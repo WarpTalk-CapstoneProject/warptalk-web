@@ -17,14 +17,25 @@
  *   from, with the workspace still visible behind it, it costs a glance.
  *
  * THE CREDIT BAR
- *   Owners and admins get the workspace's remaining credits here, because credit is the thing
- *   that stops a meeting mid-sentence and the only other place it was visible was the Billing
- *   page — which you had to already suspect a problem to open. It is deliberately NOT shown to
- *   members: they cannot top it up, and a number nobody can act on is only anxiety.
+ *   Every internal member gets the workspace's remaining credits here, because credit is the
+ *   thing that stops a meeting mid-sentence and the only other place it was visible was the
+ *   Billing page — which you had to already suspect a problem to open. It used to be owners and
+ *   admins only, on the theory that members cannot top it up. WT-700 turned that around: when
+ *   the balance runs out, translation stops for everyone in the room, not just for the person
+ *   who could have paid, so the people sitting in those meetings need to see it coming too. A
+ *   member who cannot act on the number can still say something to someone who can — which is
+ *   why, for them, the low-balance line says who to ask.
+ *
+ *   External members do NOT get it. They are guests from another organisation, and this
+ *   workspace's balance is not theirs to track. The backend gates the same way — billing's
+ *   `GET credits/workspace/{id}` answers 403 for an external member — and CreditBar already
+ *   renders a 403 as nothing, so the client check here is the polite half of a rule the server
+ *   enforces, not the rule itself.
  */
 
 import type { ReactElement } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import {
   CreditCard,
@@ -40,7 +51,8 @@ import { getErrorStatus } from "@/lib/api/retry-policy";
 import { billingService } from "@/services/billing.service";
 import type { UserDto } from "@/types/auth";
 
-function CreditBar({ workspaceId }: { workspaceId: string }) {
+function CreditBar({ workspaceId, canTopUp }: { workspaceId: string; canTopUp: boolean }) {
+  const t = useTranslations("common.accountMenu");
   // `status`, not `isLoading`. isLoading is `isPending && isFetching`, so it is FALSE in the
   // gap between a failed attempt and its retry — and in that gap isError is false too and data
   // is undefined, so every guard fell through and the bar rendered as nothing. That window is
@@ -75,8 +87,9 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   // owner whose workspace simply has no plan — a scary sentence about a perfectly ordinary
   // state. Backend fix: CreditsController.ToActionResult.
   //
-  // 403 is the same kind of non-event from this component's point of view: a member who cannot
-  // see billing gets no bar, not an error about one.
+  // 403 is the same kind of non-event from this component's point of view: someone the server
+  // will not show this balance to (an external member, since WT-700) gets no bar, not an error
+  // about one.
   const errorStatus = status === "error" ? getErrorStatus(error) : null;
   if (errorStatus === 404 || errorStatus === 403) return null;
 
@@ -86,7 +99,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   if (status === "error") {
     return (
       <div className="rounded-lg border border-border/60 bg-surface-1 px-3 py-2">
-        <p className="text-[11px] text-ink-subtle">Couldn&rsquo;t load workspace credits.</p>
+        <p className="text-[11px] text-ink-subtle">{t("creditsLoadFailed")}</p>
       </div>
     );
   }
@@ -101,7 +114,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="rounded-lg border border-border/60 bg-surface-1 p-3">
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-medium text-ink">Workspace credits</span>
+        <span className="text-[12px] font-medium text-ink">{t("credits")}</span>
         <span className="text-[12px] tabular-nums text-ink-muted">
           {remaining.toLocaleString()} / {data.totalCredits.toLocaleString()}
         </span>
@@ -114,7 +127,8 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
       </div>
       {isLow ? (
         <p className="mt-2 text-[11px] text-destructive">
-          Low balance — meetings stop translating when this runs out.
+          {t("lowBalance")}
+          {canTopUp ? null : ` ${t("askOwnerToTopUp")}`}
         </p>
       ) : null}
     </div>
@@ -143,8 +157,11 @@ export function AccountMenu({
   membershipType: string | null;
   onSignOut: () => void;
 }) {
+  const t = useTranslations("common.accountMenu");
   const normalizedRole = role?.toLowerCase() ?? "";
   const isOwnerOrAdmin = normalizedRole === "owner" || normalizedRole === "admin";
+  // null reads as Internal, as it does in the header line below.
+  const isExternal = membershipType?.toUpperCase() === "EXTERNAL";
   const base = workspaceSlug ? `/${workspaceSlug}` : null;
 
   const close = () => onOpenChange(false);
@@ -175,16 +192,18 @@ export function AccountMenu({
             <p className="truncate text-[13px] font-medium text-ink">{user.fullName}</p>
             <p className="truncate text-[11px] text-ink-muted">{user.email}</p>
             <p className="mt-0.5 truncate text-[10px] font-medium text-primary">
-              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : t("memberFallback")}
               {" · "}
               {membershipType
                 ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                : "Internal"}
+                : t("internalFallback")}
             </p>
           </div>
         </div>
 
-        {isOwnerOrAdmin && workspaceId ? <CreditBar workspaceId={workspaceId} /> : null}
+        {!isExternal && workspaceId ? (
+          <CreditBar workspaceId={workspaceId} canTopUp={isOwnerOrAdmin} />
+        ) : null}
 
         <div className="flex flex-col gap-0.5">
           {base ? (
@@ -192,13 +211,13 @@ export function AccountMenu({
               <MenuLink
                 href={`${base}/settings/account/profile`}
                 icon={<UserIcon className="h-4 w-4" />}
-                label="Profile settings"
+                label={t("profileSettings")}
                 onNavigate={close}
               />
               <MenuLink
                 href={`${base}/members`}
                 icon={<UsersThree className="h-4 w-4" />}
-                label="Members"
+                label={t("members")}
                 onNavigate={close}
               />
               {isOwnerOrAdmin ? (
@@ -206,13 +225,13 @@ export function AccountMenu({
                   <MenuLink
                     href={`${base}/settings`}
                     icon={<GearSix className="h-4 w-4" />}
-                    label="Workspace settings"
+                    label={t("workspaceSettings")}
                     onNavigate={close}
                   />
                   <MenuLink
                     href={`${base}/settings/billing`}
                     icon={<CreditCard className="h-4 w-4" />}
-                    label="Billing"
+                    label={t("billing")}
                     onNavigate={close}
                   />
                 </>
@@ -229,7 +248,7 @@ export function AccountMenu({
             className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-ink transition-colors hover:bg-surface-2"
           >
             <SignOut className="h-4 w-4" />
-            Sign out
+            {t("signOut")}
           </button>
         </div>
       </PopoverContent>

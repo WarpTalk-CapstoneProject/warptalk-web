@@ -1,0 +1,379 @@
+{
+  "eyebrow": "Nền tảng",
+  "title": "Cài đặt nền tảng",
+  "description": "Mọi cài đặt vận hành mà nền tảng đọc, kèm ai đã đổi, khi nào và vì sao. Thông tin bí mật vẫn nằm trong cấu hình triển khai; trang này chỉ cho biết chúng đã được cấu hình hay chưa.",
+  "refresh": "Làm mới",
+  "categories": {
+    "general": {
+      "label": "Chung",
+      "description": "Chế độ bảo trì, địa chỉ hỗ trợ và giá trị khởi đầu của một không gian làm việc mới."
+    },
+    "security": {
+      "label": "Bảo mật & xác thực",
+      "description": "Thời hạn phiên, chính sách mật khẩu, khoá tài khoản, giới hạn tần suất đăng nhập và đăng nhập bằng Google. Muốn thay đổi cần quyền settings.security."
+    },
+    "meetings": {
+      "label": "Cuộc họp & pipeline AI",
+      "description": "Phiên âm, gợi ý AI, nhân bản giọng nói và ghi hình — kèm danh mục ngôn ngữ và sổ đồng ý bên dưới để tham chiếu."
+    },
+    "billing": {
+      "label": "Thanh toán",
+      "description": "Dùng thử, chính sách thanh toán (VAT) và thông số kinh tế giá."
+    },
+    "notifications": {
+      "label": "Thông báo & email",
+      "description": "Email giao dịch được gửi từ ai và thư trả lời đi về đâu."
+    },
+    "limits": {
+      "label": "Giới hạn & hạn mức",
+      "description": "Kích thước tải lên và giới hạn tần suất. Một số có thể nâng cho một gói hoặc một không gian làm việc bằng giá trị ghi đè."
+    },
+    "retention": {
+      "label": "Dữ liệu & lưu trữ",
+      "description": "Nền tảng giữ lại những gì, và hiện nay cái gì xoá chúng."
+    },
+    "integrations": {
+      "label": "Tích hợp",
+      "description": "Dịch vụ bên ngoài: đã cấu hình hay chưa, kiểm tra kết nối và cấu hình lúc triển khai. Thông tin bí mật không bao giờ được hiển thị."
+    },
+    "feature_flags": {
+      "label": "Cờ tính năng",
+      "description": "Công tắc ngắt và triển khai dần. Cờ đang tắt là tắt với mọi người, bất kể danh sách cho phép ghi gì."
+    }
+  },
+  "nav": {
+    "aria": "Nhóm cài đặt",
+    "changedCount": "{count, plural, other {# cài đặt khác giá trị mặc định}}"
+  },
+  "search": {
+    "placeholder": "Tìm cài đặt theo tên, khoá, mô tả hoặc dịch vụ",
+    "changedOnly": "Khác mặc định",
+    "results": "{count, plural, other {# cài đặt khớp}} với “{query}” trong mọi nhóm",
+    "noResults": "Không có cài đặt nào khớp với “{query}”.",
+    "changedOnlyEmpty": "Chưa có cài đặt nào trong nhóm này bị đổi khỏi giá trị mặc định."
+  },
+  "empty": {
+    "category": "Nhóm này chưa có cài đặt nào."
+  },
+  "loadError": {
+    "title": "Không tải được cài đặt nền tảng",
+    "hint": "Dịch vụ workspace không phản hồi. Hãy thử lại sau giây lát.",
+    "retry": "Thử lại"
+  },
+  "publish": {
+    "healthy": "Đã phát hành · v{version}",
+    "healthyTitle": "Phát hành lần cuối lúc {when}. Các dịch vụ nhận thay đổi trong vài giây.",
+    "never": "Chưa phát hành lần nào; các dịch vụ đang chạy theo giá trị lúc triển khai.",
+    "unhealthy": "Dịch vụ giữ giá trị cũ",
+    "unhealthyDetail": "Lần phát hành gần nhất không đến được các dịch vụ: {error}. Những gì bạn lưu vẫn được lưu an toàn, nhưng các dịch vụ tiếp tục chạy theo giá trị nhận được lần cuối cho đến khi phát hành thành công.",
+    "unknownError": "không có thông tin chi tiết"
+  },
+  "toolbar": {
+    "export": "Xuất JSON",
+    "exporting": "Đang xuất…",
+    "import": "Nhập JSON",
+    "readOnly": "Chỉ xem: vai trò của bạn được xem cài đặt nền tảng nhưng không được thay đổi."
+  },
+  "export": {
+    "done": "Đã xuất {count, plural, other {# giá trị}} vào {file}.",
+    "excluded": "Đã bỏ qua {count, plural, other {# cài đặt nhạy cảm}}: {keys}.",
+    "failed": "Xuất không thành công."
+  },
+  "values": {
+    "on": "Bật",
+    "off": "Tắt",
+    "empty": "(trống)",
+    "none": "Không có",
+    "rollout": "{percent}%",
+    "plans": "{count, plural, other {# gói}}",
+    "workspaces": "{count, plural, other {# không gian làm việc}}",
+    "denied": "{count} bị chặn"
+  },
+  "scopes": {
+    "platform": "Nền tảng",
+    "plan": "Gói",
+    "workspace": "Không gian làm việc"
+  },
+  "badges": {
+    "changed": "Đã đổi",
+    "risky": "Rủi ro",
+    "riskyHint": "Có thể khoá người dùng, dừng cuộc họp hoặc thay đổi số tiền khách hàng phải trả. Thay đổi cần ghi lý do và xác nhận phần khác biệt.",
+    "security": "Bảo mật",
+    "securityHint": "Thuộc nhóm Bảo mật & xác thực: cần quyền settings.security ngoài settings.manage.",
+    "restart": "Cần khởi động lại",
+    "restartHint": "Chỉ được đọc lúc khởi động: thay đổi có hiệu lực sau lần triển khai tiếp theo của dịch vụ sở hữu.",
+    "sensitive": "Nhạy cảm",
+    "sensitiveHint": "Nhận diện được con người: không có trong tệp xuất và hiển thị là ẩn trong lịch sử."
+  },
+  "row": {
+    "copyKey": "Sao chép khoá {key}",
+    "copied": "Đã sao chép khoá.",
+    "owner": "Được đọc bởi {service}",
+    "default": "Mặc định {value}",
+    "scopes": "Phạm vi: {scopes}",
+    "lastChanged": "Đổi lúc {when} bởi {who}",
+    "someone": "một người",
+    "neverChanged": "Chưa từng đổi tại đây",
+    "notSet": "Chưa đặt",
+    "notSetExplain": "{service} dùng giá trị lúc triển khai (mặc định trong mã: {value}).",
+    "edit": "Sửa",
+    "reset": "Đặt lại mặc định",
+    "history": "Lịch sử",
+    "cancel": "Huỷ",
+    "review": "Xem lại thay đổi",
+    "readOnly": "Chỉ xem",
+    "refusal": {
+      "manage": "Thay đổi cài đặt nền tảng cần quyền settings.manage.",
+      "security": "Cài đặt Bảo mật & xác thực cần thêm quyền settings.security.",
+      "server": "Máy chủ không cho phép bạn thay đổi cài đặt này."
+    },
+    "overrides": "{count, plural, =0 {Ghi đè} other {# ghi đè}}",
+    "noOverrides": "Không có ghi đè: mọi gói và không gian làm việc dùng giá trị của nền tảng.",
+    "addOverride": "Thêm ghi đè",
+    "editOverride": "Sửa",
+    "removeOverride": "Xoá"
+  },
+  "editor": {
+    "on": "Bật",
+    "off": "Tắt",
+    "itemPlaceholder": "Nhập một mục rồi nhấn Enter (hoặc dán cả danh sách)",
+    "removeItem": "Xoá {item}",
+    "length": "{count}/{max}",
+    "entries": "{count}/{max} mục",
+    "range": "{min} – {max}",
+    "min": "tối thiểu {min}",
+    "max": "tối đa {max}",
+    "flag": {
+      "enabled": "Đang bật",
+      "disabled": "Đang tắt với mọi người",
+      "killSwitchHint": "Công tắc ngắt. Tắt là tắt tính năng ở mọi nơi, bất kể các danh sách bên dưới.",
+      "rollout": "Triển khai",
+      "rolloutPercent": "Tỷ lệ triển khai",
+      "rolloutHint": "Tỷ lệ không gian làm việc được bật, chọn theo mã băm cố định của mã không gian làm việc. Quyết định trên toàn nền tảng cần 100%.",
+      "allowPlans": "Luôn bật cho các gói",
+      "allowWorkspaces": "Luôn bật cho các không gian làm việc",
+      "denyWorkspaces": "Luôn tắt cho các không gian làm việc",
+      "planPlaceholder": "Mã gói, ví dụ pro",
+      "workspacePlaceholder": "Mã không gian làm việc"
+    }
+  },
+  "validation": {
+    "expectedBoolean": "Cần là bật hoặc tắt.",
+    "expectedInteger": "Cần là số nguyên.",
+    "expectedNumber": "Cần là một số.",
+    "min": "Phải từ {min}{unit} trở lên.",
+    "max": "Không được vượt quá {max}{unit}.",
+    "expectedText": "Cần là văn bản.",
+    "tooLong": "Tối đa {max} ký tự.",
+    "controlCharacters": "Chứa ký tự điều khiển.",
+    "pattern": "Không đúng định dạng.",
+    "notAllowed": "“{value}” không thuộc: {allowed}.",
+    "expectedList": "Cần là một danh sách.",
+    "tooManyEntries": "Tối đa {max} mục.",
+    "entryNotText": "Không phải văn bản.",
+    "entryEmpty": "Đang trống.",
+    "duplicate": "“{value}” bị lặp lại.",
+    "expectedFlag": "Cần là một cờ tính năng.",
+    "flagUnknownField": "Trường “{field}” không có trong cờ tính năng.",
+    "flagEnabled": "Cờ cần được bật hoặc tắt.",
+    "flagRollout": "Tỷ lệ triển khai phải là số nguyên từ 0 đến 100.",
+    "flagList": "{field} chỉ được chứa văn bản.",
+    "flagListTooLong": "{field} có hơn {max} mục.",
+    "flagWorkspaceIds": "{field} phải là danh sách mã không gian làm việc.",
+    "flagPlanSlugs": "Gói phải được ghi bằng mã (chữ thường, chữ số, - và _).",
+    "entry": "Mục {index}: {message}",
+    "planSlug": "Nhập mã gói: chữ thường, chữ số, - và _.",
+    "workspaceId": "Nhập mã không gian làm việc (GUID).",
+    "scopeNotAllowed": "Không thể ghi đè cài đặt này ở phạm vi đó."
+  },
+  "confirm": {
+    "title": "Xem lại thay đổi",
+    "resetTitle": "Đặt lại mặc định",
+    "removeOverrideTitle": "Xoá ghi đè",
+    "scope": "Phạm vi",
+    "before": "Trước",
+    "after": "Sau",
+    "notSet": "Chưa đặt",
+    "added": "Thêm",
+    "removed": "Bỏ",
+    "flagFields": {
+      "enabled": "Bật",
+      "rolloutPercent": "Triển khai",
+      "allowPlans": "Luôn bật cho các gói",
+      "allowWorkspaces": "Luôn bật cho các không gian làm việc",
+      "denyWorkspaces": "Luôn tắt cho các không gian làm việc"
+    },
+    "resetExplain": "Xoá giá trị đã lưu: {service} quay về giá trị lúc triển khai, sau đó là mặc định trong mã ({value}).",
+    "riskyNotice": "Cài đặt này được đánh dấu rủi ro: có thể khoá người dùng, dừng cuộc họp hoặc thay đổi số tiền khách hàng phải trả. Hãy kiểm tra giá trị mới trước khi lưu.",
+    "securityNotice": "Đây là cài đặt Bảo mật & xác thực. Thay đổi được ghi lại cùng tên và lý do của bạn.",
+    "restartNotice": "{service} đọc giá trị này lúc khởi động: giá trị mới có hiệu lực sau lần triển khai tiếp theo.",
+    "unchanged": "Không có gì để lưu: giá trị mới giống giá trị đang lưu.",
+    "reason": "Lý do",
+    "reasonPlaceholder": "Vì sao thay đổi?",
+    "reasonRequired": "Bắt buộc, tối thiểu {min} ký tự. Được ghi vào lịch sử của cài đặt và nhật ký kiểm toán.",
+    "reasonOptional": "Không bắt buộc. Được ghi vào lịch sử của cài đặt và nhật ký kiểm toán.",
+    "cancel": "Huỷ",
+    "confirm": "Lưu thay đổi",
+    "confirmReset": "Đặt lại",
+    "saving": "Đang lưu…",
+    "saved": "Đã lưu {label}.",
+    "resetDone": "Đã đặt lại {label}.",
+    "failed": "Thay đổi chưa được lưu.",
+    "forbidden": "Bạn không có quyền thay đổi cài đặt này.",
+    "conflict": "Một người khác đã đổi cài đặt này sau khi bạn mở nó. Hãy tải lại để xem giá trị của họ rồi thực hiện lại thay đổi.",
+    "reload": "Tải lại"
+  },
+  "override": {
+    "addTitle": "Thêm ghi đè",
+    "editTitle": "Sửa ghi đè",
+    "description": "ghi đè được ưu tiên hơn giá trị nền tảng cho một gói hoặc một không gian làm việc (ghi đè của không gian làm việc thắng ghi đè của gói).",
+    "scopeType": "Áp dụng cho",
+    "planSlug": "Mã gói",
+    "workspaceId": "Mã không gian làm việc",
+    "planPlaceholder": "pro",
+    "workspacePlaceholder": "00000000-0000-0000-0000-000000000000",
+    "workspaceHint": "Mã được hiển thị trên trang quản trị của không gian làm việc.",
+    "value": "Giá trị",
+    "cancel": "Huỷ",
+    "review": "Xem lại thay đổi"
+  },
+  "history": {
+    "title": "Lịch sử",
+    "error": "Không tải được lịch sử của cài đặt này.",
+    "retry": "Thử lại",
+    "empty": "Chưa có thay đổi nào được ghi lại cho cài đặt này.",
+    "actions": {
+      "set": "Đã đổi",
+      "reset": "Đã đặt lại",
+      "revert": "Đã hoàn tác",
+      "import": "Đã nhập"
+    },
+    "by": "bởi {who}",
+    "revertOf": "hoàn tác một thay đổi trước",
+    "noReason": "Không ghi lý do",
+    "hidden": "ẩn",
+    "notSet": "chưa đặt",
+    "revert": "Hoàn tác",
+    "revertTitle": "Hoàn tác thay đổi này",
+    "revertDescription": "Khôi phục giá trị mà thay đổi này đã thay thế. Việc hoàn tác được ghi lại thành một thay đổi mới kèm lý do của bạn.",
+    "revertConfirm": "Hoàn tác",
+    "reverting": "Đang hoàn tác…",
+    "reverted": "Đã hoàn tác {label}."
+  },
+  "import": {
+    "title": "Nhập cài đặt nền tảng",
+    "description": "Tải lên tệp được xuất từ trang này. Không có gì thay đổi cho đến khi bạn áp dụng, và việc nhập là tất cả hoặc không gì cả.",
+    "choose": "Chọn tệp JSON",
+    "chooseAnother": "Chọn tệp khác",
+    "checking": "Đang kiểm tra với máy chủ…",
+    "excluded": "Tệp đã bỏ qua {count, plural, other {# cài đặt nhạy cảm}} ({keys}); chúng không bị thay đổi.",
+    "summary": "{changed} sẽ đổi · {unchanged} giữ nguyên · {rejected} bị từ chối",
+    "preview": "Xem trước khi nhập",
+    "columns": {
+      "setting": "Cài đặt",
+      "scope": "Phạm vi",
+      "outcome": "Kết quả",
+      "change": "Thay đổi"
+    },
+    "outcomes": {
+      "create": "Mới",
+      "update": "Cập nhật",
+      "unchanged": "Giữ nguyên",
+      "rejected": "Bị từ chối"
+    },
+    "rejectedNoReason": "Máy chủ từ chối.",
+    "hasRejected": "Hãy sửa hoặc bỏ các dòng bị từ chối trước khi áp dụng: việc nhập là tất cả hoặc không gì cả, nên sẽ không có gì thay đổi.",
+    "nothingToApply": "Mọi giá trị trong tệp đã khớp; không có gì để áp dụng.",
+    "reason": "Lý do",
+    "reasonPlaceholder": "Vì sao nhập các cài đặt này?",
+    "reasonHint": "Bắt buộc, tối thiểu {min} ký tự. Được ghi cho từng thay đổi.",
+    "cancel": "Huỷ",
+    "apply": "{count, plural, =0 {Áp dụng} other {Áp dụng # thay đổi}}",
+    "applying": "Đang áp dụng…",
+    "applied": "Đã đổi {count, plural, other {# cài đặt}}.",
+    "notApplied": "Máy chủ không áp dụng việc nhập; hãy xem các dòng bên dưới.",
+    "failed": "Việc nhập chưa được áp dụng.",
+    "previewFailed": "Máy chủ không kiểm tra được tệp này.",
+    "notSet": "chưa đặt",
+    "errors": {
+      "fileTooLarge": "Tệp lớn hơn 2 MB; đó không phải tệp xuất cài đặt.",
+      "invalidJson": "Tệp không phải JSON hợp lệ.",
+      "notAnObject": "Tệp không phải tệp xuất cài đặt (cần một đối tượng JSON).",
+      "wrongFormat": "Định dạng của tệp là “{format}”, không phải tệp xuất cài đặt nền tảng WarpTalk.",
+      "noSettings": "Tệp không chứa cài đặt nào.",
+      "tooManyEntries": "Tệp có hơn {max} mục.",
+      "badEntry": "Mục {index}: {reason}",
+      "entryReasons": {
+        "notAnObject": "không phải một đối tượng.",
+        "key": "không có khoá hợp lệ.",
+        "scopeType": "có phạm vi không xác định.",
+        "scopeId": "có mã phạm vi không khớp với phạm vi.",
+        "value": "không có giá trị."
+      }
+    }
+  },
+  "integrations": {
+    "title": "Tích hợp",
+    "columns": {
+      "name": "Tích hợp",
+      "configured": "Đã cấu hình",
+      "services": "Báo cáo bởi",
+      "lastCheck": "Kiểm tra gần nhất",
+      "actions": "Thao tác"
+    },
+    "configured": "Đã cấu hình",
+    "notConfigured": "Chưa cấu hình",
+    "unknown": "Chưa rõ",
+    "unknownHint": "Chưa có dịch vụ nào báo cáo về tích hợp này.",
+    "noReports": "Chưa có báo cáo",
+    "never": "Chưa kiểm tra",
+    "checkOk": "OK · {latency} ms",
+    "checkFailed": "Thất bại",
+    "test": "Kiểm tra kết nối",
+    "testing": "Đang kiểm tra…",
+    "testOk": "{name}: kết nối OK ({latency} ms).",
+    "testFailed": "{name}: {detail}",
+    "testError": "Không kiểm tra được {name}.",
+    "noDetail": "kiểm tra thất bại, không có chi tiết.",
+    "open": "Mở",
+    "empty": "Chưa có tích hợp nào được báo cáo.",
+    "error": "Không tải được trạng thái tích hợp.",
+    "unavailable": "Máy chủ này chưa báo cáo trạng thái tích hợp.",
+    "retry": "Thử lại",
+    "secretsNote": "Khoá, token và địa chỉ endpoint không bao giờ được hiển thị hay lưu ở đây: chúng nằm trong cấu hình triển khai, và chỉ có việc đã đặt hay chưa được báo cáo.",
+    "deployConfig": {
+      "title": "Cấu hình triển khai",
+      "description": "Đọc từ cấu hình triển khai của từng dịch vụ. Muốn đổi cần triển khai lại, không phải trang này.",
+      "empty": "Chưa có giá trị triển khai nào được báo cáo.",
+      "notSet": "Chưa đặt"
+    }
+  },
+  "retention": {
+    "intro": "Hiện chưa có mục nào ở đây là cài đặt. Một cài đặt lưu trữ chỉ được thêm vào danh mục cùng với tác vụ thực thi nó — trước đó, một giá trị nhập ở đây sẽ được tin là có tác dụng nhưng thực tế bị bỏ qua.",
+    "notEnforcedHeading": "Hiện chưa được thực thi",
+    "enforcedHeading": "Đang được thực thi",
+    "items": {
+      "transcripts": {
+        "title": "Bản ghi lời, tóm tắt và tài liệu cuộc họp",
+        "body": "Được giữ cho đến khi có người xoá. Không có tác vụ nào xoá theo thời gian."
+      },
+      "recordings": {
+        "title": "Bản ghi hình cuộc họp",
+        "body": "Được giữ trong kho lưu trữ đối tượng cho đến khi bị xoá. Không có quy tắc vòng đời hay tác vụ nào làm chúng hết hạn."
+      },
+      "auditLog": {
+        "title": "Nhật ký kiểm toán và lịch sử cài đặt",
+        "body": "Chỉ ghi thêm. Không có gì cắt bớt chúng."
+      },
+      "workspaceRetention": {
+        "title": "Thời hạn lưu tài liệu theo không gian làm việc",
+        "body": "Số ngày lưu tài liệu của một không gian làm việc được lưu và hiển thị trong phần cài đặt của nó, nhưng không có tác vụ nào đọc giá trị này: nó chưa được thực thi."
+      },
+      "streamTtl": {
+        "title": "Luồng pipeline cuộc họp trực tiếp",
+        "body": "Các luồng Redis hết hạn theo TTL mà mỗi dịch vụ được triển khai kèm. Đây là cấu hình lúc triển khai, không phải cài đặt ở đây."
+      }
+    },
+    "footnote": "Hiện nay việc xoá dữ liệu là thao tác thủ công: chủ không gian làm việc xoá một cuộc họp hoặc tài liệu, hoặc nhân viên xử lý theo yêu cầu."
+  }
+}

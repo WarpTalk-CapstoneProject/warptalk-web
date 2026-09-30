@@ -31,7 +31,10 @@ export type AdminPluginKind = "native" | "mcp";
  * `unresolved` is the honest state of a row nobody has connected yet — the ladder chooses on the
  * first connect. `preregistered` is the only source that asserts the row itself holds a client id.
  */
-export type AdminPluginOAuthClientSource = "unresolved" | "preregistered" | "cimd" | "dcr";
+export type AdminPluginOAuthClientSource = "unresolved" | "preregistered" | "cimd" | "dcr" | "api_key";
+
+/** `api_key`: no OAuth at all — each user pastes a key of their own, sent as a Bearer token. */
+export type AdminPluginAuthMode = "oauth" | "api_key";
 
 /**
  * One tool in a row's manifest, as `tools_json` stores it.
@@ -64,6 +67,11 @@ export interface AdminPluginCatalogListItemDto {
   pluginKey: string;
   label: string;
   description: string;
+  /**
+   * The row's icon. Null for a row without one; `PluginGlyph` then draws the bundled brand mark for
+   * the key. Optional because a server older than the marketplace icons does not send it.
+   */
+  avatarUrl?: string | null;
   kind: AdminPluginKind;
   provider: string;
   isActive: boolean;
@@ -74,8 +82,25 @@ export interface AdminPluginCatalogListItemDto {
   hasClientId: boolean;
   hasClientSecret: boolean;
   toolCount: number;
+  /** Users who have it installed now; a removed installation is not counted. */
   installationCount: number;
+  /**
+   * "Workspaces using it": workspaces the platform lets have the plugin AND that have it — on the
+   * Owner's list, or connected by at least one active member. Null when the workspace service could
+   * not be reached (render "—", never "no workspaces"). Optional for an older server.
+   */
+  workspaceCount?: number | null;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
+
+/**
+ * Which workspaces a marketplace plugin reaches by default. `retired` is `isActive: false`;
+ * `opt_in` hides it from every workspace a platform admin has not enabled it for.
+ */
+export type AdminPluginWorkspaceDefault = "available" | "opt_in" | "retired";
 
 /** One row in full, with the tool manifest `PUT .../tools` replaces. */
 export interface AdminPluginCatalogDetailDto {
@@ -119,6 +144,10 @@ export interface AdminPluginCatalogDetailDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
 
 /**
@@ -152,6 +181,8 @@ export interface CreateAdminMcpPluginRequest {
    * `oAuthClientSource` on the way back produces `oAuth` on the way in.
    */
   oAuth?: CreateAdminMcpPluginOAuthRequest;
+  /** Omitted means oauth. `api_key` cannot be combined with oAuth; the server refuses it. */
+  authMode?: AdminPluginAuthMode;
 }
 
 /**
@@ -194,6 +225,8 @@ export interface UpdateAdminPluginRequest {
   sortOrder?: number;
   /** Empty string clears it. */
   category?: string;
+  /** Switching mode ends every user's connection to the row: their credential no longer applies. */
+  authMode?: AdminPluginAuthMode;
 }
 
 /**
@@ -251,7 +284,7 @@ export interface AdminPluginToolAuditEntryDto {
   toolName: string;
   /** The leading 500 characters of the tool arguments. Can hold whatever a user typed. */
   inputSummary: string | null;
-  /** `"ok"`, or the error code the call failed with — the recorder writes the code as the status. */
+  /** `"success"`, or the error code the call stopped on — the recorder writes the code as the status. */
   resultStatus: string;
   providerResourceRef: string | null;
   createdAt: string;

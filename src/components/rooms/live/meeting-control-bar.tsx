@@ -1,7 +1,8 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -14,6 +15,7 @@ import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
+import { VoicePanel } from "@/components/rooms/live/voice-panel";
 import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
 import { MicCheck } from "@/components/rooms/live/mic-check";
 import {
@@ -78,9 +80,6 @@ function useFlyoutDismiss(
 
   return containerRef;
 }
-
-/** Sentinel for the "use my own cloned voice" entry, which is not a provider voice id. */
-const MY_VOICE_OPTION = "__my_voice__";
 
 export function MeetingControlBar({
   meetingEnabled,
@@ -309,6 +308,7 @@ export function MeetingControlBar({
    */
   onToggleTranscriptPauseInPanel?: () => void;
 }) {
+  const t = useTranslations("meetingControlBar");
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
     "root" | "layout" | "voice" | "microphone"
@@ -375,18 +375,6 @@ export function MeetingControlBar({
     hasAudience: voiceCloneHasAudience,
   });
 
-  /**
-   * Picking a provider voice means "do not use mine", so consent is withdrawn alongside it.
-   *
-   * They were independent switches and the clone silently won, which is how somebody could select
-   * a voice from the catalog, see it ticked, and hear something else. Revoking is also the safe
-   * direction for a biometric permission: the only way to turn cloning back on is to ask for it.
-   */
-  function selectProviderVoice(voiceId: string) {
-    onChangeVoicePreference?.(voiceId);
-    if (voiceCloneEnabled) onChangeVoiceCloneConsent?.(false);
-  }
-
   function closeSettingsMenu() {
     setIsSettingsMenuOpen(false);
     setSettingsSection("root");
@@ -423,7 +411,7 @@ export function MeetingControlBar({
             }`}
           >
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
-            {warptalkStarted ? "Stop Translation" : "Start Translation"}
+            {warptalkStarted ? t("translation.stop") : t("translation.start")}
           </button>
           <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
@@ -459,7 +447,7 @@ export function MeetingControlBar({
       {isHost && onToggleLock ? (
         <div className="relative" ref={hostControlsRef}>
           <MeetControl
-            label="Host controls"
+            label={t("hostControls.label")}
             active={Boolean(isLocked) || isHostControlsMenuOpen}
             icon={<ShieldCheck className="h-5 w-5" weight={isLocked ? "fill" : "regular"} />}
             hasPopup
@@ -476,7 +464,7 @@ export function MeetingControlBar({
                 // this ticket ("0 [role=menu] nodes" could not have matched even while the
                 // panel was on screen).
                 role="menu"
-                aria-label="Host controls"
+                aria-label={t("hostControls.menuAriaLabel")}
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -487,8 +475,8 @@ export function MeetingControlBar({
                 align="left"
               >
                 <HostControlRow
-                  label={isLocked ? "Room locked" : "Lock room"}
-                  description="Blocks new joiners while active."
+                  label={isLocked ? t("hostControls.lockRoom.lockedLabel") : t("hostControls.lockRoom.unlockedLabel")}
+                  description={t("hostControls.lockRoom.description")}
                   icon={isLocked ? <Lock className="h-4 w-4" weight="fill" /> : <LockOpen className="h-4 w-4" />}
                   active={Boolean(isLocked)}
                   toggle
@@ -496,8 +484,8 @@ export function MeetingControlBar({
                 />
                 {onToggleMuteOnEntry ? (
                   <HostControlRow
-                    label="Mute on entry"
-                    description="New joiners start with mic muted."
+                    label={t("hostControls.muteOnEntry.label")}
+                    description={t("hostControls.muteOnEntry.description")}
                     icon={<MicrophoneSlash className="h-4 w-4" />}
                     active={Boolean(muteOnEntry)}
                     toggle
@@ -506,8 +494,8 @@ export function MeetingControlBar({
                 ) : null}
                 {onMuteAll ? (
                   <HostControlRow
-                    label="Mute all"
-                    description="Everyone but you — they can unmute themselves."
+                    label={t("hostControls.muteAll.label")}
+                    description={t("hostControls.muteAll.description")}
                     icon={<Microphone className="h-4 w-4" />}
                     onClick={() => {
                       onMuteAll();
@@ -528,10 +516,10 @@ export function MeetingControlBar({
         <MeetControl
           label={
             recordingPending
-              ? "Recording request in progress"
+              ? t("recording.pending")
               : isRecording
-                ? "Stop recording"
-                : "Start recording"
+                ? t("recording.stop")
+                : t("recording.start")
           }
           active={isRecording}
           disabled={recordingPending}
@@ -578,8 +566,8 @@ export function MeetingControlBar({
       <MeetControl
         label={
           subtitlesEnabled
-            ? "Hide captions (transcript keeps recording)"
-            : "Show captions"
+            ? t("captions.hide")
+            : t("captions.show")
         }
         active={subtitlesEnabled}
         icon={
@@ -592,7 +580,7 @@ export function MeetingControlBar({
       />
 
       <MeetControl
-        label={isScreenSharing ? "Stop presenting" : "Present now"}
+        label={isScreenSharing ? t("screenShare.stop") : t("screenShare.start")}
         active={isScreenSharing}
         icon={<Screencast className="h-5 w-5" />}
         onClick={onToggleScreenShare}
@@ -600,7 +588,7 @@ export function MeetingControlBar({
 
       {onToggleRaiseHand ? (
         <MeetControl
-          label={handRaised ? "Lower hand" : "Raise hand"}
+          label={handRaised ? t("raiseHand.lower") : t("raiseHand.raise")}
           active={handRaised}
           icon={<HandPalm className="h-5 w-5" weight={handRaised ? "fill" : "regular"} />}
           onClick={onToggleRaiseHand}
@@ -610,7 +598,7 @@ export function MeetingControlBar({
       {onSendReaction ? (
         <div className="relative" ref={reactionRef}>
           <MeetControl
-            label="Send a reaction"
+            label={t("reactions.send")}
             icon={<SmileyWink className="h-5 w-5" />}
             onClick={() => setIsReactionMenuOpen((current) => !current)}
           />
@@ -634,7 +622,7 @@ export function MeetingControlBar({
                       onSendReaction(emoji);
                       setIsReactionMenuOpen(false);
                     }}
-                    className="grid h-8 w-8 place-items-center rounded-md text-lg transition-colors hover:bg-canvas"
+                    className="grid h-8 w-8 place-items-center rounded-md text-lg transition-colors hover:bg-surface-2"
                   >
                     {emoji}
                   </button>
@@ -649,7 +637,7 @@ export function MeetingControlBar({
       
       <div className="relative" ref={settingsRef}>
         <MeetControl
-          label="Settings"
+          label={t("settingsButton")}
           active={isSettingsMenuOpen}
           icon={<GearSix className="h-5 w-5" />}
           onClick={() =>
@@ -674,10 +662,10 @@ export function MeetingControlBar({
               {settingsSection === "root" ? (
                 <>
                   <SettingsRow
-                    label="Noise suppression"
+                    label={t("settingsMenu.noiseSuppression.label")}
                     icon={<WaveSine className="h-4 w-4" />}
                     active={noiseSuppressionEnabled}
-                    value={noiseSuppressionEnabled ? "On" : "Off"}
+                    value={noiseSuppressionEnabled ? t("settingsMenu.noiseSuppression.on") : t("settingsMenu.noiseSuppression.off")}
                     onClick={onToggleNoiseSuppression}
                   />
                   {/* Right under the switch it proves. The strip draws the PUBLISHED signal —
@@ -695,23 +683,23 @@ export function MeetingControlBar({
                       at all was that it had no row anywhere. Adjacent so the two can be compared;
                       named so they cannot be mistaken for each other. */}
                   <SettingsRow
-                    label="Mic noise filter"
+                    label={t("settingsMenu.micNoiseFilter.row")}
                     icon={<Microphone className="h-4 w-4" />}
                     value={noiseReductionLabel(noiseReductionMode)}
                     onClick={() => setSettingsSection("microphone")}
                     hasSubmenu
                   />
                   <SettingsRow
-                    label="Background blur"
+                    label={t("settingsMenu.backgroundBlur.label")}
                     icon={<UserFocus className="h-4 w-4" />}
                     active={backgroundBlurEnabled}
-                    value={backgroundBlurEnabled ? "On" : "Off"}
+                    value={backgroundBlurEnabled ? t("settingsMenu.backgroundBlur.on") : t("settingsMenu.backgroundBlur.off")}
                     onClick={onToggleBackgroundBlur}
                   />
                   <SettingsRow
-                    label="Layout"
+                    label={t("settingsMenu.layout.label")}
                     icon={<Layout className="h-4 w-4" />}
-                    value={layoutModeLabel(layoutMode)}
+                    value={layoutModeLabel(layoutMode, t)}
                     onClick={() => setSettingsSection("layout")}
                     hasSubmenu
                   />
@@ -728,7 +716,7 @@ export function MeetingControlBar({
                   {onChangeVoiceEnabled || onChangeVoiceCloneConsent
                     || (onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0) ? (
                     <SettingsRow
-                      label="Voice"
+                      label={t("settingsMenu.voice.label")}
                       icon={<SpeakerHigh className="h-4 w-4" />}
                       value={voiceSelection.label}
                       onClick={() => setSettingsSection("voice")}
@@ -747,7 +735,7 @@ export function MeetingControlBar({
                       anything. */}
                   {onToggleTranscriptPauseInPanel ? (
                     <SettingsRow
-                      label={transcriptPaused ? "Resume transcript" : "Pause transcript"}
+                      label={transcriptPaused ? t("settingsMenu.transcript.resume") : t("settingsMenu.transcript.pause")}
                       icon={
                         <PauseCircle
                           className={`h-4 w-4 ${transcriptPausePending ? "animate-pulse" : ""}`}
@@ -755,7 +743,7 @@ export function MeetingControlBar({
                         />
                       }
                       active={transcriptPaused}
-                      value={transcriptPaused ? "Paused" : "Recording"}
+                      value={transcriptPaused ? t("settingsMenu.transcript.paused") : t("settingsMenu.transcript.recording")}
                       onClick={() => {
                         onToggleTranscriptPauseInPanel();
                         closeSettingsMenu();
@@ -764,14 +752,14 @@ export function MeetingControlBar({
                   ) : null}
                   <div className="my-1 h-[1px] bg-surface-3" />
                   <SettingsRow
-                    label="Copy join link"
+                    label={t("settingsMenu.copyJoinLink")}
                     icon={<Copy className="h-4 w-4" />}
-                    onClick={() => onCopyText(joinLink || roomCode, joinLink ? "Join link" : "Room code")}
+                    onClick={() => onCopyText(joinLink || roomCode, joinLink ? t("settingsMenu.joinLinkToastLabel") : t("settingsMenu.roomCodeToastLabel"))}
                   />
                   <SettingsRow
-                    label="Copy room code"
+                    label={t("settingsMenu.copyRoomCode")}
                     icon={<Hash className="h-4 w-4" />}
-                    onClick={() => onCopyText(roomCode, "Room code")}
+                    onClick={() => onCopyText(roomCode, t("settingsMenu.roomCodeToastLabel"))}
                   />
                 </>
               ) : null}
@@ -779,15 +767,14 @@ export function MeetingControlBar({
               {settingsSection === "microphone" ? (
                 <>
                   <SettingsPanelHeader
-                    title="Mic noise filter"
+                    title={t("settingsMenu.micNoiseFilter.submenuHeader")}
                     onBack={() => setSettingsSection("root")}
                   />
                   {/* Says which layer this is, because the menu it came from has a row called
                       "Noise suppression" two lines above and somebody will otherwise reasonably
                       assume this is the same setting twice. */}
                   <p className="px-2.5 pb-1 pt-0.5 text-[11px] leading-snug text-ink-muted">
-                    Filters your microphone before it is transcribed. Changes how accurately your
-                    words are recognised — not what other people hear.
+                    {t("settingsMenu.micNoiseFilter.description")}
                   </p>
                   {NOISE_REDUCTION_MODES.map((mode) => (
                     <button
@@ -804,7 +791,7 @@ export function MeetingControlBar({
                       className={`flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors disabled:opacity-60 ${
                         noiseReductionMode === mode
                           ? "bg-primary/10 text-primary"
-                          : "text-ink hover:bg-canvas"
+                          : "text-ink hover:bg-surface-2"
                       }`}
                     >
                       <span className="min-w-0 flex-1">
@@ -825,11 +812,11 @@ export function MeetingControlBar({
 
               {settingsSection === "layout" ? (
                 <>
-                  <SettingsPanelHeader title="Layout" onBack={() => setSettingsSection("root")} />
-                  <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={closeSettingsMenu} />
-                  <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={closeSettingsMenu} />
-                  <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={closeSettingsMenu} />
-                  <LayoutOption label="Sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <SettingsPanelHeader title={t("settingsMenu.layout.submenuHeader")} onBack={() => setSettingsSection("root")} />
+                  <LayoutOption label={t("settingsMenu.layout.auto")} value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label={t("settingsMenu.layout.grid")} value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label={t("settingsMenu.layout.spotlight")} value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label={t("settingsMenu.layout.sidebar")} value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={closeSettingsMenu} />
                 </>
               ) : null}
 
@@ -846,238 +833,71 @@ export function MeetingControlBar({
 
               {settingsSection === "voice" ? (
                 <>
-                  <SettingsPanelHeader title="Voice" onBack={() => setSettingsSection("root")} />
-                  {onChangeVoiceEnabled ? (
-                    // A switch, not a tap-row. The old row was a button whose LABEL was the
-                    // current state and whose VALUE was an instruction to invert it ("Voice on ·
-                    // Tap for transcript only") — three phrases a reader has to reconcile before
-                    // knowing which state they are in, for what is a boolean. A switch carries
-                    // its state and its affordance in one control, and cannot be misread as a
-                    // caption.
-                    <div className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">
-                        {voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-ink">Voice</span>
-                        <span className="block truncate text-[11px] text-ink-muted">
-                          {voiceEnabled === false
-                            ? "Off — you read translations instead of hearing them."
-                            : "On — translations are spoken to you."}
-                        </span>
-                      </span>
-                      <Switch
-                        checked={voiceEnabled !== false}
-                        onCheckedChange={(checked) => onChangeVoiceEnabled(checked)}
-                        aria-label="Hear translated voice"
-                      />
-                    </div>
-                  ) : null}
-                  {voiceEnabled !== false ? (
-                    <>
-                      <div className="my-1 h-[1px] bg-surface-3" />
-
-                      {/* Right here in the list, not a switch somewhere else. Choosing a voice and
-                          choosing YOUR voice are the same question, and separating them is what
-                          made a whole test session conclude cloning was broken while the worker
-                          was scoring clone samples 1.0.
-
-                          The detail line carries the two facts that were previously unknowable
-                          from inside a meeting: whether this is even reaching anyone, and that
-                          consent is what turns it on. */}
-                      {/* YOUR VOICE — one direction only.
-                          Whose voice a dub is spoken in is the speaker's decision; the listener
-                          chooses the LANGUAGE, and the same voice is rendered once per language.
-                          These options used to be mixed into the list below, which points the
-                          other way, so picking a library voice to LISTEN in silently turned off
-                          your own cloned voice for everybody else in the room. */}
-                      {onChangeDubVoice || onChangeVoiceCloneConsent ? (
-                        <>
-                          <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                            Your voice
-                          </p>
-                          {onChangeVoiceCloneConsent ? (
-                            <VoiceOption
-                              label="My voice"
-                              detail={
-                                voiceCloneHasAudience
-                                  ? "Cloned from how you sound in this meeting"
-                                  : "Nobody is listening in another language yet"
-                              }
-                              value={MY_VOICE_OPTION}
-                              active={Boolean(voiceCloneEnabled) && !dubVoice}
-                              onSelect={() => {
-                                // Both halves, because they are two different settings that
-                                // together mean "clone me": consent is the per-room permission,
-                                // and a dub voice left set would win over the clone entirely.
-                                onChangeDubVoice?.(null);
-                                onChangeVoiceCloneConsent(true);
-                              }}
-                              close={closeSettingsMenu}
-                            />
-                          ) : null}
-                          {onChangeDubVoice
-                            ? (ownVoiceProfiles ?? []).map((profile) => (
-                                <VoiceOption
-                                  key={profile.id}
-                                  label={profile.name}
-                                  detail="A recording you uploaded"
-                                  value={profile.voiceId}
-                                  active={dubVoice === profile.voiceId}
-                                  onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                                  close={closeSettingsMenu}
-                                />
-                              ))
-                            : null}
-                          {onChangeDubVoice
-                            ? [...(voiceCatalog ?? [])]
-                                .sort(
-                                  (a, b) =>
-                                    (a.gender || "").localeCompare(b.gender || "") ||
-                                    a.name.localeCompare(b.name),
-                                )
-                                .map((voice) => (
-                                  <VoiceOption
-                                    key={`dub-${voice.id}`}
-                                    label={voice.name}
-                                    detail={`A library voice${voice.gender ? ` · ${voice.gender}` : ""}`}
-                                    value={voice.id}
-                                    active={dubVoice === voice.id}
-                                    onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                                    close={closeSettingsMenu}
-                                  />
-                                ))
-                            : null}
-                          <div className="my-1 h-[1px] bg-surface-3" />
-                          <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                            Stand-in voice
-                          </p>
-                          {/* Said out loud because it is not guessable, and because getting it
-                              wrong is invisible: a voice picked here replaces the stand-in for
-                              people who have NOT chosen how they sound. Anyone who cloned their
-                              voice or picked their own is heard as themselves regardless — see
-                              TTSWorker._resolve_voice_variants. */}
-                          <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">
-                            Only applies to people who have not chosen a voice of their own.
-                          </p>
-                        </>
-                      ) : null}
-
-                      {/* "Assigned, not matched" is the honest description of the default: the
-                          worker picks deterministically from this language's catalog by hashing
-                          the speaker id, so everyone keeps a stable voice and no two people
-                          sound alike — but nothing compares it to how the speaker actually
-                          sounds. Saying so is what makes the list below worth opening. */}
-                      <VoiceOption
-                        label="Automatic"
-                        detail="Assigned, not matched to your voice"
-                        value=""
-                        active={!voicePreference && !voiceCloneEnabled}
-                        onSelect={(value) => selectProviderVoice(value)}
-                        close={closeSettingsMenu}
-                      />
-                      {/* Grouped by gender, then by name. The label alone still leaves six
-                          mixed rows to read one at a time; clustering them is what turns the
-                          list into "here are the masculine ones". */}
-                      {[...(voiceCatalog ?? [])]
-                        .sort(
-                          (a, b) =>
-                            (a.gender || "").localeCompare(b.gender || "") ||
-                            a.name.localeCompare(b.name),
-                        )
-                        .map((voice) => (
-                        <VoiceOption
-                          key={voice.id}
-                          label={voice.name}
-                          detail={voice.gender || undefined}
-                          value={voice.id}
-                          active={!voiceCloneEnabled && voicePreference === voice.id}
-                          onSelect={(value) => selectProviderVoice(value)}
-                          close={closeSettingsMenu}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-                  {/* What listeners actually get, spelled out under the list. The choice above is
-                      stored either way; this is the only place that says whether it is reaching
-                      anybody. */}
-                  <p className="px-2.5 pb-2 pt-1 text-[11px] leading-snug text-ink-muted">
-                    {voiceSelection.detail}
-                  </p>
-
-                  {/* FLASH MODE — a room setting, kept visually apart from everything above it.
-                      The list above is two questions about VOICE ("how do I sound", "what do I
-                      hear"). This is a third question about SPEED, and it is the only control in
-                      this panel that changes things for other people. Merging it into the list
-                      would repeat the exact mistake this panel was rebuilt to fix, so it gets a
-                      rule, a heading of its own, and a sentence saying who it affects. */}
-                  <div className="my-1 h-[1px] bg-surface-3" />
-                  <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                    Room speed
-                  </p>
-                  <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
-                    <span className="min-w-0 text-left">
-                      <span className="block text-[13px] text-ink">Flash mode</span>
-                      <span className="block text-[11px] leading-snug text-ink-subtle">
-                        {onChangeFlashMode
-                          ? "Start translating while people are still speaking. Faster, and still experimental."
-                          : flashModeSource === "room"
-                            ? "Set by the host. Translation starts while people are still speaking."
-                            : flashModeSource === "deployment"
-                              // Nobody set this room. Saying "the host" here named a person who
-                              // had made no such choice, and made a default look like a decision.
-                              ? "Following the platform default. Translation starts while people are still speaking."
-                              // No override and no published default. The switch has to sit
-                              // somewhere, so it sits off — but it is not reporting a reading,
-                              // and claiming one is the whole defect this replaces.
-                              : "Not known right now — the room is using whatever the platform defaults to."}
-                      </span>
-                    </span>
-                    <Switch
-                      size="sm"
-                      className="mt-0.5 shrink-0"
-                      checked={flashModeEnabled}
-                      // A guest sees the switch in the position the host chose and cannot move
-                      // it. Hiding it instead would leave them unable to tell a fast room from a
-                      // slow one, which is the thing they can actually perceive.
-                      disabled={!onChangeFlashMode}
-                      onCheckedChange={(checked) => onChangeFlashMode?.(Boolean(checked))}
-                    />
-                  </div>
-
-                  {/* WT-420. The capture itself, live. Everything below was already known to the
-                      TTS worker and written only to a log — which is why an entire test session
-                      concluded cloning was broken while the worker scored the clip 1.0. */}
-                  {cloneStatus.tone !== "idle" || cloneStatus.title ? (
-                    <div className="mx-2.5 mb-2 rounded-lg bg-surface-2 px-2.5 py-2">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="text-[11px] font-medium text-ink">{cloneStatus.title}</p>
-                        {cloneStatus.quality ? (
-                          <span
-                            className={`text-[10px] uppercase tracking-wide ${
-                              cloneStatus.quality === "good"
-                                ? "text-emerald-600"
-                                : cloneStatus.quality === "fair"
-                                  ? "text-amber-600"
-                                  : "text-ink-muted"
-                            }`}
-                          >
-                            {cloneStatus.quality}
+                  <SettingsPanelHeader title={t("settingsMenu.voice.submenuHeader")} onBack={() => setSettingsSection("root")} />
+                  {/* The panel itself is shared with the bridge popup — see voice-panel.tsx and
+                      lib/meeting/voice-panel.ts. Room speed stays here: it is the bar's section, not a
+                      voice, and it rides in the panel's footer slot so it keeps its place above the
+                      capture status. */}
+                  <VoicePanel
+                    mode="meeting"
+                    voiceEnabled={voiceEnabled}
+                    onChangeVoiceEnabled={onChangeVoiceEnabled}
+                    voicePreference={voicePreference}
+                    voiceCatalog={voiceCatalog}
+                    onChangeVoicePreference={onChangeVoicePreference}
+                    voiceCloneEnabled={voiceCloneEnabled}
+                    voiceCloneHasAudience={voiceCloneHasAudience}
+                    onChangeVoiceCloneConsent={onChangeVoiceCloneConsent}
+                    dubVoice={dubVoice}
+                    ownVoiceProfiles={ownVoiceProfiles}
+                    onChangeDubVoice={onChangeDubVoice}
+                    cloneCapture={cloneCapture}
+                    cloneLevels={cloneLevels}
+                    onDone={closeSettingsMenu}
+                    footer={
+                      <>
+                        {/* FLASH MODE — a room setting, kept visually apart from everything above it.
+                            The list above is two questions about VOICE ("how do I sound", "what do I
+                            hear"). This is a third question about SPEED, and it is the only control in
+                            this panel that changes things for other people. Merging it into the list
+                            would repeat the exact mistake this panel was rebuilt to fix, so it gets a
+                            rule, a heading of its own, and a sentence saying who it affects. */}
+                        <div className="my-1 h-[1px] bg-surface-3" />
+                        <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+                          {t("roomSpeed.heading")}
+                        </p>
+                        <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
+                          <span className="min-w-0 text-left">
+                            <span className="block text-[13px] text-ink">{t("roomSpeed.flashMode.label")}</span>
+                            <span className="block text-[11px] leading-snug text-ink-subtle">
+                              {onChangeFlashMode
+                                ? t("roomSpeed.flashMode.editable")
+                                : flashModeSource === "room"
+                                  ? t("roomSpeed.flashMode.room")
+                                  : flashModeSource === "deployment"
+                                    // Nobody set this room. Saying "the host" here named a person who
+                                    // had made no such choice, and made a default look like a decision.
+                                    ? t("roomSpeed.flashMode.deployment")
+                                    // No override and no published default. The switch has to sit
+                                    // somewhere, so it sits off — but it is not reporting a reading,
+                                    // and claiming one is the whole defect this replaces.
+                                    : t("roomSpeed.flashMode.unknown")}
+                            </span>
                           </span>
-                        ) : null}
-                      </div>
-                      {cloneStatus.tone === "working" || cloneStatus.progress !== null ? (
-                        <CloneCaptureMeter
-                          levels={cloneLevels}
-                          progress={cloneStatus.progress}
-                          tone={cloneStatus.tone}
-                        />
-                      ) : null}
-                      <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-                        {cloneStatus.detail}
-                      </p>
-                    </div>
-                  ) : null}
+                          <Switch
+                            size="sm"
+                            className="mt-0.5 shrink-0"
+                            checked={flashModeEnabled}
+                            // A guest sees the switch in the position the host chose and cannot move
+                            // it. Hiding it instead would leave them unable to tell a fast room from a
+                            // slow one, which is the thing they can actually perceive.
+                            disabled={!onChangeFlashMode}
+                            onCheckedChange={(checked) => onChangeFlashMode?.(Boolean(checked))}
+                          />
+                        </div>
+                      </>
+                    }
+                  />
                 </>
               ) : null}
             </FlyoutSurface>
@@ -1112,6 +932,7 @@ function CloneCaptureCard({
   /** The bar. This card is portaled out of it, because the bar's wrapper clips upward. */
   anchorRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const t = useTranslations("meetingControlBar");
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   // What makes this occurrence "the same one" for dismissal: the tone plus the title. Progress
@@ -1161,7 +982,7 @@ function CloneCaptureCard({
         <button
           type="button"
           onClick={() => setDismissedKey(occurrenceKey)}
-          aria-label="Dismiss voice capture status"
+          aria-label={t("cloneCapture.dismissAriaLabel")}
           className="shrink-0 rounded p-0.5 text-ink-subtle transition-colors hover:text-ink"
         >
           <X className="h-3.5 w-3.5" />
@@ -1179,16 +1000,16 @@ function CloneCaptureCard({
   );
 }
 
-function layoutModeLabel(mode: MeetingLayoutMode): string {
+function layoutModeLabel(mode: MeetingLayoutMode, t: ReturnType<typeof useTranslations>): string {
   switch (mode) {
     case "grid":
-      return "Grid";
+      return t("settingsMenu.layout.grid");
     case "spotlight":
-      return "Spotlight";
+      return t("settingsMenu.layout.spotlight");
     case "sidebar":
-      return "Sidebar";
+      return t("settingsMenu.layout.sidebar");
     default:
-      return "Auto";
+      return t("settingsMenu.layout.auto");
   }
 }
 
@@ -1197,7 +1018,7 @@ function SettingsPanelHeader({ title, onBack }: { title: string; onBack: () => v
     <button
       type="button"
       onClick={onBack}
-      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-canvas hover:text-ink"
+      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
     >
       <CaretLeft className="h-3.5 w-3.5" />
       {title}
@@ -1225,7 +1046,7 @@ function SettingsRow({
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
-        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2"
       }`}
     >
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
@@ -1259,7 +1080,7 @@ function HostControlRow({
       aria-checked={toggle ? Boolean(active) : undefined}
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
-        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2"
       }`}
     >
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
@@ -1267,41 +1088,6 @@ function HostControlRow({
         <span className="font-medium">{label}</span>
         <span className="text-[11px] text-ink-muted">{description}</span>
       </span>
-    </button>
-  );
-}
-
-function VoiceOption({
-  label,
-  detail,
-  value,
-  active,
-  onSelect,
-  close,
-}: {
-  label: string;
-  detail?: string;
-  value: string;
-  active: boolean;
-  onSelect: (voiceId: string) => void;
-  close: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(value);
-        close();
-      }}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
-    >
-      <span className="min-w-0 text-left">
-        <span className="block truncate">{label}</span>
-        {detail ? (
-          <span className="block truncate text-[11px] capitalize text-ink-subtle">{detail}</span>
-        ) : null}
-      </span>
-      {active ? <CheckCircle className="h-3.5 w-3.5 shrink-0 text-ink" weight="fill" /> : null}
     </button>
   );
 }
@@ -1386,7 +1172,7 @@ function LayoutOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-surface-2 text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-surface-2"}`}
     >
       {label}
       {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
@@ -1407,17 +1193,18 @@ function LiveKitTrackControls({
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
 }) {
+  const t = useTranslations("meetingControlBar");
   if (!enabled) {
     return (
       <>
         <MeetControl
-          label={microphoneEnabled ? "Mute microphone" : "Unmute microphone"}
+          label={microphoneEnabled ? t("trackControls.muteMicrophone") : t("trackControls.unmuteMicrophone")}
           active={!microphoneEnabled}
           icon={microphoneEnabled ? <Microphone className="h-5 w-5" /> : <MicrophoneSlash className="h-5 w-5" />}
           onClick={onToggleMicrophone}
         />
         <MeetControl
-          label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
+          label={cameraEnabled ? t("trackControls.turnCameraOff") : t("trackControls.turnCameraOn")}
           active={!cameraEnabled}
           icon={cameraEnabled ? <VideoCamera className="h-5 w-5" /> : <VideoCameraSlash className="h-5 w-5" />}
           onClick={onToggleCamera}
@@ -1445,7 +1232,7 @@ function LiveKitTrackControls({
           // The speaker lives on the microphone caret. To a user "my headset" is one decision,
           // and an output picker of its own would be a third button in a full bar.
           kinds={["audioinput", "audiooutput"]}
-          label="Choose microphone and speaker"
+          label={t("trackControls.chooseMicrophoneAndSpeaker")}
         />
       </div>
       <div className="flex items-center">
@@ -1453,7 +1240,7 @@ function LiveKitTrackControls({
           source={Track.Source.Camera}
           className="grid h-10 w-10 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
         />
-        <MediaDeviceMenuButton kinds={["videoinput"]} label="Choose camera" />
+        <MediaDeviceMenuButton kinds={["videoinput"]} label={t("trackControls.chooseCamera")} />
       </div>
     </>
   );
@@ -1491,7 +1278,7 @@ function MeetControl({
       aria-controls={hasPopup && expanded ? controls : undefined}
       className={`grid h-10 w-10 place-items-center rounded-xl transition-colors ${
         disabled
-          ? "cursor-not-allowed bg-canvas text-ink-tertiary"
+          ? "cursor-not-allowed bg-surface-2 text-ink-tertiary"
           : active
           ? "bg-surface-2 text-primary"
           : "bg-transparent text-ink-muted hover:bg-surface-2"
@@ -1567,6 +1354,7 @@ function LanguagePairPicker({
   onLanguagePicked?: (language: string) => void;
   highlight: boolean;
 }) {
+  const t = useTranslations("meetingControlBar");
   const [open, setOpen] = useState(false);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   // Whether the languages the ROOM does not offer are showing.
@@ -1647,7 +1435,7 @@ function LanguagePairPicker({
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Choose your language"
+        title={t("languagePicker.triggerTitle")}
         className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium transition-colors ${
           highlight
             ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 hover:bg-amber-500/15"
@@ -1656,7 +1444,7 @@ function LanguagePairPicker({
       >
         <Translate className="h-4 w-4" />
         {choice.mode === "unset" ? (
-          <span>Set language</span>
+          <span>{t("languagePicker.setLanguage")}</span>
         ) : (
           <span>{getLanguageName(shownLanguage)}</span>
         )}
@@ -1672,8 +1460,8 @@ function LanguagePairPicker({
           className="z-50 w-64 overflow-y-auto rounded-2xl border border-border bg-surface-1 p-1.5 shadow-lg"
         >
           <LanguageColumn
-            title="My language"
-            hint="What you speak, and what everyone else is translated into for you."
+            title={t("languagePicker.myLanguage.title")}
+            hint={t("languagePicker.myLanguage.hint")}
             options={languageOptions}
             selected={choice.mode === "unset" ? undefined : shownLanguage}
             onSelect={pick}
@@ -1693,8 +1481,8 @@ function LanguagePairPicker({
               <div className="my-1 h-[1px] bg-border" />
               {otherLanguagesVisible ? (
                 <LanguageColumn
-                  title="Other languages"
-                  hint="Not offered by this room, but still translated for you."
+                  title={t("languagePicker.otherLanguages.title")}
+                  hint={t("languagePicker.otherLanguages.hint")}
                   options={otherLanguages}
                   selected={choice.mode === "unset" ? undefined : shownLanguage}
                   onSelect={pick}
@@ -1706,7 +1494,7 @@ function LanguagePairPicker({
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   <CaretRight className="h-3 w-3" weight="bold" />
-                  <span>Another language</span>
+                  <span>{t("languagePicker.otherLanguages.disclosure")}</span>
                 </button>
               )}
             </>

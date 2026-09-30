@@ -1,0 +1,36 @@
+{
+  "subheading": "Các thiết bị và trình duyệt hiện đang đăng nhập vào tài khoản của bạn.",
+  "signOutAllOthers": "Đăng xuất khỏi tất cả phiên khác",
+  "loadFailed": "Không thể tải các phiên của bạn.",
+  "retry": "Thử lại",
+  "noActiveSessions": "Không có phiên nào đang hoạt động.",
+  "couldNotMatchDevice": "Không thể khớp thiết bị này với phiên nào. Hãy đăng xuất và đăng nhập lại để quản lý các phiên khác từ đây.",
+  "signOut": "Đăng xuất",
+  "revoke": "Thu hồi",
+  "cancel": "Hủy",
+  "deviceLabel": {
+    "unknownDevice": "Thiết bị không xác định",
+    "browserOnSystem": "{browser} trên {system}"
+  },
+  "dialog": {
+    "revokeTitle": "Thu hồi phiên này?",
+    "revokeDescription": "{device}{ip} sẽ bị đăng xuất và cần đăng nhập lại.",
+    "signOutOthersTitle": "Đăng xuất khỏi tất cả phiên khác?",
+    "signOutOthersDescription": "{count, plural, other {# phiên khác}} sẽ bị đăng xuất. Thiết bị này vẫn giữ đăng nhập.",
+    "signOutDeviceTitle": "Đăng xuất khỏi thiết bị này?",
+    "signOutDeviceDescription": "Bạn sẽ bị đăng xuất tại đây và được đưa về trang đăng nhập."
+  },
+  "toasts": {
+    "sessionSignedOut": "Đã đăng xuất phiên.",
+    "othersSignedOut": "Đã đăng xuất khỏi tất cả phiên khác.",
+    "signOutFailed": "Không thể đăng xuất phiên đó."
+  },
+  "row": {
+    "thisDevice": "Thiết bị này",
+    "unknownIp": "IP không xác định",
+    "lastActive": "Hoạt động lần cuối {when}",
+    "signedIn": "Đăng nhập {when}",
+    "expires": "Hết hạn {when}",
+    "unknown": "không xác định"
+  }
+}

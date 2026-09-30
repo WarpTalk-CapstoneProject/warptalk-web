@@ -14,6 +14,7 @@ const [
   voiceProfiles,
   voiceProfileDialog,
   packageJson,
+  meetingTranscriptEn,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/components/rooms/meeting-transcript-panel.tsx"),
@@ -23,6 +24,7 @@ const [
   read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
   read("src/components/voice/create-voice-profile-dialog.tsx"),
   read("package.json"),
+  read("messages/en/meetingTranscript.json").then(JSON.parse),
 ]);
 
 const startedHandler = meetingSession.slice(
@@ -46,10 +48,13 @@ const checks = [
     // The summary no longer has a tab of its own either: it is rendered by the reading rail
     // beside the transcript it cites, which is what <TranscriptReadingLayout brings. Same rule,
     // one fewer place to read the same summary.
+    // Nor does the FILES list: `<ArtifactsPanel` was named here until 2026-09-18, and what it
+    // carried is now on the surfaces that show what each file is a copy of — the transcript's
+    // toolbar, the summary's control row, the recording's player. What WT-225/228 needs is that the
+    // saved record is reachable from the meeting, and the two needles below are that.
     "WT-225/228 the saved meeting record is reachable from the meeting",
     roomDetailPage.includes("<MeetingRecordSection") &&
-      roomDetailPage.includes("<TranscriptReadingLayout") &&
-      roomDetailPage.includes("<ArtifactsPanel"),
+      roomDetailPage.includes("<TranscriptReadingLayout"),
   ],
   [
     // The gate this opens is now named for what it actually governs: whether an arriving
@@ -98,7 +103,10 @@ const checks = [
   [
     "WT-228 transcript review exposes editing and finalization actions",
     transcriptPanel.includes("finalizeTranscript()") &&
-      transcriptPanel.includes("Save correction") &&
+      // "Save correction" moved into i18n (t("editor.save")) — the panel must still call that
+      // key, and the English catalog must still carry the wording.
+      transcriptPanel.includes('t("editor.save")') &&
+      meetingTranscriptEn.editor?.save === "Save correction" &&
       // Still reached from the meeting's own page, which is the half that made the deleted
       // Transcripts route safe to remove.
       roomDetailPage.includes("<MeetingTranscriptArtifact"),

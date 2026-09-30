@@ -1,0 +1,33 @@
+{
+  "header": {
+    "title": "Thông báo",
+    "subtitle": "Chọn kênh mà WarpTalk có thể dùng để liên hệ với bạn. Áp dụng cho mọi không gian làm việc."
+  },
+  "error": {
+    "title": "Không thể tải cài đặt thông báo",
+    "hint": "Không hiển thị gì thay vì giá trị mặc định có thể không đúng của bạn. Hãy thử lại, và nếu vẫn thất bại, kiểm tra xem dịch vụ thông báo có hoạt động không.",
+    "retry": "Thử lại",
+    "retrying": "Đang thử lại…"
+  },
+  "toasts": {
+    "saveFailed": "Không thể lưu cài đặt thông báo."
+  },
+  "channels": {
+    "sectionTitle": "Kênh thông báo",
+    "notAppliedYet": "Chưa được áp dụng",
+    "notAppliedSuffix": "Lựa chọn của bạn đã được lưu, nhưng hệ thống gửi vẫn chưa đọc giá trị này.",
+    "ariaLabel": "Thông báo {title}",
+    "email": {
+      "title": "Email",
+      "hint": "Gửi thông báo đến địa chỉ email tài khoản của bạn."
+    },
+    "push": {
+      "title": "Đẩy (Push)",
+      "hint": "Thông báo đẩy trên trình duyệt và ứng dụng máy tính."
+    },
+    "inApp": {
+      "title": "Trong ứng dụng",
+      "hint": "Chuông thông báo và cảnh báo bật lên bên trong WarpTalk."
+    }
+  }
+}

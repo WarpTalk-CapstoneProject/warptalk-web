@@ -55,6 +55,12 @@ export type RoomAudioRoutingInput = {
    * that exact string (see BridgeTokenDto).
    */
   bridgeStandInIdentity?: string | null;
+  /**
+   * Speakers this listener has ALREADY been hearing through a dub, in this listen language, while
+   * translation has been running. Their raw microphone stays off even while their interpreter bot
+   * is momentarily absent — see the mismatched-language rule in routeRoomAudio.
+   */
+  previouslyDubbedSpeakerIds?: ReadonlySet<string>;
 };
 
 export type RoomAudioRouting = {
@@ -62,6 +68,8 @@ export type RoomAudioRouting = {
   wanted: ReadonlySet<string>;
   /** The one wanted identity that is played into the bridge device rather than the speakers. */
   outboundIdentity: string | null;
+  /** Speakers whose dub, in this listener's voice, is on the wire right now. */
+  dubbedSpeakerIds: ReadonlySet<string>;
 };
 
 /** A speaker's interpreter track in ANY language: the language it is in, and whether it is the default voice. */
@@ -126,6 +134,7 @@ export function routeRoomAudio({
   localUserId,
   bridgeOutboundReady = false,
   bridgeStandInIdentity,
+  previouslyDubbedSpeakerIds,
 }: RoomAudioRoutingInput): RoomAudioRouting {
   const standIn = bridgeStandInIdentity || null;
 
@@ -193,11 +202,55 @@ export function routeRoomAudio({
     // Mismatched language: prefer the dub, but only once it exists. The untranslated original is
     // a worse listen than the dub and a far better one than dead air, and it self-corrects the
     // moment the bot publishes.
+    //
+    // "Once it exists" means once in this session, not "right now" (WT-874). tts_worker
+    // disconnects an interpreter bot after 60s without a sentence (SESSION_IDLE_TIMEOUT_S), so
+    // every pause longer than that unmuted the speaker's raw mic, and the next sentence was heard
+    // twice: the original for the 2-5s the pipeline takes, then the bot rejoined and the dub
+    // started over it. For a speaker already dubbed to this listener the pipeline is known to
+    // work, so the gap is a bot reconnecting, not a missing translation.
+    if (previouslyDubbedSpeakerIds?.has(identity)) return false;
     return !dubbedSpeakerIds.has(identity);
   };
 
   return {
     wanted: new Set(identities.filter(isWanted)),
     outboundIdentity,
+    dubbedSpeakerIds,
   };
+}
+
+/** Which speakers a listener has been hearing dubbed, and under which listening scope. */
+export type DubbedHistory = { readonly scope: string; readonly ids: ReadonlySet<string> };
+
+export const EMPTY_DUBBED_HISTORY: DubbedHistory = { scope: "", ids: new Set() };
+
+/**
+ * The scope a dubbed-speaker history is valid for: the listen language, while dubs are both
+ * produced and wanted. Empty means "no history applies", so turning voice or translation off and
+ * on again starts over and the first utterance fails open again.
+ */
+export function dubbedHistoryScope({
+  targetLanguageNormalized,
+  translationActive,
+  voiceEnabled,
+}: Pick<RoomAudioRoutingInput, "targetLanguageNormalized" | "translationActive" | "voiceEnabled">): string {
+  return translationActive && voiceEnabled ? targetLanguageNormalized : "";
+}
+
+/**
+ * The history after this render: reset on a scope change, grown by whoever is dubbed now.
+ * Returns `previous` itself when nothing changed, so a caller can store it in React state during
+ * render without looping.
+ */
+export function mergeDubbedHistory(
+  previous: DubbedHistory,
+  scope: string,
+  dubbedNow: ReadonlySet<string>,
+): DubbedHistory {
+  if (!scope) return previous.scope === "" && previous.ids.size === 0 ? previous : EMPTY_DUBBED_HISTORY;
+  const base = previous.scope === scope ? previous.ids : new Set<string>();
+  const missing = [...dubbedNow].filter((id) => !base.has(id));
+  if (previous.scope === scope && missing.length === 0) return previous;
+  return { scope, ids: new Set([...base, ...missing]) };
 }

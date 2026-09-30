@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Cancelling a workspace's subscription, or undoing a cancellation.
+ * Cancelling a workspace's subscription, or undoing a scheduled cancellation (`/reactivate`).
  *
  * Both go through the ordinary `SubscriptionService` endpoints rather than an admin-only route.
  * That is what makes cancelling here the SAME act a workspace owner performs: Stripe is cancelled,
@@ -9,12 +9,14 @@
  * skipped at least one of those and nobody would have found out until a customer kept being
  * charged.
  *
- * The reason is required by this dialog even though the endpoint takes it as optional. It is
- * stored on the subscription and it is the only record of why somebody at WarpTalk reached into a
- * customer's billing.
+ * For cancel, the reason is required by this dialog even though the endpoint takes it as optional.
+ * It is stored on the subscription and it is the only record of why somebody at WarpTalk reached
+ * into a customer's billing. Reactivate asks for none: its endpoint has nowhere to keep one, and
+ * collecting text that is then dropped would claim a record that does not exist.
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -31,27 +33,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/errors";
 import type { AdminSubscriptionSummaryDto } from "@/types/admin-subscription";
 
-export type SubscriptionLifecycleAction = "cancel" | "resume";
+export type SubscriptionLifecycleAction = "cancel" | "reactivate";
 
-const COPY: Record<
-  SubscriptionLifecycleAction,
-  { title: string; description: string; confirm: string; pending: string }
-> = {
-  cancel: {
-    title: "Cancel this subscription?",
-    description:
-      "The Stripe subscription is cancelled, entitlements are republished and the workspace owner is notified. A trial ends immediately; a paid subscription runs to the end of its period.",
-    confirm: "Cancel subscription",
-    pending: "Cancelling…",
-  },
-  resume: {
-    title: "Resume this subscription?",
-    description:
-      "Undoes a cancellation that has not taken effect yet. Billing continues on the existing period.",
-    confirm: "Resume subscription",
-    pending: "Resuming…",
-  },
+type LifecycleCopy = {
+  title: string;
+  description: string;
+  confirm: string;
+  pending: string;
+  /** Only cancel stores a reason; the reactivate endpoint takes no body to put one in. */
+  requiresReason: boolean;
 };
+
+function getCopy(
+  t: ReturnType<typeof useTranslations>,
+): Record<SubscriptionLifecycleAction, LifecycleCopy> {
+  return {
+    cancel: {
+      title: t("cancel.title"),
+      description: t("cancel.description"),
+      confirm: t("cancel.confirm"),
+      pending: t("cancel.pending"),
+      requiresReason: true,
+    },
+    reactivate: {
+      title: t("reactivate.title"),
+      description: t("reactivate.description"),
+      confirm: t("reactivate.confirm"),
+      pending: t("reactivate.pending"),
+      requiresReason: false,
+    },
+  };
+}
 
 export function SubscriptionLifecycleDialog({
   subscription,
@@ -64,7 +76,7 @@ export function SubscriptionLifecycleDialog({
   subscription: AdminSubscriptionSummaryDto | null;
   action: SubscriptionLifecycleAction;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (reason: string) => Promise<unknown>;
+  onSubmit: (reason: string | null) => Promise<unknown>;
   isSaving: boolean;
 }) {
   return (
@@ -97,27 +109,28 @@ function LifecycleForm({
   subscription: AdminSubscriptionSummaryDto;
   action: SubscriptionLifecycleAction;
   onCancel: () => void;
-  onSubmit: (reason: string) => Promise<unknown>;
+  onSubmit: (reason: string | null) => Promise<unknown>;
   onDone: () => void;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminSubscriptions.lifecycleDialog");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const copy = COPY[action];
+  const copy = getCopy(t)[action];
 
   const handleSubmit = async () => {
     const trimmed = reason.trim();
-    if (trimmed.length < 10) {
-      setError("Give a reason of at least ten characters. It is the only record of why.");
+    if (copy.requiresReason && trimmed.length < 10) {
+      setError(t("reasonTooShort"));
       return;
     }
 
     try {
       setError(null);
-      await onSubmit(trimmed);
+      await onSubmit(copy.requiresReason ? trimmed : null);
       onDone();
     } catch (err) {
-      setError(getErrorMessage(err, "The subscription could not be updated."));
+      setError(getErrorMessage(err, t("genericError")));
     }
   };
 
@@ -132,13 +145,14 @@ function LifecycleForm({
         <div className="rounded-lg border border-hairline/60 px-3 py-2 text-[12px]">
           <p className="font-medium text-ink">{subscription.planName}</p>
           <p className="mt-0.5 font-mono text-[11px] text-ink-subtle">
-            workspace {subscription.workspaceId}
+            {t("workspacePrefix")} {subscription.workspaceId}
           </p>
         </div>
 
+        {copy.requiresReason ? (
         <div>
           <Label htmlFor="lifecycle-reason" className="text-[12px] text-ink-muted">
-            Reason
+            {t("reasonLabel")}
           </Label>
           <Textarea
             id="lifecycle-reason"
@@ -146,9 +160,10 @@ function LifecycleForm({
             rows={3}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Recorded on the subscription."
+            placeholder={t("reasonPlaceholder")}
           />
         </div>
+        ) : null}
 
         {error ? (
           <p
@@ -163,7 +178,7 @@ function LifecycleForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Back
+          {t("back")}
         </Button>
         <Button onClick={() => void handleSubmit()} disabled={isSaving}>
           {isSaving ? copy.pending : copy.confirm}

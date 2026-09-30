@@ -124,7 +124,7 @@ export interface MinutesDocumentPlan {
 
 /** The summary template keys that are not narrative — see meeting-summary.ts for the full set. */
 const DECISION_KEYS = new Set(["decisions"]);
-const ACTION_KEYS = new Set(["actionItems"]);
+const ACTION_KEYS = new Set(["actionItems", "action_items"]);
 
 /**
  * Sort the stored sections into the document's parts, keeping stored order inside each part.
@@ -382,6 +382,39 @@ function zonedParts(value: string, timeZone?: string | null): ZonedParts | null 
     minute: find("minute"),
     offset: rawOffset ? rawOffset.replace(/^GMT/, "UTC").replace(/^UTC$/, "UTC+00:00") : null,
   };
+}
+
+/* ─────────────────────────── Drafted sentences ─────────────────────────── */
+
+/**
+ * WT-685 — the three sentences the backend drafter writes in Vietnamese, as they are stored.
+ *
+ * Mirrors `MeetingMinutesDrafter.DraftedLocation`, `DraftedQuorumRule` and `DraftedAgendaPreface`
+ * in warptalk-backend, which also translates them for the International .docx. The two lists must
+ * move together; a string changed on one side stops being translated on the other and prints in
+ * Vietnamese again, which is the exact bug this exists for.
+ */
+// i18n-allow: stored document DATA to match against, byte for byte — never shown as interface copy.
+export const DRAFTED_LOCATION = "Trực tuyến qua WarpTalk";
+export const DRAFTED_QUORUM_RULE = "Quá bán số người được mời";
+export const DRAFTED_AGENDA_PREFACE = "Theo mô tả cuộc họp khi đặt lịch:";
+
+/**
+ * A drafted line as the International layout prints it.
+ *
+ * Only the drafter's own wording is translated. A line the secretary rewrote is no longer the
+ * drafted sentence and is printed exactly as they wrote it — translating a person's words on a
+ * signed record would be the machine editing the minutes. Matching the stored text rather than a
+ * flag is also what fixes every document already drawn up, approved ones included.
+ */
+export function inInternationalLayout(value: string | null | undefined): string | null | undefined {
+  if (!value) return value;
+  if (value === DRAFTED_LOCATION) return "Online via WarpTalk";
+  if (value === DRAFTED_QUORUM_RULE) return "a majority of those invited";
+  if (value.startsWith(DRAFTED_AGENDA_PREFACE)) {
+    return `From the meeting description at booking:${value.slice(DRAFTED_AGENDA_PREFACE.length)}`;
+  }
+  return value;
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -647,9 +680,14 @@ export function externalGuestNotice(attendance: MinutesAttendance): string | nul
 
 /* ─────────────────────────── Assembly ─────────────────────────── */
 
-/** Every language a translation of this document exists in, in a stable order. */
+/**
+ * Every language this document can be read in besides its own, in a stable order.
+ *
+ * WT-685: read through `cleanTranslations`, so "vi-VN" and "vi" are one language and the record's
+ * own language is never offered as a translation of itself.
+ */
 export function translationLanguagesOf(content: MeetingMinutesContent): string[] {
-  return Object.keys(content.translations ?? {}).sort();
+  return Object.keys(cleanTranslations(content)).sort();
 }
 
 /**
@@ -667,4 +705,172 @@ export function closingSentence(
   return closed
     ? `There being no further business, the meeting closed at ${closed}.`
     : "There being no further business, the meeting closed.";
+}
+
+/* ─────────────────────────── Editing the structure ─────────────────────────── */
+
+/**
+ * The section a secretary's own discussion points go into.
+ *
+ * Its own key rather than more lines inside "summary": the summary is one paragraph a model wrote,
+ * and a point somebody adds by hand is a different kind of line. As an items section it numbers on
+ * its own (3.2, 3.3 …) and leaves the model's paragraph intact. The .docx writers title the same
+ * key, so the downloaded file agrees with the page.
+ */
+export const DISCUSSION_KEY = "discussion";
+
+/**
+ * One blank line appended to the section with this key, creating the section when there is none.
+ *
+ * Appends to the LAST items section carrying the key, so a document that already has decisions
+ * grows its decisions and never gains a second "Decisions" heading. A blank line is kept as typed:
+ * approval already skips a blank action item, so an abandoned one creates no task.
+ */
+export function addMinutesItem(content: MeetingMinutesContent, key: string): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  let target = -1;
+  sections.forEach((section, index) => {
+    if (section.key === key && section.kind === "items") target = index;
+  });
+
+  if (target === -1) {
+    sections.push({ key, kind: "items", items: [{ text: "" }] });
+  } else {
+    const section = sections[target];
+    sections[target] = { ...section, items: [...(section.items ?? []), { text: "" }] };
+  }
+
+  return { ...content, sections };
+}
+
+/**
+ * Take one line out of the document. A null `itemIndex` is a paragraph section, which IS its line.
+ *
+ * A section left with nothing in it goes too: an empty heading on a signed record reads as
+ * something removed and hidden. Section indices after it shift, which is safe because the page is
+ * laid out again from the working copy after every change.
+ */
+export function removeMinutesClause(
+  content: MeetingMinutesContent,
+  sectionIndex: number,
+  itemIndex: number | null,
+): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  const section = sections[sectionIndex];
+  if (!section) return content;
+
+  if (itemIndex == null) {
+    sections.splice(sectionIndex, 1);
+    return { ...content, sections };
+  }
+
+  const items = (section.items ?? []).filter((_, index) => index !== itemIndex);
+  if (items.length === 0) sections.splice(sectionIndex, 1);
+  else sections[sectionIndex] = { ...section, items };
+
+  return { ...content, sections };
+}
+
+/**
+ * Who an action item is assigned to. Spreads the item, so its text and its citation survive — the
+ * citation is what approval uses to recognise the same commitment across versions.
+ */
+export function setMinutesItemOwner(
+  content: MeetingMinutesContent,
+  sectionIndex: number,
+  itemIndex: number,
+  owner: string,
+): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  const section = sections[sectionIndex];
+  const item = section?.items?.[itemIndex];
+  if (!section || !item) return content;
+
+  const items = [...(section.items ?? [])];
+  items[itemIndex] = { ...item, owner };
+  sections[sectionIndex] = { ...section, items };
+
+  return { ...content, sections };
+}
+
+/* ─────────────────────────── Reading in one language ─────────────────────────── */
+
+/*
+ * WT-685 — one biên bản, read in ONE language.
+ *
+ * The page used to hang lines of every stored translation under the original, choosing per section
+ * the first language that happened to pair, alphabetically. One page could carry [ja] under 3.1
+ * and [vi] under 3.2, and a "translation" of the record into its own language printed English under
+ * English tagged [en]. These mirror MinutesLanguageView in warptalk-backend, which shapes the
+ * downloaded file by the same rules, so the screen and the file agree.
+ */
+
+/** What a file downloaded in a reading language contains: that language, or the original beside it. */
+export type MinutesFileMode = "mono" | "bilingual";
+
+const CARRIED_OVER_KEY = "carriedOver";
+
+function bareLanguage(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().split(/[-_]/)[0];
+}
+
+/** What an untranslated section says in place of borrowing another language's words. */
+export function untranslatedNotice(language: string): string {
+  return `This section has not been translated into ${language} yet.`;
+}
+
+/**
+ * The stored translations keyed by bare language code, without the record's own language, keeping
+ * the first spelling of a language that appears twice.
+ */
+export function cleanTranslations(content: MeetingMinutesContent): Record<string, MinutesSection[]> {
+  const original = bareLanguage(content.primaryLanguage);
+  const cleaned: Record<string, MinutesSection[]> = {};
+
+  for (const code of Object.keys(content.translations ?? {}).sort()) {
+    const key = bareLanguage(code);
+    const sections = content.translations?.[code];
+    if (!key || key === original || cleaned[key] || !sections?.length) continue;
+    cleaned[key] = sections;
+  }
+
+  return cleaned;
+}
+
+/** The document in its own language and nothing else — what a reader sees before choosing one. */
+export function originalOnly(content: MeetingMinutesContent): MeetingMinutesContent {
+  return { ...content, translations: null };
+}
+
+function hasWords(section: MinutesSection): boolean {
+  return Boolean(section.text?.trim()) || Boolean(section.items?.some((item) => item.text?.trim()));
+}
+
+/**
+ * The whole document in `language`: every section replaced by its counterpart there, and a section
+ * with none replaced by a notice saying so. `requested` is a reading generated on request for a
+ * language the record does not store, and wins over a stored one.
+ *
+ * Carried-over items are quotations of an earlier meeting's record and stay as they were written.
+ */
+export function readMinutesIn(
+  content: MeetingMinutesContent,
+  language: string,
+  requested?: MinutesSection[] | null,
+): MeetingMinutesContent {
+  const wanted = bareLanguage(language);
+  if (!wanted || wanted === bareLanguage(content.primaryLanguage)) return originalOnly(content);
+
+  const translated = requested?.length ? requested : cleanTranslations(content)[wanted];
+
+  const sections = content.sections.map((section): MinutesSection => {
+    if (section.key === CARRIED_OVER_KEY) return section;
+
+    const counterpart = translated?.find((candidate) => candidate.key === section.key);
+    if (counterpart && hasWords(counterpart)) return counterpart;
+
+    return { key: section.key, kind: "paragraph", text: untranslatedNotice(wanted) };
+  });
+
+  return { ...content, sections, translations: null };
 }

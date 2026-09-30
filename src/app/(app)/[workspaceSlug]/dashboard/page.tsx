@@ -30,6 +30,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowUpRight,
   CheckCircle,
@@ -54,6 +55,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceDocuments, useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { getErrorStatus } from "@/lib/api/retry-policy";
+import { UNFINISHED_ROOM_STATUSES_FILTER } from "@/lib/meeting/meeting-day";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -76,6 +78,7 @@ const BREAKDOWN_WINDOWS = [
 ] as const;
 
 export default function WorkspaceAdminDashboardPage() {
+  const t = useTranslations("dashboard");
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceRole();
@@ -103,8 +106,12 @@ export default function WorkspaceAdminDashboardPage() {
   );
   // Same reason as the Meetings list: without workspaceId the server cannot widen this to a
   // workspace Owner/Admin, and the Meetings tile read 0 for an Admin while the Owner saw 3.
+  // `status` is sent rather than left to the server's default, which is the four statuses that
+  // existed when it was written. OPEN (WT-612 / WT-621) is not among them, so a meeting the clock
+  // had just opened was absent from "up next" — the one row it most belonged in.
   const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({
     pageSize: 100,
+    status: UNFINISHED_ROOM_STATUSES_FILTER,
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
@@ -147,8 +154,8 @@ export default function WorkspaceAdminDashboardPage() {
         <WorkspaceBody className="pt-6">
           <WorkspaceEmptyState
             icon={<CreditCard size={28} weight="duotone" />}
-            title="Only an Owner or Admin can see this dashboard"
-            description="It reports workspace-wide spend and resources, so it is limited to the people who manage them."
+            title={t("restricted.title")}
+            description={t("restricted.description")}
           />
         </WorkspaceBody>
       </WorkspacePage>
@@ -174,14 +181,19 @@ export default function WorkspaceAdminDashboardPage() {
     .filter(
       (room) =>
         room.status === "in_progress" ||
+        // WT-612 / WT-621: its slot came round and the door opened by itself. Unlike the
+        // `scheduled` clause below it carries no time test — an OPEN room is open NOW, whatever
+        // the hour it was booked for says.
+        room.status === "open" ||
         room.status === "waiting" ||
         (room.status === "scheduled" &&
           room.scheduledAt &&
           new Date(room.scheduledAt).getTime() >= now),
     )
     .sort((a, b) => {
-      // Running first — it is happening whether or not it was booked earliest.
-      const liveRank = (status: string) => (status === "in_progress" ? 0 : 1);
+      // Running or open first — it is happening whether or not it was booked earliest.
+      const liveRank = (status: string) =>
+        status === "in_progress" || status === "open" ? 0 : 1;
       if (liveRank(a.status) !== liveRank(b.status)) return liveRank(a.status) - liveRank(b.status);
       return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
     })
@@ -208,7 +220,7 @@ export default function WorkspaceAdminDashboardPage() {
             href={billingHref}
             className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
           >
-            Billing
+            {t("billing")}
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         }
@@ -232,24 +244,26 @@ export default function WorkspaceAdminDashboardPage() {
           messageKey={noPlan ? "no-plan" : "has-plan"}
           title={
             noPlan
-              ? "Start translating in this workspace"
-              : "Your workspace at a glance"
+              ? t("hero.noPlanTitle")
+              : t("hero.hasPlanTitle")
           }
           description={
             noPlan
-              ? "Meetings translate against a credit balance. Choose a plan to give this workspace one, and every meeting in it gets live translation, transcripts and AI summaries."
-              : "Credits, burn rate and what is coming up — everything that decides whether this workspace keeps translating, on one page."
+              ? t("hero.noPlanDescription")
+              : t("hero.hasPlanDescription")
           }
-          actionLabel={noPlan ? "Choose a plan" : "Open billing"}
+          actionLabel={noPlan ? t("hero.choosePlan") : t("hero.openBilling")}
           actionHref={noPlan ? plansHref : billingHref}
+          dismissLabel={t("hero.dismiss")}
         />
 
         {creditsQuery.isPending ? (
           <BlockSpinner height="h-[152px]" />
         ) : creditsQuery.isError && !noPlan ? (
           <PanelNotice
-            title="Could not read this workspace's credits"
-            detail="Billing did not answer. The rest of the page is unaffected."
+            title={t("creditsError.title")}
+            detail={t("creditsError.detail")}
+            retryLabel={t("retry")}
             onRetry={() => creditsQuery.refetch()}
           />
         ) : (
@@ -269,8 +283,8 @@ export default function WorkspaceAdminDashboardPage() {
             neither child carries a border of its own. */}
         <div className="grid divide-y divide-hairline overflow-hidden rounded-2xl border border-hairline bg-surface-1 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           <WorkspaceSection
-            title="Credit usage"
-            description={`Consumed against topped up, month by month in ${year}.`}
+            title={t("sections.creditUsage")}
+            description={t("sections.creditUsageDescription", { year })}
             className="lg:col-span-2 rounded-none border-0 bg-transparent shadow-none"
           >
             {/* "No plan" is an EMPTY chart, not a missing one.
@@ -285,7 +299,7 @@ export default function WorkspaceAdminDashboardPage() {
               <BlockSpinner height="h-[220px]" bare />
             ) : trendQuery.isError && getErrorStatus(trendQuery.error) !== 404 ? (
               <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-                Usage could not be loaded.
+                {t("usageCouldNotLoad")}
               </p>
             ) : (
               <UsageTrend
@@ -293,7 +307,7 @@ export default function WorkspaceAdminDashboardPage() {
                 monthlyData={trendQuery.data?.monthlyData ?? []}
                 emptyMessage={
                   trendQuery.isError
-                    ? "Usage is charted once this workspace has a plan."
+                    ? t("noPlan.usageChartedOncePlan")
                     : undefined
                 }
               />
@@ -301,7 +315,7 @@ export default function WorkspaceAdminDashboardPage() {
           </WorkspaceSection>
 
           <WorkspaceSection
-            title="Where credits go"
+            title={t("sections.whereCreditsGo")}
             className="rounded-none border-0 bg-transparent shadow-none"
             actions={
               <div className="flex items-center gap-1">
@@ -322,7 +336,7 @@ export default function WorkspaceAdminDashboardPage() {
               <BlockSpinner height="h-[220px]" bare />
             ) : breakdownQuery.isError ? (
               <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-                Usage could not be loaded.
+                {t("usageCouldNotLoad")}
               </p>
             ) : (
               <UsageBreakdown rows={breakdownQuery.data ?? []} />
@@ -331,12 +345,12 @@ export default function WorkspaceAdminDashboardPage() {
         </div>
 
         <div className="grid gap-4">
-          <WorkspaceSection title="Who is spending it">
+          <WorkspaceSection title={t("sections.whoIsSpending")}>
             {memberUsageQuery.isPending ? (
               <BlockSpinner height="h-[220px]" bare />
             ) : memberUsageQuery.isError ? (
               <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-                Member usage could not be loaded.
+                {t("memberUsageError")}
               </p>
             ) : (
               <MemberUsage
@@ -349,13 +363,13 @@ export default function WorkspaceAdminDashboardPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <WorkspaceSection title="Needs a decision">
+          <WorkspaceSection title={t("sections.needsDecision")}>
             {isLoadingAttention ? (
               <BlockSpinner height="h-[52px]" bare />
             ) : nothingNeedsYou ? (
               <div className="flex items-center gap-2 py-2 text-[13px] text-ink-muted">
                 <CheckCircle className="h-4 w-4 text-emerald-500" />
-                Nothing is waiting on you.
+                {t("nothingWaiting")}
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -363,7 +377,7 @@ export default function WorkspaceAdminDashboardPage() {
                   <ActionRow
                     icon={<FileText className="h-4 w-4" />}
                     href={`/${activeWorkspaceSlug}/documents`}
-                    title={`${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} waiting for approval`}
+                    title={t("documentsWaitingApproval", { count: pendingDocuments.length })}
                     detail={pendingDocuments
                       .slice(0, 3)
                       .map((doc) => doc.name)
@@ -375,8 +389,10 @@ export default function WorkspaceAdminDashboardPage() {
                   <ActionRow
                     icon={<Warning className="h-4 w-4 text-amber-500" />}
                     href={billingHref}
-                    title={`Credits are at ${remainingPercent}%`}
-                    detail={`${Math.max(0, credits?.currentCredits ?? 0).toLocaleString()} left — meetings stop translating when this runs out.`}
+                    title={t("creditsAtPercent", { percent: remainingPercent })}
+                    detail={t("creditsAtPercentDetail", {
+                      count: Math.max(0, credits?.currentCredits ?? 0).toLocaleString(),
+                    })}
                   />
                 ) : null}
 
@@ -384,19 +400,22 @@ export default function WorkspaceAdminDashboardPage() {
                   <ActionRow
                     icon={<Warning className="h-4 w-4 text-amber-500" />}
                     href={billingHref}
-                    title="The plan is set to cancel"
-                    detail={`${subscription.planName} ends on ${new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(new Date(subscription.currentPeriodEnd))}.`}
+                    title={t("planCancelling")}
+                    detail={t("planEndsOn", {
+                      planName: subscription.planName,
+                      date: new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(new Date(subscription.currentPeriodEnd)),
+                    })}
                   />
                 ) : null}
               </div>
             )}
           </WorkspaceSection>
 
-          <WorkspaceSection title="Coming up">
+          <WorkspaceSection title={t("sections.comingUp")}>
             {isLoadingRooms ? (
               <BlockSpinner height="h-[52px]" bare />
             ) : upcoming.length === 0 ? (
-              <p className="py-2 text-[13px] text-ink-muted">No meetings scheduled.</p>
+              <p className="py-2 text-[13px] text-ink-muted">{t("noMeetingsScheduled")}</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {upcoming.map((room) => (
@@ -406,17 +425,22 @@ export default function WorkspaceAdminDashboardPage() {
                     href={`/${activeWorkspaceSlug}/rooms/${room.id}`}
                     title={room.title || room.translationRoomCode}
                     detail={
+                      // Not "Running now" for an OPEN room: it has nobody in it and no translation
+                      // session behind it, and saying it is running would send someone in
+                      // expecting a meeting already under way (WT-612 / WT-621).
                       room.status === "in_progress"
-                        ? "Running now"
+                        ? t("runningNow")
+                        : room.status === "open"
+                        ? t("openNow")
                         : room.scheduledAt
-                          ? new Intl.DateTimeFormat("en-US", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            }).format(new Date(room.scheduledAt))
-                          : "No time set"
+                        ? new Intl.DateTimeFormat("en-US", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(room.scheduledAt))
+                        : t("noTimeSet")
                     }
                   />
                 ))}
@@ -433,21 +457,21 @@ export default function WorkspaceAdminDashboardPage() {
             icon={<Users className="h-4 w-4" />}
             isLoading={isLoadingMembers}
             value={members?.total ?? members?.items?.length ?? 0}
-            label="members"
+            label={t("counts.members")}
           />
           <CountLink
             href={`/${activeWorkspaceSlug}/documents`}
             icon={<FileText className="h-4 w-4" />}
             isLoading={isLoadingDocuments}
             value={documents?.total ?? allDocuments.length}
-            label="documents"
+            label={t("counts.documents")}
           />
           <CountLink
             href={`/${activeWorkspaceSlug}/rooms`}
             icon={<VideoCamera className="h-4 w-4" />}
             isLoading={isLoadingRooms}
             value={roomsData?.total ?? rooms.length}
-            label="meetings"
+            label={t("counts.meetings")}
           />
         </div>
       </WorkspaceBody>
@@ -471,10 +495,12 @@ function BlockSpinner({ height, bare = false }: { height: string; bare?: boolean
 function PanelNotice({
   title,
   detail,
+  retryLabel,
   onRetry,
 }: {
   title: string;
   detail: string;
+  retryLabel: string;
   onRetry: () => void;
 }) {
   return (
@@ -491,7 +517,7 @@ function PanelNotice({
         onClick={onRetry}
         className="inline-flex h-[28px] shrink-0 items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
       >
-        Retry
+        {retryLabel}
       </button>
     </div>
   );

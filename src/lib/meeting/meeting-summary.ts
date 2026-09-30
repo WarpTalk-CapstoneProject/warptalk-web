@@ -40,10 +40,14 @@ const SECTION_TITLES: Record<string, string> = {
   narrative: "What happened",
   decisions: "Decisions",
   actionItems: "Action items",
+  action_items: "Action items",
   // Not a summary template section: the minutes drafter adds it for a recurring meeting,
   // quoting what earlier occurrences left open.
   carriedOver: "Carried over from the last meeting",
   openQuestions: "Open questions",
+  // Not a summary template section either: the minutes editor adds it for points a secretary
+  // writes in by hand (see DISCUSSION_KEY in minutes-document.ts).
+  discussion: "Discussion points",
   progress: "Progress",
   plans: "Plans",
   blockers: "Blockers",
@@ -156,11 +160,12 @@ function toItem(raw: unknown): MeetingSummaryItem | null {
   if (!raw || typeof raw !== "object") return null;
 
   const row = raw as Record<string, unknown>;
-  // `task` is the action-item spelling; `text` is every other section's.
-  const text = String(row.text ?? row.task ?? "").trim();
+  // `task` is the action-item spelling; `text` is every other section's. Also allow description.
+  const text = String(row.text ?? row.task ?? row.description ?? "").trim();
   if (!text) return null;
 
-  const owner = typeof row.owner === "string" ? row.owner.trim() : "";
+  const ownerRaw = row.owner ?? row.assignee;
+  const owner = typeof ownerRaw === "string" ? ownerRaw.trim() : "";
   return {
     text,
     ...(owner ? { owner } : {}),

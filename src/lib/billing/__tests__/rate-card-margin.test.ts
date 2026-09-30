@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  isCreditRateCard,
   marginLabel,
   marginTone,
+  parseProviderCostUsd,
+  providerCostEffect,
   resolveRateCardMargin,
   type RateCardLike,
 } from "../rate-card-margin.ts";
@@ -125,3 +128,45 @@ describe("marginLabel", () => {
     );
   });
 });
+
+describe("isCreditRateCard", () => {
+  it("recognises the credit-unit cards billing_worker settles on", () => {
+    assert.equal(isCreditRateCard({ currency: "CRD" }), true);
+    // The database column is char(3); a padded or lowercase value is still a credit card.
+    assert.equal(isCreditRateCard({ currency: "crd " }), true);
+  });
+
+  it("leaves VND and USD cards to the full editor", () => {
+    assert.equal(isCreditRateCard({ currency: "VND" }), false);
+    assert.equal(isCreditRateCard({ currency: "USD" }), false);
+  });
+});
+
+describe("providerCostEffect", () => {
+  it("backfills a card that never had a cost, so settled usage becomes costable", () => {
+    assert.equal(providerCostEffect({ providerUnitCostUsd: null }, 0.00049), "backfill");
+  });
+
+  it("supersedes a card whose cost changes, so settled usage keeps the old cost", () => {
+    assert.equal(providerCostEffect({ providerUnitCostUsd: 0.00049 }, 0.0006), "supersede");
+  });
+
+  it("does nothing when the cost is the same", () => {
+    assert.equal(providerCostEffect({ providerUnitCostUsd: 0.00049 }, 0.00049), "unchanged");
+  });
+});
+
+describe("parseProviderCostUsd", () => {
+  it("reads a small positive USD amount exactly as typed", () => {
+    assert.equal(parseProviderCostUsd("0.00049"), 0.00049);
+    assert.equal(parseProviderCostUsd(" 0.000735 "), 0.000735);
+    assert.equal(parseProviderCostUsd("4.9e-4"), 0.00049);
+  });
+
+  it("refuses zero, negatives, blanks and text rather than guessing", () => {
+    for (const value of ["0", "0.0", "-0.0001", "", "  ", "abc", "1,5", "$0.001"]) {
+      assert.equal(parseProviderCostUsd(value), null, value);
+    }
+  });
+});
+

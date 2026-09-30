@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import { isUsableWorkspaceSlug, normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { isPlatformAdminToken } from "@/lib/api/token-lifecycle";
 import {
   ACCESS_TOKEN_COOKIE,
@@ -35,6 +35,13 @@ const PUBLIC_ROUTES = [
   // visitor to /login first would break the one flow this feature exists for, since the person
   // holding the link may have no account at all.
   "/minutes/shared",
+  // WT-686. The page LiveKit's recorder opens for every meeting recording. The recorder is a
+  // headless Chrome with no session, so the gate answered it 307 -> /login; the page never called
+  // EgressHelper.startRecording(), LiveKit aborted every egress with "Start signal not received",
+  // and no meeting has had a video since the template was switched on. Public costs nothing: the
+  // page grants no access of its own, joining only the room the egress-minted token already names,
+  // and it calls no WarpTalk API.
+  "/egress",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",
@@ -132,6 +139,49 @@ export function proxy(request: NextRequest) {
     const destination = new URL(`/${movedBilling[1]}/settings/billing`, request.url);
     destination.search = request.nextUrl.search;
     return NextResponse.redirect(destination);
+  }
+
+  /**
+   * Payments was merged into Invoices on 2026-09-17 — the two pages showed the same numbers — so
+   * its address forwards here for the same reason as the one above: a bookmark or an old link must
+   * land on the page that now answers "did that charge go through?", not on a 404.
+   */
+  const movedPayments = /^\/([^/]+)\/settings\/billing\/payments\/?$/.exec(pathname);
+  if (movedPayments) {
+    const destination = new URL(`/${movedPayments[1]}/settings/billing/invoices`, request.url);
+    destination.search = request.nextUrl.search;
+    return NextResponse.redirect(destination);
+  }
+
+  /**
+   * Two workspace pages taken out of the product on the owner's call (2026-09-23), forwarded for
+   * the same reason as the two above: a bookmark lands somewhere real, not on a 404.
+   *
+   * - `/settings/audit-log` only ever listed actions WarpTalk STAFF took on the workspace, which
+   *   is the platform's own trail. It stays on /admin/audit; workspace owners no longer see it.
+   * - `/tasks` ("My tasks") is off the main navigation. Action items still live on each meeting's
+   *   record, where they were produced.
+   *
+   * Anchored like movedBilling, and only for a segment that can BE a workspace slug, so
+   * `/admin/...`, `/rooms/...` and every other reserved prefix is never rewritten.
+   */
+  const retiredAuditLog = /^\/([^/]+)\/settings\/audit-log\/?$/.exec(pathname);
+  if (retiredAuditLog && isUsableWorkspaceSlug(retiredAuditLog[1])) {
+    return NextResponse.redirect(new URL(`/${retiredAuditLog[1]}/settings`, request.url));
+  }
+  const retiredTasks = /^\/([^/]+)\/tasks\/?$/.exec(pathname);
+  if (retiredTasks && isUsableWorkspaceSlug(retiredTasks[1])) {
+    return NextResponse.redirect(new URL(`/${retiredTasks[1]}/home`, request.url));
+  }
+
+  /**
+   * Two admin portal pages taken out on the owner's call (2026-09-24), forwarded to Insights for
+   * the same reason: the platform meeting directory (`/admin/meetings`) and the Event outbox
+   * (`/admin/outbox`). Insights still shows live meetings and the dead-letter count; neither links
+   * here any more. Their backend endpoints are untouched — only the pages went.
+   */
+  if (/^\/admin\/(?:meetings|outbox)(?:\/.*)?$/.test(pathname)) {
+    return NextResponse.redirect(new URL("/admin", request.url));
   }
 
   // A dead cookie must not survive the response that noticed it was dead, or the next page

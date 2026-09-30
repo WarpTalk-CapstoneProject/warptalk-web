@@ -33,6 +33,15 @@
 
 export type InstallNotePlatform = "mac" | "windows";
 
+/**
+ * Duck-typed against next-intl's translator shape (callable + `.raw`), not imported: this file
+ * has no imports on purpose (see above), and a structural type needs none.
+ */
+export interface InstallNotesTranslator {
+  (key: string, values?: Record<string, string | number>): string;
+  raw: (key: string) => unknown;
+}
+
 export interface InstallNote {
   platform: InstallNotePlatform;
   title: string;
@@ -129,10 +138,10 @@ const MAC_NOTE: InstallNote = {
   summary:
     "WarpTalk is signed, but not notarized by Apple yet, so macOS asks you to confirm the first time you open it.",
   steps: [
-    "Open the .dmg and drag WarpTalk into your Applications folder.",
-    "Open WarpTalk from Applications. macOS says it could not verify the app is free of malware — click Done.",
-    "Open System Settings › Privacy & Security, scroll down to Security, and click Open Anyway next to the message about WarpTalk. It appears there for about an hour after step 2.",
-    "Confirm with Touch ID or your password, then choose Open Anyway once more. macOS asks only this once; updates open normally afterwards.",
+    "Open the downloaded WarpTalk .pkg. macOS says it could not verify it is free of malware — click Done.",
+    "Open System Settings › Privacy & Security, scroll down to Security, and click Open Anyway next to the message about WarpTalk. It appears there for about an hour after step 1.",
+    "Confirm with Touch ID or your password, then choose Open Anyway once more and follow the installer. It also adds the WarpTalk Microphone and WarpTalk Speaker audio devices that Google Meet translation uses — nothing to install separately.",
+    "Open WarpTalk from Applications. Updates install on their own afterwards.",
   ],
   footnote:
     "Gatekeeper stays on throughout — you are approving this one app, not turning the check off.",
@@ -147,11 +156,33 @@ const WINDOWS_NOTE: InstallNote = {
     "Run the WarpTalk Setup .exe. Windows shows a blue “Windows protected your PC” screen.",
     "Click More info, just under that message.",
     "Click Run anyway, then continue through the installer as usual.",
+    "Near the end, Windows asks for permission to set up the Google Meet audio cables (VB-CABLE and Hi-Fi Cable by VB-Audio). Click Yes — nothing to install separately.",
   ],
   footnote:
     "On a PC managed by your workplace or school, SmartScreen can block the file outright with no Run anyway button. Nothing on this page gets past that — ask whoever administers the machine, or run WarpTalk in your browser instead.",
   link: { label: "Open WarpTalk in the browser", href: "/login" },
 };
+
+function localizedMacNote(t: InstallNotesTranslator): InstallNote {
+  return {
+    platform: "mac",
+    title: t("mac.title"),
+    summary: t("mac.summary"),
+    steps: t.raw("mac.steps") as string[],
+    footnote: t("mac.footnote"),
+  };
+}
+
+function localizedWindowsNote(t: InstallNotesTranslator): InstallNote {
+  return {
+    platform: "windows",
+    title: t("windows.title"),
+    summary: t("windows.summary"),
+    steps: t.raw("windows.steps") as string[],
+    footnote: t("windows.footnote"),
+    link: { label: t("windows.linkLabel"), href: "/login" },
+  };
+}
 
 /**
  * The notes to render beside the download links, in platform order, for the release on offer.
@@ -160,14 +191,26 @@ const WINDOWS_NOTE: InstallNote = {
  * platform to everyone and is server-rendered, so guessing the OS here would either flash the
  * wrong instructions or leave a Mac user reading Windows steps for the build they just clicked.
  * A platform with nothing to download gets no note.
+ *
+ * `t` is optional and defaults to the English constants above: the contract test in
+ * `__tests__/install-notes.test.ts` calls this with no translator and pins their exact wording, so
+ * the default has to stay byte-for-byte what it already was. The `/download` page passes a real
+ * translator (`getTranslations("download.installNotes")`) to render the visitor's locale instead.
  */
-export function buildInstallNotes(release: {
-  version: string | null;
-  hasMacAsset: boolean;
-  hasWindowsAsset: boolean;
-}): InstallNote[] {
+export function buildInstallNotes(
+  release: {
+    version: string | null;
+    hasMacAsset: boolean;
+    hasWindowsAsset: boolean;
+  },
+  t?: InstallNotesTranslator,
+): InstallNote[] {
   const notes: InstallNote[] = [];
-  if (release.hasMacAsset && !macBuildIsNotarized(release.version)) notes.push(MAC_NOTE);
-  if (release.hasWindowsAsset) notes.push(WINDOWS_NOTE);
+  if (release.hasMacAsset && !macBuildIsNotarized(release.version)) {
+    notes.push(t ? localizedMacNote(t) : MAC_NOTE);
+  }
+  if (release.hasWindowsAsset) {
+    notes.push(t ? localizedWindowsNote(t) : WINDOWS_NOTE);
+  }
   return notes;
 }

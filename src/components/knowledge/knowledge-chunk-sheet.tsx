@@ -28,6 +28,7 @@
 import { useState } from "react";
 import { Trash, Warning } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -43,9 +44,9 @@ import {
   useUpdateKnowledgeChunk,
 } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/api/errors";
-import { sourceLabel } from "@/lib/knowledge/knowledge-view";
+import { sourceLabel, sourceTypeLabel } from "@/lib/knowledge/knowledge-view";
 import { cn } from "@/lib/utils";
-import { FACT_CATEGORIES } from "@/types/workspace-knowledge";
+import { FACT_CATEGORIES, isKnownFactCategory } from "@/types/workspace-knowledge";
 import type { WorkspaceKnowledgeChunkDto } from "@/types/workspace-knowledge";
 
 const MAX_FACT_LENGTH = 500;
@@ -95,6 +96,9 @@ function ChunkEditor({
   canEdit: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations("knowledge.sheet");
+  const tKnowledge = useTranslations("knowledge");
+  const tCategories = useTranslations("knowledge.factCategories");
   const [fact, setFact] = useState(chunk.fact ?? "");
   const [category, setCategory] = useState<string | null>(chunk.factCategory);
   const [aiRetrieval, setAiRetrieval] = useState(chunk.aiRetrieval);
@@ -118,58 +122,57 @@ function ChunkEditor({
         chunkId: chunk.chunkId,
         update: { fact: nextFact, factCategory: nextCategory, aiRetrieval },
       });
-      toast.success("Chunk updated.");
+      toast.success(t("toasts.updated"));
       onClose();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not update this chunk."));
+      toast.error(getErrorMessage(error, t("toasts.updateFailed")));
     }
   }
 
   async function destroy() {
     try {
       await remove.mutateAsync(chunk.chunkId);
-      toast.success("Chunk removed from the index.");
+      toast.success(t("toasts.removed"));
       onClose();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not remove this chunk."));
+      toast.error(getErrorMessage(error, t("toasts.removeFailed")));
     }
   }
 
   return (
     <SheetContent className="flex w-full flex-col gap-0 sm:max-w-[520px]">
       <SheetHeader className="border-b border-hairline">
-        <SheetTitle className="text-[15px]">{sourceLabel(chunk)}</SheetTitle>
+        <SheetTitle className="text-[15px]">{sourceLabel(chunk, tKnowledge)}</SheetTitle>
         <SheetDescription className="text-[12px]">
           {chunk.sourceType === "document" && chunk.chunkIndex != null
-            ? `Chunk ${chunk.chunkIndex} of this document, as it was indexed.`
-            : "One indexed piece of what this workspace knows."}
+            ? t("chunkOfDocument", { index: chunk.chunkIndex })
+            : t("onePiece")}
         </SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <Field label="Indexed text">
+        <Field label={t("indexedTextLabel")}>
           {chunk.text ? (
             <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-surface-2/50 px-3 py-2.5 text-[12px] leading-relaxed text-ink">
               {chunk.text}
             </p>
           ) : (
             <p className="text-[12px] text-ink-subtle">
-              Indexed before the stored payload kept its text.
+              {t("noTextKept")}
             </p>
           )}
           <p className="mt-1.5 text-[11px] text-ink-subtle">
-            Read-only — the vector was computed from these words. To change
-            them, fix the source and upload it again, or delete this chunk.
+            {t("readOnlyHint")}
           </p>
         </Field>
 
-        <Field label="Fact">
+        <Field label={t("factLabel")}>
           {canEdit ? (
             <>
               <Textarea
                 value={fact}
                 onChange={(event) => setFact(event.target.value)}
-                placeholder="One line this chunk establishes. Leave empty if it establishes none."
+                placeholder={t("factPlaceholder")}
                 className="min-h-20 text-[12px]"
               />
               <p
@@ -186,12 +189,12 @@ function ChunkEditor({
           )}
         </Field>
 
-        <Field label="Category">
+        <Field label={t("categoryLabel")}>
           {canEdit ? (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-1.5">
                 <CategoryChip
-                  label="None"
+                  label={t("none")}
                   selected={category === null}
                   disabled={false}
                   onClick={() => setCategory(null)}
@@ -199,7 +202,7 @@ function ChunkEditor({
                 {FACT_CATEGORIES.map((value) => (
                   <CategoryChip
                     key={value}
-                    label={value}
+                    label={tCategories(value)}
                     selected={category === value}
                     disabled={!nextFact}
                     onClick={() => setCategory(value)}
@@ -211,7 +214,7 @@ function ChunkEditor({
                   type="text"
                   value={category && !FACT_CATEGORIES.includes(category as any) ? category : ""}
                   onChange={(e) => setCategory(e.target.value ? e.target.value : null)}
-                  placeholder="Or enter custom category name..."
+                  placeholder={t("customCategoryPlaceholder")}
                   disabled={!nextFact}
                   className="h-8 px-2.5 py-1 text-[11px] rounded-md border border-hairline bg-surface-1 text-ink focus:outline-none focus:ring-1 focus:ring-[var(--primary)] w-full max-w-[260px] disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -219,17 +222,21 @@ function ChunkEditor({
             </div>
           ) : (
             <p className="text-[12px] capitalize text-ink">
-              {chunk.factCategory ?? "—"}
+              {chunk.factCategory
+                ? isKnownFactCategory(chunk.factCategory)
+                  ? tCategories(chunk.factCategory)
+                  : chunk.factCategory
+                : "—"}
             </p>
           )}
           {canEdit && !nextFact ? (
             <p className="mt-1.5 text-[11px] text-ink-subtle">
-              Write a fact to categorise it.
+              {t("writeAFactHint")}
             </p>
           ) : null}
         </Field>
 
-        <Field label="WarpBot retrieval">
+        <Field label={t("retrievalLabel")}>
           {canEdit ? (
             <button
               type="button"
@@ -239,12 +246,11 @@ function ChunkEditor({
               <span className="min-w-0">
                 <span className="block text-[12px] font-medium text-ink">
                   {aiRetrieval
-                    ? "Can be used in answers"
-                    : "Kept, but never quoted"}
+                    ? t("canBeUsed")
+                    : t("keptNeverQuoted")}
                 </span>
                 <span className="mt-0.5 block text-[11px] text-ink-muted">
-                  Turning this off leaves the chunk here to be audited and takes
-                  it out of everything WarpBot says.
+                  {t("retrievalHint")}
                 </span>
               </span>
               <span
@@ -264,29 +270,28 @@ function ChunkEditor({
           ) : (
             <p className="text-[12px] text-ink">
               {chunk.aiRetrieval
-                ? "Can be used in answers"
-                : "Kept, but never quoted"}
+                ? t("canBeUsed")
+                : t("keptNeverQuoted")}
             </p>
           )}
         </Field>
 
-        <Field label="Where it came from">
+        <Field label={t("whereFrom")}>
           <dl className="grid grid-cols-[128px_1fr] gap-y-1.5 text-[12px]">
             {/* `capitalize` only where the value is one of ours. A filename is the file's own,
                 and "MSA-2026.pdf" retitled as "MSA-2026.Pdf" is wrong about a real thing. */}
             <Detail
-              label="Source"
-              value={chunk.sourceType.replace(/_/g, " ")}
-              capitalize
+              label={t("sourceDetail")}
+              value={sourceTypeLabel(chunk.sourceType, tKnowledge)}
             />
             {chunk.documentName ? (
-              <Detail label="Document" value={chunk.documentName} />
+              <Detail label={t("documentDetail")} value={chunk.documentName} />
             ) : null}
             {chunk.speakerName ? (
-              <Detail label="Speaker" value={chunk.speakerName} />
+              <Detail label={t("speakerDetail")} value={chunk.speakerName} />
             ) : null}
-            <Detail label="Retention" value={chunk.retentionState ?? "—"} capitalize />
-            <Detail label="Chunk id" value={chunk.chunkId} mono />
+            <Detail label={t("retentionDetail")} value={chunk.retentionState ?? "—"} capitalize />
+            <Detail label={t("chunkIdDetail")} value={chunk.chunkId} mono />
           </dl>
         </Field>
       </div>
@@ -300,9 +305,7 @@ function ChunkEditor({
             <div className="flex flex-col gap-2.5">
               <p className="flex items-start gap-2 text-[12px] text-ink">
                 <Warning className="mt-0.5 size-4 shrink-0 text-amber-500" />
-                Remove this chunk from the index? The document or meeting it
-                came from is not touched, and re-uploading the source will index
-                it again.
+                {t("deleteConfirm")}
               </p>
               <div className="flex items-center justify-end gap-2">
                 <Button
@@ -310,7 +313,7 @@ function ChunkEditor({
                   size="sm"
                   onClick={() => setConfirmingDelete(false)}
                 >
-                  Cancel
+                  {t("cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -318,7 +321,7 @@ function ChunkEditor({
                   disabled={remove.isPending}
                   onClick={destroy}
                 >
-                  {remove.isPending ? "Removing…" : "Remove chunk"}
+                  {remove.isPending ? t("removing") : t("removeChunk")}
                 </Button>
               </div>
             </div>
@@ -331,18 +334,18 @@ function ChunkEditor({
                 onClick={() => setConfirmingDelete(true)}
               >
                 <Trash className="size-3.5" />
-                Delete
+                {t("delete")}
               </Button>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onClose}>
-                  Cancel
+                  {t("cancel")}
                 </Button>
                 <Button
                   size="sm"
                   disabled={!dirty || tooLong || update.isPending}
                   onClick={save}
                 >
-                  {update.isPending ? "Saving…" : "Save changes"}
+                  {update.isPending ? t("saving") : t("saveChanges")}
                 </Button>
               </div>
             </div>

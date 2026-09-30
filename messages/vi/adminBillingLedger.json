@@ -1,0 +1,263 @@
+{
+  "header": {
+    "eyebrow": "Thanh toán nền tảng",
+    "title": "Thanh toán",
+    "description": "Tín dụng, mức tiêu thụ và không gian làm việc đang hoạt động trên toàn hệ thống."
+  },
+  "actions": {
+    "exportReport": "Xuất báo cáo",
+    "managePlans": "Quản lý gói"
+  },
+  "adjustCredits": {
+    "trigger": "Điều chỉnh tín dụng",
+    "title": "Điều chỉnh tín dụng",
+    "description": "Thêm hoặc bớt tín dụng theo cách thủ công. Thao tác này sẽ được ghi lại trong nhật ký kiểm tra.",
+    "descriptionWithTarget": "Thêm hoặc bớt tín dụng cho không gian làm việc {workspaceId}. Thao tác này sẽ được ghi lại trong nhật ký kiểm tra.",
+    "confirmHeading": "Xác nhận điều chỉnh tín dụng này",
+    "confirmWorkspace": "Không gian làm việc: {name}",
+    "confirmAmount": "{sign}{amount} tín dụng",
+    "confirmReason": "Lý do: {reason}",
+    "workspaceLabel": "Không gian làm việc",
+    "workspaceLoading": "Đang tải danh sách không gian làm việc…",
+    "workspaceLoadError": "Không thể tải danh sách không gian làm việc",
+    "workspacePlaceholder": "Chọn một không gian làm việc…",
+    "workspaceOption": "{name} ({slug})",
+    "workspaceOptionSuspended": "{name} ({slug}) — đã tạm ngưng",
+    "amountLabel": "Số lượng",
+    "amountPlaceholder": "vd. 500 hoặc -500",
+    "amountHint": "Dùng giá trị âm để trừ tín dụng.",
+    "reasonLabel": "Lý do (Bắt buộc)",
+    "reasonPlaceholder": "vd. Bồi thường do gián đoạn dịch vụ",
+    "cancel": "Hủy",
+    "back": "Quay lại",
+    "reviewAdjustment": "Xem lại điều chỉnh",
+    "confirmAdjustment": "Xác nhận điều chỉnh",
+    "processing": "Đang xử lý...",
+    "success": "Đã điều chỉnh thành công {sign}{amount} tín dụng.",
+    "errors": {
+      "chooseWorkspace": "Vui lòng chọn một không gian làm việc.",
+      "invalidAmount": "Vui lòng nhập một số nguyên hợp lệ (khác 0).",
+      "amountTooLarge": "Mỗi lần điều chỉnh không được vượt quá {max} tín dụng.",
+      "reasonRequired": "Cần nhập lý do để phục vụ nhật ký kiểm tra.",
+      "adjustFailed": "Không thể điều chỉnh tín dụng. Vui lòng thử lại."
+    }
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "Tổng tín dụng đã phát hành",
+      "detail": "Đang lưu hành trên các không gian làm việc"
+    },
+    "activeWorkspaces": {
+      "label": "Không gian làm việc đang hoạt động",
+      "detail": "Không gian làm việc đang sử dụng nền tảng"
+    },
+    "monthlyConsumption": {
+      "label": "Mức tiêu thụ trong tháng",
+      "detail": "Tổng tín dụng đã tiêu thụ trong tháng này"
+    },
+    "transactions30d": {
+      "label": "Giao dịch (30 ngày)",
+      "detail": "Giao dịch tín dụng trong 30 ngày qua"
+    }
+  },
+  "tabs": {
+    "overview": "Kinh tế & Phân tích",
+    "ledger": "Giao dịch toàn hệ thống",
+    "invoices": "Hóa đơn",
+    "subscriptions": "Gói đăng ký",
+    "alerts": "Cảnh báo gian lận"
+  },
+  "ledger": {
+    "cardTitle": "Giao dịch toàn hệ thống",
+    "filters": {
+      "typeLabel": "Loại",
+      "topUp": "Nạp tín dụng",
+      "consumption": "Tiêu thụ",
+      "adjustment": "Điều chỉnh"
+    },
+    "table": {
+      "timestamp": "Thời gian",
+      "workspace": "Không gian làm việc",
+      "type": "Loại",
+      "reason": "Lý do",
+      "amount": "Số tiền",
+      "balanceAfter": "Số dư sau",
+      "action": "Hành động"
+    },
+    "empty": "Không tìm thấy giao dịch nào",
+    "meetingSession": "Phiên họp",
+    "systemAutomatic": "Tự động bởi hệ thống",
+    "typeBadge": {
+      "topUp": "Nạp tín dụng",
+      "consume": "Tiêu thụ",
+      "adjustment": "Điều chỉnh"
+    },
+    "view": "Xem"
+  },
+  "export": {
+    "dialogTitle": "Xuất báo cáo thanh toán",
+    "stats": {
+      "transactions": "Giao dịch",
+      "netTopUp": "Tổng nạp tín dụng",
+      "totalConsumed": "Tổng đã tiêu thụ",
+      "netAdjustments": "Tổng điều chỉnh"
+    },
+    "noteLabel": "Thêm ghi chú (không bắt buộc)",
+    "notePlaceholder": "vd: Rà soát thanh toán quý 2/2026 cho cuộc họp hội đồng...",
+    "noteHelper": "Ghi chú này sẽ được in ở đầu sheet Summary.",
+    "cancel": "Hủy",
+    "download": "Tải file Excel",
+    "generating": "Đang tạo file...",
+    "noDataAlert": "Không có dữ liệu để xuất."
+  },
+  "transactionDetails": {
+    "title": "Chi tiết giao dịch",
+    "subtitle": "Phân tích chi phí dịch vụ AI biến đổi trong phiên này",
+    "date": "Ngày",
+    "totalDeducted": "Tổng đã trừ",
+    "serviceBreakdown": "Phân tích theo dịch vụ",
+    "callsSummary": "{count, plural, other {# lượt gọi}} × {unitPrice} {suffix}",
+    "activityLogFeed": "Nhật ký hoạt động",
+    "close": "Đóng"
+  },
+  "usageLabels": {
+    "translation": "Dịch thuật thời gian thực",
+    "summary": "Tóm tắt cuộc họp bằng AI",
+    "chat": "Trò chuyện AI trong không gian làm việc",
+    "other": "Khác",
+    "aiUsage": "Sử dụng AI"
+  },
+  "idBadge": {
+    "copyTooltip": "Nhấn để sao chép ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Mức sử dụng credit",
+    "usageNote": "Tiêu thụ và nạp thêm — thứ yếu so với tăng trưởng, và là những gì sổ cái bên dưới liệt kê.",
+    "vsPrevious": "{delta} so với 6 tháng trước",
+    "monthGrowth": "{percent} trong {month}",
+    "tiles": {
+      "revenue": "Doanh thu · 6 tháng",
+      "sixMonths": "Các khoản đã thanh toán, 6 tháng gần nhất",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} gói đang hoạt động",
+      "activeWorkspaces": "Workspace hoạt động · 6 tháng",
+      "activeWorkspacesDetail": "Đã dùng credit ít nhất một lần",
+      "activeAccounts": "Tài khoản hoạt động · 6 tháng",
+      "activeAccountsDetail": "Đã đăng nhập ít nhất một lần",
+      "totalUsers": "Người dùng đã đăng ký",
+      "newUsers": "{count} mới trong 6 tháng"
+    },
+    "revenueTitle": "Doanh thu theo tháng",
+    "revenueNote": "Các khoản đã thanh toán, tính bằng VND; một lần checkout Stripe và hóa đơn đầu tiên của nó chỉ tính một lần. Tháng gần nhất là tính đến hôm nay.",
+    "activeTitle": "Tài khoản và workspace hoạt động",
+    "activeNote": "Theo tháng: tài khoản đã đăng nhập, workspace đã dùng credit. Tháng gần nhất là tính đến hôm nay.",
+    "usersTitle": "Tăng trưởng người dùng và workspace",
+    "series": {
+      "activeAccounts": "Tài khoản hoạt động",
+      "activeWorkspaces": "Workspace hoạt động",
+      "totalUsers": "Người dùng đã đăng ký",
+      "totalWorkspaces": "Workspace",
+      "newUsers": "Người dùng mới"
+    },
+    "loading": "Đang tải…",
+    "noData": "Không có khoản thanh toán nào trong các tháng này.",
+    "unavailable": "Backend này chưa hỗ trợ."
+  },
+  "lists": {
+    "tabsLabel": "Các mục thanh toán",
+    "workspacePlaceholder": "Tìm không gian làm việc…",
+    "creditsUnit": "tín dụng",
+    "ledger": {
+      "searchPlaceholder": "Tìm theo mô tả, hoặc dán mã giao dịch…",
+      "count": "{count, plural, other {# giao dịch}}",
+      "filters": {
+        "date": "Ngày"
+      },
+      "amountPresets": {
+        "over1k": "Từ 1.000 tín dụng",
+        "over10k": "Từ 10.000 tín dụng",
+        "over100k": "Từ 100.000 tín dụng"
+      },
+      "emptyDescription": "Các lần nạp, tiêu thụ và điều chỉnh sẽ hiện ở đây ngay khi phát sinh."
+    },
+    "export": {
+      "description": "Xuất tệp Excel gồm 2 sheet: <strong>Summary</strong> (chỉ số hệ thống và tổng cộng) và <strong>Audit Trail</strong> — mọi giao dịch khớp với tìm kiếm và bộ lọc hiện tại của sổ cái.",
+      "matching": "{count, plural, other {Sẽ xuất # giao dịch.}}",
+      "truncated": "Chỉ xuất {cap} giao dịch đầu tiên. Thu hẹp bộ lọc để xuất phần còn lại.",
+      "loading": "Đang tải các giao dịch khớp bộ lọc…",
+      "failed": "Không tải được giao dịch để xuất. Hãy đóng hộp thoại này và thử lại."
+    },
+    "invoices": {
+      "caption": "Hóa đơn",
+      "searchPlaceholder": "Tìm theo số hóa đơn, hoặc dán mã hóa đơn…",
+      "count": "{count, plural, other {# hóa đơn}}",
+      "filters": {
+        "status": "Trạng thái",
+        "workspace": "Không gian làm việc",
+        "currency": "Tiền tệ",
+        "issued": "Ngày phát hành",
+        "total": "Tổng tiền"
+      },
+      "statuses": {
+        "draft": "Nháp",
+        "issued": "Đã phát hành",
+        "open": "Chờ thanh toán",
+        "paid": "Đã thanh toán",
+        "void": "Đã hủy",
+        "uncollectible": "Không thu được"
+      },
+      "sort": {
+        "issued": "Ngày phát hành",
+        "total": "Tổng tiền",
+        "due": "Hạn thanh toán"
+      },
+      "columns": {
+        "invoice": "Hóa đơn",
+        "issued": "Phát hành",
+        "workspace": "Không gian làm việc",
+        "status": "Trạng thái",
+        "due": "Hạn",
+        "total": "Tổng tiền",
+        "actions": "Thao tác"
+      },
+      "viewReceipt": "Xem biên lai",
+      "stripeInvoice": "Hóa đơn Stripe",
+      "emptyTitle": "Chưa có hóa đơn",
+      "emptyDescription": "Hóa đơn sẽ hiện ở đây khi một không gian làm việc thanh toán gói hoặc mua tín dụng."
+    },
+    "subscriptions": {
+      "title": "Gói đăng ký có trang riêng",
+      "description": "Tìm kiếm và lọc mọi gói đăng ký của các không gian làm việc, xem doanh thu định kỳ, và hủy hoặc kích hoạt lại gói trong danh mục gói đăng ký.",
+      "open": "Mở danh mục gói đăng ký"
+    },
+    "alerts": {
+      "title": "Cảnh báo gian lận và sử dụng",
+      "description": "Các không gian làm việc tiêu thụ tín dụng cao bất thường (hơn 50.000 tín dụng trong 24 giờ qua).",
+      "searchPlaceholder": "Tìm không gian làm việc theo tên hoặc ID…",
+      "count": "{count, plural, other {# cảnh báo}}",
+      "filters": {
+        "consumption": "Tiêu thụ 24 giờ"
+      },
+      "consumptionPresets": {
+        "over100k": "Từ 100.000 tín dụng",
+        "over500k": "Từ 500.000 tín dụng",
+        "over1m": "Từ 1.000.000 tín dụng"
+      },
+      "sort": {
+        "consumption": "Tiêu thụ 24 giờ",
+        "workspace": "Tên không gian làm việc"
+      },
+      "columns": {
+        "workspace": "Không gian làm việc",
+        "id": "ID không gian làm việc",
+        "reason": "Lý do",
+        "consumption": "Tiêu thụ 24 giờ",
+        "actions": "Thao tác"
+      },
+      "reason": "Tiêu thụ cao bất thường: {credits} tín dụng trong 24 giờ",
+      "investigate": "Điều tra",
+      "emptyTitle": "Không có mức sử dụng bất thường",
+      "emptyDescription": "Không có không gian làm việc nào tiêu thụ quá 50.000 tín dụng trong 24 giờ qua."
+    }
+  }
+}

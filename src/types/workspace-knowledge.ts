@@ -78,6 +78,11 @@ export const FACT_CATEGORIES = [
 
 export type FactCategory = (typeof FACT_CATEGORIES)[number];
 
+/** Whether a category is one of the product's own, vs. an owner-typed custom category (data). */
+export function isKnownFactCategory(category: string): category is FactCategory {
+  return (FACT_CATEGORIES as readonly string[]).includes(category);
+}
+
 /**
  * What an Owner may correct about a chunk.
  *

@@ -3,6 +3,8 @@ export const WORKSPACE_DOCUMENT_STATUS = {
   PUBLIC: "public",
   REJECTED: "rejected",
   ARCHIVED: "archived",
+  /** Published once, then taken back from the workspace. Named people, the uploader and owners/admins only. */
+  PRIVATE: "private",
 } as const;
 
 export type WorkspaceDocumentStatusType =

@@ -92,5 +92,17 @@ export function useMeetingMinutesActions(roomId: string | undefined) {
     onSuccess: apply,
   });
 
-  return { createDraft, save, sign, approve, revise };
+  const designateSecretary = useMutation({
+    mutationFn: async ({
+      minutesId,
+      participantId,
+    }: {
+      minutesId: string;
+      participantId: string | null;
+    }) =>
+      (await meetingMinutesService.designateSecretary(roomId!, minutesId, participantId)).data,
+    onSuccess: apply,
+  });
+
+  return { createDraft, save, sign, approve, revise, designateSecretary };
 }

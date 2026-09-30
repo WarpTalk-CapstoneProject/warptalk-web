@@ -21,7 +21,7 @@
  *   forces a wrong pick and then acts on it.
  */
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Check } from "@phosphor-icons/react/dist/ssr";
 
 import { cn } from "@/lib/utils";
@@ -32,11 +32,23 @@ export type AssistantQuestionOption = {
   value?: string;
 };
 
+/** One fact about what is about to happen: "Title: Quick meeting", "When: Today 15:40 – 16:10". */
+export type AssistantQuestionDetail = {
+  label: string;
+  value: string;
+};
+
 export type AssistantQuestion = {
   question: string;
   header: string;
   options: AssistantQuestionOption[];
   multi_select?: boolean;
+  /**
+   * Rows drawn under the question. A confirmation card for a write says exactly what it will
+   * write — the meeting's title, its time, the calendar it lands on — because "Confirm this
+   * action" told the user nothing about what they were confirming.
+   */
+  details?: AssistantQuestionDetail[];
 };
 
 /**
@@ -50,16 +62,32 @@ export function parseAssistantQuestions(json: string): AssistantQuestion[] {
   try {
     const parsed = JSON.parse(json) as { questions?: unknown };
     const questions = Array.isArray(parsed?.questions) ? parsed.questions : [];
-    return questions.filter(
-      (q): q is AssistantQuestion =>
-        typeof q === "object"
-        && q !== null
-        && typeof (q as AssistantQuestion).question === "string"
-        && Array.isArray((q as AssistantQuestion).options),
-    );
+    return questions
+      .filter(
+        (q): q is AssistantQuestion =>
+          typeof q === "object"
+          && q !== null
+          && typeof (q as AssistantQuestion).question === "string"
+          && Array.isArray((q as AssistantQuestion).options),
+      )
+      // A row this cannot draw honestly is dropped rather than rendered half-empty, the way a
+      // malformed question is. Same reasoning as parseMessageMentions.
+      .map((question) => ({ ...question, details: validDetails(question.details) }));
   } catch {
     return [];
   }
+}
+
+function validDetails(details: unknown): AssistantQuestionDetail[] | undefined {
+  if (!Array.isArray(details)) return undefined;
+  const rows = details.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const { label, value } = row as Record<string, unknown>;
+    if (typeof label !== "string" || typeof value !== "string") return [];
+    if (!label.trim() || !value.trim()) return [];
+    return [{ label: label.trim(), value: value.trim() }];
+  });
+  return rows.length > 0 ? rows : undefined;
 }
 
 /** The picks, as the sentence the assistant will read on its next turn. */
@@ -142,7 +170,27 @@ export function AssistantQuestionCard({
                   <span className="text-[10px] text-ink-subtle">Pick any</span>
                 ) : null}
               </div>
-              <p className="mt-1.5 text-[12px] leading-snug text-ink">{question.question}</p>
+              {/* pre-line: an older worker put a confirmation's details in the question itself,
+                  and collapsed into one run they read as a sentence. */}
+              <p
+                className={cn(
+                  "mt-1.5 whitespace-pre-line leading-snug text-ink",
+                  // With rows under it the question is the card's heading, not its body.
+                  question.details?.length ? "text-[12.5px] font-semibold" : "text-[12px]",
+                )}
+              >
+                {question.question}
+              </p>
+              {question.details?.length ? (
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                  {question.details.map((detail) => (
+                    <Fragment key={detail.label}>
+                      <dt className="text-ink-muted">{detail.label}</dt>
+                      <dd className="m-0 text-ink">{detail.value}</dd>
+                    </Fragment>
+                  ))}
+                </dl>
+              ) : null}
 
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {question.options.map((option) => {

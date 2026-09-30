@@ -24,7 +24,22 @@ export interface AdminFeedbackDimensionDto {
   averageRating: number | null;
   /** Counts for ratings 1..5, index 0 being a rating of 1. */
   distribution: number[];
+  // ── WT-694, computed server-side. Optional: absent from a backend that predates it. ──
+  /** Respondents who answered this dimension ÷ all respondents; null when nobody responded. */
+  responseShare?: number | null;
+  /** `none` (nobody answered — "no data", not a score), `low` (thin sample) or `ok`. */
+  confidence?: AdminFeedbackConfidence;
+  /** Why the confidence is what it is; null when `ok`. */
+  confidenceNote?: string | null;
+  previousResponseCount?: number;
+  /** Same dimension, previous window of equal length. Null when nobody answered then. */
+  previousAverageRating?: number | null;
+  previousConfidence?: AdminFeedbackConfidence;
+  /** Current − previous average; null unless both exist. Never computed client-side. */
+  averageDelta?: number | null;
 }
+
+export type AdminFeedbackConfidence = "none" | "low" | "ok";
 
 export interface AdminFeedbackSummaryDto {
   from: string;
@@ -36,6 +51,23 @@ export interface AdminFeedbackSummaryDto {
   /** Null when nothing ended in the window — a rate with no denominator is not zero. */
   responseRate: number | null;
   dimensions: AdminFeedbackDimensionDto[];
+  // ── WT-694 ──
+  previousFrom?: string | null;
+  previousTo?: string | null;
+  previousResponseCount?: number;
+  previousResponseRate?: number | null;
+  /** Survey-level confidence; `confidenceNote` says why when not `ok`. */
+  confidence?: AdminFeedbackConfidence;
+  confidenceNote?: string | null;
+  /** Weakest dimension by average, preferring trustworthy samples; null when nothing was rated. */
+  lowestDimension?: string | null;
+  /** Set when every candidate for `lowestDimension` was a thin sample. */
+  lowestDimensionNote?: string | null;
+  /** Dimensions nobody answered in the window (e.g. voice clone quality). */
+  dimensionsWithoutData?: string[];
+  /** The thresholds behind `low`, so the page states them instead of hardcoding them. */
+  minResponses?: number;
+  minRate?: number;
 }
 
 export interface AdminFeedbackCommentDto {
@@ -54,4 +86,11 @@ export interface AdminFeedbackQuery {
   /** Measured against when the rating was submitted, not when the meeting ran. */
   from?: string;
   to?: string;
+  /** Comments only: `recent` (default) or `lowest` — lowest overall rating first (WT-694). */
+  sort?: "recent" | "lowest";
+  /** Comments only: matched against the comment text and the room title. */
+  search?: string;
+  /** Comments only: bounds on the overall rating, 1..5 inclusive. */
+  minRating?: number;
+  maxRating?: number;
 }

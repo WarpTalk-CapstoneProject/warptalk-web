@@ -1,0 +1,82 @@
+{
+  "packs": {
+    "title": "クレジットパック",
+    "description": "プランに上乗せする一回限りのクレジット。一度支払うと、このワークスペースの残高に追加されます。"
+  },
+  "addons": {
+    "title": "アドオン",
+    "description": "プランの上限を引き上げます。更新は個別に請求されます。",
+    "cycle": "請求サイクル",
+    "cycles": {
+      "monthly": "月払い",
+      "yearly": "年払い"
+    },
+    "owned": "利用中",
+    "ownedUnits": "+{units} {unit}",
+    "ownedOn": "有効",
+    "endsOn": "{date} に終了",
+    "cancel": "解約",
+    "billed": "{price} · {cycle}",
+    "needsPlan": "アドオンは有料プランに追加するものです。追加するにはプランを選んでください。"
+  },
+  "cards": {
+    "untitled": "無題",
+    "credits": "{credits} クレジット",
+    "bonus": "+{bonus} ボーナス",
+    "validFor": "未使用のクレジットは購入から {days, plural, other {# 日}}後に失効します",
+    "neverExpires": "クレジットは失効しません",
+    "remaining": "{count, plural, other {残り # 回購入可能}}",
+    "availableUntil": "{date} まで販売",
+    "noPrice": "お使いの通貨では販売していません",
+    "buy": "購入",
+    "add": "追加",
+    "raises": "1 単位ごとに{entitlement}が +{units} {unit}",
+    "unlocks": "{entitlement}を利用可能に",
+    "unit": "単位",
+    "quantityRange": "{min}–{max} 単位",
+    "perUnitMonth": "/ {unit} / 月",
+    "perUnitYear": "/ {unit} / 年",
+    "perMonth": "/ 月",
+    "perYear": "/ 年",
+    "entitlements": {
+      "max_participants": "会議あたりの参加者数",
+      "max_languages": "会議あたりの言語数",
+      "max_active_rooms": "同時ルーム数",
+      "voice_clone": "ボイスクローン",
+      "ai_assistant": "AI アシスタント",
+      "glossary": "カスタム用語集"
+    }
+  },
+  "purchase": {
+    "packDescription": "支払いが完了するとすぐにクレジットがワークスペースに追加されます。",
+    "addonDescription": "{cycle}で個別に更新・請求されます。いつでも解約でき、支払い済み期間の終了まで利用できます。",
+    "cycles": {
+      "monthly": "毎月",
+      "yearly": "毎年"
+    },
+    "quantity": "数量（{unit}）",
+    "coupon": "クーポンコード",
+    "couponPlaceholder": "任意",
+    "apply": "適用",
+    "couponApplied": "{name}：−{discount}",
+    "couponInvalid": "このコードはここでは使えません。",
+    "couponFailed": "コードを確認できませんでした。",
+    "credits": "クレジット",
+    "includesBonus": "ボーナス {bonus} クレジットを含む",
+    "listPrice": "価格",
+    "total": "合計",
+    "totalHintOnce": "1 回だけ請求されます。最終価格は Stripe のページで確定します。",
+    "totalHintRecurring": "{cycle}請求されます。最終価格は Stripe のページで確定します。",
+    "continue": "支払いへ進む",
+    "starting": "決済画面を開いています…",
+    "checkoutFailed": "決済を開始できませんでした。"
+  },
+  "cancelDialog": {
+    "title": "{name} を解約しますか？",
+    "description": "支払い済み期間の終了まで有効で、その後は更新されません。返金はありません。",
+    "keep": "継続する",
+    "confirm": "アドオンを解約",
+    "done": "アドオンは支払い済み期間の終了時に終了します。",
+    "failed": "アドオンを解約できませんでした。"
+  }
+}

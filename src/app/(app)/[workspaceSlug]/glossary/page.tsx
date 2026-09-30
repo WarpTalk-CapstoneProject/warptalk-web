@@ -30,12 +30,20 @@
  *   is the disambiguation the global list cannot do.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { FileArrowUp, Plus, Trash, MagnifyingGlass } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
+import {
+  FileArrowUp,
+  Plus,
+  Trash,
+  MagnifyingGlass,
+  BookOpen,
+  Globe,
+} from "@phosphor-icons/react";
 
 import {
   WorkspaceBody,
@@ -62,7 +70,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/errors";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName, meetingLanguagesForPolicy } from "@/lib/language/languages";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
@@ -73,17 +81,25 @@ import {
   useDeleteGlossaryTerm,
   useGlossariesByWorkspace,
   useGlossaryTerms,
+  useWorkspaceSettings,
 } from "@/hooks/use-workspace";
 // Called directly, not through a hook: the terms go into the glossary that was created a line
 // earlier, and a hook bound to an id can only be bound to one the component already had.
 import { WorkspaceService } from "@/services/workspace.service";
-import { initialTermsSchema, termRowsToImport } from "@/lib/glossary/initial-terms";
+import { getInitialTermsSchema, termRowsToImport } from "@/lib/glossary/initial-terms";
 import { InitialTermsField } from "@/components/glossary/initial-terms-field";
 import type { GlossaryDto } from "@/types/workspace";
+import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import {
   GlossaryImportDialog,
   type ParsedGlossaryRow,
 } from "@/components/glossary/glossary-import-dialog";
+import { WorkspaceGlobalGlossaryView } from "@/components/glossary/workspace-global-glossary-view";
+import {
+  groupTermsByDomain,
+  findCrossDomainTerms,
+  normalizeDomain,
+} from "@/lib/glossary/domain-grouping";
 
 /**
  * What a new glossary starts as, on both sides.
@@ -94,33 +110,43 @@ import {
  */
 const DEFAULT_GLOSSARY_LANGUAGE = "en";
 
-const glossarySchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  sourceLanguage: z.string().min(1, "Select the language people speak"),
-  targetLanguage: z.string().min(1, "Select the language it is translated into"),
-  // WT-558. The rule for what counts as a usable row lives in lib/glossary/initial-terms, so the
-  // schema and the field that renders the errors cannot disagree about a half-filled row.
-  initialTerms: initialTermsSchema,
-});
-type GlossaryForm = z.infer<typeof glossarySchema>;
+function getGlossarySchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(2, t("validation.nameMin")),
+    description: z.string().optional(),
+    sourceLanguage: z.string().min(1, t("validation.sourceLanguageRequired")),
+    targetLanguage: z.string().min(1, t("validation.targetLanguageRequired")),
+    // WT-558. The rule for what counts as a usable row lives in lib/glossary/initial-terms, so the
+    // schema and the field that renders the errors cannot disagree about a half-filled row.
+    initialTerms: getInitialTermsSchema((key) => t(`initialTerms.${key}`)),
+  });
+}
+type GlossaryForm = z.infer<ReturnType<typeof getGlossarySchema>>;
 
-const termSchema = z.object({
-  sourceTerm: z.string().min(1, "The term is required"),
-  targetTerm: z.string().min(1, "The translation to use is required"),
-  domain: z.string().optional(),
-  partOfSpeech: z.string().optional(),
-  definition: z.string().optional(),
-  context: z.string().optional(),
-});
-type TermForm = z.infer<typeof termSchema>;
+function getTermSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    sourceTerm: z.string().min(1, t("validation.sourceTermRequired")),
+    targetTerm: z.string().min(1, t("validation.targetTermRequired")),
+    domain: z.string().optional(),
+    partOfSpeech: z.string().optional(),
+    definition: z.string().optional(),
+    context: z.string().optional(),
+  });
+}
+type TermForm = z.infer<ReturnType<typeof getTermSchema>>;
 
 export default function WorkspaceGlossaryPage() {
+  const t = useTranslations("glossary");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const role = useWorkspaceRole();
   // Owners and admins curate the terminology; a member reads it. The server is the real gate —
   // this only avoids offering a control that would come back 403.
   const canManage = role === "owner" || role === "admin";
+
+  // Dual tabs: Custom Glossary (Private) vs Global Glossary (System Reference & Tracking)
+  const [activeTab, setActiveTab] = useState<"custom" | "global">("custom");
+  const [groupBy, setGroupBy] = useState<"domain" | "alphabetical">("domain");
+  const [selectedDomain, setSelectedDomain] = useState<string>("all");
 
   const glossariesQuery = useGlossariesByWorkspace(workspaceId ?? "");
   const glossaries = useMemo(() => glossariesQuery.data ?? [], [glossariesQuery.data]);
@@ -146,22 +172,16 @@ export default function WorkspaceGlossaryPage() {
   const deleteTerm = useDeleteGlossaryTerm(selected?.id ?? "");
   const bulkImport = useBulkImportGlossaryTerms(selected?.id ?? "");
 
+  const glossarySchema = useMemo(() => getGlossarySchema(t), [t]);
+  const termSchema = useMemo(() => getTermSchema(t), [t]);
+
   const glossaryForm = useForm<GlossaryForm>({
     resolver: zodResolver(glossarySchema),
-    // English on both sides, prefilled rather than left empty.
-    //
-    // Every glossary this workspace has made is English-sourced, and the pair was being picked
-    // from two empty dropdowns each time — so the commonest answer cost two decisions, and a
-    // half-filled form failed validation on a field nobody had thought about. The selects are
-    // still there and still change it; this only decides what they start on.
     defaultValues: {
       name: "",
       description: "",
       sourceLanguage: DEFAULT_GLOSSARY_LANGUAGE,
       targetLanguage: DEFAULT_GLOSSARY_LANGUAGE,
-      // One blank row, offered rather than hidden behind "+ Add term". A section that starts
-      // empty reads as optional detail; a row with the cursor in it reads as the next thing to
-      // do, which is what the ticket is asking for.
       initialTerms: [{ sourceTerm: "", targetTerm: "" }],
     },
   });
@@ -181,27 +201,79 @@ export default function WorkspaceGlossaryPage() {
   const terms = useMemo(() => {
     const all = termsQuery.data ?? [];
     const needle = search.trim().toLowerCase();
-    if (!needle) return all;
-    return all.filter((term) =>
-      [term.sourceTerm, term.targetTerm, term.domain, term.definition]
+    return all.filter((term) => {
+      if (selectedDomain !== "all" && normalizeDomain(term.domain) !== selectedDomain) {
+        return false;
+      }
+      if (!needle) return true;
+      return [term.sourceTerm, term.targetTerm, term.domain, term.definition, term.context]
         .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(needle)),
-    );
-  }, [termsQuery.data, search]);
+        .some((field) => field!.toLowerCase().includes(needle));
+    });
+  }, [termsQuery.data, search, selectedDomain]);
 
-  const languageOptions = useMemo(() => languagesInScope("meeting"), []);
+  const customDomainGroups = useMemo(() => {
+    return groupTermsByDomain(terms);
+  }, [terms]);
+
+  const crossDomainMap = useMemo(() => {
+    return findCrossDomainTerms(termsQuery.data ?? [], (t) => t.sourceTerm);
+  }, [termsQuery.data]);
+
+  const availableCustomDomains = useMemo(() => {
+    const set = new Set<string>();
+    for (const term of termsQuery.data ?? []) {
+      set.add(normalizeDomain(term.domain));
+    }
+    return Array.from(set).sort((a, b) => {
+      if (a === "General") return 1;
+      if (b === "General") return -1;
+      return a.localeCompare(b, "vi");
+    });
+  }, [termsQuery.data]);
+
+  // WT-875 — the languages a NEW glossary may be created in are the workspace's allowed target
+  // languages (Settings → Allowed Target Translation Languages), not the whole meeting scope. The
+  // hierarchy is L1 workspace ⊇ L2 meeting ⊇ L3 artifact: creating something new is bounded by
+  // the workspace's CURRENT policy, while reading what already exists is never filtered — so the
+  // glossary pills and footer below keep naming a glossary's languages through `getLanguageName`
+  // even after the policy has dropped one of them.
+  //
+  // Same read and same fallback as the voice page and the create-room picker: an empty or absent
+  // policy means unrestricted (see `isLanguageAllowedByPolicy`), and a failed read leaves the
+  // policy unknown, which the app reads the same way.
+  const settingsQuery = useWorkspaceSettings(workspaceId ?? "");
+  const allowedTargetLanguages = settingsQuery.data?.allowedTargetLanguages;
+  // Settled, not merely successful. Until then the unrestricted fallback would briefly offer
+  // languages the workspace forbids, so the pickers wait instead.
+  const languagePolicyReady = settingsQuery.isFetched;
+  const languageOptions = useMemo(
+    () => meetingLanguagesForPolicy(allowedTargetLanguages),
+    [allowedTargetLanguages],
+  );
+  // English when the workspace allows it, otherwise the first language it does allow. A default
+  // outside the option list renders as an empty select that nonetheless passes validation.
+  const defaultGlossaryLanguage = languageOptions.some(
+    (language) => language.code === DEFAULT_GLOSSARY_LANGUAGE,
+  )
+    ? DEFAULT_GLOSSARY_LANGUAGE
+    : (languageOptions[0]?.code ?? DEFAULT_GLOSSARY_LANGUAGE);
+
+  // The form's defaults are fixed at mount, before the policy has loaded, and `reset()` after a
+  // create returns to them. So whenever the dialog is open, a language the policy does not allow
+  // is snapped to the default — including when the policy changes while the dialog is open.
+  useEffect(() => {
+    if (!glossaryDialogOpen || !languagePolicyReady) return;
+    const allowed = new Set(languageOptions.map((language) => language.code));
+    for (const field of ["sourceLanguage", "targetLanguage"] as const) {
+      if (!allowed.has(glossaryForm.getValues(field))) {
+        glossaryForm.setValue(field, defaultGlossaryLanguage);
+      }
+    }
+  }, [glossaryDialogOpen, languagePolicyReady, languageOptions, defaultGlossaryLanguage, glossaryForm]);
 
   /**
-   * WT-472: the terms as a DICTIONARY — grouped by initial letter, alphabetical within each group.
-   *
-   * A flat table sorted by insertion order is a log of what somebody typed. A vocabulary is looked
-   * up, not scrolled: you arrive knowing the word and wanting the entry. Grouping by letter and
-   * offering the letters as an index is what makes that a jump instead of a scan.
-   *
-   * `localeCompare` rather than `<`, because Vietnamese is a first-class source language here and
-   * codepoint order puts every accented letter after "z" — "Đ" would sort past "Z" and "ế" would
-   * not sit with "e". The `#` bucket catches digits and symbols, which is where acronyms with
-   * leading numbers land.
+   * Grouped by initial letter, alphabetical within each group.
    */
   const groupedTerms = useMemo(() => {
     const groups = new Map<string, typeof terms>();
@@ -216,37 +288,29 @@ export default function WorkspaceGlossaryPage() {
       bucket.sort((a, b) => a.sourceTerm.localeCompare(b.sourceTerm, "vi"));
     }
     return [...groups.entries()].sort(([a], [b]) => {
-      // "#" last: a reader scanning the index wants the letters first.
       if (a === "#") return 1;
       if (b === "#") return -1;
       return a.localeCompare(b, "vi");
     });
   }, [terms]);
 
-  /**
-   * WT-472. Reports BOTH numbers, because the server skips terms already present and only one of
-   * "imported 40" and "imported 40, skipped 60" is true of the same file.
-   *
-   * WT-601 — and it says WHICH rows were skipped. The server has always sent one message per
-   * rejected row and this threw the list away, so "skipped 12" was a number with nothing to act
-   * on: no way to tell a re-import of terms already here from a spreadsheet that names a word
-   * twice. Three are shown because a toast is not a report and the rest are still in the file.
-   */
   async function importTerms(rows: ParsedGlossaryRow[]) {
     if (!selected) return;
     try {
       const result = await bulkImport.mutateAsync(rows);
       const summary =
         result.skipped > 0
-          ? `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already in this glossary.`
-          : `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`;
+          ? t("toasts.importedSkipped", { count: result.imported, skipped: result.skipped })
+          : t("toasts.imported", { count: result.imported });
 
       toast.success(summary, {
         description:
           result.errors.length > 0
             ? [
                 ...result.errors.slice(0, 3),
-                result.errors.length > 3 ? `…and ${result.errors.length - 3} more.` : null,
+                result.errors.length > 3
+                  ? t("toasts.moreErrors", { count: result.errors.length - 3 })
+                  : null,
               ]
                 .filter(Boolean)
                 .join(" ")
@@ -254,7 +318,7 @@ export default function WorkspaceGlossaryPage() {
       });
       setImportDialogOpen(false);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not import the file."));
+      toast.error(getErrorMessage(error, t("toasts.importFailed")));
     }
   }
 
@@ -267,18 +331,6 @@ export default function WorkspaceGlossaryPage() {
         targetLanguage: values.targetLanguage,
       });
 
-      /**
-       * WT-558: the terms typed alongside the name, written into the glossary that was just made.
-       *
-       * Two requests rather than one, because the create endpoint takes no terms — and that is
-       * the right seam: a glossary whose terms failed to import is still a glossary, and the
-       * reader is told exactly that instead of being shown a failure that rolled back the name
-       * they had already chosen. Which is why this is not inside the try that reports "could not
-       * create the glossary": by here, it has been created.
-       *
-       * Blank rows are dropped. Half-filled ones never get here — the schema refuses them, so a
-       * word somebody typed cannot be silently discarded.
-       */
       const rows = termRowsToImport(values.initialTerms);
 
       let importedCount = 0;
@@ -287,48 +339,27 @@ export default function WorkspaceGlossaryPage() {
           const result = await WorkspaceService.bulkImportTerms(created.id, rows);
           importedCount = result.imported;
         } catch (error) {
-          toast.error(
-            getErrorMessage(error, `Glossary created, but its terms could not be added.`),
-          );
+          toast.error(getErrorMessage(error, t("toasts.glossaryTermsFailed")));
         }
       }
 
       toast.success(
         importedCount > 0
-          ? `Glossary created with ${importedCount} term${importedCount === 1 ? "" : "s"}.`
-          : "Glossary created.",
+          ? t("toasts.glossaryCreatedWithTerms", { count: importedCount })
+          : t("toasts.glossaryCreated"),
       );
       setGlossaryDialogOpen(false);
       glossaryForm.reset();
 
-      // Land on what was just made, rather than leaving the reader on whichever glossary happened
-      // to be selected before. The list is refetched AFTER the import so the term count on the
-      // new entry is the real one — the create mutation's own invalidation fires before the terms
-      // exist and would show 0.
       setSelectedId(created.id);
       await glossariesQuery.refetch();
 
-      /**
-       * Carry on into the import the reader actually asked for.
-       *
-       * Terms cannot be imported into nothing — a glossary is a source/target language PAIR, and
-       * the pair is what tells the importer which column is which. So "Import terms" from the
-       * empty state has to create the glossary first. Dropping the reader back on a bare page at
-       * that point loses what they came to do, which is how the import ended up looking absent:
-       * it was reachable only from inside a glossary nobody had yet.
-       *
-       * `refetch` rather than the mutation's result, which is typed `void`; and `data[0]` is
-       * unambiguous because this path is only offered when there were no glossaries at all.
-       */
       if (importAfterCreate) {
         setImportAfterCreate(false);
-        // WT-558: named directly now. This used to refetch and take `data[0]`, which was only
-        // unambiguous because the path was offered exclusively from the empty state; the create
-        // endpoint returns the row it made, so there is nothing left to infer.
         setImportDialogOpen(true);
       }
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not create the glossary."));
+      toast.error(getErrorMessage(error, t("toasts.glossaryCreateFailed")));
     }
   }
 
@@ -343,11 +374,11 @@ export default function WorkspaceGlossaryPage() {
         definition: values.definition || null,
         context: values.context || null,
       });
-      toast.success("Term added.");
+      toast.success(t("toasts.termAdded"));
       setTermDialogOpen(false);
       termForm.reset();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not add the term."));
+      toast.error(getErrorMessage(error, t("toasts.termAddFailed")));
     }
   }
 
@@ -355,18 +386,38 @@ export default function WorkspaceGlossaryPage() {
     try {
       await deleteGlossary.mutateAsync(glossary.id);
       if (selectedId === glossary.id) setSelectedId(null);
-      toast.success("Glossary deleted.");
+      toast.success(t("toasts.glossaryDeleted"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not delete the glossary."));
+      toast.error(getErrorMessage(error, t("toasts.glossaryDeleteFailed")));
     }
   }
 
   async function removeTerm(termId: string) {
     try {
       await deleteTerm.mutateAsync(termId);
-      toast.success("Term removed.");
+      toast.success(t("toasts.termRemoved"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not remove the term."));
+      toast.error(getErrorMessage(error, t("toasts.termRemoveFailed")));
+    }
+  }
+
+  // 1-Click Customize from Global Term
+  function handleCustomizeGlobalTerm(globalTerm: GlobalGlossaryTermDto) {
+    setActiveTab("custom");
+    termForm.reset({
+      sourceTerm: globalTerm.term,
+      targetTerm: globalTerm.preferredTranslation,
+      domain: globalTerm.businessDomain || "",
+      partOfSpeech: "",
+      definition: globalTerm.definition || "",
+      context: globalTerm.usageNote || "",
+    });
+    if (glossaries.length === 0) {
+      setGlossaryDialogOpen(true);
+      toast.info(t("toasts.createGlossaryFirstForCustom"));
+    } else {
+      setTermDialogOpen(true);
+      toast.info(t("toasts.customizingTerm", { term: globalTerm.term }));
     }
   }
 
@@ -382,9 +433,10 @@ export default function WorkspaceGlossaryPage() {
 
   return (
     <WorkspacePage>
+      {/* Top Workspace Toolbar */}
       <WorkspaceToolbar
         filters={
-          glossaries.length > 0 ? (
+          activeTab === "custom" && glossaries.length > 0 ? (
             <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
               {glossaries.map((glossary) => {
                 const active = selected?.id === glossary.id;
@@ -411,65 +463,97 @@ export default function WorkspaceGlossaryPage() {
           ) : null
         }
         actions={
-          <>
-            {selected ? (
-              <div className="relative">
-                <MagnifyingGlass className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search terms"
-                  className="h-8 w-44 pl-8 text-[12px]"
-                />
-              </div>
-            ) : null}
-            {canManage ? (
-              <>
-                <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" />
-                  New glossary
-                </WorkspacePrimaryButton>
-                {selected ? (
-                  <>
-                    {/* Import sits BESIDE Add term, not inside a menu. A domain vocabulary
-                        arrives as a spreadsheet far more often than it is typed word by word,
-                        so the bulk path is the primary one for anyone setting a glossary up. */}
-                    <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
-                      <FileArrowUp className="h-3.5 w-3.5" />
-                      Import
-                    </WorkspacePrimaryButton>
-                    <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
-                      <Plus className="h-3.5 w-3.5" />
-                      Add term
-                    </WorkspacePrimaryButton>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </>
+          activeTab === "custom" ? (
+            <>
+              {selected ? (
+                <div className="relative">
+                  <MagnifyingGlass className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={t("searchPlaceholder")}
+                    className="h-8 w-44 pl-8 text-[12px]"
+                  />
+                </div>
+              ) : null}
+              {canManage ? (
+                <>
+                  <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("newGlossary")}
+                  </WorkspacePrimaryButton>
+                  {selected ? (
+                    <>
+                      <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
+                        <FileArrowUp className="h-3.5 w-3.5" />
+                        {t("import")}
+                      </WorkspacePrimaryButton>
+                      <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
+                        <Plus className="h-3.5 w-3.5" />
+                        {t("addTerm")}
+                      </WorkspacePrimaryButton>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          ) : null
         }
       />
 
       <WorkspaceBody>
-        {glossaries.length === 0 ? (
+        {/* Top Dual Tabs: Custom Glossary vs Global Glossary (Linear style) */}
+        <div className="mb-4 flex items-center gap-2 border-b border-hairline pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("custom")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[13px] font-medium transition-colors -mb-[9px] ${
+              activeTab === "custom"
+                ? "border-ink text-ink font-semibold"
+                : "border-transparent text-ink-muted hover:text-ink"
+            }`}
+          >
+            <BookOpen className="h-4 w-4" />
+            {t("tabs.custom")}
+            {glossaries.length > 0 && (
+              <span className="rounded-full border border-hairline bg-surface-2 px-1.5 py-0.2 text-[10px] text-ink-subtle">
+                {glossaries.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("global")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[13px] font-medium transition-colors -mb-[9px] ${
+              activeTab === "global"
+                ? "border-ink text-ink font-semibold"
+                : "border-transparent text-ink-muted hover:text-ink"
+            }`}
+          >
+            <Globe className="h-4 w-4" />
+            {t("tabs.global")}
+          </button>
+        </div>
+
+        {/* Tab 2: Global Glossary Reference & Tracking */}
+        {activeTab === "global" ? (
+          <WorkspaceGlobalGlossaryView
+            canManage={canManage}
+            onCustomizeTerm={handleCustomizeGlobalTerm}
+          />
+        ) : glossaries.length === 0 ? (
+          /* Empty Workspace State */
           <PagePlaceholder
             kind="glossary"
-            title="No glossary yet"
-            description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary. Already have a list? Import a CSV or spreadsheet instead of typing it out."
+            title={t("emptyState.title")}
+            description={t("emptyState.description")}
             action={
               canManage ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
-                    New glossary
+                    {t("newGlossary")}
                   </WorkspacePrimaryButton>
-                  {/*
-                    Import is offered from the empty state as well as from inside a glossary.
-                    It only ever lived inside one, so with no glossary yet — the state every
-                    workspace starts in — the product looked like it could not import at all.
-                    This route creates the glossary first and then opens the importer, because
-                    terms need a language pair to land in.
-                  */}
                   <WorkspacePrimaryButton
                     onClick={() => {
                       setImportAfterCreate(true);
@@ -477,7 +561,7 @@ export default function WorkspaceGlossaryPage() {
                     }}
                   >
                     <FileArrowUp className="h-3.5 w-3.5" />
-                    Import terms
+                    {t("emptyState.importTerms")}
                   </WorkspacePrimaryButton>
                 </div>
               ) : undefined
@@ -488,121 +572,275 @@ export default function WorkspaceGlossaryPage() {
         ) : terms.length === 0 ? (
           <PagePlaceholder
             kind="glossary"
-            title={search ? "No term matches that search" : "This glossary has no terms yet"}
-            description={
-              search
-                ? undefined
-                : "Add the words this workspace wants heard and translated a particular way, or import a CSV or spreadsheet you already have."
-            }
+            title={search ? t("emptyTerms.titleSearch") : t("emptyTerms.titleEmpty")}
+            description={search ? undefined : t("emptyTerms.description")}
             action={
-              // Offered here too, not only in the header bar. This is the screen someone lands on
-              // straight after creating a glossary, and a vocabulary arrives as a spreadsheet far
-              // more often than it is typed in word by word.
               !search && canManage ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
                     <FileArrowUp className="h-3.5 w-3.5" />
-                    Import terms
+                    {t("emptyState.importTerms")}
                   </WorkspacePrimaryButton>
                   <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
-                    Add term
+                    {t("addTerm")}
                   </WorkspacePrimaryButton>
                 </div>
               ) : undefined
             }
           />
         ) : (
-          /* WT-472: a dictionary, not a table.
-             The letters are an index you click, and each entry reads term → translation with its
-             definition underneath, the way a lexicon does. The previous flat table was sorted by
-             insertion order, which is the order somebody happened to type things in and is of no
-             use to a reader who arrives already knowing the word. */
+          /* Custom Glossary Terms View (Domain Grouping & Alphabetical) */
           <div className="flex flex-col gap-3">
-            {groupedTerms.length > 1 ? (
-              <nav className="flex flex-wrap gap-1" aria-label="Jump to letter">
-                {groupedTerms.map(([letter]) => (
-                  <a
-                    key={letter}
-                    href={`#glossary-letter-${letter}`}
-                    className="grid h-6 min-w-6 place-items-center rounded-[5px] border border-hairline px-1 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            {/* View Switcher & Domain Jump Bar */}
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              {/* Domain Jump Navigation (Linear pills) */}
+              {availableCustomDomains.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDomain("all")}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      selectedDomain === "all"
+                        ? "border-border bg-surface-3 font-semibold text-ink"
+                        : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+                    }`}
                   >
-                    {letter}
-                  </a>
-                ))}
-              </nav>
-            ) : null}
-
-            <div className="overflow-clip rounded-lg border border-hairline">
-              {groupedTerms.map(([letter, letterTerms]) => (
-                <section key={letter}>
-                  {/* Sticky so the letter stays visible while its entries scroll — otherwise a
-                      long section leaves the reader with no idea where they are. */}
-                  <h3
-                    id={`glossary-letter-${letter}`}
-                    className="sticky top-0 z-10 scroll-mt-2 border-b border-hairline bg-surface-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted"
-                  >
-                    {letter}
-                    <span className="ml-1.5 font-normal normal-case tracking-normal text-ink-subtle">
-                      {letterTerms.length}
+                    {t("domains.all")}
+                    <span className="text-[10px] text-ink-subtle">
+                      ({termsQuery.data?.length ?? 0})
                     </span>
-                  </h3>
-                  <ul className="divide-y divide-hairline">
-                    {letterTerms.map((term) => (
-                      <li
-                        key={term.id}
-                        className="group flex items-start justify-between gap-3 px-3 py-2.5"
+                  </button>
+                  {availableCustomDomains.map((domain) => {
+                    const domainCount = (termsQuery.data ?? []).filter(
+                      (t) => normalizeDomain(t.domain) === domain,
+                    ).length;
+                    const active = selectedDomain === domain;
+                    return (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => setSelectedDomain(domain)}
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          active
+                            ? "border-border bg-surface-3 font-semibold text-ink"
+                            : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+                        }`}
                       >
-                        <div className="min-w-0">
-                          <p className="flex flex-wrap items-baseline gap-1.5">
-                            <span className="text-[13px] font-medium text-ink">
-                              {term.sourceTerm}
-                            </span>
-                            {term.partOfSpeech ? (
-                              <span className="text-[11px] italic text-ink-subtle">
-                                {term.partOfSpeech}
-                              </span>
-                            ) : null}
-                            <span className="text-ink-subtle">→</span>
-                            <span className="text-[13px] text-ink">{term.targetTerm}</span>
-                            {term.domain ? (
-                              <Badge variant="secondary" className="text-[10px]">
-                                {term.domain}
-                              </Badge>
-                            ) : null}
-                          </p>
-                          {term.definition || term.context ? (
-                            <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
-                              {term.definition || term.context}
-                            </p>
-                          ) : null}
-                          {term.usageNote ? (
-                            <p className="mt-0.5 text-[11px] italic text-ink-subtle">
-                              {term.usageNote}
-                            </p>
-                          ) : null}
-                        </div>
-                        {canManage ? (
-                          <button
-                            type="button"
-                            onClick={() => removeTerm(term.id)}
-                            disabled={deleteTerm.isPending}
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
-                            title="Remove term"
-                          >
-                            <Trash className="h-3.5 w-3.5" />
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
+                        {domain}
+                        <span className="text-[10px] text-ink-subtle">({domainCount})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Grouping Toggle (Domain vs A-Z) */}
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <span className="text-[11px] text-ink-subtle">{t("grouping.label")}:</span>
+                <div className="inline-flex rounded-[6px] border border-hairline bg-surface-2 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setGroupBy("domain")}
+                    className={`rounded-[4px] px-2 py-1 text-[11px] font-medium transition-colors ${
+                      groupBy === "domain"
+                        ? "bg-surface-1 text-ink shadow-xs"
+                        : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    {t("grouping.byDomain")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGroupBy("alphabetical")}
+                    className={`rounded-[4px] px-2 py-1 text-[11px] font-medium transition-colors ${
+                      groupBy === "alphabetical"
+                        ? "bg-surface-1 text-ink shadow-xs"
+                        : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    {t("grouping.alphabetical")}
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {/* List Rendering */}
+            {groupBy === "domain" ? (
+              <div className="flex flex-col gap-4">
+                {customDomainGroups.map((group) => (
+                  <div
+                    key={group.domain}
+                    className="overflow-clip rounded-lg border border-hairline"
+                  >
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-hairline bg-surface-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                      <span className="flex items-center gap-1.5">
+                        {group.domain}
+                        <span className="font-normal normal-case text-ink-subtle">
+                          ({group.count} {t("termsCount")})
+                        </span>
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-hairline bg-surface-1">
+                      {group.terms.map((term) => {
+                        const otherDomains = crossDomainMap.get(term);
+                        return (
+                          <li
+                            key={term.id}
+                            className="group flex items-start justify-between gap-3 px-3 py-2.5 hover:bg-surface-2/30"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="flex flex-wrap items-baseline gap-1.5">
+                                <span className="text-[13px] font-medium text-ink">
+                                  {term.sourceTerm}
+                                </span>
+                                {term.partOfSpeech && (
+                                  <span className="text-[11px] italic text-ink-subtle">
+                                    {term.partOfSpeech}
+                                  </span>
+                                )}
+                                <span className="text-ink-subtle">→</span>
+                                <span className="text-[13px] font-medium text-ink">
+                                  {term.targetTerm}
+                                </span>
+                              </p>
+                              {term.definition && (
+                                <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
+                                  {term.definition}
+                                </p>
+                              )}
+                              {term.context && (
+                                <p className="mt-0.5 text-[11px] italic text-ink-subtle">
+                                  <span className="font-medium not-italic text-ink-muted">
+                                    {t("contextLabel")}:{" "}
+                                  </span>
+                                  &ldquo;{term.context}&rdquo;
+                                </p>
+                              )}
+                              {otherDomains && otherDomains.length > 0 && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] text-ink-subtle">
+                                  <span>{t("multiDomainNotice")}:</span>
+                                  {otherDomains.map((od) => (
+                                    <button
+                                      key={od}
+                                      type="button"
+                                      onClick={() => setSelectedDomain(od)}
+                                      className="underline hover:text-ink"
+                                    >
+                                      {od}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() => removeTerm(term.id)}
+                                disabled={deleteTerm.isPending}
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                                title={t("removeTermTitle")}
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* Alphabetical A-Z view */
+              <div className="flex flex-col gap-3">
+                {groupedTerms.length > 1 && (
+                  <nav className="flex flex-wrap gap-1" aria-label={t("jumpToLetter")}>
+                    {groupedTerms.map(([letter]) => (
+                      <a
+                        key={letter}
+                        href={`#glossary-letter-${letter}`}
+                        className="grid h-6 min-w-6 place-items-center rounded-[5px] border border-hairline px-1 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                      >
+                        {letter}
+                      </a>
+                    ))}
+                  </nav>
+                )}
+
+                <div className="overflow-clip rounded-lg border border-hairline">
+                  {groupedTerms.map(([letter, letterTerms]) => (
+                    <section key={letter}>
+                      <h3
+                        id={`glossary-letter-${letter}`}
+                        className="sticky top-0 z-10 scroll-mt-2 border-b border-hairline bg-surface-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted"
+                      >
+                        {letter}
+                        <span className="ml-1.5 font-normal normal-case tracking-normal text-ink-subtle">
+                          {letterTerms.length}
+                        </span>
+                      </h3>
+                      <ul className="divide-y divide-hairline bg-surface-1">
+                        {letterTerms.map((term) => (
+                          <li
+                            key={term.id}
+                            className="group flex items-start justify-between gap-3 px-3 py-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="flex flex-wrap items-baseline gap-1.5">
+                                <span className="text-[13px] font-medium text-ink">
+                                  {term.sourceTerm}
+                                </span>
+                                {term.partOfSpeech && (
+                                  <span className="text-[11px] italic text-ink-subtle">
+                                    {term.partOfSpeech}
+                                  </span>
+                                )}
+                                <span className="text-ink-subtle">→</span>
+                                <span className="text-[13px] text-ink">{term.targetTerm}</span>
+                                {term.domain && (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {term.domain}
+                                  </Badge>
+                                )}
+                              </p>
+                              {term.definition && (
+                                <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
+                                  {term.definition}
+                                </p>
+                              )}
+                              {term.context && (
+                                <p className="mt-0.5 text-[11px] italic text-ink-subtle">
+                                  <span className="font-medium not-italic text-ink-muted">
+                                    {t("contextLabel")}:{" "}
+                                  </span>
+                                  &ldquo;{term.context}&rdquo;
+                                </p>
+                              )}
+                            </div>
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() => removeTerm(term.id)}
+                                disabled={deleteTerm.isPending}
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                                title={t("removeTermTitle")}
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {selected && canManage ? (
+        {activeTab === "custom" && selected && canManage ? (
           <div className="mt-3 flex items-center justify-between text-[11px] text-ink-muted">
             <span>
               {selected.description ||
@@ -614,51 +852,51 @@ export default function WorkspaceGlossaryPage() {
               disabled={deleteGlossary.isPending}
               className="text-ink-subtle transition-colors hover:text-red-600"
             >
-              Delete this glossary
+              {t("deleteThisGlossary")}
             </button>
           </div>
         ) : null}
       </WorkspaceBody>
 
+      {/* Create Glossary Dialog */}
       <Dialog
         open={glossaryDialogOpen}
         onOpenChange={(open) => {
           setGlossaryDialogOpen(open);
-          // Abandoning the create step abandons the import it was standing in for. Left set, the
-          // flag would fire the importer open after some unrelated glossary created later.
           if (!open) setImportAfterCreate(false);
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New glossary</DialogTitle>
-            <DialogDescription>
-              One glossary covers one direction of translation. Add another for a second language
-              pair.
-            </DialogDescription>
+            <DialogTitle>{t("dialogs.newGlossary.title")}</DialogTitle>
+            <DialogDescription>{t("dialogs.newGlossary.description")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={glossaryForm.handleSubmit(submitGlossary)} className="space-y-3">
             <div>
-              <Input placeholder="Name" {...glossaryForm.register("name")} />
-              {glossaryForm.formState.errors.name ? (
+              <Input
+                placeholder={t("dialogs.newGlossary.namePlaceholder")}
+                {...glossaryForm.register("name")}
+              />
+              {glossaryForm.formState.errors.name && (
                 <p className="mt-1 text-[11px] text-red-600">
                   {glossaryForm.formState.errors.name.message}
                 </p>
-              ) : null}
+              )}
             </div>
             <Input
-              placeholder="Description (optional)"
+              placeholder={t("dialogs.newGlossary.descriptionPlaceholder")}
               {...glossaryForm.register("description")}
             />
             <div className="grid grid-cols-2 gap-2">
               <Select
+                disabled={!languagePolicyReady}
                 value={glossaryForm.watch("sourceLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("sourceLanguage", value ?? "")
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Spoken language" />
+                  <SelectValue placeholder={t("dialogs.newGlossary.spokenLanguagePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {languageOptions.map((language) => (
@@ -669,13 +907,14 @@ export default function WorkspaceGlossaryPage() {
                 </SelectContent>
               </Select>
               <Select
+                disabled={!languagePolicyReady}
                 value={glossaryForm.watch("targetLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("targetLanguage", value ?? "")
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Translated into" />
+                  <SelectValue placeholder={t("dialogs.newGlossary.translatedIntoPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {languageOptions.map((language) => (
@@ -686,15 +925,13 @@ export default function WorkspaceGlossaryPage() {
                 </SelectContent>
               </Select>
             </div>
-            {glossaryForm.formState.errors.sourceLanguage ||
-            glossaryForm.formState.errors.targetLanguage ? (
-              <p className="text-[11px] text-red-600">Choose both languages.</p>
-            ) : null}
+            {(glossaryForm.formState.errors.sourceLanguage ||
+              glossaryForm.formState.errors.targetLanguage) && (
+              <p className="text-[11px] text-red-600">
+                {t("dialogs.newGlossary.chooseBothLanguages")}
+              </p>
+            )}
 
-            {/* WT-558 — the first terms, typed here rather than after the fact.
-                Creating a glossary and putting a word in it used to be two separate errands:
-                create an empty set, find it in the list, open it, then add a term. Everything a
-                person came to do belongs in the action they started. */}
             <InitialTermsField
               fields={initialTerms.fields}
               register={glossaryForm.register}
@@ -706,65 +943,79 @@ export default function WorkspaceGlossaryPage() {
             />
 
             <DialogFooter>
-              <WorkspacePrimaryButton type="submit" disabled={createGlossary.isPending}>
-                {createGlossary.isPending ? "Creating…" : "Create glossary"}
+              <WorkspacePrimaryButton
+                type="submit"
+                disabled={createGlossary.isPending || !languagePolicyReady}
+              >
+                {createGlossary.isPending
+                  ? t("dialogs.newGlossary.creating")
+                  : t("dialogs.newGlossary.create")}
               </WorkspacePrimaryButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* Add Term Dialog */}
       <Dialog open={termDialogOpen} onOpenChange={setTermDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add term</DialogTitle>
-            <DialogDescription>
-              Applied live, to both speech recognition and translation, for every meeting in this
-              workspace.
-            </DialogDescription>
+            <DialogTitle>{t("dialogs.addTerm.title")}</DialogTitle>
+            <DialogDescription>{t("dialogs.addTerm.description")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={termForm.handleSubmit(submitTerm)} className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Input placeholder="Term as spoken" {...termForm.register("sourceTerm")} />
-                {termForm.formState.errors.sourceTerm ? (
+                <Input
+                  placeholder={t("dialogs.addTerm.termAsSpokenPlaceholder")}
+                  {...termForm.register("sourceTerm")}
+                />
+                {termForm.formState.errors.sourceTerm && (
                   <p className="mt-1 text-[11px] text-red-600">
                     {termForm.formState.errors.sourceTerm.message}
                   </p>
-                ) : null}
+                )}
               </div>
               <div>
-                <Input placeholder="Translate as" {...termForm.register("targetTerm")} />
-                {termForm.formState.errors.targetTerm ? (
+                <Input
+                  placeholder={t("dialogs.addTerm.translateAsPlaceholder")}
+                  {...termForm.register("targetTerm")}
+                />
+                {termForm.formState.errors.targetTerm && (
                   <p className="mt-1 text-[11px] text-red-600">
                     {termForm.formState.errors.targetTerm.message}
                   </p>
-                ) : null}
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {/* The field that makes this a WORKSPACE glossary: the same word means different
-                  things in different industries, and this is where a workspace says which. */}
-              <Input placeholder="Field / domain (optional)" {...termForm.register("domain")} />
               <Input
-                placeholder="Part of speech (optional)"
+                placeholder={t("dialogs.addTerm.domainPlaceholder")}
+                {...termForm.register("domain")}
+              />
+              <Input
+                placeholder={t("dialogs.addTerm.partOfSpeechPlaceholder")}
                 {...termForm.register("partOfSpeech")}
               />
             </div>
-            <Input placeholder="Definition (optional)" {...termForm.register("definition")} />
             <Input
-              placeholder="Context — when this reading applies (optional)"
+              placeholder={t("dialogs.addTerm.definitionPlaceholder")}
+              {...termForm.register("definition")}
+            />
+            <Input
+              placeholder={t("dialogs.addTerm.contextPlaceholder")}
               {...termForm.register("context")}
             />
             <DialogFooter>
               <WorkspacePrimaryButton type="submit" disabled={addTerm.isPending}>
-                {addTerm.isPending ? "Adding…" : "Add term"}
+                {addTerm.isPending ? t("dialogs.addTerm.adding") : t("dialogs.addTerm.addTerm")}
               </WorkspacePrimaryButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* Import Dialog with Template Gallery */}
       {selected ? (
         <GlossaryImportDialog
           open={importDialogOpen}

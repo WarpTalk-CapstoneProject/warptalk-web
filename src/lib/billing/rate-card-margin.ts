@@ -79,3 +79,42 @@ export function marginLabel(margin: RateCardMargin): string {
   if (margin.value != null) return `${margin.value.toFixed(1)}×`;
   return margin.reason === "currency-mismatch" ? "not comparable" : "no cost recorded";
 }
+
+/**
+ * The internal credit-unit cards — the ones billing_worker actually settles usage on. Their
+ * `unitPrice` is credits per unit, set by hand, not derived from a provider cost; so the only thing
+ * worth editing on one is the provider cost, which is what admin Insights reads to compute AI
+ * provider cost. The full editor would reprice them from cost × markup, which is wrong for them.
+ */
+export function isCreditRateCard(card: { currency: string }): boolean {
+  return card.currency.trim().toUpperCase() === "CRD";
+}
+
+/**
+ * What saving a provider cost on a credit card does to history, mirroring the server:
+ *
+ * - "backfill"  — the card has no cost yet. It is recorded on the card itself, so the usage already
+ *   settled on it becomes costable. A missing fact, not a price change.
+ * - "supersede" — the card has a different cost. A new version takes effect now and the usage
+ *   already settled keeps the cost that applied to it.
+ * - "unchanged" — same number; nothing is written.
+ */
+export function providerCostEffect(
+  card: { providerUnitCostUsd: number | null },
+  nextCostUsd: number,
+): "backfill" | "supersede" | "unchanged" {
+  if (card.providerUnitCostUsd == null) return "backfill";
+  return card.providerUnitCostUsd === nextCostUsd ? "unchanged" : "supersede";
+}
+
+/**
+ * A provider cost typed by an admin: a positive USD amount, or null. Zero is refused on purpose —
+ * no provider in the pipeline is free, and the server would reject it as a claim that one is.
+ */
+export function parseProviderCostUsd(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d*\.?\d+(e-?\d+)?$/i.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/errors";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useKickMeetingParticipant,
@@ -166,7 +167,7 @@ export function PeoplePanel({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3">
         <p className="text-[12px] font-medium text-ink-subtle">Room Code</p>
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold tracking-wide text-ink">
@@ -336,7 +337,11 @@ function ParticipantRow({
         toast.success("Participant admitted.");
       }
       if (action === "reject") {
-        await reject.mutateAsync(participant.id);
+        // WT-699 / TC2402: the USER id, like kick, mute and transfer beside it — all four are
+        // MeetingService routes, which speak user ids. `participant.id` is the room service's
+        // participant ROW id (right for admit, which is a room-service route), and sent here it
+        // matched nobody: the knock stayed in the lobby while the toast said it was rejected.
+        await reject.mutateAsync(participant.userId);
         toast.success("Participant rejected from lobby.");
       }
       if (action === "transfer") {
@@ -355,13 +360,20 @@ function ParticipantRow({
       toast.success("Participant removed from meeting.");
       setShowKickDialog(false);
     } catch (error: unknown) {
+      // WT-699 / TC2103: 409 is "already removed" — true, and not a failure the host has to fix.
+      // The server's sentence says so; the dialog closes as it would have on success.
+      if (getErrorStatus(error) === 409) {
+        toast.info(getErrorMessage(error, "This participant has already been removed from the meeting."));
+        setShowKickDialog(false);
+        return;
+      }
       toast.error(getErrorMessage(error, "Failed to kick participant."));
     }
   }
 
   return (
     <>
-      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-canvas">
+      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-surface-2">
         <div className="flex items-center gap-2.5 min-w-0">
           {/* The badges to the right say where someone is relative to THIS room; the dot says
               whether they are reachable in the app at all — which is the difference between an
@@ -402,7 +414,7 @@ function ParticipantRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle group-hover:hidden">
+          <span className="grid h-6 w-6 place-items-center rounded-sm bg-surface-2 text-ink-subtle group-hover:hidden">
             {audioEnabled ? (
               <Microphone className="h-3.5 w-3.5" />
             ) : (

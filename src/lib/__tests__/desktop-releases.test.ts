@@ -89,6 +89,28 @@ test("mac builds carry their architecture into the label", () => {
   assert.equal(classifyDesktopAsset(file("WarpTalk-0.2.0.dmg"))?.label, "Universal (.dmg)");
 });
 
+test("the macOS .pkg is the recommended download whenever a release has one", () => {
+  // The pkg also installs WarpTalk Microphone and WarpTalk Speaker; a dmg can only copy the app.
+  // Older releases with only a dmg keep offering it.
+  assert.equal(classifyDesktopAsset(file("WarpTalk-0.4.5-arm64.pkg"))?.label, "Apple Silicon (.pkg)");
+  assert.equal(classifyDesktopAsset(file("WarpTalk-0.4.5.pkg"))?.kind, "mac-pkg");
+
+  const release = normalizeRelease({
+    version: "v0.4.5",
+    files: [
+      file("WarpTalk-0.4.5-arm64-mac.zip"),
+      file("WarpTalk-0.4.5-arm64.dmg"),
+      file("WarpTalk-0.4.5-arm64.pkg"),
+      file("WarpTalk-0.4.5.pkg"),
+    ],
+  })!;
+  assert.equal(pickPrimaryAsset(release.assets, "mac", "arm64")?.fileName, "WarpTalk-0.4.5-arm64.pkg");
+  assert.equal(pickPrimaryAsset(release.assets, "mac", "x64")?.fileName, "WarpTalk-0.4.5.pkg");
+
+  const dmgOnly = normalizeRelease({ version: "v0.4.4", files: [file("WarpTalk-0.4.4-arm64.dmg")] })!;
+  assert.equal(pickPrimaryAsset(dmgOnly.assets, "mac", "arm64")?.fileName, "WarpTalk-0.4.4-arm64.dmg");
+});
+
 test("a zip only counts as a mac build when the name says so", () => {
   assert.equal(classifyDesktopAsset(file("WarpTalk-0.2.0-mac.zip"))?.platform, "mac");
   assert.equal(classifyDesktopAsset(file("source-code.zip")), null);

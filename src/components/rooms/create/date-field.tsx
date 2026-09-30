@@ -15,6 +15,7 @@
  * recurrence code that parses it is untouched.
  */
 
+import { useLocale, useTranslations } from "next-intl";
 import { CalendarBlank } from "@phosphor-icons/react/dist/ssr";
 
 import { Calendar } from "@/components/ui/calendar";
@@ -35,10 +36,10 @@ function parseLocalDate(value: string): Date | undefined {
 }
 
 /** "30 Sep 2026" — month spelled out, so there is no dd/mm vs mm/dd ambiguity to resolve. */
-function formatLabel(value: string): string {
+function formatLabel(value: string, locale: string, pickDateLabel: string): string {
   const date = parseLocalDate(value);
-  if (!date) return "Pick a date";
-  return new Intl.DateTimeFormat("en-GB", {
+  if (!date) return pickDateLabel;
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -61,6 +62,8 @@ export function DateField({
   className?: string;
   "data-testid"?: string;
 }) {
+  const t = useTranslations("rooms.create.dateField");
+  const locale = useLocale();
   const selected = parseLocalDate(value);
   const minDate = min ? parseLocalDate(min) : undefined;
 
@@ -75,18 +78,18 @@ export function DateField({
             // The row this sits in toggles the whole setting when clicked.
             onClick={(event) => event.stopPropagation()}
             className={cn(
-              "flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border/60 bg-canvas px-1.5 text-[12px] tabular-nums text-ink focus:outline-none focus:ring-1 focus:ring-ink/20",
+              "flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border/60 bg-surface-2 px-1.5 text-[12px] tabular-nums text-ink focus:outline-none focus:ring-1 focus:ring-ink/20",
               className,
             )}
           >
             <CalendarBlank size={13} className="shrink-0 text-ink-muted" />
-            {formatLabel(value)}
+            {formatLabel(value, locale, t("pickDate"))}
           </button>
         }
       />
       <PopoverContent
         align="end"
-        className="w-auto rounded-xl border-border/50 bg-canvas p-3 shadow-xl"
+        className="w-auto rounded-xl border-border/50 bg-surface-1 p-3 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <Calendar

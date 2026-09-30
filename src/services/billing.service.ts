@@ -1,13 +1,18 @@
 import apiClient from "@/lib/api/client";
+import { API } from "@/lib/api/endpoints";
 import type {
+  RecurringBillingStatusDto,
   CreditBalanceDto,
   BillingReportDto,
   CreditHistoryFilters,
   CreditHistoryQueryParams,
   CreditTransactionDto,
+  FrozenCreditsDto,
+  GlobalInvoiceFilters,
   PagedResult,
   SubscriptionDto,
   InvoiceDto,
+  PaymentTransactionDto,
   UsageAlertDto,
   TopWorkspaceDto,
   UsageChartDto,
@@ -26,6 +31,17 @@ export const billingService = {
   ): Promise<CreditBalanceDto> => {
     const { data } = await apiClient.get<CreditBalanceDto>(
       `/credits/workspace/${workspaceId}`,
+    );
+    return data;
+  },
+
+  /**
+   * Credits the workspace kept from a subscription that ended ("X credits kept — renew to use
+   * them"). 200 with zero when nothing is frozen, including for a workspace with no plan at all.
+   */
+  getFrozenCredits: async (workspaceId: string): Promise<FrozenCreditsDto> => {
+    const { data } = await apiClient.get<FrozenCreditsDto>(
+      `/credits/workspace/${workspaceId}/frozen`,
     );
     return data;
   },
@@ -140,6 +156,8 @@ export const billingService = {
       if (filters.toDate) params.toDate = filters.toDate;
       if (filters.minAmount !== undefined) params.minAmount = filters.minAmount;
       if (filters.maxAmount !== undefined) params.maxAmount = filters.maxAmount;
+      if (filters.search?.trim()) params.search = filters.search.trim();
+      if (filters.sort) params.sort = filters.sort;
     }
 
     const { data } = await apiClient.get<PagedResult<CreditTransactionDto>>(
@@ -237,12 +255,10 @@ export const billingService = {
     workspaceId: string,
     amount: number,
     reason: string,
-  ): Promise<CreditTransactionDto> => {
-    const { data } = await apiClient.post<CreditTransactionDto>(
-      `/credits/workspace/${workspaceId}/adjust`,
-      { amount, reason },
-    );
-    return data;
+  ): Promise<void> => {
+    // The audited admin route. The old `/credits/workspace/{id}/adjust` authorized off a role string
+    // and wrote nothing to the platform audit log; it is gone.
+    await apiClient.post(API.adminWorkspaceBilling.adjustCredits(workspaceId), { amount, reason });
   },
 
   /**
@@ -296,6 +312,33 @@ export const billingService = {
       },
     );
     return data;
+  },
+
+  /**
+   * Every payment recorded against this workspace — card checkouts, invoice-rail payments, failed
+   * and refunded ones included — newest first as the server orders them. Owner/Admin only.
+   */
+  getWorkspacePaymentHistory: async (
+    workspaceId: string,
+    pageNumber = 1,
+    pageSize = 20,
+  ): Promise<PagedResult<PaymentTransactionDto>> => {
+    const { data } = await apiClient.get<PagedResult<PaymentTransactionDto>>(
+      API.workspaceBilling.paymentHistory(workspaceId),
+      { params: { pageNumber, pageSize } },
+    );
+    return data;
+  },
+
+  /**
+   * A Stripe checkout URL for one open invoice. The caller becomes the buyer; the server checks
+   * that they own the invoice's workspace and refuses a paid or void invoice.
+   */
+  createInvoiceCheckout: async (invoiceId: string): Promise<string> => {
+    const { data } = await apiClient.post<{ url: string }>(
+      API.workspaceBilling.invoiceCheckout(invoiceId),
+    );
+    return data.url;
   },
 
   /**
@@ -367,6 +410,39 @@ export const billingService = {
     return data;
   },
 
+  /**
+   * backend#466 — renewal as the billing page shows it: who renews, the next charge date and
+   * amount, the card on file (brand + last four only) and any failed renewal charge.
+   */
+  getRecurringBilling: async (workspaceId: string): Promise<RecurringBillingStatusDto> => {
+    const { data } = await apiClient.get<RecurringBillingStatusDto>(
+      API.adminSubscriptions.recurring(workspaceId),
+    );
+    return data;
+  },
+
+  /**
+   * backend#466 — switch automatic renewal off or back on. For a card plan the server moves Stripe's
+   * cancel_at_period_end first; the paid period always runs to its end. A plan that was paid once
+   * answers 409 BILLING_AUTO_RENEW_REQUIRES_CHECKOUT when switched on.
+   */
+  setAutoRenew: async (workspaceId: string, autoRenew: boolean): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.put<SubscriptionDto>(
+      API.adminSubscriptions.autoRenew(workspaceId),
+      { autoRenew },
+    );
+    return data;
+  },
+
+  /** backend#466 — a Stripe billing-portal URL to update the card. `returnPath` is a path on this site. */
+  createBillingPortal: async (workspaceId: string, returnPath: string): Promise<string> => {
+    const { data } = await apiClient.post<{ url: string }>(
+      API.adminSubscriptions.billingPortal(workspaceId),
+      { returnPath },
+    );
+    return data.url;
+  },
+
   cancelSubscription: async (
     workspaceId: string,
     reason?: string,
@@ -430,13 +506,15 @@ export const billingService = {
   getGlobalInvoices: async (
     pageNumber = 1,
     pageSize = 20,
+    filters: GlobalInvoiceFilters = {},
   ): Promise<PagedResult<InvoiceDto>> => {
-    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(
-      `/invoices/global`,
-      {
-        params: { pageNumber, pageSize },
-      },
-    );
+    // Empty values are dropped rather than sent as `status=`, which the server would read as a
+    // request for invoices whose status is the empty string.
+    const params: Record<string, string | number> = { pageNumber, pageSize };
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null && value !== "") params[key] = value;
+    }
+    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/invoices/global`, { params });
     return data;
   },
 

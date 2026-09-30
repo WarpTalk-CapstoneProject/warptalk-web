@@ -14,10 +14,12 @@
  *   something true to say before anybody has bought anything.
  */
 
+import { useTranslations } from "next-intl";
 import { usageTypeLabel } from "@/lib/billing/usage-labels";
 import type { FeatureAdoptionDto } from "@/types/billing";
 
 export function UsageBreakdown({ rows }: { rows: FeatureAdoptionDto[] }) {
+  const t = useTranslations("dashboard");
   const ranked = [...rows]
     .filter((row) => row.totalCreditsConsumed > 0 || row.usageCount > 0)
     .sort((a, b) => b.totalCreditsConsumed - a.totalCreditsConsumed);
@@ -28,7 +30,7 @@ export function UsageBreakdown({ rows }: { rows: FeatureAdoptionDto[] }) {
     // than empty.
     return (
       <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-        Nothing has been used in this window.
+        {t("usageBreakdown.empty")}
       </p>
     );
   }
@@ -45,7 +47,9 @@ export function UsageBreakdown({ rows }: { rows: FeatureAdoptionDto[] }) {
         return (
           <div key={row.usageType}>
             <div className="flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="min-w-0 truncate text-ink">{usageTypeLabel(row.usageType)}</span>
+              <span className="min-w-0 truncate text-ink">
+                {usageTypeLabel(row.usageType, (key) => t(key as never))}
+              </span>
               <span className="shrink-0 tabular-nums text-ink-muted">
                 <span className="font-medium text-ink">
                   {row.totalCreditsConsumed.toLocaleString()}

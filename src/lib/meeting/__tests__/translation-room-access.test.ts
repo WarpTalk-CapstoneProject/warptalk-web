@@ -154,3 +154,42 @@ test("a terminal room offers nothing, and says which terminal state it is in", (
     assert.equal(intent.label, "Ended");
   }
 });
+
+// ── WT-612 / WT-621: the clock opened the room ──────────────────────────────
+
+test("an open room is joined, not started — there is nothing left to start", () => {
+  // The whole point of OPEN: the clock unlocked the door at scheduledAt. Offering "Start meeting"
+  // would ask somebody to do a thing that has already happened.
+  for (const isHost of [true, false]) {
+    const intent = resolveRoomEntryIntent({
+      status: "open",
+      isHost,
+      statusLabel: "Open",
+      scheduledAtLabel: "Aug 5, 2026, 9:00 AM",
+    });
+
+    assert.equal(intent.mode, "join", `host=${isHost}`);
+    assert.equal(intent.label, "Join meeting");
+    assert.equal(intent.isActionable, true);
+  }
+});
+
+test("an open room is not terminal and not a lobby", () => {
+  assert.equal(canJoinTranslationRoom("open"), true);
+  // Not "not started" either: the lobby exists to hold people for a host who has to open the
+  // room, and nobody has to.
+  assert.equal(shouldEnterWaitingRoom("open", { isHost: false }), false);
+  assert.equal(shouldEnterWaitingRoom("open"), false);
+});
+
+test("somebody already in an open room is offered the way back, not device setup", () => {
+  const intent = resolveRoomEntryIntent({
+    status: "open",
+    isHost: false,
+    statusLabel: "Open",
+    isActiveInMeeting: true,
+  });
+
+  assert.equal(intent.mode, "join");
+  assert.equal(intent.label, "Return to meeting");
+});

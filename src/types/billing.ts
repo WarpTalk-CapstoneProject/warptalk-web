@@ -8,6 +8,27 @@ export interface CreditBalanceDto {
   currentPeriodEnd: string; // ISO datetime
 }
 
+/**
+ * Credits a workspace kept from a subscription that ended (GET credits/workspace/{id}/frozen).
+ * Answers for a workspace with NO live plan — the case the balance endpoint 404s on.
+ */
+export interface FrozenCreditsDto {
+  workspaceId: string;
+  frozenCredits: number;
+  frozenAt: string | null;
+  endedAt: string | null;
+  dormantSince: string | null;
+  graceEndsAt: string | null;
+  hasActiveSubscription: boolean;
+  /**
+   * backend#467: the plan of the workspace's most recent subscription when it has no live one,
+   * and when that plan ended — set even when nothing was left to freeze, so the renew screen can
+   * name what ended. Null when a subscription is live, or there never was one (never paid).
+   */
+  lastPlanName?: string | null;
+  lastEndedAt?: string | null;
+}
+
 export interface SubscriptionDto {
   id: string;
   /** Nullable on the wire (`Guid? UserId`): a workspace contract subscription has no user. */
@@ -46,6 +67,17 @@ export interface CreateCheckoutSessionRequest {
    * session so the completion handler grants exactly what was paid for.
    */
   credits?: number;
+  /**
+   * backend#466, plan checkouts: renew automatically. On (the server's default) sells a Stripe
+   * Subscription — the saved card is charged every cycle. Off sells one period, paid once.
+   */
+  autoRenew?: boolean;
+  /** G11, paymentType CreditPack / AddOn: the catalog item. Its price is the catalog's. */
+  packageId?: string;
+  /** G11, add-ons: units bought. */
+  quantity?: number;
+  /** G11: a coupon code; validated server-side. One coupon per checkout. */
+  couponCode?: string;
 }
 
 export interface CheckoutSessionDto {
@@ -175,6 +207,31 @@ export interface CreditHistoryFilters {
   toDate?: string;
   minAmount?: number;
   maxAmount?: number;
+  /**
+   * Global ledger only. A transaction or reference id (exact), otherwise matched against the
+   * description. Ignored by a backend that predates it, so callers must not rely on it narrowing.
+   */
+  search?: string;
+  /** Global ledger only: created_desc (default) | created_asc | amount_desc | amount_asc. */
+  sort?: "created_desc" | "created_asc" | "amount_desc" | "amount_asc";
+}
+
+/**
+ * Server-side filters for the platform-wide invoice list (`GET /invoices/global`).
+ *
+ * `search` is an invoice number fragment, or an exact invoice id. Dates bound `issuedAt`
+ * (`fromDate` inclusive, `toDate` exclusive); amounts bound `total`.
+ */
+export interface GlobalInvoiceFilters {
+  search?: string;
+  status?: string;
+  workspaceId?: string;
+  currency?: string;
+  fromDate?: string;
+  toDate?: string;
+  minTotal?: number;
+  maxTotal?: number;
+  sort?: "issued_desc" | "issued_asc" | "total_desc" | "total_asc" | "due_asc";
 }
 
 export interface CreditHistoryQueryParams extends CreditHistoryFilters {
@@ -250,6 +307,30 @@ export interface InvoiceDto {
   workspaceName: string | null;
 }
 
+/**
+ * One row of a workspace's payment history.
+ *
+ * Mirrors `WarpTalk.BillingService.Application.DTOs.PaymentTransactionDto` (PaymentDtos.cs) field
+ * for field. `status` is the server's vocabulary — pending | paid | failed | cancelled | refunded |
+ * disputed | subscription_updated — see lib/billing/invoice-payment.
+ */
+export interface PaymentTransactionDto {
+  id: string;
+  subscriptionId: string;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  paymentMethod: string;
+  provider: string;
+  providerTransactionId: string | null;
+  providerOrderId: string | null;
+  status: string;
+  failureReason: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
 export interface UsageAlertDto {
   workspaceId: string;
   workspaceName: string;
@@ -293,4 +374,38 @@ export interface WorkspaceUsageByMemberDto {
   to: string | null;
   totalCreditsConsumed: number;
   members: MemberCreditUsageDto[];
+}
+
+/** backend#466: the card on file — brand and last four digits only. */
+export interface CardOnFileDto {
+  brand: string | null;
+  last4: string;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+/**
+ * backend#466: renewal as the billing page shows it. `renewalMode` says who renews the plan:
+ * `stripe` (the saved card is charged), `invoice` (an invoice is issued), `none` (nothing — turning
+ * auto-renew on needs a new checkout, `autoRenewRequiresCheckout`).
+ */
+export interface RecurringBillingStatusDto {
+  workspaceId: string;
+  subscriptionId: string;
+  renewalMode: "stripe" | "invoice" | "none" | string;
+  autoRenew: boolean;
+  canToggleAutoRenew: boolean;
+  autoRenewRequiresCheckout: boolean;
+  currentPeriodEnd: string;
+  nextChargeAt: string | null;
+  nextChargeAmount: number | null;
+  nextChargeCurrency: string | null;
+  card: CardOnFileDto | null;
+  canManagePaymentMethod: boolean;
+  paymentFailed: boolean;
+  paymentFailedAt: string | null;
+  paymentGraceEndsAt: string | null;
+  paymentFailureReason: string | null;
+  stripeStatus: string | null;
+  stripeUnavailable: boolean;
 }

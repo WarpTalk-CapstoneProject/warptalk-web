@@ -19,6 +19,7 @@
  */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarPresenceDot, PresenceLabel } from "@/components/presence/presence-dot";
@@ -38,6 +39,7 @@ export function WorkspaceMembersPanel({
   workspaceId: string | null;
   workspaceSlug: string | null;
 }) {
+  const t = useTranslations("common.workspaceMembersPanel");
   const membersQuery = useWorkspaceMembers(workspaceId ?? undefined, 1, PANEL_PAGE_SIZE);
   const members = membersQuery.data?.items ?? [];
 
@@ -58,13 +60,13 @@ export function WorkspaceMembersPanel({
   if (!workspaceId) {
     return (
       <p className="text-[12px] text-ink-muted">
-        Pick a workspace to see who is in it.
+        {t("pickWorkspace")}
       </p>
     );
   }
 
   if (membersQuery.isLoading) {
-    return <p className="text-[12px] text-ink-muted">Loading members…</p>;
+    return <p className="text-[12px] text-ink-muted">{t("loading")}</p>;
   }
 
   if (membersQuery.isError) {
@@ -72,7 +74,7 @@ export function WorkspaceMembersPanel({
     // to opposite conclusions.
     return (
       <p className="text-[12px] text-ink-muted">
-        Could not load the member list.
+        {t("loadError")}
       </p>
     );
   }
@@ -81,13 +83,13 @@ export function WorkspaceMembersPanel({
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-ink-subtle">
         {onlineCount > 0
-          ? `${onlineCount} of ${members.length} around now`
-          : `${members.length} member${members.length === 1 ? "" : "s"}`}
+          ? t("aroundNow", { online: onlineCount, total: members.length })
+          : t("memberCount", { count: members.length })}
       </p>
 
       <ul className="flex flex-col gap-0.5">
         {ordered.map((member) => (
-          <MemberRow key={member.id} member={member} workspaceSlug={workspaceSlug} />
+          <MemberRow key={member.id} member={member} workspaceSlug={workspaceSlug} memberFallback={t("memberFallback")} />
         ))}
       </ul>
     </div>
@@ -97,9 +99,11 @@ export function WorkspaceMembersPanel({
 function MemberRow({
   member,
   workspaceSlug,
+  memberFallback,
 }: {
   member: WorkspaceMemberDto;
   workspaceSlug: string | null;
+  memberFallback: string;
 }) {
   const row = (
     <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors hover:bg-surface-2">
@@ -116,7 +120,7 @@ function MemberRow({
         <p className="truncate text-[12px] text-ink">{member.fullName || member.email}</p>
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[11px] capitalize text-ink-muted">
-            {member.roleName?.toLowerCase() || "member"}
+            {member.roleName?.toLowerCase() || memberFallback}
           </span>
           <PresenceLabel userId={member.userId} />
         </div>

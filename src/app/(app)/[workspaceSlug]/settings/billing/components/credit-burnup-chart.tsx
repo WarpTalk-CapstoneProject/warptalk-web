@@ -25,6 +25,7 @@
  *   as, and nothing on this chart says "runs out".
  */
 
+import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState } from "react";
 
 import type { CycleBurnUp } from "@/lib/billing/cycle-burnup";
@@ -143,6 +144,7 @@ interface Reading {
 }
 
 export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
+  const t = useTranslations("settingsBillingUsage");
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -246,8 +248,11 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
   const bucketWord = burnUp.bucketSize === "week" ? "week" : "day";
   const paceText =
     burnUp.available > 0
-      ? `Even pace · ${compact(burnUp.available / burnUp.bucketsInCycle)}/${bucketWord}`
-      : "Even pace";
+      ? t("burnupChart.legend.evenPaceWithRate", {
+          rate: compact(burnUp.available / burnUp.bucketsInCycle),
+          bucket: bucketWord,
+        })
+      : t("burnupChart.legend.evenPace");
 
   return (
     <div className="relative">
@@ -256,7 +261,7 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         role="img"
-        aria-label={`Credits spent this cycle: ${whole(burnUp.spent)} of ${whole(burnUp.available)} available`}
+        aria-label={t("burnupChart.ariaLabel", { spent: whole(burnUp.spent), available: whole(burnUp.available) })}
         tabIndex={0}
         onPointerMove={(event) => setHovered(indexFromClientX(event.clientX))}
         onPointerDown={(event) => setHovered(indexFromClientX(event.clientX))}
@@ -405,7 +410,7 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
               textAnchor="end"
               className="fill-ink-subtle text-[10px] font-semibold tracking-wider"
             >
-              TODAY
+              {t("burnupChart.today")}
             </text>
           </g>
         ) : null}
@@ -473,24 +478,24 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
             {reading.label}
             {reading.projected && !reading.beyond ? (
               <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-subtle">
-                projected
+                {t("burnupChart.projected")}
               </span>
             ) : null}
           </p>
 
           {reading.beyond ? (
-            <p className="mt-1.5 text-[11.5px] text-ink-muted">Not forecast this far ahead.</p>
+            <p className="mt-1.5 text-[11.5px] text-ink-muted">{t("burnupChart.notForecast")}</p>
           ) : (
             <>
               <div className="mt-1.5 flex items-baseline justify-between gap-4">
-                <span className="text-[11.5px] text-ink-muted">Spent</span>
+                <span className="text-[11.5px] text-ink-muted">{t("burnupChart.spent")}</span>
                 <b className="text-[11.5px] font-semibold tabular-nums text-ink">
                   {whole(reading.spent)}
                 </b>
               </div>
               <div className="mt-1 flex items-baseline justify-between gap-4">
                 <span className="text-[11.5px] text-ink-muted">
-                  {burnUp.bucketSize === "week" ? "That week" : "That day"}
+                  {burnUp.bucketSize === "week" ? t("burnupChart.thatWeek") : t("burnupChart.thatDay")}
                 </span>
                 <b className="text-[11.5px] font-semibold tabular-nums text-ink">
                   {reading.spentInBucket === null ? "—" : whole(reading.spentInBucket)}
@@ -502,14 +507,14 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
           <div className="-mx-3 mt-2 h-px bg-hairline" />
 
           <div className="mt-2 flex items-baseline justify-between gap-4">
-            <span className="text-[11.5px] text-ink-muted">Available</span>
+            <span className="text-[11.5px] text-ink-muted">{t("burnupChart.available")}</span>
             <b className="text-[11.5px] font-semibold tabular-nums text-ink">
               {whole(reading.available)}
             </b>
           </div>
           {reading.beyond ? null : (
             <div className="mt-1 flex items-baseline justify-between gap-4">
-              <span className="text-[11.5px] text-ink-muted">vs even pace</span>
+              <span className="text-[11.5px] text-ink-muted">{t("burnupChart.vsEvenPace")}</span>
               <b
                 className={`text-[11.5px] font-semibold tabular-nums ${
                   reading.vsPace > 0 ? "text-destructive" : "text-emerald-600"
@@ -524,17 +529,23 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
-        <Key swatch={<span className="h-0 w-3.5 border-t-2 border-ink-subtle" />} text="Credits available" />
+        <Key
+          swatch={<span className="h-0 w-3.5 border-t-2 border-ink-subtle" />}
+          text={t("burnupChart.legend.creditsAvailable")}
+        />
         <Key
           swatch={<span className="size-2.5 rounded-[2px] bg-[var(--primary)]" />}
-          text="Spent, cumulative"
+          text={t("burnupChart.legend.spentCumulative")}
         />
         <Key
           swatch={<span className="h-0 w-3.5 border-t-2 border-dashed border-[var(--primary)]" />}
           text={paceText}
         />
         {todayIndex < lastIndex ? (
-          <Key swatch={<span className="size-2.5 rounded-[2px] bg-hairline" />} text="Not yet spent" />
+          <Key
+            swatch={<span className="size-2.5 rounded-[2px] bg-hairline" />}
+            text={t("burnupChart.legend.notYetSpent")}
+          />
         ) : null}
       </div>
     </div>

@@ -2,17 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Rectangle,
-} from "recharts";
+import { TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
 import {
   Card,
   CardContent,
@@ -210,71 +200,21 @@ export function UsageChart({ workspaceId, className }: UsageChartProps) {
             No data available for selected period
           </div>
         ) : (
-          <div className="h-[300px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                barGap={8}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#334155"
-                  opacity={0.2}
-                />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: "#64748b" }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: "#64748b" }}
-                  dx={-10}
-                  tickFormatter={(value) =>
-                    value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
-                  }
-                />
-                <Tooltip
-                  cursor={{ fill: "#334155", opacity: 0.1 }}
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    borderColor: "#334155",
-                    borderRadius: "8px",
-                    color: "#f8fafc",
-                    boxShadow:
-                      "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-                    fontSize: "13px",
-                  }}
-                  itemStyle={{ fontWeight: 500 }}
-                  formatter={(value) => [value?.toLocaleString(), "Credits"]}
-                />
-                <Legend
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: "13px", paddingTop: "20px" }}
-                />
-                <Bar
-                  dataKey="consumedCredits"
-                  name="Consumed"
-                  fill="#3b82f6"
-                  radius={[4, 4, 0, 0]}
-                  barSize={20}
-                  activeBar={<Rectangle fill="#2563eb" />}
-                />
-                <Bar
-                  dataKey="topUpCredits"
-                  name="Top-up"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                  barSize={20}
-                  activeBar={<Rectangle fill="#059669" />}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          // The shared admin chart: themed, portalled tooltip, round ticks. The Recharts version
+          // hardcoded a navy tooltip and slate greys, and its readout was clipped by this card.
+          <div className="mt-4">
+            <TimeSeriesChart
+              variant="bar"
+              integer
+              height={280}
+              ariaLabel={workspaceId ? "Workspace usage over time" : "Global usage over time"}
+              labels={chartData.map((d) => d.label)}
+              series={[
+                { key: "consumed", label: "Consumed", values: chartData.map((d) => d.consumedCredits) },
+                { key: "topUp", label: "Top-up", values: chartData.map((d) => d.topUpCredits) },
+              ]}
+              formatValue={(value) => `${value.toLocaleString("en-US")} credits`}
+            />
           </div>
         )}
       </CardContent>

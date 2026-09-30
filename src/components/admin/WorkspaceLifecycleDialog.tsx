@@ -1,6 +1,7 @@
 "use client";
 
 import { Spinner, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -18,30 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 const MAX_REASON_LENGTH = 500;
 
 export type WorkspaceLifecycleAction = "suspend" | "reactivate" | "delete";
-
-const COPY: Record<
-  WorkspaceLifecycleAction,
-  { title: string; confirm: string; busy: string; placeholder: string }
-> = {
-  suspend: {
-    title: "Suspend workspace",
-    confirm: "Suspend workspace",
-    busy: "Suspending…",
-    placeholder: "e.g. Abuse report confirmed by customer success on 2026-08-03",
-  },
-  reactivate: {
-    title: "Reactivate workspace",
-    confirm: "Reactivate workspace",
-    busy: "Reactivating…",
-    placeholder: "e.g. Customer remediated the reported content",
-  },
-  delete: {
-    title: "Delete workspace",
-    confirm: "Delete workspace permanently",
-    busy: "Deleting…",
-    placeholder: "e.g. Tenant offboarded — contract ended 2026-07-31",
-  },
-};
 
 /**
  * Confirmation for a workspace lifecycle change. Every one of these is disruptive for the whole
@@ -65,6 +42,7 @@ export function WorkspaceLifecycleDialog({
   onOpenChange: (open: boolean) => void;
   onConfirm: (reason: string) => void;
 }) {
+  const t = useTranslations("adminWorkspaces.lifecycleDialog");
   const [reason, setReason] = useState("");
 
   // Clear the draft whenever the dialog is opened or switched to the other action, so a
@@ -78,7 +56,6 @@ export function WorkspaceLifecycleDialog({
 
   const isSuspend = action === "suspend";
   const isDelete = action === "delete";
-  const copy = COPY[action];
   const trimmedReason = reason.trim();
   const canSubmit = trimmedReason.length > 0 && trimmedReason.length <= MAX_REASON_LENGTH && !pending;
 
@@ -86,33 +63,18 @@ export function WorkspaceLifecycleDialog({
     <Dialog open={open} onOpenChange={(next) => (pending ? undefined : onOpenChange(next))}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogTitle>{t(`${action}.title`)}</DialogTitle>
           <DialogDescription>
-            {isDelete ? (
-              <>
-                <span className="font-medium text-ink">{workspaceName}</span> will be deleted and
-                every membership removed with it. This cannot be undone from the portal — a
-                deleted workspace has left the lifecycle. Billing history and the audit trail
-                survive.
-              </>
-            ) : isSuspend ? (
-              <>
-                <span className="font-medium text-ink">{workspaceName}</span> will be suspended
-                for every member. No workspace data, meeting history, or billing record is
-                deleted — the workspace can be reactivated later.
-              </>
-            ) : (
-              <>
-                <span className="font-medium text-ink">{workspaceName}</span> will become active
-                again for every member. The original suspension stays in the audit trail.
-              </>
-            )}
+            {t.rich(`${action}.description`, {
+              workspaceName,
+              b: (chunks) => <span className="font-medium text-ink">{chunks}</span>,
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <Label htmlFor="lifecycle-reason">
-            Reason <span className="text-destructive">*</span>
+            {t("reasonLabel")} <span className="text-destructive">*</span>
           </Label>
           <Textarea
             id="lifecycle-reason"
@@ -121,11 +83,10 @@ export function WorkspaceLifecycleDialog({
             rows={3}
             maxLength={MAX_REASON_LENGTH}
             autoFocus
-            placeholder={copy.placeholder}
+            placeholder={t(`${action}.placeholder`)}
           />
           <p className="text-xs text-ink-muted">
-            Recorded against your admin account and attached to this workspace permanently.{" "}
-            {trimmedReason.length}/{MAX_REASON_LENGTH}
+            {t("reasonHelp", { current: trimmedReason.length, max: MAX_REASON_LENGTH })}
           </p>
         </div>
 
@@ -138,7 +99,7 @@ export function WorkspaceLifecycleDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             variant={isSuspend || isDelete ? "destructive" : "default"}
@@ -148,10 +109,10 @@ export function WorkspaceLifecycleDialog({
             {pending ? (
               <>
                 <Spinner size={14} className="animate-spin" />
-                {copy.busy}
+                {t(`${action}.busy`)}
               </>
             ) : (
-              copy.confirm
+              t(`${action}.confirm`)
             )}
           </Button>
         </DialogFooter>

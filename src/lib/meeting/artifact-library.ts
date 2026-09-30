@@ -31,6 +31,7 @@ import { foldSearchText } from "../ui/search-text.ts";
 import { parseMinutesContent } from "../../types/meetingMinutes.ts";
 import { sectionTitle } from "./meeting-summary.ts";
 import { ARTIFACT_WITHHELD_FALLBACK } from "./artifact-denial.ts";
+import { parseSavedTranscriptBody } from "../documents/saved-record-documents.ts";
 
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { MeetingMinutesDto } from "@/types/meetingMinutes";
@@ -74,6 +75,14 @@ export type LibraryEntry = {
   targetLanguages: string[];
   /** Readable text, or null when there is nothing to read — see `absence`. */
   body: string | null;
+  /**
+   * The artifact's stored content exactly as the server returned it, when `body` is readable.
+   *
+   * `body` is FLATTENED for reading and searching — a summary's JSON becomes lines of text — and
+   * a document built from it loses its section headings. The Word download and the card's
+   * document thumbnail rebuild the real sections from this instead. Minutes have no raw form.
+   */
+  rawBody?: string | null;
   absence: ArtifactAbsence | null;
   /** When the document itself last changed, falling back to when it was created. */
   changedAt: string | null;
@@ -216,6 +225,7 @@ export function buildArtifactLibrary({
         sourceLanguage: room.sourceLanguage,
         targetLanguages: room.targetLanguages,
         body: hasBody ? raw : null,
+        rawBody: hasBody ? artifact.content ?? null : null,
         absence: hasBody ? null : artifactAbsence(artifact),
         changedAt: artifact.updatedAt ?? artifact.createdAt ?? room.endedAt,
       });
@@ -348,7 +358,15 @@ export function entryExcerpt(entry: LibraryEntry, maxChars = 320): string {
  * decision and names who can change it, which is the difference between "ask the host" and
  * "this product is broken".
  */
-export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): string {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type ArtifactAbsenceTranslator = (key: string) => string | undefined;
+
+export function describeAbsence(
+  absence: ArtifactAbsence,
+  kind: ArtifactKind,
+  t?: ArtifactAbsenceTranslator,
+): string {
   switch (absence) {
     case "withheld":
       // The app's existing sentence, imported rather than rewritten. Two things were wrong with
@@ -364,19 +382,26 @@ export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): s
       // host-or-participant, full stop), so the same person can often read the very transcript
       // this card called unreadable. This sentence is about the file the host has not shared,
       // which is what is actually true here.
-      return ARTIFACT_WITHHELD_FALLBACK;
+      return t?.("withheld") ?? ARTIFACT_WITHHELD_FALLBACK;
     case "generating":
       return kind === "summary"
-        ? "The assistant is still writing this summary."
-        : "This is still being produced.";
+        ? (t?.("generatingSummary") ?? "The assistant is still writing this summary.")
+        : (t?.("generatingOther") ?? "This is still being produced.");
     case "empty":
       return kind === "minutes"
-        ? "Drawn up but not written yet."
-        : "Nobody spoke, so there was nothing to write down.";
+        ? (t?.("emptyMinutes") ?? "Drawn up but not written yet.")
+        : (t?.("emptyOther") ?? "Nobody spoke, so there was nothing to write down.");
     case "unavailable":
-      return "The file behind this is no longer available.";
+      return t?.("unavailable") ?? "The file behind this is no longer available.";
   }
 }
+
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type RelativeTimeTranslator = (
+  key: "justNow" | "minutesAgo" | "hoursAgo" | "daysAgo",
+  values: { count: number },
+) => string;
 
 /**
  * "6h ago", "Aug 28" — how the card dates a document.
@@ -384,26 +409,31 @@ export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): s
  * Relative only inside a week. Past that, a weekday-less "36 days ago" is arithmetic the reader
  * has to do in their head to get back to a date, and a date is what they were looking for.
  */
-export function relativeTime(value: string | null | undefined, now: number = Date.now()): string {
+export function relativeTime(
+  value: string | null | undefined,
+  now: number = Date.now(),
+  t?: RelativeTimeTranslator,
+  locale?: string,
+): string {
   if (!value) return "—";
   const at = Date.parse(value);
   if (Number.isNaN(at)) return "—";
 
   const seconds = Math.round((now - at) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return t ? t("justNow", { count: 0 }) : "just now";
 
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return t ? t("minutesAgo", { count: minutes }) : `${minutes}m ago`;
 
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t ? t("hoursAgo", { count: hours }) : `${hours}h ago`;
 
   const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return t ? t("daysAgo", { count: days }) : `${days}d ago`;
 
   const date = new Date(at);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
@@ -553,4 +583,105 @@ export function groupEntriesByMeeting(entries: LibraryEntry[]): MeetingRecordGro
  */
 export function preferredEntry(group: MeetingRecordGroup): LibraryEntry {
   return group.entries.find((entry) => entry.body) ?? group.entries[0];
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// The library by KIND and by WHOSE (2026-09-30 redesign).
+//
+// The page is a personal library: it lists the documents this viewer can READ, one card per
+// document, under three kinds (no "all records") and three scopes. A document the viewer cannot
+// open is not listed anywhere — not dimmed, not counted — because a card whose only content is
+// "ask the host" is a card for a document the viewer does not have. The meeting's own page is
+// where somebody learns that its transcript exists and is not shared.
+// ---------------------------------------------------------------------------------------------
+
+export type LibraryScope = "all" | "mine" | "shared";
+
+export const LIBRARY_KINDS: readonly ArtifactKind[] = ["transcript", "summary", "minutes"];
+export const LIBRARY_SCOPES: readonly LibraryScope[] = ["all", "mine", "shared"];
+
+/**
+ * Whether an entry belongs on the grid at all.
+ *
+ * Readable, and not empty: a transcript whose export holds no line anybody said ("Nobody spoke")
+ * is not a document, the same rule the Recap downloads settled. A summary still being written is
+ * listed — it will be readable in a minute, and hiding it would make the meeting look summary-less
+ * until a refresh. Withheld, failed and expired documents are not listed.
+ */
+export function isListableEntry(entry: LibraryEntry): boolean {
+  if (entry.absence === "generating") return entry.kind === "summary";
+  if (!entry.body) return false;
+  if (entry.kind === "transcript") {
+    return parseSavedTranscriptBody(entry.rawBody ?? entry.body).some((turn) => turn.paragraphs.length > 0);
+  }
+  return true;
+}
+
+/** "mine" is a meeting the viewer hosted; everything else they can read was shared with them. */
+export function entryScope(entry: LibraryEntry, viewerId: string | null | undefined): Exclude<LibraryScope, "all"> {
+  return viewerId && entry.hostId === viewerId ? "mine" : "shared";
+}
+
+/**
+ * What a search term matches: the document's TITLE — the meeting's name — and the room code, so a
+ * code pasted from an invite still finds its meeting. Minutes also match their own number.
+ *
+ * Not the body. The cards are titled by the meeting, and a result whose title does not contain
+ * the word typed reads as a wrong result. Folded both sides, as elsewhere: "bao cao" finds
+ * "Báo cáo".
+ */
+export function entryTitleMatches(entry: LibraryEntry, query: string): boolean {
+  const term = foldSearchText(query);
+  if (!term) return true;
+  const fields = [entry.roomTitle, entry.roomCode, entry.kind === "minutes" ? entry.title : ""];
+  return fields.some((value) => foldSearchText(value).includes(term));
+}
+
+export function listLibrary(
+  entries: readonly LibraryEntry[],
+  filters: { kind: ArtifactKind; scope: LibraryScope; query?: string; viewerId?: string | null },
+): LibraryEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.kind === filters.kind &&
+      isListableEntry(entry) &&
+      (filters.scope === "all" || entryScope(entry, filters.viewerId) === filters.scope) &&
+      entryTitleMatches(entry, filters.query ?? ""),
+  );
+}
+
+export type LibraryCounts = {
+  /** Listable documents of each kind, across every scope — the number on a kind tab. */
+  byKind: Record<ArtifactKind, number>;
+  /** Listable documents of the SELECTED kind in each scope — the number on a scope tab. */
+  byScope: Record<LibraryScope, number>;
+};
+
+/**
+ * The numbers on the tabs. Taken before the search narrows anything, so a tab says how much is
+ * behind it rather than how much survived the term already typed.
+ */
+export function libraryCounts(
+  entries: readonly LibraryEntry[],
+  kind: ArtifactKind,
+  viewerId: string | null | undefined,
+): LibraryCounts {
+  const byKind: Record<ArtifactKind, number> = { transcript: 0, summary: 0, minutes: 0 };
+  const byScope: Record<LibraryScope, number> = { all: 0, mine: 0, shared: 0 };
+  for (const entry of entries) {
+    if (!isListableEntry(entry)) continue;
+    byKind[entry.kind] += 1;
+    if (entry.kind !== kind) continue;
+    byScope.all += 1;
+    byScope[entryScope(entry, viewerId)] += 1;
+  }
+  return { byKind, byScope };
+}
+
+/** When the meeting began: the entry carries the end and the length. Null when neither is known. */
+export function entryStartedAt(entry: LibraryEntry): string | null {
+  const ended = Date.parse(entry.meetingEndedAt);
+  if (Number.isNaN(ended)) return null;
+  return new Date(ended - Math.max(0, entry.durationSeconds || 0) * 1000).toISOString();
 }

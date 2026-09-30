@@ -8,6 +8,7 @@ import type { AdminAnnouncementQuery } from "@/types/admin-announcement";
 
 export const ADMIN_ANNOUNCEMENT_KEYS = {
   list: (query: AdminAnnouncementQuery) => ["admin-announcements", query] as const,
+  detail: (id: string) => ["admin-announcements", "detail", id] as const,
 };
 
 export function useAdminAnnouncements(query: AdminAnnouncementQuery) {
@@ -16,6 +17,15 @@ export function useAdminAnnouncements(query: AdminAnnouncementQuery) {
     queryFn: () => adminAnnouncementService.list(query),
     placeholderData: (previous) => previous,
     staleTime: 60_000,
+  });
+}
+
+export function useAdminAnnouncement(id: string | undefined) {
+  return useQuery({
+    queryKey: ADMIN_ANNOUNCEMENT_KEYS.detail(id ?? ""),
+    queryFn: () => adminAnnouncementService.get(id!),
+    enabled: Boolean(id),
+    staleTime: 30_000,
   });
 }
 

@@ -1,0 +1,138 @@
+{
+  "page": {
+    "eyebrow": "収益",
+    "title": "サブスクリプション",
+    "description": "プラットフォーム上のすべてのプラン、月あたりの価値、そして次に終了するものを一覧できます。",
+    "refresh": "更新",
+    "summaryError": "収益合計を読み込めませんでした。以下の一覧には影響ありません。",
+    "summary": {
+      "monthlyRecurring": {
+        "label": "月次経常収益",
+        "helperMultiCurrency": "通貨ごとに集計（換算なし）",
+        "helperDefault": "トライアルと解約分は含みません"
+      },
+      "active": {
+        "label": "有効",
+        "helper": "うち{count}件がトライアル中"
+      },
+      "endingWithin14Days": {
+        "label": "14日以内に更新",
+        "helper": "更新・期限切れの両方を含みます"
+      },
+      "pastDue": {
+        "label": "支払い延滞",
+        "helper": "未払い請求によりサービスが一時停止中"
+      }
+    },
+    "statusTabs": {
+      "label": "サブスクリプションのステータス",
+      "all": "すべて",
+      "active": "有効",
+      "pending": "保留中",
+      "suspended": "一時停止",
+      "cancelled": "解約済み",
+      "expired": "期限切れ"
+    },
+    "loading": "読み込み中…",
+    "subscriptionCount": "{count}件のサブスクリプション",
+    "sort": {
+      "label": "並び替え",
+      "periodEndAsc": "更新日が近い順",
+      "periodEndDesc": "更新日が遠い順",
+      "creditsAsc": "残クレジットが少ない順",
+      "createdDesc": "新しい順",
+      "createdAsc": "古い順"
+    },
+    "errorState": {
+      "title": "サブスクリプションを読み込めませんでした。",
+      "description": "課金サービスの状態と、ご自身のセッションにまだプラットフォーム管理者権限があるかご確認ください。",
+      "retry": "再試行"
+    },
+    "emptyState": {
+      "title": "この条件に一致するサブスクリプションはありません",
+      "description": "別のステータスタブを選んでください。"
+    },
+    "row": {
+      "noRenew": "更新なし",
+      "pastDue": "延滞",
+      "changePlan": "プラン変更",
+      "reactivate": "再有効化",
+      "cancel": "解約",
+      "value": {
+        "trial": "トライアル中",
+        "cancelled": "解約済み"
+      }
+    },
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "columns": {
+      "plan": "プラン",
+      "status": "ステータス",
+      "value": "月額",
+      "credits": "残りクレジット",
+      "periodEnd": "期間終了",
+      "actions": "操作"
+    },
+    "filters": {
+      "plan": "プラン",
+      "service": "サービス状態",
+      "serviceStates": {
+        "healthy": "正常",
+        "low_balance": "残高不足",
+        "in_overage": "超過利用中",
+        "suspended": "サービス停止中"
+      },
+      "cycle": "請求サイクル",
+      "cycles": {
+        "monthly": "月払い",
+        "yearly": "年払い"
+      },
+      "autoRenew": "自動更新",
+      "renews": "更新する",
+      "doesNotRenew": "更新しない",
+      "workspace": "ワークスペース",
+      "workspacePlaceholder": "名前またはスラッグでワークスペースを検索…",
+      "periodEnd": "期間終了"
+    },
+    "sortFields": {
+      "periodEnd": "期間終了日",
+      "created": "作成日",
+      "credits": "残りクレジット"
+    }
+  },
+  "lifecycleDialog": {
+    "cancel": {
+      "title": "このサブスクリプションを解約しますか？",
+      "description": "Stripe側のサブスクリプションが解約され、権限が再反映され、ワークスペースのオーナーに通知が届きます。トライアルは即座に終了し、有料プランは契約期間の終わりまで継続します。",
+      "confirm": "サブスクリプションを解約",
+      "pending": "解約中…"
+    },
+    "reactivate": {
+      "title": "このサブスクリプションを再有効化しますか？",
+      "description": "まだ反映されていない解約を取り消し、支払い済みの期間について更新を再度オンにします。今すぐ請求は発生しません。サービスの一時停止は解除されません。",
+      "confirm": "サブスクリプションを再有効化",
+      "pending": "再有効化中…"
+    },
+    "workspacePrefix": "ワークスペース",
+    "reasonLabel": "理由",
+    "reasonPlaceholder": "サブスクリプションに記録されます。",
+    "reasonTooShort": "10文字以上の理由を入力してください。これが唯一の記録になります。",
+    "genericError": "サブスクリプションを更新できませんでした。",
+    "back": "戻る"
+  },
+  "changePlanDialog": {
+    "title": "プラン変更",
+    "description": "このワークスペースのサブスクリプションを<strong>{planName}</strong>から選択したプランへ変更します。クレジット残高は引き継がれません — 変更に応じた補填が必要な場合は、別途クレジット調整を行ってください。",
+    "newPlanLabel": "新しいプラン",
+    "loadingPlans": "プランを読み込み中…",
+    "choosePlan": "プランを選択…",
+    "currentSuffix": "（現在のプラン）",
+    "genericError": "プランを変更できませんでした。",
+    "cancel": "キャンセル",
+    "confirm": "プラン変更",
+    "pending": "変更中…"
+  }
+}

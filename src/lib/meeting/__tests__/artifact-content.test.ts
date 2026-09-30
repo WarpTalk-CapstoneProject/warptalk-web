@@ -110,6 +110,20 @@ test("legacy pre-template summaries still render", () => {
   assert.deepEqual(summary.actionItems, [{ owner: "Tu", task: "Cut the tag" }]);
 });
 
+test("summaries with snake_case action_items and assignee/description aliases still render", () => {
+  const summary = readSummaryArtifact(
+    JSON.stringify({
+      summary: "Action items discussed.",
+      action_items: [{ assignee: "Alex", description: "Follow up with client" }],
+      insufficientData: false,
+    }),
+  );
+
+  assert.ok(summary);
+  assert.deepEqual(summary.actionItems, [{ owner: "Alex", task: "Follow up with client" }]);
+});
+
+
 test("neither artifact viewer stringifies JSON at the user any more", () => {
   // The defect was never in the parser — it was that two pages did not call it. A regression here
   // looks like working code, so it is asserted against the pages themselves.

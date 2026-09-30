@@ -28,6 +28,7 @@ const sync = read("src/components/rooms/transcript-reading-sync.tsx");
 const player = read("src/components/rooms/meeting-record-panels.tsx");
 const roomDetail = read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx");
 const logic = read("src/lib/transcript/document-reading.ts");
+const meetingSummaryEn = JSON.parse(read("messages/en/meetingSummary.json"));
 
 // ── The measure: characters, never a percentage ─────────────────────────────
 
@@ -194,12 +195,15 @@ assert.doesNotMatch(
   "Every summary point must render in the rail. A point with no moment loses its jump, not its "
     + "place in the document.",
 );
+// "no moment recorded" moved into i18n (t("claim.noMoment")) — assert the rail still calls that
+// key, and the English catalog still carries the wording.
 assert.match(
   rail,
-  /no moment recorded/,
+  /claim\.atMs === null \? t\("claim\.noMoment"\) : formatCitationTime\(claim\.atMs\)/,
   "A point with no moment must say so in place of a timestamp, so it cannot be mistaken for one "
     + "the transcript vouches for.",
 );
+assert.equal(meetingSummaryEn.claim?.noMoment, "no moment recorded");
 assert.match(
   rail,
   /uncitedCount/,
@@ -251,5 +255,96 @@ for (const [name, source] of [
     `${name} must let its inner scroll chain to the page — containment is the trap WT-330(8) removed.`,
   );
 }
+
+// ── WT-705: the summary's languages follow the meeting, and rewriting is the host's ──
+//
+// The picker used to offer the whole product catalogue, so most choices ended in a 400 from the
+// server (WT-703). What can be READ is every rendering that exists; what can be WRITTEN is the
+// room's generatable set. Pinned here because both regressions render perfectly well.
+assert.doesNotMatch(
+  rail,
+  /languagesInScope\("chatTarget"\)/,
+  "The summary language picker must not offer the product catalogue — the server refuses to "
+    + "write a summary in a language outside the meeting's generatable set.",
+);
+assert.match(
+  rail,
+  /artifactLanguageOptions\(/,
+  "The picker's languages come from artifactLanguageOptions — the one helper that decides which "
+    + "languages a finished meeting may be offered, from the room's artifactLanguages (WT-703). "
+    + "A second helper with its own fail mode is the bug this replaced.",
+);
+// One source of truth, and this is how it stays one: the set is read from that module and from
+// nowhere else. A second helper with its own fail mode — one failing closed on a finished room
+// whose server list is null, one failing open — is exactly what this replaced.
+assert.equal(
+  (rail.match(/from "@\/lib\/(language|meeting)\/artifact-language[^"]*"/g) ?? []).length,
+  1,
+  "The rail must import the offerable set from artifact-language-options and from nothing else.",
+);
+assert.match(
+  rail,
+  /const existingCodes = new Set\(/,
+  "Existing renderings and writable languages are split on what the record actually holds, so "
+    + "what already exists is never re-filtered.",
+);
+assert.match(
+  rail,
+  /useSummaryRenderings\(/,
+  "The picker must know which renderings already exist — those are readable in any language.",
+);
+assert.match(
+  rail,
+  /<optgroup label=\{t\("languageGroups\.available"\)\}>[\s\S]*<optgroup label=\{t\("languageGroups\.canBeWritten"\)\}>/,
+  "Readable and writable languages are offered as two separate groups.",
+);
+assert.equal(
+  meetingSummaryEn.languageGroups?.available,
+  "Available",
+  "The English catalog must still call the readable group \"Available\".",
+);
+assert.equal(
+  meetingSummaryEn.languageGroups?.canBeWritten,
+  "Can be written",
+  "The English catalog must still call the generatable group \"Can be written\".",
+);
+assert.match(
+  rail,
+  /<option value="">\{t\("asSpoken"\)\}<\/option>/,
+  "\"As spoken\" is always offered, ahead of both groups.",
+);
+assert.equal(
+  meetingSummaryEn.asSpoken,
+  "As spoken",
+  "The English catalog must still call the transcript-language option \"As spoken\".",
+);
+assert.match(
+  rail,
+  /writableCodes\.has\(target\)/,
+  "Changing the shape must not carry a language the new shape can neither read nor write. The "
+    + "write test is artifactLanguageOptions WITHOUT `keep` — `keep` exists to keep a value "
+    + "selectable, not to claim the server will write in it.",
+);
+assert.match(
+  rail,
+  /stale && onRewrite && isHost/,
+  "Rewriting the meeting's summary is host-only on the server; the button is the host's alone.",
+);
+const renderingsHook = read("src/hooks/use-summary-renderings.ts");
+assert.match(
+  renderingsHook,
+  /queryKey: SUMMARY_RENDERINGS_KEY\(/,
+  "The renderings list is cached under its own key.",
+);
+assert.match(
+  renderingsHook,
+  /"summary-renderings", roomId\]/,
+  "The renderings query key is [\"summary-renderings\", roomId].",
+);
+assert.match(
+  renderingsHook,
+  /enabled: !!roomId/,
+  "No room id, no request.",
+);
 
 console.log("Reading rail contract (Option C): PASS");

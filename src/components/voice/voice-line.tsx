@@ -37,6 +37,7 @@ export function VoiceLine({
   secondary,
   status,
   statusText,
+  statusTitle,
   actions,
   avatar,
 }: {
@@ -50,6 +51,11 @@ export function VoiceLine({
   status?: ReactNode;
   /** The same state as plain words, for the stacked narrow layout. */
   statusText?: string;
+  /**
+   * The full explanation behind the state, as a tooltip on both layouts — a failure reason does
+   * not fit a 190px column, and truncating the only explanation a row has is how it goes unread.
+   */
+  statusTitle?: string;
   actions?: ReactNode;
   /**
    * A face in place of the state dot. Catalogue voices take one — several hundred of them as
@@ -83,7 +89,10 @@ export function VoiceLine({
       <span className="hidden truncate text-[12.5px] text-ink-muted @[520px]/main:block">
         {secondary}
       </span>
-      <span className="hidden items-center gap-2 truncate text-[12px] text-ink-subtle @[520px]/main:flex">
+      <span
+        className="hidden items-center gap-2 truncate text-[12px] text-ink-subtle @[520px]/main:flex"
+        title={statusTitle || undefined}
+      >
         {status}
       </span>
 
@@ -91,7 +100,10 @@ export function VoiceLine({
         {actions}
       </div>
 
-      <p className="col-start-2 mt-0.5 truncate text-[12px] text-ink-subtle @[520px]/main:hidden">
+      <p
+        className="col-start-2 mt-0.5 truncate text-[12px] text-ink-subtle @[520px]/main:hidden"
+        title={statusTitle || undefined}
+      >
         {[typeof secondary === "string" ? secondary : undefined, statusText]
           .filter(Boolean)
           .join(" · ")}

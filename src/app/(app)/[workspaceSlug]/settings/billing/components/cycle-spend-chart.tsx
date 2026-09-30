@@ -21,6 +21,7 @@
  *   theme like the rest of the page.
  */
 
+import { useTranslations } from "next-intl";
 import {
   Bar,
   BarChart,
@@ -50,6 +51,7 @@ function compact(value: number): string {
 }
 
 export function CycleSpendChart({ activity }: { activity: CycleActivity }) {
+  const t = useTranslations("settingsBillingUsage");
   const dayFormat = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" });
   const pace = activity.evenPacePerBucket;
 
@@ -57,7 +59,7 @@ export function CycleSpendChart({ activity }: { activity: CycleActivity }) {
     label: dayFormat.format(bucket.start),
     fullLabel:
       activity.bucketSize === "week"
-        ? `Week of ${dayFormat.format(bucket.start)}`
+        ? t("cycleSpendChart.weekOf", { date: dayFormat.format(bucket.start) })
         : dayFormat.format(bucket.start),
     consumed: bucket.consumed,
     toppedUp: bucket.toppedUp,
@@ -67,9 +69,9 @@ export function CycleSpendChart({ activity }: { activity: CycleActivity }) {
   if (activity.totalConsumed === 0) {
     return (
       <div className="flex h-[220px] flex-col items-center justify-center gap-1 text-center">
-        <p className="text-[13px] text-ink">No credits spent yet this cycle.</p>
+        <p className="text-[13px] text-ink">{t("cycleSpendChart.emptyTitle")}</p>
         <p className="text-[12px] text-ink-muted">
-          Spending appears here per {activity.bucketSize} as meetings are translated.
+          {t("cycleSpendChart.emptyDetail", { bucket: activity.bucketSize })}
         </p>
       </div>
     );
@@ -114,8 +116,8 @@ export function CycleSpendChart({ activity }: { activity: CycleActivity }) {
               (payload?.[0]?.payload as Point | undefined)?.fullLabel ?? ""
             }
             formatter={(value, name) => [
-              `${Number(value ?? 0).toLocaleString()} credits`,
-              name === "consumed" ? "Spent" : "Added",
+              t("cycleSpendChart.creditsSuffix", { value: Number(value ?? 0).toLocaleString() }),
+              name === "consumed" ? t("cycleSpendChart.spent") : t("cycleSpendChart.added"),
             ]}
           />
           {pace !== null ? (
@@ -124,7 +126,10 @@ export function CycleSpendChart({ activity }: { activity: CycleActivity }) {
               stroke="var(--muted-foreground)"
               strokeDasharray="4 4"
               label={{
-                value: `Even pace · ${compact(pace)}/${activity.bucketSize}`,
+                value: t("cycleSpendChart.evenPaceWithRate", {
+                  rate: compact(pace),
+                  bucket: activity.bucketSize,
+                }),
                 position: "insideTopLeft",
                 fill: "var(--muted-foreground)",
                 fontSize: 11,

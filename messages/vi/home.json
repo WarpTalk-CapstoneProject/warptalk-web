@@ -1,0 +1,24 @@
+{
+  "quickJumps": "Lối tắt",
+  "actions": {
+    "createRoom": "Tạo cuộc họp",
+    "findMeeting": "Tìm cuộc họp",
+    "joinByCode": "Tham gia bằng mã",
+    "meetings": "Cuộc họp",
+    "history": "Lịch sử",
+    "artifacts": "Bản ghi",
+    "documents": "Tài liệu",
+    "members": "Thành viên",
+    "billing": "Thanh toán",
+    "dashboard": "Bảng điều khiển",
+    "settings": "Cài đặt"
+  },
+  "meetingDayPanel": {
+    "ariaLabel": "Cuộc họp theo ngày",
+    "emptyTitleToday": "Hôm nay chưa có cuộc họp nào",
+    "emptyTitleOtherDay": "Ngày này chưa có cuộc họp nào",
+    "emptySubtitleCanCreate": "Hãy lên lịch một cuộc họp, hoặc tận hưởng sự yên tĩnh.",
+    "emptySubtitleCannotCreate": "Bạn sẽ thấy cuộc họp ở đây khi có người mời bạn.",
+    "newMeeting": "Cuộc họp mới"
+  }
+}

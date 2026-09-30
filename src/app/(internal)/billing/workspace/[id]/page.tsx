@@ -57,6 +57,7 @@ import { format } from "date-fns";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format/currency";
 
@@ -92,6 +93,11 @@ export default function AdminWorkspaceBillingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const pathname = usePathname();
+  // Mounted at both /admin/billing/workspace/[id] and the legacy /billing/workspace/[id] — see
+  // the matching note in src/app/(internal)/billing/page.tsx. Stay on whichever base is already
+  // showing so the "Back" arrow below doesn't jump the person into the other layout's sidebar.
+  const basePath = pathname.startsWith("/admin") ? "/admin/billing" : "/billing";
   const queryClient = useQueryClient();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
@@ -443,7 +449,7 @@ export default function AdminWorkspaceBillingPage({
       <div className="flex items-center justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-1">
-            <Link href="/billing">
+            <Link href={basePath}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -606,7 +612,9 @@ export default function AdminWorkspaceBillingPage({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink border border-hairline">
+                            {/* surface-1, not surface-2: the card around this is already
+                                surface-2, so the tile has to go UP a step to stay visible. */}
+                            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-1 text-ink border border-hairline">
                               <Icon className="h-4 w-4" />
                             </span>
                             <div>

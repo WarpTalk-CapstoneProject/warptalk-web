@@ -22,14 +22,20 @@ export const ANNOUNCEMENT_TYPES = ["ANNOUNCEMENT", "PROMOTION", "MAINTENANCE", "
 export type AnnouncementType = (typeof ANNOUNCEMENT_TYPES)[number];
 
 /**
- * The only audience mode the validator allows.
+ * The three audiences `CreateAdminNotificationValidator` accepts. WT-699 / TC4104.
  *
- * `BROADCAST` and `SEGMENT` exist as constants and are refused: "Only SPECIFIC_USERS is supported
- * until a production user/segment resolver is configured." A composer that offered "everyone"
- * would be offering the one thing this endpoint cannot do — and the one thing hardest to undo if
- * it ever started working.
+ * BROADCAST and SEGMENT used to be refused ("Only SPECIFIC_USERS is supported until a production
+ * user/segment resolver is configured"), so the composer offered only a named list. The resolver
+ * exists now: BROADCAST is every active account, SEGMENT every active member of one workspace
+ * (the segment id is the workspace id). Both are resolved to people server-side, once, when the
+ * announcement is created.
  */
-export const ANNOUNCEMENT_TARGET_MODE = "SPECIFIC_USERS";
+export const ANNOUNCEMENT_AUDIENCES = ["SPECIFIC_USERS", "SEGMENT", "BROADCAST"] as const;
+
+export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number];
+
+/** The default audience: a named list, the narrowest and the one that was always supported. */
+export const ANNOUNCEMENT_TARGET_MODE: AnnouncementAudience = "SPECIFIC_USERS";
 
 /** The largest list one request may carry. Past this the composer asks for a narrower audience. */
 export const MAX_RECIPIENTS = 1000;
@@ -38,8 +44,12 @@ export interface AnnouncementDraft {
   type: AnnouncementType;
   title: string;
   content: string;
+  /** Who it goes to. Only SPECIFIC_USERS reads `recipientIds`; only SEGMENT reads `segmentId`. */
+  audience: AnnouncementAudience;
   /** User ids from the platform directory. Never emails — the server takes GUIDs. */
   recipientIds: string[];
+  /** SEGMENT: the workspace whose active members receive it. */
+  segmentId: string;
   imageUrl: string;
   ctaLink: string;
   discountCode: string;
@@ -70,7 +80,9 @@ export function emptyAnnouncementDraft(): AnnouncementDraft {
     type: "ANNOUNCEMENT",
     title: "",
     content: "",
+    audience: ANNOUNCEMENT_TARGET_MODE,
     recipientIds: [],
+    segmentId: "",
     imageUrl: "",
     ctaLink: "",
     discountCode: "",
@@ -130,10 +142,15 @@ export function validateAnnouncementDraft(draft: AnnouncementDraft): string | nu
   if (containsHtml(content))
     return "The message cannot contain HTML tags — the notification service refuses them.";
 
-  if (draft.recipientIds.length === 0)
-    return "Choose at least one recipient. This endpoint sends to a named list, not to everyone.";
-  if (draft.recipientIds.length > MAX_RECIPIENTS)
-    return `Choose ${MAX_RECIPIENTS} recipients or fewer.`;
+  const audience = draft.audience ?? ANNOUNCEMENT_TARGET_MODE;
+  if (audience === "SPECIFIC_USERS") {
+    if (draft.recipientIds.length === 0)
+      return "Choose at least one recipient, or send to a workspace or to everyone instead.";
+    if (draft.recipientIds.length > MAX_RECIPIENTS)
+      return `Choose ${MAX_RECIPIENTS} recipients or fewer.`;
+  } else if (audience === "SEGMENT") {
+    if (!draft.segmentId?.trim()) return "Choose the workspace whose members should receive it.";
+  }
 
   if (!typeAllowsPayloadFields(draft.type)) {
     // Named individually rather than as "extra fields", so the reader knows which box to clear.
@@ -165,15 +182,17 @@ export function buildCreateRequest(draft: AnnouncementDraft): CreateAdminAnnounc
   const optional = (value: string) => (value.trim() ? value.trim() : null);
   const allowsPayload = typeAllowsPayloadFields(draft.type);
   const needsDowntime = typeRequiresDowntime(draft.type);
+  const audience = draft.audience ?? ANNOUNCEMENT_TARGET_MODE;
 
   return {
     title: draft.title.trim(),
     content: draft.content.trim(),
     type: draft.type,
-    targetAudienceMode: ANNOUNCEMENT_TARGET_MODE,
-    specificUserIds: draft.recipientIds,
-    // Only meaningful in SEGMENT mode, which this endpoint refuses. Always null.
-    segmentId: null,
+    targetAudienceMode: audience,
+    // Each mode carries only its own field. The validator refuses a BROADCAST that also names
+    // people, and a list left over from switching modes must not narrow a SEGMENT by accident.
+    specificUserIds: audience === "SPECIFIC_USERS" ? draft.recipientIds : [],
+    segmentId: audience === "SEGMENT" ? draft.segmentId.trim() : null,
     imageUrl: allowsPayload ? optional(draft.imageUrl) : null,
     ctaLink: allowsPayload ? optional(draft.ctaLink) : null,
     discountCode: allowsPayload ? optional(draft.discountCode) : null,

@@ -1,0 +1,167 @@
+{
+  "statusBadge": {
+    "active": "有効",
+    "locked": "ロック中",
+    "deactivated": "無効化済み",
+    "unverified": "未確認",
+    "deleted": "削除済み"
+  },
+  "list": {
+    "eyebrow": "プラットフォームディレクトリ",
+    "title": "アカウント",
+    "description": "ワークスペースの所属に関係なく、プラットフォーム上のすべてのアカウントを表示します。",
+    "refresh": "更新",
+    "statusTabsLabel": "アカウントの状態",
+    "statusTabs": {
+      "all": "すべて",
+      "active": "有効",
+      "locked": "ロック中",
+      "unverified": "未確認",
+      "deactivated": "無効化済み",
+      "deleted": "削除済み"
+    },
+    "loading": "読み込み中…",
+    "accountCount": "アカウント {count} 件",
+    "searchPlaceholder": "名前またはメールで検索…",
+    "searchAriaLabel": "ユーザーを検索",
+    "sortLabel": "並び替え",
+    "sortOptions": {
+      "createdDesc": "新しい順",
+      "createdAsc": "古い順",
+      "lastLoginDesc": "最近のアクティビティ順",
+      "lastLoginAsc": "アクティビティが古い順",
+      "nameAsc": "名前 A–Z",
+      "nameDesc": "名前 Z–A"
+    },
+    "loadErrorTitle": "ユーザーディレクトリを読み込めませんでした。",
+    "loadErrorDescription": "認証サービスの状態と、ご自身のセッションにプラットフォーム管理者ロールがあるかを確認してください。",
+    "tryAgain": "再試行",
+    "emptyTitle": "この条件に一致するアカウントはありません",
+    "emptyDescription": "検索条件をクリアするか、別のステータスタブを選んでください。",
+    "columns": {
+      "user": "ユーザー",
+      "status": "状態",
+      "roles": "ロール",
+      "sessions": "セッション",
+      "lastLogin": "最終ログイン",
+      "actions": "操作",
+      "created": "登録日"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "ログイン履歴なし",
+    "sessionCount": "セッション {count} 件",
+    "noActionsAvailable": "—",
+    "unlock": "ロック解除",
+    "signOut": "サインアウト",
+    "reactivate": "再有効化",
+    "deactivate": "無効化",
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "filters": {
+      "role": "プラットフォームロール",
+      "platformAdmin": "プラットフォーム管理者",
+      "signedIn": "サインイン",
+      "neverSignedIn": "一度もない",
+      "hasSignedIn": "1回以上",
+      "lastLogin": "最終ログイン",
+      "created": "登録日"
+    },
+    "sortFields": {
+      "created": "登録日",
+      "name": "名前",
+      "lastLogin": "最終ログイン"
+    }
+  },
+  "detail": {
+    "eyebrow": "プラットフォームアカウント",
+    "backToDirectory": "アカウント",
+    "refresh": "更新",
+    "unlock": "ロック解除",
+    "endSessions": "セッションを終了",
+    "deactivate": "無効化",
+    "reactivate": "再有効化",
+    "notFoundTitle": "アカウントが見つかりません",
+    "notFoundDescription": "このIDに該当するアカウントはありません。完全に削除されたか、リンクが誤っている可能性があります。",
+    "loadErrorTitle": "このアカウントを読み込めませんでした",
+    "loadErrorDescription": "認証サービスの状態と、ご自身のセッションにプラットフォーム管理者ロールがあるかを確認してください。",
+    "backToDirectoryButton": "ディレクトリに戻る",
+    "tryAgain": "再試行",
+    "identityHeading": "基本情報",
+    "facts": {
+      "status": "状態",
+      "platformRoles": "プラットフォームロール",
+      "lastSignedIn": "最終ログイン",
+      "accountCreated": "アカウント作成日"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "ログイン履歴なし",
+    "accessHeading": "アクセス",
+    "emailConfirmed": {
+      "label": "メール確認",
+      "hint": "本人が確認用リンクを完了したことがあるかどうかを示します。",
+      "confirmed": "確認済み",
+      "notConfirmed": "未確認"
+    },
+    "signInAllowed": {
+      "label": "サインイン許可",
+      "hint": "無効化すると、開いているセッションもすべて終了します。",
+      "allowed": "許可",
+      "deactivated": "無効化済み"
+    },
+    "lockout": {
+      "label": "ログイン失敗によるロック",
+      "hintLocked": "{time} に自動解除されます。ロック解除はその時刻を待たずに実行できます。",
+      "hintClear": "ロックは一時的なもので、時間が経てば自動的に解除されます。",
+      "locked": "ロック中",
+      "none": "なし"
+    },
+    "sessionsHeading": "セッション",
+    "sessionsOpenCount": "{count, plural, =0 {開いているセッションはありません} other {現在 # 件が開いています}}",
+    "sessionColumns": {
+      "device": "デバイス",
+      "ipAddress": "IPアドレス",
+      "signedIn": "ログイン日時",
+      "expires": "有効期限"
+    },
+    "unknownDevice": "不明なデバイス",
+    "noIpAddress": "—",
+    "noSessionsOpen": "開いているセッションはありません。このアカウントはどこにもサインインしていません。",
+    "footerNote": "セッションの行にはトークンやそのハッシュ値は一切含まれません。管理者に必要なのはセッションの存在を知ることであり、それを使用できることではありません。セッションを終了してもアカウントはロックされず、パスワードも変更されません。本人はすぐに再ログインできます。"
+  },
+  "actionDialog": {
+    "revokeSessions": {
+      "title": "すべてのセッションを終了しますか?",
+      "description": "アカウントをすべての場所からサインアウトさせます。ロックはされず、パスワードも変更されません — 本人はすぐに再ログインできます。",
+      "confirm": "セッションを終了",
+      "pending": "終了中…"
+    },
+    "deactivate": {
+      "title": "このアカウントを無効化しますか?",
+      "description": "本人はサインインできなくなり、開いているセッションも終了します。データが削除されることはなく、後で元に戻せます。",
+      "confirm": "無効化",
+      "pending": "無効化中…"
+    },
+    "reactivate": {
+      "title": "このアカウントを再有効化しますか?",
+      "description": "サインインが再び許可されます。以前終了したセッションはそのままです — 本人は新たにサインインし直します。",
+      "confirm": "再有効化",
+      "pending": "再有効化中…"
+    },
+    "unlock": {
+      "title": "ロックを解除しますか?",
+      "description": "ログイン失敗によるロックを解除し、試行回数のカウンターをリセットします。待機時間を待たずに本人が再試行できるようになります。",
+      "confirm": "ロック解除",
+      "pending": "解除中…"
+    },
+    "noSessionsOpen": "現在開いているセッションはありません。",
+    "sessionsWillEnd": "{count} 件のセッションが終了します。",
+    "reasonLabel": "理由",
+    "reasonPlaceholder": "プラットフォームの監査ログに、あなたのアカウントとともに記録されます。",
+    "reasonTooShort": "10文字以上の理由を入力してください。プラットフォームの監査ログに記録されます。",
+    "genericError": "何も変更されませんでした — 操作を完了できませんでした。",
+    "back": "戻る"
+  }
+}

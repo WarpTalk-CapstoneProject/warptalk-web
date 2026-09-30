@@ -15,6 +15,13 @@
  *
  *   The reverse failure is just as easy: someone adds a "Billing" link somewhere new next month and
  *   reaches for the address they remember. The last check below scans for that.
+ *
+ * PAYMENTS IS NOT A DESTINATION ANY MORE (2026-09-17)
+ *   Payments and Invoices were built from one template and, with one payment per invoice, showed
+ *   the same numbers — "2 page payment và invoice đang bị giống nhau". Payments was folded into
+ *   Invoices as a "Payment attempts" list that appears only when a charge did not go through. Its
+ *   address forwards from the proxy, for the reason given on the Billing forward below, and its
+ *   nav row is gone from both settings trees.
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
@@ -28,6 +35,18 @@ const sidebar = read("src/components/layout/linear-sidebar.tsx");
 const proxy = read("src/proxy.ts");
 const settingsBillingPage = "src/app/(app)/[workspaceSlug]/settings/billing/page.tsx";
 const legacyBillingRoute = "src/app/(app)/[workspaceSlug]/billing";
+const legacyPaymentsRoute = "src/app/(app)/[workspaceSlug]/settings/billing/payments";
+const invoicesPage = read("src/app/(app)/[workspaceSlug]/settings/billing/invoices/page.tsx");
+// The page's copy went through next-intl (messages/en/settingsBillingInvoices.json) so the
+// screen reads in the reader's language. The contract below now checks the TRANSLATION KEY is
+// wired up in the source plus the English catalog still carries the sentence, rather than the
+// literal English string — otherwise this check would fail the moment the page is translated.
+const invoicesEnCatalog = JSON.parse(
+  read("messages/en/settingsBillingInvoices.json"),
+);
+// Same reasoning for the collapsed settings rail's Billing row: its label now goes through
+// t("settingsNav.billing") rather than a literal string.
+const commonEnCatalog = JSON.parse(read("messages/en/common.json"));
 
 /**
  * The `workspaceNav` array is the main sidebar's second group. Slicing to it rather than searching
@@ -41,6 +60,8 @@ const workspaceNavBlock = sidebar.slice(
 
 /** Any in-app link to the old slugged address: `${slug}/billing`, `${base}/billing`, and friends. */
 const OLD_ADDRESS = /\}\/billing[`"']/;
+/** Any in-app link to the folded Payments page. */
+const OLD_PAYMENTS_ADDRESS = /\/settings\/billing\/payments/;
 
 /**
  * Comments are stripped first. Several files here explain WHY the old address is gone, quoting it
@@ -64,6 +85,11 @@ function sourceFiles(dir, found = []) {
 
 const staleLinks = sourceFiles("src").filter((file) =>
   OLD_ADDRESS.test(withoutComments(read(file))),
+);
+
+// The proxy is exempt: it names the old address in order to forward it.
+const stalePaymentLinks = sourceFiles("src").filter(
+  (file) => file !== join("src", "proxy.ts") && OLD_PAYMENTS_ADDRESS.test(withoutComments(read(file))),
 );
 
 const checks = [
@@ -91,7 +117,8 @@ const checks = [
   ],
   [
     "the collapsed settings rail offers Billing",
-    /settingsItems\.push\(\{[\s\S]{0,120}label: "Billing"/.test(sidebar),
+    /settingsItems\.push\(\{[\s\S]{0,120}label: t\("settingsNav\.billing"\)/.test(sidebar) &&
+      commonEnCatalog.sidebar?.settingsNav?.billing === "Billing",
   ],
   [
     "the settings chrome survives the trip to /payment/plans",
@@ -104,6 +131,28 @@ const checks = [
   [
     `no source file links to the old address (${staleLinks.join(", ") || "none"})`,
     staleLinks.length === 0,
+  ],
+  [
+    "the old Payments address forwards to Invoices from the proxy",
+    proxy.includes("/settings/billing/invoices`, request.url)") &&
+      proxy.includes("\\/settings\\/billing\\/payments\\/?$/"),
+  ],
+  ["no page shadows the Payments forward", !existsSync(join(root, legacyPaymentsRoute))],
+  ["the expanded settings nav no longer offers Payments", !/>\s*Payments\s*</.test(sidebar)],
+  [
+    "the collapsed settings rail no longer offers Payments",
+    !/settingsItems\.push\(\{[\s\S]{0,120}label: "Payments"/.test(sidebar),
+  ],
+  [
+    "Invoices shows the payment attempts that did not go through",
+    invoicesPage.includes("useWorkspacePaymentHistory") &&
+      invoicesPage.includes("isUnsuccessfulPayment") &&
+      invoicesPage.includes('t("paymentAttempts.title")') &&
+      invoicesEnCatalog.paymentAttempts?.title === "Payment attempts that did not go through",
+  ],
+  [
+    `no source file links to the Payments address (${stalePaymentLinks.join(", ") || "none"})`,
+    stalePaymentLinks.length === 0,
   ],
 ];
 

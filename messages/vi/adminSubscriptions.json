@@ -1,0 +1,138 @@
+{
+  "page": {
+    "eyebrow": "Doanh thu",
+    "title": "Gói đăng ký",
+    "description": "Mọi gói đăng ký trên nền tảng, giá trị hằng tháng và gói nào sắp hết hạn tiếp theo.",
+    "refresh": "Làm mới",
+    "summaryError": "Không thể tải tổng doanh thu. Danh sách bên dưới vẫn không bị ảnh hưởng.",
+    "summary": {
+      "monthlyRecurring": {
+        "label": "Doanh thu định kỳ hằng tháng",
+        "helperMultiCurrency": "Giữ riêng theo từng loại tiền — không quy đổi",
+        "helperDefault": "Không tính các gói dùng thử và đã hủy"
+      },
+      "active": {
+        "label": "Đang hoạt động",
+        "helper": "{count} vẫn đang dùng thử"
+      },
+      "endingWithin14Days": {
+        "label": "Gia hạn trong 14 ngày tới",
+        "helper": "Bao gồm cả gia hạn lẫn hết hạn"
+      },
+      "pastDue": {
+        "label": "Quá hạn thanh toán",
+        "helper": "Dịch vụ bị tạm ngưng do hóa đơn quá hạn"
+      }
+    },
+    "statusTabs": {
+      "label": "Trạng thái đăng ký",
+      "all": "Tất cả",
+      "active": "Đang hoạt động",
+      "pending": "Đang chờ",
+      "suspended": "Đã tạm ngưng",
+      "cancelled": "Đã hủy",
+      "expired": "Đã hết hạn"
+    },
+    "loading": "Đang tải…",
+    "subscriptionCount": "{count} gói đăng ký",
+    "sort": {
+      "label": "Sắp xếp",
+      "periodEndAsc": "Gia hạn gần nhất",
+      "periodEndDesc": "Gia hạn xa nhất",
+      "creditsAsc": "Ít credit còn lại nhất",
+      "createdDesc": "Mới nhất",
+      "createdAsc": "Cũ nhất"
+    },
+    "errorState": {
+      "title": "Không thể tải danh sách gói đăng ký.",
+      "description": "Kiểm tra dịch vụ thanh toán và đảm bảo phiên đăng nhập của bạn vẫn còn quyền quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "emptyState": {
+      "title": "Không có gói đăng ký nào khớp với bộ lọc này",
+      "description": "Hãy chọn một tab trạng thái khác."
+    },
+    "row": {
+      "noRenew": "không gia hạn",
+      "pastDue": "quá hạn",
+      "changePlan": "Đổi gói",
+      "reactivate": "Kích hoạt lại",
+      "cancel": "Hủy",
+      "value": {
+        "trial": "Đang dùng thử",
+        "cancelled": "Đã hủy"
+      }
+    },
+    "pagination": {
+      "pageOf": "Trang {page}/{totalPages}",
+      "previous": "Trước",
+      "next": "Sau"
+    },
+    "columns": {
+      "plan": "Gói",
+      "status": "Trạng thái",
+      "value": "Giá trị hằng tháng",
+      "credits": "Tín dụng còn lại",
+      "periodEnd": "Kết thúc kỳ",
+      "actions": "Thao tác"
+    },
+    "filters": {
+      "plan": "Gói",
+      "service": "Trạng thái dịch vụ",
+      "serviceStates": {
+        "healthy": "Bình thường",
+        "low_balance": "Số dư thấp",
+        "in_overage": "Vượt hạn mức",
+        "suspended": "Tạm ngưng dịch vụ"
+      },
+      "cycle": "Chu kỳ thanh toán",
+      "cycles": {
+        "monthly": "Hằng tháng",
+        "yearly": "Hằng năm"
+      },
+      "autoRenew": "Tự động gia hạn",
+      "renews": "Có gia hạn",
+      "doesNotRenew": "Không gia hạn",
+      "workspace": "Không gian làm việc",
+      "workspacePlaceholder": "Tìm không gian làm việc theo tên hoặc slug…",
+      "periodEnd": "Kết thúc kỳ"
+    },
+    "sortFields": {
+      "periodEnd": "Ngày kết thúc kỳ",
+      "created": "Ngày tạo",
+      "credits": "Tín dụng còn lại"
+    }
+  },
+  "lifecycleDialog": {
+    "cancel": {
+      "title": "Hủy gói đăng ký này?",
+      "description": "Gói đăng ký trên Stripe sẽ bị hủy, các quyền lợi sẽ được cập nhật lại và chủ workspace sẽ nhận được thông báo. Gói dùng thử kết thúc ngay lập tức; gói trả phí sẽ chạy đến hết chu kỳ hiện tại.",
+      "confirm": "Hủy gói đăng ký",
+      "pending": "Đang hủy…"
+    },
+    "reactivate": {
+      "title": "Kích hoạt lại gói đăng ký này?",
+      "description": "Hoàn tác một lệnh hủy chưa có hiệu lực: việc gia hạn sẽ được bật lại cho chu kỳ đã thanh toán. Không có khoản phí nào bị tính ngay lúc này. Thao tác này không gỡ bỏ tình trạng tạm ngưng dịch vụ.",
+      "confirm": "Kích hoạt lại gói đăng ký",
+      "pending": "Đang kích hoạt lại…"
+    },
+    "workspacePrefix": "workspace",
+    "reasonLabel": "Lý do",
+    "reasonPlaceholder": "Sẽ được lưu lại trên gói đăng ký.",
+    "reasonTooShort": "Nhập lý do ít nhất mười ký tự. Đây là ghi chép duy nhất giải thích vì sao.",
+    "genericError": "Không thể cập nhật gói đăng ký.",
+    "back": "Quay lại"
+  },
+  "changePlanDialog": {
+    "title": "Đổi gói",
+    "description": "Chuyển gói đăng ký của workspace này từ <strong>{planName}</strong> sang gói bạn chọn. Số dư credit sẽ không được chuyển theo — nếu cần bù đắp, hãy thực hiện một điều chỉnh credit riêng.",
+    "newPlanLabel": "Gói mới",
+    "loadingPlans": "Đang tải danh sách gói…",
+    "choosePlan": "Chọn một gói…",
+    "currentSuffix": " (hiện tại)",
+    "genericError": "Không thể đổi gói.",
+    "cancel": "Hủy",
+    "confirm": "Đổi gói",
+    "pending": "Đang đổi…"
+  }
+}

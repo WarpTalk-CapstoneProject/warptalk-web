@@ -1,0 +1,59 @@
+{
+  "accessDenied": {
+    "title": "Access denied",
+    "description": "Only workspace Owners and Administrators can view the audit log."
+  },
+  "filters": {
+    "actionLabel": "Action",
+    "targetLabel": "Target",
+    "fromDate": "From date",
+    "toDate": "To date",
+    "to": "to",
+    "clear": "Clear"
+  },
+  "loading": "Loading…",
+  "entryCount": "{formatted} {count, plural, one {entry} other {entries}}",
+  "refresh": "Refresh",
+  "table": {
+    "time": "Time",
+    "actor": "Actor",
+    "action": "Action",
+    "target": "Target",
+    "details": "Details"
+  },
+  "invalidRange": {
+    "title": "The start date is after the end date",
+    "description": "Pick a start date on or before the end date."
+  },
+  "loadError": "The audit log could not be loaded",
+  "tryAgain": "Try again",
+  "empty": {
+    "noMatchTitle": "No entries match these filters",
+    "noMatchDescription": "Clear the filters to see every recorded entry.",
+    "noEntriesTitle": "No audit entries yet",
+    "noEntriesDescription": "Actions WarpTalk staff take on this workspace — such as suspending it or adjusting its credits — will appear here."
+  },
+  "pageOf": "Page {page} of {totalPages}",
+  "previous": "Previous",
+  "next": "Next",
+  "action": {
+    "suspend": "Workspace suspended",
+    "reactivate": "Workspace reactivated",
+    "delete": "Workspace deleted"
+  },
+  "entity": {
+    "workspace": "Workspace",
+    "credit_adjustment": "Credits"
+  },
+  "actionOption": {
+    "all": "All actions",
+    "suspend": "Workspace suspended",
+    "reactivate": "Workspace reactivated",
+    "delete": "Workspace deleted"
+  },
+  "entityOption": {
+    "all": "All targets",
+    "workspace": "Workspace",
+    "credit_adjustment": "Credits"
+  }
+}

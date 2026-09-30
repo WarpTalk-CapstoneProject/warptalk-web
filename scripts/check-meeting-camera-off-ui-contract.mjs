@@ -7,6 +7,9 @@ const meetingStage = await readFile(
   path.join(root, "src/components/rooms/live/meeting-stage.tsx"),
   "utf8",
 );
+const meetingCallChromeEn = JSON.parse(
+  await readFile(path.join(root, "messages/en/meetingCallChrome.json"), "utf8"),
+);
 
 const checks = [
   [
@@ -14,9 +17,12 @@ const checks = [
     meetingStage.includes("isCameraUnavailable(trackRef)"),
   ],
   [
+    // "Camera is off" moved into i18n (t("stage.cameraOff")) — assert the component still
+    // renders it through the translation key, and the English catalog still carries the wording.
     "camera-off tiles have an explicit UI state",
     meetingStage.includes('data-camera-state="off"') &&
-      meetingStage.includes("Camera is off"),
+      meetingStage.includes('t("cameraOff")') &&
+      meetingCallChromeEn.stage?.cameraOff === "Camera is off",
   ],
   [
     "participant tile wrappers fill their grid cell",

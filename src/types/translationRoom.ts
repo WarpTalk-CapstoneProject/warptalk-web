@@ -8,6 +8,16 @@
 export type TranslationRoomStatus =
   | "scheduled"
   | "waiting"
+  /**
+   * WT-612 / WT-621: the clock opened the door at `scheduledAt` — nobody pressed Start.
+   *
+   * It is the gap between "booked" and "somebody is in it": the room is enterable, and there is
+   * no translation session behind it yet. The first person who actually walks in takes it to
+   * `in_progress`. So it is live for every purpose the UI has (it is joinable, it belongs in
+   * Active, it is not missed and not finished) while being nothing like `in_progress` for the
+   * one purpose that reads a session — see persistent-meeting-session's `meetingLive`.
+   */
+  | "open"
   | "in_progress"
   | "paused"
   | "ended"
@@ -59,6 +69,12 @@ export interface TranslationRoomDto {
      * render a recorded meeting as an unrecorded one.
      */
     saveTranscript?: boolean;
+    /**
+     * WT-826: whether the record is shared with everyone who took part when the meeting ends.
+     * The server sends the EFFECTIVE value — a room that never stated it reads TRUE, because that
+     * is what will happen to it. Absent (an older server) is treated the same way.
+     */
+    autoShareRecord?: boolean;
   };
   participantCount?: number;
   /**
@@ -83,6 +99,25 @@ export interface TranslationRoomDto {
    * mistake "one occurrence of many" for "the whole booking".
    */
   series?: SeriesListSummary | null;
+  /**
+   * WT-703: the languages new post-meeting content (summary renderings, minutes translations)
+   * may be GENERATED in — the meeting's L2 snapshot narrowed by the workspace's current L1
+   * policy and the active catalog, computed server-side in one place and exactly what the
+   * server will accept. Sent by the room detail read once the meeting is over. Reading content
+   * that already exists is never filtered by this.
+   *
+   * - `undefined` — an older backend that does not send the field.
+   * - `null` — the room has not finished yet, or the server could not compute the set.
+   *
+   * See lib/meeting/artifact-language-options.ts for how each of those is read.
+   */
+  artifactLanguages?: RoomArtifactLanguagesDto | null;
+}
+
+/** WT-703: server-computed language set for a finished room's artifacts. */
+export interface RoomArtifactLanguagesDto {
+  /** Language codes new artifact content may be generated in. Never includes "as spoken". */
+  generatable: string[];
 }
 
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
@@ -162,6 +197,8 @@ export interface CreateTranslationRoomRequest {
     participantsCanStartTranslation?: boolean;
     /** WT-587: send `false` for a meeting that is not to be written down. Omit to keep it. */
     saveTranscript?: boolean;
+    /** WT-826: send `false` to keep the record host-only when the meeting ends. Omit to share it. */
+    autoShareRecord?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];
@@ -175,6 +212,12 @@ export interface CreateTranslationRoomRequest {
   externalMeetingUrl?: string;
   externalCalendarEventId?: string;
   externalCalendarEventUrl?: string;
+  /**
+   * EXTERNAL_BRIDGE only: what the other side of the external call speaks — the language of the
+   * "External Meeting" stand-in. Omitted, the server takes the first target that is not the
+   * source. See lib/meeting/bridge-far-side-language.ts.
+   */
+  externalMeetingLanguage?: string;
 }
 
 /**
@@ -417,6 +460,8 @@ export interface TranslationRoomArtifactDto {
   updatedAt?: string | null;
   /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
   recordingStartedAt?: string | null;
+  /** WT-824: why a FAILED recording has no file (host-facing reason + LiveKit status/error). */
+  failureReason?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

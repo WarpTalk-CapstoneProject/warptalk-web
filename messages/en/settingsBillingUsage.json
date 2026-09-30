@@ -1,0 +1,162 @@
+{
+  "accessDenied": "Only workspace Owners and Administrators can view usage.",
+  "header": {
+    "title": "Usage",
+    "filterByMember": "Filter by member",
+    "allMembers": "All members",
+    "selectedMember": "Selected member",
+    "cycleRangeElapsed": "{range} · {days}d elapsed",
+    "thisBillingCycle": "This billing cycle",
+    "refresh": "Refresh",
+    "exportCsv": "Export CSV"
+  },
+  "chart": {
+    "creditsSpent": "Credits spent",
+    "groupBy": "Group by:",
+    "service": "Service",
+    "bucketSizeAria": "Bucket size",
+    "day": "1d",
+    "week": "1w",
+    "creditsHeadline": "{amount} credits",
+    "avgPerBucket": "avg {amount} / {bucket}",
+    "workspacePrefix": "Workspace ",
+    "inOverageSince": "in overage since {date}",
+    "projectedOverageOn": "projected overage on {date}",
+    "noDatesToChart": "This cycle has no dates to chart against.",
+    "noSpendMember": "No credits spent by this member yet.",
+    "noSpendWorkspace": "No credits spent yet this cycle.",
+    "spendingAppearsHere": "Spending appears here per {bucket} as meetings are translated."
+  },
+  "rail": {
+    "cycleCredits": "Cycle credits",
+    "spentByMember": "Spent by {member}",
+    "spent": "Spent",
+    "spentOfAvailable": "{spent} / {available}",
+    "progressAria": "Credits spent of available",
+    "pointToday": "Where an even spend would be today",
+    "granted": "Granted",
+    "adjustments": "Adjustments",
+    "carriedOver": "Carried over",
+    "toppedUp": "Topped up",
+    "remaining": "Remaining",
+    "paceNote": {
+      "inOverageSince": "In overage since <date></date>.",
+      "projectedOverageStarts": "At this pace, overage starts <date></date>.",
+      "noAllowance": "No allowance on this cycle.",
+      "tooEarly": "Too early in the cycle to project a pace.",
+      "lastsWholeCycle": "At this pace the allowance <b>lasts the whole cycle</b>",
+      "aheadOfEvenSpend": " · {delta}% ahead of an even spend"
+    },
+    "settlements": "Settlements",
+    "settlementsPerBucket": "Settlements per {bucket}",
+    "settlementsDetail": "Times credits were deducted",
+    "meetingsBilled": "Meetings billed",
+    "meetingsBilledPerBucket": "Meetings billed per {bucket}",
+    "busiestBucket": "Busiest {bucket}",
+    "busiestValue": "{date} · {amount} credits",
+    "noValue": "—"
+  },
+  "tabs": {
+    "spendingDetail": "Spending detail",
+    "aiServices": "AI services",
+    "movements": "Top-ups & adjustments",
+    "spendingBy": "Spending by",
+    "members": "Members",
+    "meetings": "Meetings"
+  },
+  "serviceCards": {
+    "empty": "No AI usage recorded this cycle.",
+    "credits": "{amount} credits",
+    "uses": "{amount} uses",
+    "perUse": "{value} / use",
+    "noValue": "—",
+    "creditsPerBucket": "{label} credits per {bucket}"
+  },
+  "movements": {
+    "empty": "No top-ups, refunds or adjustments this cycle."
+  },
+  "rankedList": {
+    "noMembers": "No member has spent credits this cycle.",
+    "noMeetings": "No meeting has been billed this cycle.",
+    "meetingSub": "{date} · {count, plural, one {# settlement} other {# settlements}}",
+    "meetingsFootnote": "Matched by meeting time: a charge records the transcript line it paid for, not the room."
+  },
+  "overagePanel": {
+    "noAllowance": {
+      "title": "Running out of credits",
+      "description": "What happens at zero",
+      "body": "Meetings stop translating when this workspace reaches zero credits. This plan has no overage allowance — contact WarpTalk to add one."
+    },
+    "control": {
+      "title": "Keep meetings running past zero",
+      "description": "Instead of cutting translation off mid-sentence",
+      "switchAria": "Keep meetings running past zero credits",
+      "enabledBody": "A meeting that runs out keeps translating on credit, up to <cap></cap> credits this cycle. Past that it stops and the workspace is suspended until you top up.",
+      "disabledBody": "Translation stops the moment credits reach zero, mid-meeting. Your plan allows up to <cap></cap> credits of overage if you turn this on.",
+      "usedOfCap": "{used} of {cap} overage credits used this cycle"
+    },
+    "toasts": {
+      "enabled": "Meetings will keep running past zero credits.",
+      "disabled": "Meetings will stop when credits reach zero.",
+      "failed": "Could not change the overage setting."
+    }
+  },
+  "topUpModal": {
+    "title": "Buy credits",
+    "description": "Credits are added to this workspace as soon as the payment clears.",
+    "orEnterAmount": "Or enter an amount",
+    "minimumPlaceholder": "{min} minimum",
+    "credits": "Credits",
+    "estimatedTotal": "Estimated total",
+    "estimatedHint": "The final amount is priced by the server at checkout.",
+    "belowMinimum": "The minimum is {min} credits — Stripe refuses a charge below {amount}.",
+    "startingCheckout": "Starting checkout…",
+    "continueToPayment": "Continue to payment",
+    "noWorkspaceError": "Open a workspace before buying credits — credits belong to a workspace.",
+    "checkoutFailed": "Failed to start checkout. Please try again."
+  },
+  "serviceUsageTable": {
+    "empty": "No AI usage recorded in this window.",
+    "headers": {
+      "service": "Service",
+      "uses": "Uses",
+      "creditsPerUse": "Credits / use",
+      "credits": "Credits",
+      "share": "Share"
+    }
+  },
+  "burnupChart": {
+    "ariaLabel": "Credits spent this cycle: {spent} of {available} available",
+    "today": "TODAY",
+    "projected": "projected",
+    "notForecast": "Not forecast this far ahead.",
+    "spent": "Spent",
+    "thatWeek": "That week",
+    "thatDay": "That day",
+    "available": "Available",
+    "vsEvenPace": "vs even pace",
+    "legend": {
+      "creditsAvailable": "Credits available",
+      "spentCumulative": "Spent, cumulative",
+      "evenPaceWithRate": "Even pace · {rate}/{bucket}",
+      "evenPace": "Even pace",
+      "notYetSpent": "Not yet spent"
+    }
+  },
+  "cycleSpendChart": {
+    "emptyTitle": "No credits spent yet this cycle.",
+    "emptyDetail": "Spending appears here per {bucket} as meetings are translated.",
+    "weekOf": "Week of {date}",
+    "creditsSuffix": "{value} credits",
+    "spent": "Spent",
+    "added": "Added",
+    "evenPaceWithRate": "Even pace · {rate}/{bucket}"
+  },
+  "usageSpendChart": {
+    "ariaLabel": "Credits spent per {bucket}, stacked by AI service",
+    "otherServices": "Other services",
+    "average": "Average",
+    "weekOf": "Week of {date}",
+    "total": "Total"
+  }
+}

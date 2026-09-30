@@ -24,6 +24,26 @@ export type RoomCeilingNotice = {
   message: string | null;
 };
 
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+type CeilingTranslator = (
+  key: "plan" | "platformDefault" | "workspaceOverride",
+  values: { ceiling: number },
+) => string;
+
+const DEFAULT_ROOM_CEILING_COPY: Record<string, (ceiling: number) => string> = {
+  plan: (ceiling) =>
+    `Your plan allows ${ceiling} concurrent rooms, so ${ceiling} is what applies. A higher `
+    + "number here has no effect — this setting can only lower the limit.",
+  platformDefault: (ceiling) =>
+    `Until this workspace has an active plan it is limited to ${ceiling} concurrent rooms, so `
+    + `${ceiling} is what applies. A higher number here has no effect — this setting can only `
+    + "lower the limit.",
+  workspaceOverride: (ceiling) =>
+    `This workspace is limited to ${ceiling} concurrent rooms, so ${ceiling} is what applies. `
+    + "A higher number here has no effect — this setting can only lower the limit.",
+};
+
 /**
  * `source` is the entitlement's provenance as the resolver reports it. Unknown or missing
  * provenance falls back to the claim that can always be made — that this is the limit in force —
@@ -33,8 +53,11 @@ export function describeRoomCeiling(input: {
   ceiling: number | null | undefined;
   configured: number | null | undefined;
   source?: string | null;
+  t?: CeilingTranslator;
 }): RoomCeilingNotice {
   const { ceiling, configured, source } = input;
+  const t: CeilingTranslator =
+    input.t ?? ((key, values) => DEFAULT_ROOM_CEILING_COPY[key](values.ceiling));
 
   // Nothing to say unless the box asks for more than is actually permitted. Equal is not a
   // conflict, and a ceiling above the setting means the setting is the tighter of the two and is
@@ -49,27 +72,20 @@ export function describeRoomCeiling(input: {
     return { message: null };
   }
 
-  const tail =
-    `, so ${ceiling} is what applies. A higher number here has no effect — `
-    + "this setting can only lower the limit.";
-
   if (source?.startsWith("plan:")) {
-    return { message: `Your plan allows ${ceiling} concurrent rooms${tail}` };
+    return { message: t("plan", { ceiling }) };
   }
 
   if (source === "platform_default") {
     // No plan is in force. Telling them "your plan allows" would send an Owner to Billing to
     // look for a limit their plan does not impose.
-    return {
-      message:
-        `Until this workspace has an active plan it is limited to ${ceiling} concurrent rooms${tail}`,
-    };
+    return { message: t("platformDefault", { ceiling }) };
   }
 
   // `workspace_override` lands here, and so does anything unrecognised. The workspace's own
   // override cannot be looser than the plan, so if it is the binding limit then the workspace
   // set it — which is not something to attribute to a plan.
-  return { message: `This workspace is limited to ${ceiling} concurrent rooms${tail}` };
+  return { message: t("workspaceOverride", { ceiling }) };
 }
 
 /**
@@ -89,14 +105,30 @@ export function describeRoomCeiling(input: {
  *   What it must do is make a quota visible that previously fired only at the point of creating a
  *   meeting, with nothing on this screen to connect the refusal to. That was the whole report.
  */
+const DEFAULT_LANGUAGE_CEILING_COPY: Record<string, (ceiling: number) => string> = {
+  plan: (ceiling) =>
+    `Your plan allows ${ceiling} target languages per meeting. You may permit more here — a `
+    + `single meeting simply cannot use more than ${ceiling} at once.`,
+  platformDefault: (ceiling) =>
+    `Until this workspace has an active plan it is limited to ${ceiling} target languages per `
+    + `meeting. You may permit more here — a single meeting simply cannot use more than `
+    + `${ceiling} at once.`,
+  workspaceOverride: (ceiling) =>
+    `This workspace is limited to ${ceiling} target languages per meeting. You may permit more `
+    + `here — a single meeting simply cannot use more than ${ceiling} at once.`,
+};
+
 export function describeLanguageCeiling(input: {
   /** From `maxLanguagesCeiling` — null when no plan quota is in force. */
   ceiling: number | null | undefined;
   /** How many languages the workspace currently permits. */
   allowedCount: number | null | undefined;
   source?: string | null;
+  t?: CeilingTranslator;
 }): RoomCeilingNotice {
   const { ceiling, allowedCount, source } = input;
+  const t: CeilingTranslator =
+    input.t ?? ((key, values) => DEFAULT_LANGUAGE_CEILING_COPY[key](values.ceiling));
 
   // Silent unless the allowlist is wider than a single meeting may use. Permitting exactly as
   // many as the plan allows, or fewer, needs no explanation.
@@ -111,20 +143,13 @@ export function describeLanguageCeiling(input: {
     return { message: null };
   }
 
-  const tail =
-    ` per meeting. You may permit more here — a single meeting simply cannot use `
-    + `more than ${ceiling} at once.`;
-
   if (source?.startsWith("plan:")) {
-    return { message: `Your plan allows ${ceiling} target languages${tail}` };
+    return { message: t("plan", { ceiling }) };
   }
 
   if (source === "platform_default") {
-    return {
-      message:
-        `Until this workspace has an active plan it is limited to ${ceiling} target languages${tail}`,
-    };
+    return { message: t("platformDefault", { ceiling }) };
   }
 
-  return { message: `This workspace is limited to ${ceiling} target languages${tail}` };
+  return { message: t("workspaceOverride", { ceiling }) };
 }

@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   ALL_ROOM_STATUSES_FILTER,
   ROOM_STATUSES,
+  UNFINISHED_ROOM_STATUSES_FILTER,
   daysWithMeetings,
   isMeetingOver,
   isSameDay,
@@ -157,20 +158,40 @@ test("a day picked on Active keeps everything still to come", () => {
 test("the list asks for exactly the statuses the server has", () => {
   assert.deepEqual(
     [...ROOM_STATUSES],
-    ["scheduled", "waiting", "in_progress", "paused", "ended", "cancelled", "expired", "failed"],
+    [
+      "scheduled",
+      "waiting",
+      "open",
+      "in_progress",
+      "paused",
+      "ended",
+      "cancelled",
+      "expired",
+      "failed",
+    ],
   );
   assert.equal(
     ALL_ROOM_STATUSES_FILTER,
-    "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,EXPIRED,FAILED",
+    "SCHEDULED,WAITING,OPEN,IN_PROGRESS,PAUSED,ENDED,CANCELLED,EXPIRED,FAILED",
   );
   assert.doesNotMatch(ALL_ROOM_STATUSES_FILTER, /TIMEOUT/);
+});
+
+// WT-612 / WT-621. The home panel and the dashboard each asked for the four statuses that existed
+// when they were written — the dashboard by sending nothing and inheriting the server's default —
+// so an OPEN room was missing from both. Derived from the same list, it cannot happen again.
+test("the unfinished filter is every status that is not over", () => {
+  assert.equal(
+    UNFINISHED_ROOM_STATUSES_FILTER,
+    "SCHEDULED,WAITING,OPEN,IN_PROGRESS,PAUSED",
+  );
 });
 
 test("every status the list fetches lands in exactly one of Active and History", () => {
   const over = ROOM_STATUSES.filter(isMeetingOver);
   const notOver = ROOM_STATUSES.filter((status) => !isMeetingOver(status));
   assert.deepEqual(over, ["ended", "cancelled", "expired", "failed"]);
-  assert.deepEqual(notOver, ["scheduled", "waiting", "in_progress", "paused"]);
+  assert.deepEqual(notOver, ["scheduled", "waiting", "open", "in_progress", "paused"]);
 });
 
 // The week view fetches by month, because that is what the cache is keyed by. The one thing that

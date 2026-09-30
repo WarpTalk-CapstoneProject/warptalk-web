@@ -1,0 +1,82 @@
+{
+  "packs": {
+    "title": "Credit packs",
+    "description": "One-off credits on top of your plan. Paid once, added to this workspace's balance."
+  },
+  "addons": {
+    "title": "Add-ons",
+    "description": "Raise a limit of your plan, billed with its own renewal.",
+    "cycle": "Billing cycle",
+    "cycles": {
+      "monthly": "Monthly",
+      "yearly": "Yearly"
+    },
+    "owned": "Active",
+    "ownedUnits": "+{units} {unit}",
+    "ownedOn": "Enabled",
+    "endsOn": "Ends {date}",
+    "cancel": "Cancel",
+    "billed": "{price} · {cycle}",
+    "needsPlan": "Add-ons sit on top of a paid plan. Choose a plan to add them."
+  },
+  "cards": {
+    "untitled": "Untitled",
+    "credits": "{credits} credits",
+    "bonus": "+{bonus} bonus",
+    "validFor": "Unspent credits expire {days, plural, one {# day} other {# days}} after purchase",
+    "neverExpires": "Credits never expire",
+    "remaining": "{count, plural, one {# purchase left} other {# purchases left}}",
+    "availableUntil": "On sale until {date}",
+    "noPrice": "Not sold in your currency",
+    "buy": "Buy",
+    "add": "Add",
+    "raises": "+{units} {unit} of {entitlement} per unit",
+    "unlocks": "Unlocks {entitlement}",
+    "unit": "unit",
+    "quantityRange": "{min}–{max} units",
+    "perUnitMonth": "/ {unit} / month",
+    "perUnitYear": "/ {unit} / year",
+    "perMonth": "/ month",
+    "perYear": "/ year",
+    "entitlements": {
+      "max_participants": "participants per meeting",
+      "max_languages": "languages per meeting",
+      "max_active_rooms": "concurrent rooms",
+      "voice_clone": "voice cloning",
+      "ai_assistant": "the AI assistant",
+      "glossary": "the custom glossary"
+    }
+  },
+  "purchase": {
+    "packDescription": "Credits are added to this workspace as soon as the payment clears.",
+    "addonDescription": "Billed {cycle} with its own renewal. Cancel any time; it stays until the paid period ends.",
+    "cycles": {
+      "monthly": "monthly",
+      "yearly": "yearly"
+    },
+    "quantity": "How many ({unit})",
+    "coupon": "Coupon code",
+    "couponPlaceholder": "Optional",
+    "apply": "Apply",
+    "couponApplied": "{name}: −{discount}",
+    "couponInvalid": "This code does not apply here.",
+    "couponFailed": "The code could not be checked.",
+    "credits": "Credits",
+    "includesBonus": "Includes {bonus} bonus credits",
+    "listPrice": "Price",
+    "total": "Total",
+    "totalHintOnce": "Charged once. Final price is confirmed on the Stripe page.",
+    "totalHintRecurring": "Charged {cycle}. Final price is confirmed on the Stripe page.",
+    "continue": "Continue to payment",
+    "starting": "Opening checkout…",
+    "checkoutFailed": "Checkout could not be started."
+  },
+  "cancelDialog": {
+    "title": "Cancel {name}?",
+    "description": "It stays active until the end of the period already paid for, then stops renewing. Nothing is refunded.",
+    "keep": "Keep it",
+    "confirm": "Cancel add-on",
+    "done": "The add-on will end at the close of its paid period.",
+    "failed": "The add-on could not be cancelled."
+  }
+}

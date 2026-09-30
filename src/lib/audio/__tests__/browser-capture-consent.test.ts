@@ -19,7 +19,7 @@ function loopbackHost(overrides: Partial<BrowserCaptureConsentInput> = {}): Brow
   return {
     isBridgeRoom: true,
     isHost: true,
-    translationStarted: true,
+    meetingOpen: true,
     hasInboundDevice: false,
     loopbackAvailable: true,
     answer: null,
@@ -50,13 +50,20 @@ test("granting allows the capture, declining does not", () => {
   assert.equal(browserCaptureConsentState(loopbackHost({ answer: false })), "declined");
 });
 
-test("nothing is asked before there is a pipeline to consent to", () => {
-  // Before Start Translation nothing consumes the track, so a dialog would arrive with no
-  // explanation for why it appeared.
+test("nothing is asked for a meeting that is not open", () => {
+  // A meeting that has ended or been paused is not listening to anybody, so a dialog would
+  // arrive with no explanation for why it appeared.
   assert.equal(
-    browserCaptureConsentState(loopbackHost({ translationStarted: false })),
+    browserCaptureConsentState(loopbackHost({ meetingOpen: false })),
     "not-required",
   );
+});
+
+test("WT-828: the ask does not wait for Start Translation", () => {
+  // The transcript is saved whenever people speak. The far side of a bridged call speaks from
+  // the moment the host joins, and waiting for translation to start kept all of that out of the
+  // record. The input no longer knows anything about translation at all.
+  assert.equal(browserCaptureConsentState(loopbackHost({ meetingOpen: true })), "required");
 });
 
 test("only the host is asked, and only in a bridge room", () => {

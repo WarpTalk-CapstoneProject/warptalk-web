@@ -9,14 +9,16 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-const [directory, detail, service, endpoints, dialog, sidebar] = await Promise.all([
-  source("src/app/(app)/admin/workspaces/page.tsx"),
-  source("src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx"),
-  source("src/services/admin-workspace.service.ts"),
-  source("src/lib/api/endpoints.ts"),
-  source("src/components/admin/WorkspaceLifecycleDialog.tsx"),
-  source("src/components/layout/linear-sidebar.tsx"),
-]);
+const [directory, detail, service, endpoints, dialog, sidebar, adminWorkspacesEn] =
+  await Promise.all([
+    source("src/app/(app)/admin/workspaces/page.tsx"),
+    source("src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx"),
+    source("src/services/admin-workspace.service.ts"),
+    source("src/lib/api/endpoints.ts"),
+    source("src/components/admin/WorkspaceLifecycleDialog.tsx"),
+    source("src/components/layout/linear-sidebar.tsx"),
+    source("messages/en/adminWorkspaces.json").then(JSON.parse),
+  ]);
 
 // The directory must talk to the platform-wide admin API, never the member-scoped one.
 assert.match(
@@ -35,13 +37,17 @@ assert.doesNotMatch(
   "the admin service must not reuse the member-scoped workspace endpoints",
 );
 
-// URL is the source of truth for tab, search, sort, and page.
-for (const param of ["status", "sort", "page", "q"]) {
-  assert.match(
-    directory,
-    new RegExp(`searchParams\\.get\\("${param}"\\)`),
-    `directory must read "${param}" from the URL so navigation restores it`,
-  );
+// URL is the source of truth for tab, search, sort, filters and page. Since the admin list toolkit
+// the parsing lives in useAdminListState (q, sort/dir, page, and one param per filter — see
+// src/lib/admin/list-state.ts and its tests); the directory must drive its query from it.
+assert.match(directory, /useAdminListState\(LIST_CONFIG\)/, "directory must keep its view in the URL via useAdminListState");
+assert.match(
+  directory,
+  /key: "status", kind: "enum"/,
+  "the status tab must be a URL filter (status=) so navigation restores it",
+);
+for (const field of ["state.page", "state.search", "state.sort.field"]) {
+  assert.ok(directory.includes(field), `directory must send ${field} to the API`);
 }
 assert.match(
   directory,
@@ -53,17 +59,26 @@ assert.match(
 assert.match(directory, /pageSize: PAGE_SIZE/, "paging must be server-driven");
 
 // Required list states.
+// i18n: the copy below now renders through next-intl (t("...") from the "adminWorkspaces.list"
+// scope) rather than as literal source text, so these check the translation key is wired up plus
+// the English catalog still carries the sentence.
 assert.match(directory, /isError/, "directory must implement an error state");
 assert.match(directory, /isPending/, "directory must implement a loading state");
-assert.match(
-  directory,
-  /No workspaces match these filters/,
-  "directory must implement an empty state",
+assert.match(directory, /t\("emptyTitle"\)/, "directory must implement an empty state");
+assert.equal(
+  adminWorkspacesEn.list?.emptyTitle,
+  "No workspaces match these filters",
+  "the empty-state title must read 'No workspaces match these filters' in English",
 );
 assert.match(
   directory,
-  /Owner unavailable/,
+  /t\("ownerUnavailable"\)/,
   "directory must degrade gracefully when the owner cannot be resolved",
+);
+assert.equal(
+  adminWorkspacesEn.list?.ownerUnavailable,
+  "Owner unavailable",
+  "the owner-unavailable label must read 'Owner unavailable' in English",
 );
 
 // Master → detail navigation is a real route, so the selected workspace lives in the URL.
@@ -71,7 +86,8 @@ assert.match(
 // is for is unchanged: the row must lead somewhere, and it must be a URL rather than state.
 assert.match(
   directory,
-  /href=\{`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
+  // `href={…}` on a Link, or `rowHref={(workspace) => …}` on the admin list table.
+  /(?:href=\{|rowHref=\{\(workspace\) => )`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
   "rows must link to the detail route",
 );
 
@@ -101,21 +117,31 @@ assert.match(dialog, /pending/, "the lifecycle dialog must expose a pending stat
 assert.match(detail, /getErrorMessage/, "lifecycle failures must surface the server message");
 assert.match(
   detail,
-  /Workspace not found/,
+  /t\("notFoundTitle"\)/,
   "workspace detail must implement a missing-workspace state",
+);
+assert.equal(
+  adminWorkspacesEn.detail?.notFoundTitle,
+  "Workspace not found",
+  "the missing-workspace title must read 'Workspace not found' in English",
 );
 
 // Deleted workspaces are terminal in the UI as well as the API.
 assert.match(
   detail,
-  /Deleted workspaces cannot change lifecycle state/,
+  /t\("deletedCannotChange"\)/,
   "deleted workspaces must not offer suspend/reactivate",
+);
+assert.equal(
+  adminWorkspacesEn.detail?.deletedCannotChange,
+  "Deleted workspaces cannot change lifecycle state",
+  "the deleted-workspace notice must read 'Deleted workspaces cannot change lifecycle state' in English",
 );
 
 // Navigation entry stays wired.
 assert.match(
   sidebar,
-  /label: "Workspaces"[\s\S]*href: "\/admin\/workspaces"/,
+  /label: t\("adminNav\.items\.workspaces"\)[\s\S]*href: "\/admin\/workspaces"/,
   "platform navigation must expose Workspaces",
 );
 

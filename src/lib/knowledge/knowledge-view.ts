@@ -113,19 +113,48 @@ export const SOURCE_FALLBACK_LABELS: Record<string, string> = {
 };
 
 /**
+ * Optional i18n hook for this file's labels. Defaults to the English constants above so
+ * callers that have not migrated yet (and this file's own node:test suite, which asserts
+ * exact English strings) keep working unchanged. Kept as a plain function type rather than
+ * importing next-intl, so this file stays renderer-free and test-runnable without a module
+ * resolver — see the file header.
+ */
+export type KnowledgeLabelTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+const SOURCE_FALLBACK_KEYS: Record<string, string> = {
+  document: "sourceFallback.document",
+  meeting_summary: "sourceFallback.meetingSummary",
+  glossary: "sourceFallback.glossary",
+  workspace_context: "sourceFallback.workspaceContext",
+};
+
+/**
  * An unknown source type is labelled as itself rather than hidden or mislabelled: a producer
  * this screen has not been taught about is a real row, and showing its raw type is more honest
  * — and more debuggable — than calling it a document.
  */
+/** The source TYPE's own label (e.g. "Document"), regardless of any title the chunk carries. */
+export function sourceTypeLabel(sourceType: string, t?: KnowledgeLabelTranslator): string {
+  const fallbackKey = SOURCE_FALLBACK_KEYS[sourceType];
+  if (t && fallbackKey) return t(fallbackKey);
+  return SOURCE_FALLBACK_LABELS[sourceType] || sourceType;
+}
+
 export function sourceLabel(
   chunk: Pick<WorkspaceKnowledgeChunkDto, "sourceType" | "sourceTitle" | "documentName">,
+  t?: KnowledgeLabelTranslator,
 ): string {
-  return (
-    chunk.sourceTitle ||
-    chunk.documentName ||
-    SOURCE_FALLBACK_LABELS[chunk.sourceType] ||
-    chunk.sourceType
-  );
+  return chunk.sourceTitle || chunk.documentName || sourceTypeLabel(chunk.sourceType, t);
+}
+
+/** `SOURCE_TABS` with translated labels, for a caller that has a translator on hand. */
+export function translatedSourceTabs(t: KnowledgeLabelTranslator): { value: SourceTab; label: string }[] {
+  return [
+    { value: "all", label: t("sourceTabs.all") },
+    { value: "document", label: t("sourceTabs.document") },
+    { value: "meeting_summary", label: t("sourceTabs.meeting") },
+    { value: "glossary", label: t("sourceTabs.glossary") },
+  ];
 }
 
 export function hasAnyFact(items: readonly Pick<WorkspaceKnowledgeChunkDto, "fact">[]): boolean {

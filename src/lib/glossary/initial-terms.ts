@@ -16,6 +16,15 @@ export const initialTermSchema = z.object({
 
 export type InitialTermRow = z.infer<typeof initialTermSchema>;
 
+/** Optional translator, defaulted to English so callers that have not been migrated to
+ * next-intl (and the node:test contract for this file) keep working unchanged. */
+type InitialTermsTranslator = (key: "addTranslationOrClear" | "addTermOrClear") => string;
+
+const DEFAULT_INITIAL_TERMS_COPY: Record<string, string> = {
+  addTranslationOrClear: "Add the translation, or clear the term.",
+  addTermOrClear: "Add the term, or clear the translation.",
+};
+
 /**
  * A list of pairs, where a HALF-filled row is an error and an empty one is not.
  *
@@ -24,9 +33,10 @@ export type InitialTermRow = z.infer<typeof initialTermSchema>;
  *  - exactly one side  → refused. Somebody typed a word and lost the other half of it, and
  *    dropping that silently is how a term a person believes they added does not exist.
  */
-export const initialTermsSchema = z
-  .array(initialTermSchema)
-  .superRefine((rows, ctx) => {
+export function getInitialTermsSchema(
+  t: InitialTermsTranslator = (key) => DEFAULT_INITIAL_TERMS_COPY[key],
+) {
+  return z.array(initialTermSchema).superRefine((rows, ctx) => {
     rows.forEach((row, index) => {
       const source = row.sourceTerm.trim();
       const target = row.targetTerm.trim();
@@ -34,18 +44,21 @@ export const initialTermsSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [index, "targetTerm"],
-          message: "Add the translation, or clear the term.",
+          message: t("addTranslationOrClear"),
         });
       }
       if (!source && target) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [index, "sourceTerm"],
-          message: "Add the term, or clear the translation.",
+          message: t("addTermOrClear"),
         });
       }
     });
   });
+}
+
+export const initialTermsSchema = getInitialTermsSchema();
 
 /**
  * The rows worth sending, trimmed.

@@ -29,11 +29,20 @@ export default function LegacyRoomsRedirectPage() {
   const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
 
   useEffect(() => {
-    // Without a workspace open there is no room to show, so the picker is the honest
-    // destination — the same choice the singular redirect makes.
-    router.replace(
-      workspaceSlug ? `/${workspaceSlug}/rooms/${roomId}` : "/workspace",
-    );
+    let slug = workspaceSlug;
+    if (!slug && typeof document !== "undefined") {
+      const match = document.cookie.match(/(?:^|;\s*)active_workspace_slug=([^;]+)/);
+      if (match) slug = decodeURIComponent(match[1]);
+    }
+    const target = slug && roomId ? `/${slug}/rooms/${roomId}` : "/workspace";
+    router.replace(target);
+
+    const timer = window.setTimeout(() => {
+      if (window.location.pathname.startsWith("/rooms/")) {
+        window.location.replace(target);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
   }, [router, roomId, workspaceSlug]);
 
   return (

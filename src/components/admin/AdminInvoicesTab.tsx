@@ -1,27 +1,36 @@
 "use client";
 
+import { AdminPanel } from "@/components/admin/admin-page-chrome";
+import {
+  AdminDataTable,
+  AdminListToolbar,
+  resolveAdminWorkspaces,
+  searchAdminWorkspaces,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  dateRangeBounds,
+  dateRangeValue,
+  entityValues,
+  enumValue,
+  numberRangeValue,
+  type ListStateConfig,
+  type SortDirection,
+} from "@/lib/admin/list-state";
 import { billingService } from "@/services/billing.service";
+import {
+  Buildings,
+  CalendarBlank,
+  CircleHalf,
+  CurrencyCircleDollar,
+  Coins,
+  Receipt,
+} from "@phosphor-icons/react/dist/ssr";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -29,10 +38,10 @@ import {
   Building2,
   Check,
   Copy,
-  Loader2,
   Shield,
   User,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format/currency";
@@ -55,7 +64,48 @@ import { formatMoney } from "@/lib/format/currency";
  * The real type is imported now, so the next field the API renames breaks the build instead of
  * the page.
  */
-import type { InvoiceDto } from "@/types/billing";
+import type { GlobalInvoiceFilters, InvoiceDto } from "@/types/billing";
+
+const PAGE_SIZE = 20;
+
+/** Mirrors InvoiceConstants.InvoiceStatuses.Filterable in the billing service. */
+const INVOICE_STATUSES = ["draft", "issued", "open", "paid", "void", "uncollectible"] as const;
+/** The two currencies the platform prices in. */
+const INVOICE_CURRENCIES = ["VND", "USD"] as const;
+
+/**
+ * The invoice list's view, in the URL beside `tab=invoices`. Everything is server-side
+ * (GET /invoices/global): this tab used to fetch 200 invoices and filter them in memory, which
+ * quietly stopped being "every invoice" at invoice 201. A palette result lands here as
+ * `?tab=invoices&q=<invoice number>`.
+ */
+const INVOICE_LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: INVOICE_STATUSES },
+    { key: "workspace", kind: "entity" },
+    { key: "currency", kind: "enum", values: INVOICE_CURRENCIES },
+    { key: "issued", kind: "dateRange" },
+    { key: "total", kind: "numberRange" },
+  ],
+  sortFields: ["issued", "total", "due"],
+  defaultSort: { field: "issued", direction: "desc" },
+  columns: [
+    { id: "invoice" },
+    { id: "issued" },
+    { id: "workspace" },
+    { id: "status" },
+    { id: "due" },
+    { id: "total" },
+    { id: "actions" },
+  ],
+};
+
+/** The toolkit's field + direction as the one sort key the endpoint takes. It has no due_desc. */
+function invoiceApiSort(field: string, direction: SortDirection): NonNullable<GlobalInvoiceFilters["sort"]> {
+  if (field === "total") return direction === "asc" ? "total_asc" : "total_desc";
+  if (field === "due") return "due_asc";
+  return direction === "asc" ? "issued_asc" : "issued_desc";
+}
 
 /**
  * The number to print on a receipt.
@@ -83,6 +133,7 @@ function IdBadge({
   type: "workspace" | "user" | "system" | "admin";
   name?: string | null;
 }) {
+  const t = useTranslations("adminBillingLedger");
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -109,7 +160,7 @@ function IdBadge({
       <div
         className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-1 border border-border-dim border-b-border cursor-pointer hover:bg-surface-2 hover:border-border transition-colors group relative"
         onClick={handleCopy}
-        title={`Click to copy ID: ${id}`}
+        title={t("idBadge.copyTooltip", { id })}
       >
         <span
           className={`text-xs font-mono font-medium ${type === "system" ? "text-blue-400" : type === "admin" ? "text-primary" : "text-foreground-muted"}`}
@@ -127,343 +178,226 @@ function IdBadge({
 }
 
 export function AdminInvoicesTab() {
-  const [page, setPage] = useState(1);
-  const [workspaceFilter, setWorkspaceFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [minAmountFilter, setMinAmountFilter] = useState<number | "">("");
-  const [maxAmountFilter, setMaxAmountFilter] = useState<number | "">("");
+  const t = useTranslations("adminBillingLedger.lists");
+  const list = useAdminListState(INVOICE_LIST_CONFIG);
+  const { state } = list;
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(
     null,
   );
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["global-invoices-list"],
-    queryFn: () => billingService.getGlobalInvoices(1, 200), // Fetch up to 200 for rich client-side filters
-  });
+  const status = enumValue(state.filters, "status");
+  const workspaceId = entityValues(state.filters, "workspace")[0];
+  const currency = enumValue(state.filters, "currency");
+  const issued = dateRangeBounds(dateRangeValue(state.filters, "issued") ?? {});
+  const total = numberRangeValue(state.filters, "total");
 
-  const invoices = useMemo(
-    () => data?.items ?? [],
-    [data?.items],
+  const filters = useMemo<GlobalInvoiceFilters>(
+    () => ({
+      search: state.search || undefined,
+      status,
+      workspaceId,
+      currency,
+      fromDate: issued.from,
+      // Half-open: the endpoint takes `issued_at < toDate`, the start of the day after.
+      toDate: issued.toExclusive,
+      minTotal: total?.min,
+      maxTotal: total?.max,
+      sort: invoiceApiSort(state.sort.field, state.sort.direction),
+    }),
+    [state.search, status, workspaceId, currency, issued.from, issued.toExclusive, total?.min, total?.max, state.sort.field, state.sort.direction],
   );
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const query = workspaceFilter.toLowerCase();
-      const matchWorkspace = workspaceFilter
-        ? inv.workspaceId?.toLowerCase().includes(query) ||
-          inv.workspaceName?.toLowerCase().includes(query)
-        : true;
-      const matchStatus =
-        statusFilter !== "ALL"
-          ? inv.status?.toLowerCase() === statusFilter.toLowerCase()
-          : true;
-      const matchMin =
-        minAmountFilter !== "" ? inv.total >= minAmountFilter : true;
-      const matchMax =
-        maxAmountFilter !== "" ? inv.total <= maxAmountFilter : true;
-      return matchWorkspace && matchStatus && matchMin && matchMax;
-    });
-  }, [
-    invoices,
-    workspaceFilter,
-    statusFilter,
-    minAmountFilter,
-    maxAmountFilter,
-  ]);
+  // Under ["global-invoices"], which the page's realtime billing listener invalidates.
+  const invoicesQuery = useQuery({
+    queryKey: ["global-invoices", state.page, filters],
+    queryFn: () => billingService.getGlobalInvoices(state.page, PAGE_SIZE, filters),
+    placeholderData: (previous) => previous,
+  });
 
-  const displayTotalCount = filteredInvoices.length;
-  const totalPages = Math.ceil(displayTotalCount / 20);
-  const paginatedInvoices = useMemo(() => {
-    return filteredInvoices.slice((page - 1) * 20, page * 20);
-  }, [filteredInvoices, page]);
+  const invoices = invoicesQuery.data?.items ?? [];
+  const totalCount = invoicesQuery.data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const activeFiltersCount = [
-    workspaceFilter !== "",
-    statusFilter !== "ALL",
-    minAmountFilter !== "",
-    maxAmountFilter !== "",
-  ].filter(Boolean).length;
+  const statusLabel = (value: string) =>
+    (INVOICE_STATUSES as readonly string[]).includes(value) ? t(`invoices.statuses.${value}`) : value;
 
-  const resetFilters = () => {
-    setWorkspaceFilter("");
-    setStatusFilter("ALL");
-    setMinAmountFilter("");
-    setMaxAmountFilter("");
-    setPage(1);
-  };
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "status",
+      label: t("invoices.filters.status"),
+      icon: <CircleHalf size={13} />,
+      kind: "enum",
+      options: INVOICE_STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+    },
+    {
+      key: "workspace",
+      label: t("invoices.filters.workspace"),
+      icon: <Buildings size={13} />,
+      kind: "entity",
+      placeholder: t("workspacePlaceholder"),
+      search: searchAdminWorkspaces,
+      resolve: resolveAdminWorkspaces,
+    },
+    {
+      key: "currency",
+      label: t("invoices.filters.currency"),
+      icon: <CurrencyCircleDollar size={13} />,
+      kind: "enum",
+      options: INVOICE_CURRENCIES.map((value) => ({ value, label: value })),
+    },
+    { key: "issued", label: t("invoices.filters.issued"), icon: <CalendarBlank size={13} />, kind: "dateRange" },
+    {
+      key: "total",
+      label: t("invoices.filters.total"),
+      icon: <Coins size={13} />,
+      kind: "numberRange",
+      step: 1,
+    },
+  ];
+
+  const columns: AdminColumn<InvoiceDto>[] = [
+    {
+      id: "invoice",
+      header: t("invoices.columns.invoice"),
+      primary: true,
+      cell: (inv) => <span className="text-xs font-mono text-ink">{inv.invoiceNumber}</span>,
+    },
+    {
+      id: "issued",
+      header: t("invoices.columns.issued"),
+      sortField: "issued",
+      defaultDirection: "desc",
+      className: "w-[160px] whitespace-nowrap",
+      cell: (inv) => (
+        <span className="text-xs font-mono text-muted-foreground">
+          {format(new Date(inv.issuedAt || inv.createdAt), "MMM d, yyyy HH:mm")}
+        </span>
+      ),
+    },
+    {
+      id: "workspace",
+      header: t("invoices.columns.workspace"),
+      cell: (inv) =>
+        // `workspaceId` is nullable — a personal invoice belongs to a user, not a workspace.
+        inv.workspaceId ? (
+          <Link
+            href={`/billing/workspace/${inv.workspaceId}`}
+            className="block hover:opacity-80 transition-opacity"
+          >
+            <IdBadge id={inv.workspaceId} type="workspace" name={inv.workspaceName} />
+          </Link>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "status",
+      header: t("invoices.columns.status"),
+      className: "w-[130px]",
+      cell: (inv) => (
+        <Badge
+          variant="outline"
+          className={
+            inv.status === "paid"
+              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+              : "bg-surface-3 text-ink"
+          }
+        >
+          {statusLabel(inv.status)}
+        </Badge>
+      ),
+    },
+    {
+      id: "due",
+      header: t("invoices.columns.due"),
+      sortField: "due",
+      defaultDirection: "asc",
+      className: "w-[130px] whitespace-nowrap",
+      cell: (inv) => (
+        <span className="text-xs text-muted-foreground">
+          {inv.dueAt ? format(new Date(inv.dueAt), "MMM d, yyyy") : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "total",
+      header: t("invoices.columns.total"),
+      align: "right",
+      sortField: "total",
+      defaultDirection: "desc",
+      className: "w-[140px]",
+      cell: (inv) => <span className="font-medium">{formatMoney(inv.total, inv.currency)}</span>,
+    },
+    {
+      id: "actions",
+      header: t("invoices.columns.actions"),
+      align: "right",
+      className: "w-[220px]",
+      cell: (inv) => (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs font-medium rounded-md px-2.5"
+            onClick={() => setSelectedInvoice(inv)}
+          >
+            {t("invoices.viewReceipt")}
+          </Button>
+          {inv.pdfUrl && (
+            <a
+              href={inv.pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline text-xs font-semibold"
+            >
+              {t("invoices.stripeInvoice")}
+            </a>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear flex flex-col h-[600px]">
-      <CardHeader className="p-4 border-b border-hairline bg-surface-1/50 flex-none">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <CardTitle className="text-lg">Global Invoices</CardTitle>
-          </div>
-        </div>
+    <>
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("invoices.searchPlaceholder")}
+        filters={filterFields}
+        count={invoicesQuery.isPending ? null : totalCount}
+        countLabel={t("invoices.count", { count: totalCount })}
+        isFetching={invoicesQuery.isFetching && !invoicesQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "issued", label: t("invoices.sort.issued") },
+            { field: "total", label: t("invoices.sort.total") },
+            { field: "due", label: t("invoices.sort.due") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
 
-        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-hairline">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select
-              value={statusFilter}
-              onValueChange={(val) => {
-                setStatusFilter(val || "ALL");
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[140px] h-8 text-sm">
-                <SelectValue placeholder="All status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Status</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Workspace</Label>
-            <Input
-              type="text"
-              placeholder="Name or ID..."
-              className="h-8 text-sm w-[140px]"
-              value={workspaceFilter}
-              onChange={(e) => {
-                setWorkspaceFilter(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Min amount</Label>
-            <Input
-              type="number"
-              min={0}
-              placeholder="Min..."
-              className="h-8 text-sm w-[110px]"
-              value={minAmountFilter}
-              onChange={(e) => {
-                setMinAmountFilter(
-                  e.target.value ? Number(e.target.value) : "",
-                );
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Max amount</Label>
-            <Input
-              type="number"
-              min={0}
-              placeholder="Max..."
-              className="h-8 text-sm w-[110px]"
-              value={maxAmountFilter}
-              onChange={(e) => {
-                setMaxAmountFilter(
-                  e.target.value ? Number(e.target.value) : "",
-                );
-                setPage(1);
-              }}
-            />
-          </div>
-
-          {activeFiltersCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground gap-1.5 self-end"
-              onClick={resetFilters}
-            >
-              <span>Clear</span>
-              <Badge className="h-4 px-1 text-[10px] font-semibold rounded-full">
-                {activeFiltersCount}
-              </Badge>
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0 flex-1 overflow-auto">
-        <Table>
-          <TableHeader className="bg-surface-2 sticky top-0 z-10">
-            <TableRow className="border-hairline hover:bg-transparent">
-              <TableHead className="w-[180px]">Date</TableHead>
-              <TableHead>Workspace</TableHead>
-              <TableHead>Stripe ID</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
-                </TableCell>
-              </TableRow>
-            ) : paginatedInvoices.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No invoices found
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedInvoices.map((inv) => (
-                <TableRow
-                  key={inv.id}
-                  className="border-hairline hover:bg-surface-2"
-                >
-                  <TableCell className="text-xs font-mono text-muted-foreground">
-                    {format(new Date(inv.createdAt), "MMM d, yyyy HH:mm")}
-                  </TableCell>
-                  <TableCell>
-                    {/* `workspaceId` is nullable — a personal invoice belongs to a user, not a
-                        workspace. The shadow type declared it `string`, so this rendered a link to
-                        /billing/workspace/null and handed IdBadge a null it calls .substring() on.
-                        Same defect as the receipt crash, one column across. */}
-                    {inv.workspaceId ? (
-                      <Link
-                        href={`/billing/workspace/${inv.workspaceId}`}
-                        className="block hover:opacity-80 transition-opacity"
-                      >
-                        <IdBadge
-                          id={inv.workspaceId}
-                          type="workspace"
-                          name={inv.workspaceName}
-                        />
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">
-                    {inv.invoiceNumber}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        inv.status === "paid"
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                          : "bg-surface-3 text-ink"
-                      }
-                    >
-                      {inv.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatMoney(inv.total, inv.currency)}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs font-medium rounded-md px-2.5"
-                      onClick={() => setSelectedInvoice(inv)}
-                    >
-                      View Receipt
-                    </Button>
-                    {inv.pdfUrl && (
-                      <a
-                        href={inv.pdfUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary hover:underline text-xs font-semibold"
-                      >
-                        Stripe Invoice
-                      </a>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-
-      {/* Pagination */}
-      <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
-        <p className="text-xs text-muted-foreground">
-          {data ? (
-            <>
-              Showing{" "}
-              <strong>
-                {(page - 1) * 20 + 1}–{Math.min(page * 20, displayTotalCount)}
-              </strong>{" "}
-              of <strong>{displayTotalCount}</strong> invoices
-            </>
-          ) : (
-            "Loading..."
-          )}
-        </p>
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 rounded-md"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              ‹
-            </Button>
-
-            {(() => {
-              const pages: (number | "...")[] = [];
-              const delta = 2;
-              for (let i = 1; i <= totalPages; i++) {
-                if (
-                  i === 1 ||
-                  i === totalPages ||
-                  (i >= page - delta && i <= page + delta)
-                ) {
-                  pages.push(i);
-                } else if (pages[pages.length - 1] !== "...") {
-                  pages.push("...");
-                }
-              }
-              return pages.map((p, i) =>
-                p === "..." ? (
-                  <span
-                    key={`ellipsis-${i}`}
-                    className="h-7 w-7 flex items-center justify-center text-xs text-muted-foreground"
-                  >
-                    …
-                  </span>
-                ) : (
-                  <Button
-                    key={p}
-                    variant={p === page ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 w-7 p-0 rounded-md text-xs"
-                    onClick={() => setPage(p as number)}
-                  >
-                    {p}
-                  </Button>
-                ),
-              );
-            })()}
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 rounded-md"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              ›
-            </Button>
-          </div>
-        )}
-      </div>
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={invoices}
+          rowKey={(inv) => inv.id}
+          isPending={invoicesQuery.isPending}
+          isError={invoicesQuery.isError}
+          onRetry={() => void invoicesQuery.refetch()}
+          empty={{
+            title: t("invoices.emptyTitle"),
+            description: t("invoices.emptyDescription"),
+            icon: <Receipt size={20} weight="duotone" />,
+          }}
+          pagination={{ page: state.page, pageCount: totalPages, total: totalCount, pageSize: PAGE_SIZE }}
+          caption={t("invoices.caption")}
+          minWidth={960}
+        />
+      </AdminPanel>
 
       <Dialog
         open={!!selectedInvoice}
@@ -735,6 +669,6 @@ export function AdminInvoicesTab() {
           </p>
         </div>
       </div>
-    </Card>
+    </>
   );
 }

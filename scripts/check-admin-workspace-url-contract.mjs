@@ -43,12 +43,13 @@ const directory = read("src/app/(app)/admin/workspaces/page.tsx");
 
 assert.match(
   directory,
-  /href=\{`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
+  // `href={…}` on a Link, or `rowHref={(workspace) => …}` on the admin list table.
+  /(?:href=\{|rowHref=\{\(workspace\) => )`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
   "The directory has the slug in hand, so it must link straight to the named URL — no id should reach the address bar from here even for a moment.",
 );
 assert.doesNotMatch(
   directory,
-  /href=\{`\/admin\/workspaces\/\$\{workspace\.id\}`\}/,
+  /(?:href=\{|rowHref=\{\(workspace\) => )`\/admin\/workspaces\/\$\{workspace\.id\}`\}/,
   "The directory must not link by id.",
 );
 

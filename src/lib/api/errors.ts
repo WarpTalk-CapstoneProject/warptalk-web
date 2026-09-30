@@ -6,6 +6,8 @@ interface ApiErrorBody {
   Message?: string;
   /** The API's own reason: "FORBIDDEN", "NOT_FOUND", "INVALID_STATE", … */
   code?: string;
+  /** The same reason under the name the gateway's own answers use (maintenance mode: "MAINTENANCE"). */
+  errorCode?: string;
   /**
    * ASP.NET's ValidationProblemDetails, which is what a FluentValidation failure actually returns
    * — NOT the { error, code } shape the rest of the API uses.
@@ -128,7 +130,7 @@ export function apiErrorCode(error: unknown): string | number | undefined {
   if (!axios.isAxiosError(error)) return undefined;
 
   const body = error.response?.data as ApiErrorBody | undefined;
-  const code = typeof body?.code === "string" ? body.code.trim() : "";
+  const code = typeof body?.code === "string" ? body.code.trim() : typeof body?.errorCode === "string" ? body.errorCode.trim() : "";
   if (code.length > 0) return code;
 
   // The status is a weaker answer than the body's code, and a better one than nothing: a

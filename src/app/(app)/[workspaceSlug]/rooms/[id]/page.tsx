@@ -12,7 +12,6 @@ import {
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
-  Archive,
   ArrowRight,
   Bold,
   Maximize2,
@@ -41,6 +40,7 @@ import {
 } from "lucide-react";
 // Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
 // router's Link are two very different things to have under one name.
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -81,7 +81,12 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
 import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
-  ArtifactsPanel,
+  isRetryableRenderingError,
+  normalizeRenderingLanguage,
+  normalizeRenderingTemplate,
+  renderingAnswerMatches,
+} from "@/lib/meeting/summary-rendering-poll";
+import {
   MeetingRecordTabButton,
   type SeekRequest,
   useArtifactDownload,
@@ -95,7 +100,8 @@ import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-displa
 import {
   countPlayableRecordings,
   findPlayableRecording,
-  hasPendingRecording,
+  recordingFailureText,
+  unplayableRecordingState,
 } from "@/lib/meeting/meeting-artifacts";
 import { resolveCitationRowId } from "@/lib/meeting/citation-target";
 import {
@@ -108,6 +114,7 @@ import {
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
+import { buildRecordingMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -135,7 +142,7 @@ import {
   useTranslationRoomParticipants,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
-import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
@@ -182,7 +189,13 @@ import { isAxiosError } from "axios";
  *
  * One tab now, named for what it actually contains.
  */
-type MeetingRecordTab = "recap" | "minutes" | "artifacts";
+/**
+ * "artifacts" was the third one, and it is gone: a list of a meeting's files reached by file type,
+ * beside two tabs that show what those files are copies of. Every download now hangs off the thing
+ * it copies, and the files that are nobody's reading surface live in the workspace's Artifacts
+ * library. Nothing may set this to "artifacts" again — see the note where ArtifactsPanel stood.
+ */
+type MeetingRecordTab = "recap" | "minutes";
 
 /**
  * Nothing cited, as ONE value rather than a new one every time.
@@ -211,19 +224,36 @@ type UserIdentity = {
   listenLanguage?: string;
 };
 
-const statusLabels: Record<TranslationRoomStatus, string> = {
-  scheduled: "Scheduled",
-  waiting: "Waiting",
-  in_progress: "In Progress",
-  paused: "Paused",
-  ended: "Ended",
-  cancelled: "Cancelled",
-  expired: "Expired",
-  failed: "Failed",
-  timeout: "Timed Out",
+/**
+ * Translator shape shared with `getPlanDescription`/`buildFeatureList` (src/lib/utils.ts) and
+ * `describeRecordSharing` (record-sharing.ts). The module-level helpers below (`buildUserList`,
+ * `toUserIdentity`, `groupRoster`, `resolveUserName`) cannot call `useTranslations()` themselves —
+ * it is a hook — so the component passes its own `t` in, and these default to the pinned English
+ * copy for any caller that does not. See `.agents/page-docs/i18n-localization.md`.
+ */
+type RoomPageTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+const DEFAULT_ROOM_PAGE_TEXT: Record<string, string> = {
+  "people.role.host": "Host",
+  "people.role.invitee": "Invitee",
+  "people.groups.waitingToBeAdmitted": "Waiting to be admitted",
+  "people.groups.inRoom": "In room",
+  "people.groups.attended": "Attended",
+  "people.groups.left": "Left",
+  "people.groups.accepted": "Accepted",
+  "people.groups.awaitingReply": "Awaiting reply",
+  "people.groups.didNotAttend": "Did not attend",
+  "people.groups.notInRoom": "Not in room",
+  "people.unnamedParticipant": "Unnamed participant",
+  "people.currentUser": "Current user",
 };
 
+function defaultRoomPageText(key: string): string {
+  return DEFAULT_ROOM_PAGE_TEXT[key] ?? key;
+}
+
 export default function RoomInformationPage() {
+  const t = useTranslations("meetingRoomPage");
   const params = useParams<{ workspaceSlug: string; id: string }>();
   const workspaceSlug = params.workspaceSlug;
   const router = useRouter();
@@ -232,8 +262,25 @@ export default function RoomInformationPage() {
   // WT-433: the "Ask to join" button's in-flight state.
   const [askingToJoin, setAskingToJoin] = useState(false);
 
+  const statusLabels: Record<TranslationRoomStatus, string> = {
+    scheduled: t("status.scheduled"),
+    waiting: t("status.waiting"),
+    open: t("status.open"),
+    in_progress: t("status.inProgress"),
+    paused: t("status.paused"),
+    ended: t("status.ended"),
+    cancelled: t("status.cancelled"),
+    expired: t("status.expired"),
+    failed: t("status.failed"),
+    timeout: t("status.timeout"),
+  };
+
   const roomQuery = useTranslationRoom(roomId);
-  const participantsQuery = useTranslationRoomParticipants(roomId);
+  // WT-701: a finished meeting's roster no longer changes. Fetch it once instead of every 3s —
+  // the recap page used to spend ~20 requests a minute of the per-user rate limit on it.
+  const participantsQuery = useTranslationRoomParticipants(roomId, {
+    poll: !isFinishedStatus(roomQuery.data?.status),
+  });
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
   const startRoomMutation = useStartTranslationRoom();
@@ -311,6 +358,7 @@ export default function RoomInformationPage() {
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
   const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
+  const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   /**
@@ -431,14 +479,34 @@ export default function RoomInformationPage() {
    * seek problem at all, it is "the file is still being written, come back in a minute" — and
    * `findPlayableRecording` cannot report it, because it collapses "never recorded" and "not ready"
    * into the same null on purpose. The union is fixed by meeting-record-panels.
+   *
+   * rec-loss: only a recording that is ACTUALLY processing. A failed one used to land here too, and
+   * the player spun over "it will appear here once it is ready" for a file that never would — see
+   * unplayableRecordingState. A failure is said by `recordingFailure` below instead.
    */
+  const unplayableRecording = unplayableRecordingState(endedRecordQuery.data?.artifacts);
   const recordingUnavailableReason: "processing" | "multiple" | null =
     playableRecordingCount > 1
       ? "multiple"
-      : playableRecordingCount === 0 &&
-          hasPendingRecording(endedRecordQuery.data?.artifacts)
+      : playableRecordingCount === 0 && unplayableRecording === "processing"
         ? "processing"
         : null;
+
+  /**
+   * rec-loss — a recording that was started and produced no file, said out loud.
+   *
+   * The bug this closes: a host pressed Record, the meeting ended, and this page showed no video and
+   * no reason — the reader could not tell "it failed" from "nobody recorded". `"all"` is the meeting
+   * with nothing to watch; `"some"` is a stop-and-restart meeting where one run failed and another
+   * plays, which still lost part of the meeting and still deserves a line. Null while anything is
+   * processing: that run may be the one that works, and the player already says to wait.
+   *
+   * A line above the reading surface rather than a player state, because the player's union belongs
+   * to meeting-record-panels and a failure has nothing to put in a video frame. See
+   * RECORDING_FAILURE_MESSAGES.
+   */
+  const recordingFailure: "all" | "some" | null =
+    unplayableRecording === "failed" ? (playableRecordingCount === 0 ? "all" : "some") : null;
 
   /**
    * WT-655 — true only for the instant a `?t=` arrival is being applied.
@@ -527,6 +595,19 @@ export default function RoomInformationPage() {
   const transcriptEntryCount = transcriptRows.length;
 
   /**
+   * Where each transcript turn falls on the RECORDING's own file-second axis, one mark per turn.
+   *
+   * Built from the exact same `transcriptRows` the transcript renders its timestamps from, and the
+   * exact same `seekSources` `requestSeek` measures against — so a mark on the scrubber and the
+   * transcript line it points at can never disagree about where a turn starts. See
+   * recording-marks.ts for why a turn that cannot be placed is dropped rather than clamped.
+   */
+  const recordingMarks = useMemo(
+    () => buildRecordingMarks(transcriptRows, seekSources),
+    [transcriptRows, seekSources],
+  );
+
+  /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
    *
    * The summary is made out of the transcript, and the AI worker returns before the model when
@@ -577,7 +658,7 @@ export default function RoomInformationPage() {
       // Only when NO moment resolved. A group where some of them did is a jump that worked, and
       // an error toast over a transcript that just scrolled to the right place reads as a bug.
       if (!earliest) {
-        toast.error("That moment is not in the saved transcript.");
+        toast.error(t("record.toasts.momentNotInTranscript"));
         return;
       }
       /**
@@ -608,7 +689,7 @@ export default function RoomInformationPage() {
         // Grouping drops control markers before anything is drawn, so a moment can genuinely have
         // no line a person can read. Scrolling to the nearest row instead would land the reader on
         // a line that is not the evidence they clicked to check.
-        toast.error("That moment has no line in the transcript.");
+        toast.error(t("record.toasts.momentHasNoLine"));
         return;
       }
       // The tab switch renders the transcript in the same commit, so the node does not
@@ -619,14 +700,14 @@ export default function RoomInformationPage() {
           // Never silent again. The row exists in the data and not on screen — a filter or a
           // language view is hiding it — and the reader has to be told, or the citation looks
           // broken in exactly the way it used to be.
-          toast.error("Could not scroll to that moment in the transcript.");
+          toast.error(t("record.toasts.momentScrollFailed"));
           return;
         }
         node.scrollIntoView({ behavior: "smooth", block: "center" });
         setHighlightedSegmentIds(new Set(rowIds));
       });
     },
-    [transcriptSegments, transcriptRows, requestSeek],
+    [transcriptSegments, transcriptRows, requestSeek, t],
   );
 
   /** Whether this arrival's `?t=` has been dealt with. One shot per mount, malformed values too. */
@@ -746,7 +827,7 @@ export default function RoomInformationPage() {
 
   function handleCopy(text: string, label: string) {
     navigator.clipboard.writeText(text);
-    setCopiedText(`${label} copied`);
+    setCopiedText(t("copiedSuffix", { label }));
     setTimeout(() => setCopiedText(null), 2000);
   }
 
@@ -759,7 +840,7 @@ export default function RoomInformationPage() {
     if (roomQuery.isLoading) {
       return (
         <div className="flex h-full items-center justify-center">
-          <p className="text-[13px] text-muted-foreground">Loading room…</p>
+          <p className="text-[13px] text-muted-foreground">{t("loading")}</p>
         </div>
       );
     }
@@ -780,11 +861,10 @@ export default function RoomInformationPage() {
         <div className="flex h-full items-center justify-center">
           <div className="flex max-w-sm flex-col items-center gap-3 text-center">
             <p className="text-[13px] text-muted-foreground">
-              This meeting link is out of date, so we can&rsquo;t open the room from it. Open the
-              meeting from your Meetings list, or ask whoever invited you to share it again.
+              {t("outdatedLink.message")}
             </p>
             <Button size="sm" onClick={() => router.push(`/${workspaceSlug}/rooms`)}>
-              Go to Meetings
+              {t("outdatedLink.goToMeetings")}
             </Button>
           </div>
         </div>
@@ -795,8 +875,7 @@ export default function RoomInformationPage() {
       <div className="flex h-full items-center justify-center">
         <div className="flex max-w-sm flex-col items-center gap-3 text-center">
           <p className="text-[13px] text-muted-foreground">
-            You don&rsquo;t have access to this room yet. If a teammate shared this link with
-            you, you can ask the host to let you in.
+            {t("noAccess.message")}
           </p>
           <Button
             size="sm"
@@ -805,7 +884,7 @@ export default function RoomInformationPage() {
               setAskingToJoin(true);
               try {
                 await translationRoomService.joinById(roomId, {
-                  displayName: user?.fullName || user?.email || "Participant",
+                  displayName: user?.fullName || user?.email || t("noAccess.participantFallback"),
                   speakLanguage: "vi",
                   listenLanguage: "vi",
                 });
@@ -814,14 +893,14 @@ export default function RoomInformationPage() {
                 // A non-member of the workspace gets the same 404 the detail read gave — the
                 // room genuinely is not theirs to knock on.
                 toast.error(
-                  getErrorMessage(error, "This room is not available to join."),
+                  getErrorMessage(error, t("noAccess.joinError")),
                 );
               } finally {
                 setAskingToJoin(false);
               }
             }}
           >
-            {askingToJoin ? "Asking…" : "Ask to join"}
+            {askingToJoin ? t("noAccess.asking") : t("noAccess.askToJoin")}
           </Button>
         </div>
       </div>
@@ -857,7 +936,7 @@ export default function RoomInformationPage() {
           await startRoomMutation.mutateAsync(room.id);
           router.push(liveMeetingPath(workspaceSlug, room.id));
         } catch (error) {
-          toast.error(getErrorMessage(error, "Could not start the meeting."));
+          toast.error(getErrorMessage(error, t("startError")));
         }
         return;
       case "lobby":
@@ -889,6 +968,7 @@ export default function RoomInformationPage() {
     apiInvitations,
     membersArray,
     user,
+    t,
   );
   // WT-641: the roster is grouped by what each row's status actually says. It no longer asks
   // `occupancy.seated` for the first group and sweeps the remainder under a heading that reads
@@ -919,9 +999,9 @@ export default function RoomInformationPage() {
     Boolean(endedRecordQuery.data);
   const railHidden = recordExpanded || readingLayoutOpen;
 
-  const rosterGroups = groupRoster(participants, isEnded);
+  const rosterGroups = groupRoster(participants, isEnded, t);
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-panel text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
@@ -961,8 +1041,8 @@ export default function RoomInformationPage() {
                     {canEditRoom ? (
                       <button
                         type="button"
-                        aria-label="Edit room"
-                        title="Edit room"
+                        aria-label={t("editRoom")}
+                        title={t("editRoom")}
                         // Visible at rest, not on hover. A hover-revealed control is
                         // undiscoverable on a touch screen and unfindable by anyone watching
                         // a demo who is not moving the pointer.
@@ -991,9 +1071,15 @@ export default function RoomInformationPage() {
                     room={room}
                     apiParticipants={apiParticipants}
                     occupancyLabel={occupancy.label}
-                    occupancyNoun={isFinishedStatus(room.status) ? "attended" : "in room"}
+                    occupancyNoun={
+                      isFinishedStatus(room.status)
+                        ? t("occupancyNoun.attended")
+                        : t("occupancyNoun.inRoom")
+                    }
                     user={user}
                     onCopy={handleCopy}
+                    canEdit={canEditRoom}
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
@@ -1049,10 +1135,16 @@ export default function RoomInformationPage() {
                         meetingTitle={room.title}
                       />
                     ) : null}
+                    {/* WT-714: "End meeting" is offered for every status that is NOT terminal,
+                        rather than for everything except the two that were reachable when this
+                        was written. `!isEnded && status !== "cancelled"` left an EXPIRED or
+                        FAILED room still offering it — and an expired room is precisely one that
+                        never ran, so there is nothing there to end. The server would refuse the
+                        request; the menu entry was the lie. */}
                     <RoomActionsMenu
                       room={room}
                       isHost={isHost}
-                      canEnd={isHost && !isEnded && room.status !== "cancelled"}
+                      canEnd={isHost && !isFinishedStatus(room.status)}
                       endPending={endRoomMutation.isPending}
                       onCopy={handleCopy}
                       onEnd={async () => {
@@ -1097,7 +1189,13 @@ export default function RoomInformationPage() {
                 roomId={room.id}
                 isHost={isHost}
                 isEnded={isEnded}
+                // What a downloaded copy of this meeting is called — see recordFileName. The
+                // title as the host typed it, and the meeting's OWN start (WT-311(c)), which is
+                // the same source the duration chip counts from.
+                meetingTitle={room.title}
+                meetingStartedAt={room.startedAt}
                 artifactAccess={room.settings?.artifactAccess}
+                autoShareRecord={room.settings?.autoShareRecord}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
                 hasTranscript={hasTranscript}
@@ -1108,9 +1206,13 @@ export default function RoomInformationPage() {
                 // is the wire it comes back up. See the note on `seekSources` above.
                 onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
+                marks={recordingMarks}
+                onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
+                recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
+                generatableLanguages={room.artifactLanguages?.generatable}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
@@ -1129,6 +1231,7 @@ export default function RoomInformationPage() {
                     currentUserId={user?.id}
                     isEnded={isEnded}
                     onCopy={handleCopy}
+                    meetingTitle={room.title}
                     transcriptId={transcriptQuery.data?.id}
                     transcriptStatus={transcriptQuery.data?.status}
                     // WT-311(c): the meeting's own clock, not the translation session's. A
@@ -1141,6 +1244,7 @@ export default function RoomInformationPage() {
                     // the segments query never runs and the count is zero for a reason that has
                     // nothing to do with the meeting.
                     transcriptErrorCode={transcriptErrorCode}
+                    saveTranscript={room.settings?.saveTranscript}
                     transcriptLoading={
                       transcriptQuery.isLoading || segmentsQuery.isLoading
                     }
@@ -1179,7 +1283,7 @@ export default function RoomInformationPage() {
           {railHidden ? null : (
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-hidden">
             <PropertyPanel
-              title="People"
+              title={t("people.panelTitle")}
               className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
               /* The one bounded scroll region. `overscroll-auto` is the default, restated:
                  chaining is what keeps this from trapping the page's scroll at its end. */
@@ -1193,7 +1297,7 @@ export default function RoomInformationPage() {
                   shared label here keeps that guarantee visible: if a group's arithmetic ever
                   drifts from occupancy, the two numbers sit one above the other. */}
               <p className="mb-2 text-[12px] text-muted-foreground">
-                {`Participants: ${occupancy.label}`}
+                {t("people.participantsCount", { label: occupancy.label })}
               </p>
 
               {rosterGroups.length === 0 ? (
@@ -1201,13 +1305,13 @@ export default function RoomInformationPage() {
                   {/* Not "Nobody is in the room right now" — that sentence answers a question
                       about presence, and the situation here is that there is nobody to be
                       present yet. */}
-                  No one else invited yet.
+                  {t("people.noneInvited")}
                 </p>
               ) : (
                 rosterGroups.map((group) => (
                   <CollapsibleSection
                     key={group.label}
-                    label={`${group.label}: ${group.people.length}`}
+                    label={t("people.groupCount", { label: group.label, count: group.people.length })}
                     defaultOpen={group.defaultOpen}
                   >
                     {group.people.map((person) => (
@@ -1248,6 +1352,7 @@ function RoomEntryButton({
   onActivate: () => void;
   className?: string;
 }) {
+  const t = useTranslations("meetingRoomPage");
   const isStart = intent.mode === "host_start";
 
   return (
@@ -1264,7 +1369,7 @@ function RoomEntryButton({
           16px the outline is most of what is left of the shape. `fill="currentColor"` rather
           than a literal white, so it keeps following the `!text-white` above it. */}
       {isStart ? <Play fill="currentColor" className="size-4" /> : null}
-      {pending ? "Starting..." : intent.label}
+      {pending ? t("startingLabel") : intent.label}
       {isStart ? null : <ArrowRight className="size-4" />}
     </Button>
   );
@@ -1287,12 +1392,9 @@ function RoomEntryButton({
  *   temporary — it needs recording durations the backend does not store — so it is the one that
  *   gets a "yet".
  */
-const SEEK_UNAVAILABLE_MESSAGES: Record<"unalignable" | "multiple", string> = {
-  unalignable:
-    "You can watch this recording, but jumping to a moment is not available for it — this meeting was transcribed before WarpTalk started recording where a video's timeline begins.",
-  multiple:
-    "This meeting has more than one recording, so jumping to a moment is not available yet — a timestamp cannot be matched to the right file.",
-};
+// SEEK_UNAVAILABLE_MESSAGES and RECORDING_FAILURE_MESSAGES used to live here as module-level
+// constants. They now need `useTranslations`, a hook, so they are built inside
+// MeetingRecordSection instead — see `seekUnavailableMessages`/`recordingFailureMessages` there.
 
 /**
  * Everything a meeting left behind, on the meeting's own page.
@@ -1309,7 +1411,10 @@ function MeetingRecordSection({
   roomId,
   isHost,
   isEnded,
+  meetingTitle,
+  meetingStartedAt,
   artifactAccess,
+  autoShareRecord,
   transcript,
   transcriptCount,
   endedRecord,
@@ -1322,15 +1427,24 @@ function MeetingRecordSection({
   onJumpToMoment,
   seekUnavailableReason,
   recordingUnavailableReason,
+  recordingFailure,
   speakerDirectory,
+  generatableLanguages,
   tab,
   onTabChange,
   expanded,
   onToggleExpanded,
+  marks,
+  onMarkClick,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
   isHost: boolean;
+  /** The meeting's own name, which every file downloaded from this record is named after. */
+  meetingTitle: string;
+  /** WT-311(c): the meeting's own start — the date in the file name, and the same source the
+   *  duration chip counts from. Null for a meeting with no start on record. */
+  meetingStartedAt?: string | null;
   /**
    * Whether the meeting is over, which is what separates "there is no record" from "the record
    * is not written yet". The host lands here the moment they press End, and the finalizer takes
@@ -1339,6 +1453,8 @@ function MeetingRecordSection({
   isEnded: boolean;
   /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
   artifactAccess?: string | null;
+  /** WT-826: whether the room shares its record by itself when the meeting ends. */
+  autoShareRecord?: boolean;
   transcript: React.ReactNode;
   transcriptCount: number;
   /**
@@ -1385,6 +1501,8 @@ function MeetingRecordSection({
   seekUnavailableReason?: "unalignable" | "multiple" | null;
   /** Passed straight to the player. The union is meeting-record-panels'. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
+  /** rec-loss: a recording that produced no file — derived on the page beside the reason above. */
+  recordingFailure?: "all" | "some" | null;
   /** Faces for the reading rail's attendees tab, from the same workspace member list the
    *  transcript's own speakers come from — the only place an avatar exists. */
   speakerDirectory?: Readonly<
@@ -1396,14 +1514,36 @@ function MeetingRecordSection({
   /** WT-588: whether the record has the page to itself, with the right rail dropped. */
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
+  generatableLanguages?: readonly string[] | null;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
+  const t = useTranslations("meetingRoomPage");
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
   const recording = findPlayableRecording(endedRecord?.artifacts);
   // WT-480: who may read this record. One derivation feeds the badge, the banner and the button.
   const setArtifactAccess = useSetArtifactAccess(roomId);
-  const sharing = describeRecordSharing({ artifactAccess, isHost });
+  const sharing = describeRecordSharing({
+    artifactAccess,
+    isHost,
+    isEnded,
+    autoShareRecord,
+    t: (key) => t(`record.sharing.${key}`),
+  });
+
+  // WT-655 / rec-loss: built here, not as module-level constants, because they now read from the
+  // i18n catalog and `useTranslations` is a hook.
+  const seekUnavailableMessages: Record<"unalignable" | "multiple", string> = {
+    unalignable: t("record.seekUnavailable.unalignable"),
+    multiple: t("record.seekUnavailable.multiple"),
+  };
+  const recordingFailureMessages: Record<"all" | "some", string> = {
+    all: t("record.recordingFailure.all"),
+    some: t("record.recordingFailure.some"),
+  };
 
   // What "the summary changed" means, as one value. The template alone could not answer it:
   // regenerating in the SAME shape leaves the template identical, so the old arrival test was
@@ -1471,8 +1611,17 @@ function MeetingRecordSection({
   const [rendering, setRendering] = useState<SummaryRenderingView | null>(null);
   const renderingPollRef = useRef<number | null>(null);
 
+  /**
+   * WT-701: which selection owns the rendering state. Bumped by every new selection and on
+   * unmount, so a read that resolves for an older attempt can neither write over the newer one
+   * nor clear the newer attempt's poll — which used to leave the selects locked on "generating"
+   * with no timer left running to ever unlock them.
+   */
+  const renderingAttemptRef = useRef(0);
+
   useEffect(
     () => () => {
+      renderingAttemptRef.current += 1;
       if (renderingPollRef.current !== null) window.clearInterval(renderingPollRef.current);
     },
     [],
@@ -1487,6 +1636,20 @@ function MeetingRecordSection({
         renderingPollRef.current = null;
       }
 
+      const attempt = ++renderingAttemptRef.current;
+      // Set once this attempt has reached an ending (ready, failed, refused, deadline). A read
+      // still in flight at that moment must not reopen it.
+      let settled = false;
+      let inFlight = false;
+      const isCurrent = () => !settled && renderingAttemptRef.current === attempt;
+      const settle = () => {
+        settled = true;
+        if (renderingAttemptRef.current === attempt && renderingPollRef.current !== null) {
+          window.clearInterval(renderingPollRef.current);
+          renderingPollRef.current = null;
+        }
+      };
+
       // Shown immediately, before the request resolves. The picker reads its value from this,
       // so leaving it until the response lands would snap the dropdown back to the published
       // pair for a moment — which is exactly what made the old one look like it did nothing.
@@ -1500,7 +1663,9 @@ function MeetingRecordSection({
 
       const stopAt = Date.now() + 90_000;
 
-      const read = async () => {
+      /** True once this attempt needs no further reads — ended, or no longer the current one. */
+      const read = async (): Promise<boolean> => {
+        inFlight = true;
         try {
           // Destructured, matching every other read through this service.
           const { data: answer } = await translationRoomService.getSummaryRendering(
@@ -1510,29 +1675,17 @@ function MeetingRecordSection({
           );
 
           // A reader who changed their mind while this was in flight must not have the old
-          // answer land on top of the new one.
-          let superseded = false;
-          setRendering((current: SummaryRenderingView | null) => {
-            if (
-              current
-              && (current.templateKey !== answer.templateKey
-                || current.language !== answer.language)
-            ) {
-              superseded = true;
-              return current;
-            }
-            return {
-              templateKey: answer.templateKey,
-              language: answer.language,
-              isCanonical: answer.isCanonical,
-              status: answer.status,
-              // `?? null` because the parser answers undefined for content it cannot read, and
-              // "nothing to show" has to be one value here — the rail decides what to render on
-              // `content` being falsy, and undefined would make that decision twice.
-              content: answer.content ? (parseMeetingSummaryContent(answer.content) ?? null) : null,
-            };
-          });
-          if (superseded) return true;
+          // answer land on top of the new one. Decided by attempt, not by comparing pairs: the
+          // newer selection owns the state and its own poll.
+          if (!isCurrent()) return true;
+
+          // WT-701 — an answer for a different pair while this selection is still the one on
+          // screen. The server echoes its NORMALISED pair (lower-case template, bare language
+          // code), and comparing raw strings read every such echo as stale, which stopped the
+          // poll and left the selects locked on "generating" with nothing left to unlock them.
+          // A reply that is genuinely for another pair is ignored and the poll carries on; the
+          // deadline still ends it.
+          if (!renderingAnswerMatches({ templateKey, language }, answer)) return false;
 
           // WT-669 — a rendering that is not coming says so, and says why.
           //
@@ -1541,13 +1694,39 @@ function MeetingRecordSection({
           // produced a sentence that named nothing. The reason had been written by the worker
           // the whole time.
           if (answer.status === "failed") {
+            settle();
             setRendering(null);
-            toast.error(answer.error || "That version could not be written.");
+            toast.error(answer.error || t("record.toasts.versionNotWritten"));
             return true;
           }
 
-          return answer.status === "ready";
+          setRendering({
+            // The picker's option values are the normalised spellings, so store those.
+            templateKey: normalizeRenderingTemplate(answer.templateKey) || templateKey,
+            language:
+              normalizeRenderingLanguage(answer.language) || normalizeRenderingLanguage(language),
+            isCanonical: answer.isCanonical,
+            status: answer.status,
+            // `?? null` because the parser answers undefined for content it cannot read, and
+            // "nothing to show" has to be one value here — the rail decides what to render on
+            // `content` being falsy, and undefined would make that decision twice.
+            content: answer.content ? (parseMeetingSummaryContent(answer.content) ?? null) : null,
+          });
+
+          if (answer.status === "ready") {
+            settle();
+            return true;
+          }
+          return false;
         } catch (error) {
+          if (!isCurrent()) return true;
+
+          // WT-701 — a blip is not a refusal. No response (network, CORS, timeout), a gateway
+          // 5xx or a 429 used to reset the picker on the first failure with a generic apology;
+          // the rendering was usually being written fine. Keep asking until the deadline.
+          if (isRetryableRenderingError(error)) return false;
+
+          settle();
           setRendering(null);
           // The server's own sentence, the way the rewrite path already does it. The endpoint
           // refuses with things a reader can act on — "This meeting has no summary yet, so there
@@ -1555,38 +1734,37 @@ function MeetingRecordSection({
           // is most of what made this control feel broken rather than unavailable.
           toast.error(
             (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
-              || "Could not read this meeting in that language.",
+              || t("record.toasts.readLanguageFailed"),
           );
           return true;
+        } finally {
+          inFlight = false;
         }
       };
 
       void (async () => {
         if (await read()) return;
+        // Unmounted, or replaced by a newer selection while the first read was out.
+        if (!isCurrent()) return;
 
         // Still being written. Polled here rather than in the rail because only this component
         // knows whether a read is still in flight, and a deadline is what separates "waiting"
         // from "never coming".
         renderingPollRef.current = window.setInterval(() => {
+          if (!isCurrent()) return;
           if (Date.now() > stopAt) {
-            if (renderingPollRef.current !== null) {
-              window.clearInterval(renderingPollRef.current);
-              renderingPollRef.current = null;
-            }
+            settle();
             setRendering(null);
-            toast.error("That version has not arrived. Try again.");
+            toast.error(t("record.toasts.versionNotArrived"));
             return;
           }
-          void read().then((done) => {
-            if (done && renderingPollRef.current !== null) {
-              window.clearInterval(renderingPollRef.current);
-              renderingPollRef.current = null;
-            }
-          });
+          // One read at a time: a slow reply must not stack a second request behind it.
+          if (inFlight) return;
+          void read();
         }, 4000);
       })();
     },
-    [endedRecord],
+    [endedRecord, t],
   );
 
   const requestSummaryRewrite = useCallback(
@@ -1611,11 +1789,11 @@ function MeetingRecordSection({
       } catch (error) {
         toast.error(
           (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
-            || "Could not rewrite the summary.",
+            || t("record.toasts.rewriteFailed"),
         );
         throw error;
       }
-      toast.success("Rewriting the summary…");
+      toast.success(t("record.toasts.rewriting"));
 
       if (rewritePollRef.current !== null) {
         window.clearInterval(rewritePollRef.current);
@@ -1662,7 +1840,7 @@ function MeetingRecordSection({
             // seconds later when the reader looks up from the picker they just used.
             setRewriteFailure({
               token: Date.now(),
-              reason: outcome.error || "The summary could not be rewritten.",
+              reason: outcome.error || t("record.toasts.rewriteFailureReason"),
             });
           })
           .catch(() => {
@@ -1670,7 +1848,7 @@ function MeetingRecordSection({
           });
       }, 4000);
     },
-    [endedRecord, onRecordChanged],
+    [endedRecord, onRecordChanged, t],
   );
 
   // No ended record means the meeting has not finished, so there is nothing to summarise and
@@ -1682,14 +1860,16 @@ function MeetingRecordSection({
     <section className="mt-8 border-b border-border/60 pb-7">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+          <h2 className="text-[15px] font-semibold text-ink">{t("record.heading")}</h2>
           {/* WT-480: the badge and the banner below come from one call, so they cannot end up
               disagreeing — a "Draft" chip beside a banner saying everyone can read it is worse
               than either alone. */}
           <span
             className={cn(
               "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-              sharing.tone === "shared"
+              // Amber only for "nobody can read this but the host" — a draft, or a participant
+              // being withheld. Shared, and shared-at-the-end, are both good news.
+              sharing.tone !== "draft" && sharing.tone !== "withheld"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
             )}
@@ -1701,22 +1881,30 @@ function MeetingRecordSection({
         {sharing.action ? (
           <button
             type="button"
-            onClick={() => void setArtifactAccess.mutateAsync(nextArtifactAccess(artifactAccess))
+            onClick={() => {
+              // WT-826: the view says which level its control sends. Before the meeting ends, a
+              // record that will share itself reads as "not shared" today, and its control keeps
+              // it private — flipping the stored level would have published it early instead.
+              const next = sharing.nextLevel ?? nextArtifactAccess(artifactAccess);
+              void setArtifactAccess.mutateAsync(next)
               .then(() => {
                 toast.success(
-                  isRecordShared(artifactAccess)
-                    ? "Record unpublished. Only you can see it now."
-                    : "Record published. Everyone who took part can read it.",
+                  !isRecordShared(next)
+                    ? isEnded
+                      ? t("record.sharing.toastUnpublished")
+                      : t("record.sharing.toastKeptPrivate")
+                    : t("record.sharing.toastPublished"),
                 );
                 onRecordChanged();
               })
               .catch((error: unknown) =>
-                toast.error(getErrorMessage(error, "Could not change who this record is shared with.")),
-              )}
+                toast.error(getErrorMessage(error, t("record.sharing.toastShareChangeFailed"))),
+              );
+            }}
             disabled={setArtifactAccess.isPending}
             className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
           >
-            {setArtifactAccess.isPending ? "Saving…" : sharing.action}
+            {setArtifactAccess.isPending ? t("record.sharing.saving") : sharing.action}
           </button>
         ) : null}
       </div>
@@ -1725,7 +1913,7 @@ function MeetingRecordSection({
         <div
           className={cn(
             "mt-3 rounded-[8px] border px-3.5 py-2.5 text-[13px] leading-relaxed",
-            sharing.tone === "shared"
+            sharing.tone === "shared" || sharing.tone === "scheduled"
               ? "border-emerald-500/25 bg-emerald-500/5 text-ink"
               : sharing.tone === "draft"
                 ? "border-amber-500/25 bg-amber-500/5 text-ink"
@@ -1740,13 +1928,13 @@ function MeetingRecordSection({
         <div
           className="mt-2 mb-4 flex items-center gap-1 border-b border-border"
           role="tablist"
-          aria-label="Meeting record sections"
+          aria-label={t("record.sectionsAriaLabel")}
         >
           <MeetingRecordTabButton
             active={activeTab === "recap"}
             onClick={() => onTabChange("recap")}
             icon={FileText}
-            label="Recap"
+            label={t("record.tabs.recap")}
             count={transcriptCount || undefined}
           />
           {/* Minutes came from the deleted `/ended` page, which was the only place they could be
@@ -1758,18 +1946,10 @@ function MeetingRecordSection({
             active={activeTab === "minutes"}
             onClick={() => onTabChange("minutes")}
             icon={ClipboardList}
-            label="Minutes"
+            label={t("record.tabs.minutes")}
           />
-          <MeetingRecordTabButton
-            active={activeTab === "artifacts"}
-            onClick={() => onTabChange("artifacts")}
-            icon={Archive}
-            label="Artifacts"
-            count={endedRecord?.artifacts.length}
-          />
-
           {/* WT-588. On the tab strip rather than inside the transcript toolbar, because it
-              widens the RECORD — summary, minutes and artifacts gain the same room, and a
+              widens the RECORD — the Recap tab and the minutes gain the same room, and a
               control that moved only when you were on one tab would read as belonging to that
               tab's content.
 
@@ -1784,11 +1964,11 @@ function MeetingRecordSection({
               aria-pressed={!!expanded}
               title={
                 expanded
-                  ? "Show the meeting details again"
-                  : "Give the record the full width"
+                  ? t("record.expand.showDetails")
+                  : t("record.expand.giveFullWidth")
               }
               aria-label={
-                expanded ? "Collapse the record" : "Expand the record"
+                expanded ? t("record.expand.collapse") : t("record.expand.expand")
               }
               className="ml-auto mb-1 hidden shrink-0 cursor-pointer rounded-md p-1.5 text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink xl:block"
             >
@@ -1804,23 +1984,16 @@ function MeetingRecordSection({
         <div className="mt-3" />
       )}
 
-      {/* WT-492: above the transcript, and only in that tab — the two are read together, and it
-          is the pairing the ticket asks for. On Summary and Artifacts it would push the panel the
-          reader came for down the page for no reason; Artifacts still lists the same file to
-          download. Rendered only when a ready recording exists, so a meeting nobody recorded shows
-          no empty frame promising one. */}
-      {/* On Summary as well as Transcript now. A summary citation is the same gesture as clicking
-          a transcript line, and it cannot move a player the reader cannot see — sending them to
-          another tab to watch what they just clicked is the long way round. Artifacts still gets
-          none: it is a list of files, and the player would push the list the reader came for down
-          the page.
+      {/* WT-492: the recording belongs beside the transcript, because the two are read together
+          — which is the pairing the ticket asks for, and the reason a summary citation can move a
+          player the reader can see.
 
-          Option C: on the TRANSCRIPT tab the player is no longer here at all. It has stopped being
-          a full-width block above the reading column and become the pip at the top of the reading
-          rail — the same component, the same element, one `variant` apart. A 16:9 frame the width
-          of the record is the single biggest reason the transcript below it was being read a
-          screenful at a time. The Summary tab keeps the block player, because there is no reading
-          column beside it there to compete with. */}
+          Option C: it is no longer HERE at all. It stopped being a full-width block above the
+          reading column and became the pip at the top of the reading rail — the same component,
+          the same element, one `variant` apart. A 16:9 frame the width of the record is the single
+          biggest reason the transcript below it was being read a screenful at a time. The pip is
+          also where its download now lives: the Artifacts tab that used to hold that file is
+          gone. */}
       {/* WT-655: the one line that stops the transcript's timestamps going quiet without a reason.
           Above the reading surface, because it is about the timestamps in it. A meeting that was
           simply never recorded produces no reason at all and so renders nothing — see
@@ -1828,7 +2001,27 @@ function MeetingRecordSection({
           are one tab now, and the rail's pip is the only player on it. */}
       {activeTab === "recap" && seekUnavailableReason ? (
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
-          {SEEK_UNAVAILABLE_MESSAGES[seekUnavailableReason]}
+          {seekUnavailableMessages[seekUnavailableReason]}
+        </div>
+      ) : null}
+      {/* rec-loss: beside the seek line and styled like it — both are "about the recording, above
+          what you are reading". role="status" so a screen reader announces it when the poll turns
+          a processing recording into a failed one while the page is open. */}
+      {activeTab === "recap" && recordingFailure ? (
+        <div
+          role="status"
+          className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted"
+        >
+          {recordingFailureMessages[recordingFailure]}
+          {/* WT-824: and why, when the backend kept LiveKit's reason. */}
+          {(endedRecord?.artifacts ?? []).map((artifact) => {
+            const text = recordingFailureText(artifact);
+            return text ? (
+              <span key={artifact.id} className="mt-1 block text-ink">
+                {text}
+              </span>
+            ) : null;
+          })}
         </div>
       ) : null}
       {activeTab === "recap" ? (
@@ -1840,10 +2033,9 @@ function MeetingRecordSection({
         // already polls while anything is generating, so this clears itself.
         isEnded && !hasRecord ? (
           <div className="rounded-[8px] border border-dashed border-border bg-surface-1 px-3.5 py-3">
-            <p className="text-[13px] font-medium text-ink">Still writing this up</p>
+            <p className="text-[13px] font-medium text-ink">{t("record.writingUp.title")}</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-              The transcript and the AI summary are produced after a meeting ends — usually
-              within a minute. This page updates on its own.
+              {t("record.writingUp.body")}
             </p>
           </div>
         ) : hasRecord ? (
@@ -1854,6 +2046,8 @@ function MeetingRecordSection({
           <TranscriptReadingLayout
             transcript={transcript}
             record={endedRecord}
+            meetingTitle={meetingTitle}
+            meetingStartedAt={meetingStartedAt}
             segments={segments}
             hasTranscript={hasTranscript}
             recording={recording}
@@ -1869,7 +2063,10 @@ function MeetingRecordSection({
             rewriteFailure={rewriteFailure}
             rendering={rendering}
             onSelectRendering={endedRecord ? selectRendering : undefined}
+            generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
+            marks={marks}
+            onMarkClick={onMarkClick}
           />
         ) : (
           transcript
@@ -1882,19 +2079,15 @@ function MeetingRecordSection({
         <MinutesPanel
           roomId={roomId}
           canManage={isHost}
+          // The same set the summary rail is handed: one answer to "which languages may this
+          // meeting still be written in", read once on this page.
+          generatableLanguages={generatableLanguages}
           // The same switch the summary's citations make: the moment being cited is a node in
           // the transcript, and that node only exists while the transcript tab is rendered.
           onSeek={(atMs) => {
             onTabChange("recap");
             onJumpToMoment(atMs);
           }}
-        />
-      ) : null}
-      {activeTab === "artifacts" && endedRecord ? (
-        <ArtifactsPanel
-          artifacts={endedRecord.artifacts}
-          busyArtifactId={busyArtifactId}
-          onDownload={downloadArtifact}
         />
       ) : null}
     </section>
@@ -1919,6 +2112,7 @@ function RoomNotesEditor({
   canEdit: boolean;
   onSave: (html: string) => Promise<void>;
 }) {
+  const t = useTranslations("meetingRoomPage");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1959,8 +2153,8 @@ function RoomNotesEditor({
       }),
       Placeholder.configure({
         placeholder: canEdit
-          ? "Add agenda, context, decisions, or review notes..."
-          : "No room notes yet.",
+          ? t("notes.placeholderEditable")
+          : t("notes.placeholderReadOnly"),
         showOnlyWhenEditable: false,
       }),
       Markdown.configure({
@@ -1999,6 +2193,20 @@ function RoomNotesEditor({
   useEffect(() => {
     editor?.setEditable(canEdit);
   }, [editor, canEdit]);
+
+  // WT-852. `content` above is read once, at mount — so notes changed anywhere else (the Edit
+  // room dialog writes the same description) never reached this editor: the page kept showing
+  // the old notes after "Room updated successfully.", and the next keystroke here would have
+  // saved them back over the edit. A new description from the server replaces what is shown,
+  // unless the host is typing in here right now; their own save echoing back is a no-op because
+  // it is already lastSavedRef.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    if (initialContent === lastSavedRef.current || editor.isFocused) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    lastSavedRef.current = initialContent;
+    editor.commands.setContent(initialContent, { emitUpdate: false });
+  }, [editor, initialContent]);
 
   // Flush any pending debounced save immediately when the editor loses focus,
   // so quickly navigating away doesn't drop the last edit.
@@ -2044,7 +2252,7 @@ function RoomNotesEditor({
   return (
     <section className="border-b border-border/60 pb-7">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{t("notes.heading")}</h2>
         <SaveIndicator state={saveState} />
       </div>
 
@@ -2055,35 +2263,35 @@ function RoomNotesEditor({
         >
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[12px] font-medium text-muted-foreground outline-none hover:bg-surface-2 hover:text-ink">
-              Aa
+              {t("notes.toolbar.textStyle")}
               <ChevronDown className="size-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-36">
               <DropdownMenuItem
                 onClick={() => editor.chain().focus().setParagraph().run()}
               >
-                Text
+                {t("notes.toolbar.text")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
                   editor.chain().focus().toggleHeading({ level: 1 }).run()
                 }
               >
-                Heading 1
+                {t("notes.toolbar.heading1")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
                   editor.chain().focus().toggleHeading({ level: 2 }).run()
                 }
               >
-                Heading 2
+                {t("notes.toolbar.heading2")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
                   editor.chain().focus().toggleHeading({ level: 3 }).run()
                 }
               >
-                Heading 3
+                {t("notes.toolbar.heading3")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -2091,25 +2299,25 @@ function RoomNotesEditor({
           <ToolbarSeparator />
 
           <ToolbarButton
-            label="Bold"
+            label={t("notes.toolbar.bold")}
             icon={<Bold className="size-3.5" />}
             active={editorState?.bold}
             onClick={() => editor.chain().focus().toggleBold().run()}
           />
           <ToolbarButton
-            label="Italic"
+            label={t("notes.toolbar.italic")}
             icon={<Italic className="size-3.5" />}
             active={editorState?.italic}
             onClick={() => editor.chain().focus().toggleItalic().run()}
           />
           <ToolbarButton
-            label="Underline"
+            label={t("notes.toolbar.underline")}
             icon={<UnderlineIcon className="size-3.5" />}
             active={editorState?.underline}
             onClick={() => editor.chain().focus().toggleUnderline().run()}
           />
           <ToolbarButton
-            label="Strikethrough"
+            label={t("notes.toolbar.strikethrough")}
             icon={<Strikethrough className="size-3.5" />}
             active={editorState?.strike}
             onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -2122,19 +2330,19 @@ function RoomNotesEditor({
           <ToolbarSeparator />
 
           <ToolbarButton
-            label="Quote"
+            label={t("notes.toolbar.quote")}
             icon={<Quote className="size-3.5" />}
             active={editorState?.blockquote}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
           />
           <ToolbarButton
-            label="Inline code"
+            label={t("notes.toolbar.inlineCode")}
             icon={<Code className="size-3.5" />}
             active={editorState?.code}
             onClick={() => editor.chain().focus().toggleCode().run()}
           />
           <ToolbarButton
-            label="Code block"
+            label={t("notes.toolbar.codeBlock")}
             icon={<Code2 className="size-3.5" />}
             active={editorState?.codeBlock}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -2143,13 +2351,13 @@ function RoomNotesEditor({
           <ToolbarSeparator />
 
           <ToolbarButton
-            label="Bullet list"
+            label={t("notes.toolbar.bulletList")}
             icon={<List className="size-3.5" />}
             active={editorState?.bulletList}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
           />
           <ToolbarButton
-            label="Numbered list"
+            label={t("notes.toolbar.numberedList")}
             icon={<ListOrdered className="size-3.5" />}
             active={editorState?.orderedList}
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -2168,11 +2376,12 @@ function RoomNotesEditor({
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {
+  const t = useTranslations("meetingRoomPage");
   if (state === "saving") {
     return (
       <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
         <Loader2 className="size-3 animate-spin" />
-        Saving...
+        {t("notes.saving")}
       </span>
     );
   }
@@ -2180,7 +2389,7 @@ function SaveIndicator({ state }: { state: SaveState }) {
     return (
       <span className="flex items-center gap-1 text-[12px] text-muted-foreground transition-opacity">
         <Check className="size-3" />
-        Saved
+        {t("notes.saved")}
       </span>
     );
   }
@@ -2227,6 +2436,7 @@ function LinkToolbarButton({
   editor: Editor;
   active?: boolean;
 }) {
+  const t = useTranslations("meetingRoomPage");
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
 
@@ -2259,8 +2469,8 @@ function LinkToolbarButton({
           "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
           active ? "bg-surface-2 text-ink" : "",
         )}
-        title="Link"
-        aria-label="Link"
+        title={t("notes.toolbar.link")}
+        aria-label={t("notes.toolbar.link")}
       >
         <LinkIcon className="size-3.5" />
       </PopoverTrigger>
@@ -2276,7 +2486,7 @@ function LinkToolbarButton({
             autoFocus
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="Paste a link..."
+            placeholder={t("notes.toolbar.linkPlaceholder")}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
           <Button
@@ -2284,7 +2494,7 @@ function LinkToolbarButton({
             size="sm"
             className="h-8 shrink-0 rounded-md text-[12px] !text-white"
           >
-            Apply
+            {t("notes.toolbar.apply")}
           </Button>
         </form>
       </PopoverContent>
@@ -2329,17 +2539,18 @@ function buildUserList(
   invitations: TranslationRoomInvitationDto[],
   membersArray: WorkspaceMemberDto[],
   currentUser: UserDto | null,
+  t: RoomPageTranslator = defaultRoomPageText,
 ): UserIdentity[] {
   const mapped = participants.map((participant) =>
-    toUserIdentity(participant, membersArray, currentUser),
+    toUserIdentity(participant, membersArray, currentUser, t),
   );
   if (!mapped.some((participant) => participant.id === room.hostId)) {
     mapped.unshift({
       id: room.hostId,
-      name: resolveUserName(room.hostId, membersArray, currentUser),
+      name: resolveUserName(room.hostId, membersArray, currentUser, undefined, t),
       email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
-      role: "Host",
-      status: "Host",
+      role: t("people.role.host"),
+      status: t("people.role.host"),
       // The service seeds a participant row for the host at creation, so reaching here means
       // that row is missing rather than that the host declined anything. "Not in room" is the
       // neutral answer; bucketing them as an unanswered invitation would be a claim.
@@ -2374,7 +2585,7 @@ function buildUserList(
         id: invitation.id ?? invitation.email,
         name,
         email: invitation.email,
-        role: "Invitee",
+        role: t("people.role.invitee"),
         status: invitation.status ? invitation.status.toLowerCase() : "pending",
       });
     }
@@ -2387,10 +2598,11 @@ function toUserIdentity(
   participant: TranslationRoomParticipantDto,
   membersArray: WorkspaceMemberDto[] = [],
   currentUser: UserDto | null = null,
+  t: RoomPageTranslator = defaultRoomPageText,
 ): UserIdentity {
   const role =
     participant.role.toLowerCase() === "host"
-      ? "Host"
+      ? t("people.role.host")
       : normalizeLabel(participant.role);
   return {
     id: participant.userId || participant.id,
@@ -2399,6 +2611,7 @@ function toUserIdentity(
       membersArray,
       currentUser,
       participant.displayName,
+      t,
     ),
     // WT-191: required for buildUserList to recognise that an invitee has already
     // joined. Without it every invitation was rendered as a second attendee row.
@@ -2427,7 +2640,11 @@ function toUserIdentity(
  * priority: the group with something to do first, then the room, then the record, then the
  * people who never arrived.
  */
-function groupRoster(people: UserIdentity[], isEnded: boolean) {
+function groupRoster(
+  people: UserIdentity[],
+  isEnded: boolean,
+  t: RoomPageTranslator = defaultRoomPageText,
+) {
   const byPresence = (...states: ParticipantPresence[]) =>
     people.filter(
       (person) => person.presence && states.includes(person.presence),
@@ -2440,17 +2657,17 @@ function groupRoster(people: UserIdentity[], isEnded: boolean) {
     );
 
   const groups = [
-    { label: "Waiting to be admitted", people: byPresence("lobby") },
-    { label: "In room", people: byPresence("in-room", "connected") },
+    { label: t("people.groups.waitingToBeAdmitted"), people: byPresence("lobby") },
+    { label: t("people.groups.inRoom"), people: byPresence("in-room", "connected") },
     {
       // "Left" is wrong for a meeting that is over — everybody left, that is what ending is.
-      label: isEnded ? "Attended" : "Left",
+      label: isEnded ? t("people.groups.attended") : t("people.groups.left"),
       people: byPresence("disconnected", "left"),
     },
-    { label: "Accepted", people: invitedWith(true) },
-    { label: "Awaiting reply", people: invitedWith(false) },
+    { label: t("people.groups.accepted"), people: invitedWith(true) },
+    { label: t("people.groups.awaitingReply"), people: invitedWith(false) },
     {
-      label: isEnded ? "Did not attend" : "Not in room",
+      label: isEnded ? t("people.groups.didNotAttend") : t("people.groups.notInRoom"),
       // The people who never arrived are the longest group on a big invite list and the least
       // often read, so they start closed — the heading still carries the count, which is the
       // part anyone actually scans for.
@@ -2579,6 +2796,7 @@ function CollapsibleSection({
  * One mark, one meaning, or the same dot means two things on two screens.
  */
 function UserRow({ user, isHost }: { user: UserIdentity; isHost?: boolean }) {
+  const t = useTranslations("meetingRoomPage");
   return (
     <Popover>
       <PopoverTrigger className="grid w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
@@ -2592,7 +2810,7 @@ function UserRow({ user, isHost }: { user: UserIdentity; isHost?: boolean }) {
           </span>
           {isHost ? (
             <span className="shrink-0 rounded bg-primary/10 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-primary">
-              Host
+              {t("people.role.host")}
             </span>
           ) : null}
         </span>
@@ -2639,6 +2857,7 @@ function RoomActionsMenu({
   onCopy: (text: string, label: string) => void;
   onEnd: () => void;
 }) {
+  const t = useTranslations("meetingRoomPage");
   const joinLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
   const showCalendar = isUpcomingScheduledRoom(room);
 
@@ -2664,28 +2883,28 @@ function RoomActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="More actions"
-        title="More actions"
+        aria-label={t("actionsMenu.moreActions")}
+        title={t("actionsMenu.moreActions")}
         className="grid size-9 shrink-0 place-items-center rounded-md border border-border text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         {isHost ? (
-          <DropdownMenuItem onClick={() => onCopy(joinLink, "Invite link")}>
+          <DropdownMenuItem onClick={() => onCopy(joinLink, t("actionsMenu.inviteLinkLabel"))}>
             <LinkIcon className="mr-2 size-3.5" />
-            Copy invite link
+            {t("actionsMenu.copyInviteLink")}
           </DropdownMenuItem>
         ) : null}
         {showCalendar ? (
           <>
             <DropdownMenuItem onClick={() => void handleDownloadIcs()}>
               <Download className="mr-2 size-3.5" />
-              Download .ics
+              {t("actionsMenu.downloadIcs")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleAddToGoogleCalendar}>
               <CalendarPlus className="mr-2 size-3.5" />
-              Add to Google Calendar
+              {t("actionsMenu.addToGoogleCalendar")}
             </DropdownMenuItem>
           </>
         ) : null}
@@ -2696,7 +2915,7 @@ function RoomActionsMenu({
             className="text-red-500 focus:text-red-500"
           >
             <StopCircle className="mr-2 size-3.5" />
-            End meeting
+            {t("actionsMenu.endMeeting")}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
@@ -2787,9 +3006,10 @@ function resolveUserName(
   membersArray: WorkspaceMemberDto[],
   currentUser: UserDto | null,
   fallback?: string,
+  t: RoomPageTranslator = defaultRoomPageText,
 ) {
   if (userId && userId === currentUser?.id) {
-    return currentUser.fullName || currentUser.email || "Current user";
+    return currentUser.fullName || currentUser.email || t("people.currentUser");
   }
 
   const member = userId
@@ -2817,7 +3037,7 @@ function resolveUserName(
   // ANY user id that resolves to nobody, not just the host — so it was calling unresolvable
   // members organizers. The role now travels as a badge on the row, which frees the name to
   // say the only true thing left: we do not know it.
-  return "Unnamed participant";
+  return t("people.unnamedParticipant");
 }
 
 function formatDateTime(value?: string) {

@@ -1,0 +1,162 @@
+{
+  "accessDenied": "ワークスペースのオーナーと管理者のみが使用状況を表示できます。",
+  "header": {
+    "title": "使用状況",
+    "filterByMember": "メンバーで絞り込む",
+    "allMembers": "全メンバー",
+    "selectedMember": "選択したメンバー",
+    "cycleRangeElapsed": "{range} ・経過{days}日",
+    "thisBillingCycle": "今回の請求サイクル",
+    "refresh": "更新",
+    "exportCsv": "CSVをエクスポート"
+  },
+  "chart": {
+    "creditsSpent": "使用クレジット",
+    "groupBy": "グループ化:",
+    "service": "サービス",
+    "bucketSizeAria": "集計単位",
+    "day": "1日",
+    "week": "1週",
+    "creditsHeadline": "{amount} クレジット",
+    "avgPerBucket": "平均 {amount} / {bucket}",
+    "workspacePrefix": "ワークスペース：",
+    "inOverageSince": "{date} から超過利用中",
+    "projectedOverageOn": "{date} に超過利用の見込み",
+    "noDatesToChart": "このサイクルにはグラフ化できる日付がありません。",
+    "noSpendMember": "このメンバーはまだクレジットを使用していません。",
+    "noSpendWorkspace": "このサイクルではまだクレジットが使用されていません。",
+    "spendingAppearsHere": "会議が翻訳されると、{bucket}ごとの使用状況がここに表示されます。"
+  },
+  "rail": {
+    "cycleCredits": "サイクルのクレジット",
+    "spentByMember": "{member} の使用量",
+    "spent": "使用済み",
+    "spentOfAvailable": "{spent} / {available}",
+    "progressAria": "利用可能量に対する使用済みクレジット",
+    "pointToday": "均等に使った場合の本日時点の位置",
+    "granted": "付与",
+    "adjustments": "調整",
+    "carriedOver": "繰越",
+    "toppedUp": "追加購入",
+    "remaining": "残り",
+    "paceNote": {
+      "inOverageSince": "<date></date> から超過利用中です。",
+      "projectedOverageStarts": "このペースでは <date></date> から超過利用になります。",
+      "noAllowance": "このサイクルには割り当てがありません。",
+      "tooEarly": "サイクル開始直後のため、ペースを予測できません。",
+      "lastsWholeCycle": "このペースなら<b>割り当てはサイクル全体もちます</b>",
+      "aheadOfEvenSpend": " ・均等ペースより{delta}%先行"
+    },
+    "settlements": "決済",
+    "settlementsPerBucket": "{bucket}ごとの決済回数",
+    "settlementsDetail": "クレジットが差し引かれた回数",
+    "meetingsBilled": "課金された会議",
+    "meetingsBilledPerBucket": "{bucket}ごとの課金された会議数",
+    "busiestBucket": "最も利用の多い{bucket}",
+    "busiestValue": "{date} ・{amount} クレジット",
+    "noValue": "—"
+  },
+  "tabs": {
+    "spendingDetail": "利用の内訳",
+    "aiServices": "AIサービス",
+    "movements": "追加購入・調整",
+    "spendingBy": "利用内訳（項目別）",
+    "members": "メンバー",
+    "meetings": "会議"
+  },
+  "serviceCards": {
+    "empty": "このサイクルにはAI利用の記録がありません。",
+    "credits": "{amount} クレジット",
+    "uses": "{amount} 回",
+    "perUse": "{value} / 回",
+    "noValue": "—",
+    "creditsPerBucket": "{label} の{bucket}ごとのクレジット"
+  },
+  "movements": {
+    "empty": "このサイクルには追加購入・返金・調整はありません。"
+  },
+  "rankedList": {
+    "noMembers": "このサイクルではクレジットを使用したメンバーがいません。",
+    "noMeetings": "このサイクルでは課金された会議がありません。",
+    "meetingSub": "{date} ・決済{count}件",
+    "meetingsFootnote": "会議の時間で照合しています。課金は支払い対象の書き起こし行を記録するもので、会議室そのものではありません。"
+  },
+  "overagePanel": {
+    "noAllowance": {
+      "title": "クレジット残量が少なくなっています",
+      "description": "ゼロになるとどうなるか",
+      "body": "このワークスペースのクレジットがゼロになると会議の翻訳は停止します。このプランには超過利用の割り当てがありません — 追加するには WarpTalk にお問い合わせください。"
+    },
+    "control": {
+      "title": "クレジットがゼロになっても会議を継続する",
+      "description": "翻訳を会議の途中で打ち切らないために",
+      "switchAria": "クレジットがゼロになっても会議を継続する",
+      "enabledBody": "クレジットを使い切った会議は、このサイクルで最大 <cap></cap> クレジットまで貸し越しで翻訳を継続します。それを超えると停止し、追加購入するまでワークスペースは一時停止となります。",
+      "disabledBody": "クレジットがゼロになると、会議の途中でも翻訳は即座に停止します。この機能をオンにすると、プランで最大 <cap></cap> クレジットまでの超過利用が可能になります。",
+      "usedOfCap": "このサイクルで {cap} 中 {used} の超過クレジットを使用"
+    },
+    "toasts": {
+      "enabled": "クレジットがゼロになっても会議は継続します。",
+      "disabled": "クレジットがゼロになると会議は停止します。",
+      "failed": "超過利用の設定を変更できませんでした。"
+    }
+  },
+  "topUpModal": {
+    "title": "クレジットを購入",
+    "description": "支払いが完了すると、このワークスペースにクレジットが追加されます。",
+    "orEnterAmount": "または金額を入力",
+    "minimumPlaceholder": "最低 {min}",
+    "credits": "クレジット",
+    "estimatedTotal": "概算合計",
+    "estimatedHint": "最終的な金額はチェックアウト時にサーバー側で計算されます。",
+    "belowMinimum": "最低額は {min} クレジットです — Stripe は {amount} 未満の支払いを拒否します。",
+    "startingCheckout": "チェックアウトを開始中…",
+    "continueToPayment": "支払いへ進む",
+    "noWorkspaceError": "クレジットを購入する前にワークスペースを開いてください — クレジットはワークスペースに属します。",
+    "checkoutFailed": "チェックアウトを開始できませんでした。もう一度お試しください。"
+  },
+  "serviceUsageTable": {
+    "empty": "この期間にはAI利用の記録がありません。",
+    "headers": {
+      "service": "サービス",
+      "uses": "利用回数",
+      "creditsPerUse": "クレジット / 回",
+      "credits": "クレジット",
+      "share": "割合"
+    }
+  },
+  "burnupChart": {
+    "ariaLabel": "このサイクルの使用クレジット: {available} 中 {spent}",
+    "today": "本日",
+    "projected": "予測",
+    "notForecast": "この時点までの予測はありません。",
+    "spent": "使用済み",
+    "thatWeek": "その週",
+    "thatDay": "その日",
+    "available": "利用可能",
+    "vsEvenPace": "均等ペースとの差",
+    "legend": {
+      "creditsAvailable": "利用可能なクレジット",
+      "spentCumulative": "使用済み（累計）",
+      "evenPaceWithRate": "均等ペース ・{rate}/{bucket}",
+      "evenPace": "均等ペース",
+      "notYetSpent": "未使用"
+    }
+  },
+  "cycleSpendChart": {
+    "emptyTitle": "このサイクルではまだクレジットが使用されていません。",
+    "emptyDetail": "会議が翻訳されると、{bucket}ごとの使用状況がここに表示されます。",
+    "weekOf": "{date} の週",
+    "creditsSuffix": "{value} クレジット",
+    "spent": "使用済み",
+    "added": "追加",
+    "evenPaceWithRate": "均等ペース ・{rate}/{bucket}"
+  },
+  "usageSpendChart": {
+    "ariaLabel": "{bucket}ごとの使用クレジット（AIサービス別積み上げ）",
+    "otherServices": "その他のサービス",
+    "average": "平均",
+    "weekOf": "{date} の週",
+    "total": "合計"
+  }
+}

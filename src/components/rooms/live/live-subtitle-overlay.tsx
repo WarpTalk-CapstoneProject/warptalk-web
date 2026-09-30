@@ -1,63 +1,61 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { memo, useMemo } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { useTranslations } from "next-intl";
+import { ListBullets } from "@phosphor-icons/react/dist/ssr";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { identityFor } from "@/lib/meeting/participant-identity";
 import {
   captionTextForReader,
   groupTranscriptSegments,
+  mergeTranslations,
 } from "@/lib/transcript/transcript-display";
+import {
+  buildCleanTranscriptView,
+  withAbsorbedSegmentIds,
+} from "@/lib/transcript/clean-transcript";
+import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
+import { liveCaptionLines } from "@/lib/transcript/live-caption-lines";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar } from "./participant-avatar";
-
-/** How many past utterances stay on screen in the full lane. Teams shows three; so does this. */
-const LANE_LINES = 3;
 
 /**
  * Live captions: what was said, IN THE READER'S OWN LANGUAGE, attributed to a face.
  *
- * WHY IT IS A ROLLING LIST AND NOT ONE BOX
- *   It used to be a single centred box holding the newest sentence, which auto-hid after six
- *   seconds. Two things came out of that. Whoever looked away for a moment lost the line with no
- *   way back — the box was gone, not scrolled off. And because the box appeared and disappeared,
- *   the space under the video was empty half the time and occupied the other half, so the caption
- *   and the transcript panel read as two surfaces competing for the same job:
+ * WHY IT SHOWS ONLY THE CURRENT CAPTION (WT-873)
+ *   The lane once kept its history and opened it as an "Earlier captions" panel when the reader
+ *   scrolled up. The panel grew upward OVER the camera view — reading back meant covering the
+ *   people talking — and it duplicated the Transcript side panel, which is the record: every
+ *   line, the original beside the translation, timestamps and confidence. So the lane is now a
+ *   subtitle again: the utterance being spoken and the one before it, centred, not scrollable,
+ *   with a corner button into the transcript panel for anyone who wants to read back.
  *
- *     "subtitle và transcript như đang đấu nhau"
+ *   It does not auto-hide, which is what the original single box did wrong: whoever looked away
+ *   for a moment still has the previous line on screen, and the space under the video does not
+ *   flicker between empty and occupied.
  *
- *   The two now say different things. This lane is the LIVE surface: the last few utterances, who
- *   said them, big enough to read across a room, scrollable by hand for the line you just missed.
- *   The transcript panel is the RECORD: every line, the reader's own translation of it, timestamps
- *   and confidence. Neither is a worse copy of the other.
+ * WHY THE SPEAKER IS NAMED ONCE PER RUN
+ *   Avatar + name on every line, left-aligned, read as a chat thread over the video. A subtitle
+ *   names who is talking when that changes — see liveCaptionLines.
  *
  * WHY IT SHOWS THE TRANSLATION AND NOT THE ORIGINAL
  *   REVERSED ON 2026-08-20, by the product owner, after reading it as a defect in a live meeting:
- *   a reader listening in English watched Vietnamese captions scroll past. This file previously
- *   argued the opposite — that CC is an accessibility surface for the audio in the room, so it
- *   should show the language actually being spoken. That reasoning holds for a meeting product.
- *   It does not hold for a TRANSLATION product, where the caption lane is the largest, most
- *   readable surface in the window and the one a participant watches instead of listening.
- *
- *   The original did not lose a home. The transcript panel shows it beside the reader's
- *   translation, with timestamps and confidence, which is a better place to read a source
- *   language than a three-line lane that scrolls.
- *
- *   The old worry — that turning captions on becomes indistinguishable from turning translation
- *   on — is answered in words on the CC control, not by withholding the translation.
+ *   a reader listening in English watched Vietnamese captions scroll past. For a TRANSLATION
+ *   product the caption lane is the largest, most readable surface in the window and the one a
+ *   participant watches instead of listening. The original lives in the transcript panel, beside
+ *   the reader's translation.
  *
  * WHY A LINE CAN BE HELD BACK
  *   A transcript segment arrives before its translation does. Rendering the original in the
- *   meantime would put the line up in the wrong language and then change it under the reader,
- *   which is the thing being fixed rather than a smaller version of it. So a line with no
- *   caption for this reader yet is simply not shown yet — see captionTextForReader, which is
- *   also what keeps a same-language room captioned normally.
+ *   meantime would put the line up in the wrong language and then change it under the reader.
+ *   So a line with no caption for this reader yet is simply not shown yet — see
+ *   captionTextForReader, which is also what keeps a same-language room captioned normally.
  *
  *   Only while translation is RUNNING, though. Transcription does not wait for Start
- *   Translation — the AI bot joins on the first published microphone — so before anybody
- *   presses it these lines are all there will ever be, and holding them for a translation
- *   nobody ordered is how the lane ends up blank for the first half of a meeting. Hence
+ *   Translation, so before anybody presses it these lines are all there will ever be, and
+ *   holding them for a translation nobody ordered leaves the lane blank. Hence
  *   `translationActive`: off, the caption is what was said.
  *
  * Fed only by real segments from the AI pipeline over SignalR (TranscriptSegmentReceived /
@@ -69,6 +67,7 @@ export function LiveSubtitleOverlay({
   variant = "lane",
   readerLanguage,
   translationActive = true,
+  onOpenTranscript,
 }: {
   enabled?: boolean;
   variant?: "lane" | "compact";
@@ -84,37 +83,75 @@ export function LiveSubtitleOverlay({
    * translation that is not coming — see captionTextForReader.
    */
   translationActive?: boolean;
+  /**
+   * Opens the transcript side panel — the only place to read back, since the lane shows the
+   * current caption and nothing older (WT-873). Omitted where there is no panel to open (the
+   * minimised dock), and then no control is drawn.
+   */
+  onOpenTranscript?: () => void;
 }) {
-  const segments = useTranslationRoomStore((state) => state.transcriptSegments);
+  const t = useTranslations("meetingCallChrome.captions");
+  // The caption lane, not the transcript lane: captions keep running while the transcript is
+  // paused, and this list is the one a pause never withholds from. See captionSegments.
+  const segments = useTranslationRoomStore((state) => state.captionSegments);
+  const cleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
   const identities = useMeetingIdentities();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion() ?? false;
 
-  const lines = useMemo(() => {
+  /**
+   * WT-716 — the lane reads Clean or Verbatim, and it is the SAME choice the transcript panel
+   * uses rather than a switch of its own.
+   *
+   * The lane has no header to hang a toggle on (it is three lines over live video, with the
+   * control bar's CC button the only thing that governs it), and a caption surface that showed
+   * "ừm, ừm, cái đó" while the panel two inches away showed the same sentence cleaned would read
+   * as two transcripts of one meeting. So the preference is shared and there is no second control:
+   * a reader who wants the recogniser's exact words switches once, in the panel, and both follow.
+   */
+  const [viewMode] = useTranscriptViewMode();
+
+  const spoken = useMemo(() => {
+    // Clean captions are built from the SEGMENTS the lane already holds — tier 1 wording, with
+    // filler-only lines dropped so the lane never spends one of its three slots on "um". A merged
+    // sentence (tier 2) is used when one has arrived for lines still on screen; it usually has
+    // not, because the lane is showing what was said a second ago and the sentence is written
+    // afterwards. Falling back to the per-segment text is the ordinary case here, not the
+    // exception.
+    const view =
+      viewMode === "clean"
+        ? buildCleanTranscriptView(segments, cleanSentences, {
+            idOf: (segment) => segment.segmentId,
+            // A swallowed segment takes its translations with it unless they are folded in, and
+            // the translation is what this lane actually prints for a reader in another language.
+            absorb: (head, absorbed) => ({
+              ...head,
+              translations: mergeTranslations(head.translations, absorbed.translations),
+              confidence: Math.min(head.confidence, absorbed.confidence),
+            }),
+          })
+        : null;
+    const grouped = groupTranscriptSegments(view ? view.segments : segments);
+    const shown = view ? withAbsorbedSegmentIds(grouped, view) : grouped;
     // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
     // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
     // rendering two lines and a gap.
-    const spoken = groupTranscriptSegments(segments)
+    return shown
       .map((utterance) => ({
         utterance,
         caption: captionTextForReader(utterance, readerLanguage, translationActive),
       }))
-      .filter((line): line is { utterance: GroupedTranscriptSegment; caption: string } =>
-        Boolean(line.caption),
-      );
-    return spoken.slice(-(variant === "compact" ? 1 : LANE_LINES));
-  }, [segments, variant, readerLanguage, translationActive]);
+      .filter((line): line is CaptionLineData => Boolean(line.caption));
+  }, [segments, cleanSentences, viewMode, readerLanguage, translationActive]);
 
-  const newest = lines[lines.length - 1];
-  // Length, not just the id: a live utterance keeps the same segmentId while its text grows, and
-  // the lane has to follow it down as it does. Measured on the CAPTION, because that is the text
-  // that grows on screen — the original can lengthen while the translation has not caught up.
-  const tailKey = newest ? `${newest.utterance.segmentId}:${newest.caption.length}` : "";
+  const lines = useMemo(
+    () =>
+      variant === "compact"
+        ? liveCaptionLines(spoken, speakerOfLine, 1)
+        : liveCaptionLines(spoken, speakerOfLine),
+    [spoken, variant],
+  );
 
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    element.scrollTop = element.scrollHeight;
-  }, [tailKey]);
+  const newest = lines[lines.length - 1]?.line;
 
   if (!enabled) return null;
 
@@ -128,7 +165,7 @@ export function LiveSubtitleOverlay({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: reduceMotion ? 0 : 0.15 }}
               className="line-clamp-2 max-w-full rounded-lg bg-black/75 px-2 py-1 text-[11px] font-medium leading-snug text-white"
             >
               {newest.caption}
@@ -140,28 +177,47 @@ export function LiveSubtitleOverlay({
   }
 
   return (
+    // A fixed box that clips: nothing in the lane grows over the camera view, and nothing in it
+    // scrolls. Lines are bottom-anchored, so a long utterance loses its OLDEST words off the top
+    // and the words being spoken now stay on screen.
     <div
-      ref={scrollRef}
       data-caption-lane
-      // Scrollable on purpose. The line you missed is one flick away instead of gone, which is
-      // the whole difference between a caption and a caption you can use.
-      className="h-full w-full overflow-y-auto overscroll-contain rounded-2xl bg-surface-2/60 px-3 py-2 custom-scrollbar"
+      className="relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-2/60"
     >
-      <div className="flex min-h-full max-w-3xl flex-col justify-end gap-1.5">
+      {onOpenTranscript ? (
+        // The way to read back is the transcript panel, reached from a corner icon: the lane is
+        // two lines tall and every pixel of it is caption.
+        <button
+          type="button"
+          onClick={onOpenTranscript}
+          aria-label={t("openFullTranscript")}
+          title={t("openFullTranscript")}
+          className="absolute right-1.5 top-1.5 z-10 grid size-7 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <ListBullets className="size-4" weight="bold" />
+        </button>
+      ) : null}
+
+      <div
+        role="region"
+        aria-label={t("liveRegionAria")}
+        className="flex min-h-0 flex-1 flex-col items-center justify-end gap-1 overflow-hidden px-10 py-2 text-center"
+      >
         {lines.length === 0 ? (
-          <p className="text-[13px] text-ink-subtle">
-            Captions will appear here as people speak.
-          </p>
+          <p className="text-[13px] text-ink-subtle">{t("emptyState")}</p>
         ) : (
-          lines.map((line, index) => (
+          lines.map(({ line, showSpeaker }, index) => (
             <CaptionLine
               key={line.utterance.segmentId}
               line={line.utterance}
               caption={line.caption}
               identities={identities}
-              // Older lines step back rather than disappear: still readable if you want them,
-              // never competing with the sentence being spoken right now.
+              showSpeaker={showSpeaker}
+              // The previous line steps back rather than disappears: still readable if you
+              // glanced away, never competing with the sentence being spoken right now.
               dimmed={index < lines.length - 1}
+              animateIn={!reduceMotion && index === lines.length - 1}
+              reduceMotion={reduceMotion}
             />
           ))
         )}
@@ -170,41 +226,71 @@ export function LiveSubtitleOverlay({
   );
 }
 
-function CaptionLine({
-  line,
-  caption,
-  identities,
-  dimmed,
-}: {
-  line: GroupedTranscriptSegment;
-  /** Already resolved for this reader by captionTextForReader — never the raw original. */
-  caption: string;
-  identities: ReturnType<typeof useMeetingIdentities>;
-  dimmed: boolean;
-}) {
-  // `speakerName` was already resolved on arrival by resolveTranscriptSpeakerName, which guards
-  // against a roster that hands back a UUID as somebody's display name. Preferring it here keeps
-  // that guard; the identity map supplies the face and the language, which it alone knows.
-  const person = identityFor(identities, line.speakerId, line.speakerName);
-  const name = line.speakerName?.trim() || person.name;
+type CaptionLineData = { utterance: GroupedTranscriptSegment; caption: string };
 
-  return (
-    <motion.p
-      layout="position"
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: dimmed ? 0.55 : 1, y: 0 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-      className="flex items-start gap-2 text-[15px] leading-snug text-ink"
-    >
-      <ParticipantAvatar identity={person} size="xs" className="mt-px" />
-      <span className="min-w-0">
-        <span className="mr-1.5 font-semibold text-ink">{name}:</span>
-        {/* Plain text, not <AnimatedWords>. Animating each word in reads well for a transcript
-            being reviewed and badly for a caption being read live: the words the eye is on are
-            still fading in. AnimatedWords stays in use in the transcript panel, where the reader
-            sets the pace. */}
-        <span>{caption}</span>
-      </span>
-    </motion.p>
-  );
+function speakerOfLine(line: CaptionLineData): string | null | undefined {
+  return line.utterance.speakerId ?? line.utterance.speakerName;
 }
+
+const CaptionLine = memo(
+  function CaptionLine({
+    line,
+    caption,
+    identities,
+    showSpeaker,
+    dimmed,
+    animateIn,
+    reduceMotion,
+  }: {
+    line: GroupedTranscriptSegment;
+    /** Already resolved for this reader by captionTextForReader — never the raw original. */
+    caption: string;
+    identities: ReturnType<typeof useMeetingIdentities>;
+    /** Avatar + name only when this line opens a speaker run (liveCaptionLines). */
+    showSpeaker: boolean;
+    dimmed: boolean;
+    /** Read at mount only: whether this line fades in or is simply there. */
+    animateIn: boolean;
+    reduceMotion: boolean;
+  }) {
+    // `speakerName` was already resolved on arrival by resolveTranscriptSpeakerName, which guards
+    // against a roster that hands back a UUID as somebody's display name. Preferring it here keeps
+    // that guard; the identity map supplies the face and the language, which it alone knows.
+    const person = identityFor(identities, line.speakerId, line.speakerName);
+    const name = line.speakerName?.trim() || person.name;
+
+    return (
+      <motion.p
+        initial={animateIn ? { opacity: 0, y: 4 } : false}
+        animate={{ opacity: dimmed ? 0.55 : 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+        className="max-w-3xl text-center text-[15px] leading-snug text-ink"
+      >
+        {showSpeaker ? (
+          <>
+            <ParticipantAvatar
+              identity={person}
+              size="xs"
+              className="mr-1.5 -translate-y-px align-middle"
+            />
+            <span className="mr-1.5 font-semibold text-ink">{name}:</span>
+          </>
+        ) : null}
+        {/* Plain text, not <AnimatedWords>: the words the eye is on must not still be fading in.
+            AnimatedWords stays in the transcript panel, where the reader sets the pace. */}
+        <span>{caption}</span>
+      </motion.p>
+    );
+  },
+  // The grouped utterance is a fresh object on every update, so the default shallow compare
+  // would re-render every line for every word spoken. What is drawn is this.
+  (previous, next) =>
+    previous.line.segmentId === next.line.segmentId &&
+    previous.line.speakerId === next.line.speakerId &&
+    previous.line.speakerName === next.line.speakerName &&
+    previous.caption === next.caption &&
+    previous.showSpeaker === next.showSpeaker &&
+    previous.dimmed === next.dimmed &&
+    previous.reduceMotion === next.reduceMotion &&
+    previous.identities === next.identities,
+);

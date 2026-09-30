@@ -55,6 +55,20 @@ export function useCreateVoiceProfile() {
   });
 }
 
+/**
+ * Clone a failed profile again from its stored recording. Invalidating the list is what starts
+ * the "Cloning" poll again (hasCloningVoiceProfile), so the row settles without a reload.
+ */
+export function useRetryVoiceProfileClone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => VoiceProfileService.retryClone(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
+    },
+  });
+}
+
 export function useDeleteVoiceProfile() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "title": "WarpTalk をダウンロード",
+    "description": "macOS、Windows、Linux 向けの WarpTalk デスクトップアプリをダウンロードします。"
+  },
+  "navbar": {
+    "homeAria": "WarpTalk ホーム",
+    "home": "ホーム",
+    "login": "ログイン",
+    "register": "新規登録",
+    "back": "戻る"
+  },
+  "hero": {
+    "title": "WarpTalk をダウンロード",
+    "subtitle": "macOS、Windows、Linux でご利用いただけます。",
+    "version": "バージョン {version}",
+    "released": "リリース日 {date}",
+    "releaseNotes": "リリースノート",
+    "viewReleases": "リリース一覧を見る",
+    "comingSoonNotice": "リリースが公開されると、ここにデスクトップ版のビルドが表示されます。"
+  },
+  "cta": {
+    "seeAllDownloads": "すべてのダウンロードを見る",
+    "downloadFor": "{platform} 版をダウンロード",
+    "alsoOn": "対応OS:",
+    "allDownloads": "すべてのダウンロード",
+    "platformJoiner": "・"
+  },
+  "assets": {
+    "sectionTitle": "WarpTalk Desktop",
+    "sectionDescription": "ライブ翻訳、システム音声のキャプチャ、ブラウザ外での会議ワークフローに特化したデスクトップ体験。",
+    "download": "ダウンロード",
+    "comingSoon": "近日公開"
+  },
+  "installNotes": {
+    "mac": {
+      "title": "macOS で初めて起動する場合",
+      "summary": "WarpTalk は署名済みですが、まだ Apple の公証(ノータライズ)を受けていないため、初回起動時に macOS が確認を求めます。",
+      "steps": [
+        "ダウンロードした WarpTalk の .pkg を開きます。macOS が「マルウェアが含まれていないことを確認できません」と表示するので、Done をクリックします。",
+        "「システム設定」›「プライバシーとセキュリティ」を開き、セキュリティの項目までスクロールして、WarpTalk に関するメッセージの横にある Open Anyway をクリックします。この表示は手順1のあと約1時間だけ表示されます。",
+        "Touch ID またはパスワードで確認し、もう一度 Open Anyway を選んでインストーラーの案内に従います。この手順で Google Meet 翻訳が使用する WarpTalk Microphone と WarpTalk Speaker のオーディオデバイスも追加されます — 別途インストールは不要です。",
+        "アプリケーションフォルダから WarpTalk を開きます。以降のアップデートは自動でインストールされます。"
+      ],
+      "footnote": "この間も Gatekeeper は無効になりません — チェック機能自体をオフにするのではなく、このアプリだけを許可しています。"
+    },
+    "windows": {
+      "title": "Windows へのインストール",
+      "summary": "インストーラーにコード署名証明書が付いていないため、SmartScreen が警告を表示します。これは初回だけでなく、新しいリリースのたびに発生します。",
+      "steps": [
+        "WarpTalk Setup .exe を実行します。Windows に青い「Windows によって PC が保護されました」という画面が表示されます。",
+        "そのメッセージのすぐ下にある More info(詳細情報)をクリックします。",
+        "Run anyway(実行)をクリックし、通常どおりインストーラーを進めます。",
+        "最後の方で、Windows が Google Meet 用のオーディオケーブル(VB-Audio 社の VB-CABLE と Hi-Fi Cable)をセットアップする許可を求めます。Yes をクリックしてください — 別途インストールは不要です。"
+      ],
+      "footnote": "会社や学校が管理する PC では、Run anyway ボタンが表示されないまま SmartScreen がファイルを完全にブロックすることがあります。このページではその制限を回避できません — 管理者に相談するか、ブラウザ版の WarpTalk をご利用ください。",
+      "linkLabel": "ブラウザで WarpTalk を開く"
+    }
+  },
+  "footer": {
+    "copyright": "© {year} WarpTalk",
+    "releases": "リリース一覧"
+  }
+}

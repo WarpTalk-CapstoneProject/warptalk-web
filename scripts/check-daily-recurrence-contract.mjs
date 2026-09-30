@@ -194,4 +194,20 @@ assert.match(
   "The options menu must show the hour in force, bound to the rule rather than to a local copy that can drift from it.",
 );
 
+// ── WT-699: an invalid repeat rule disables the submit ──────────────────────────
+
+// The options menu printed "A repeating meeting can run for at most 365 days." while Create
+// stayed enabled, so the only thing that stopped the request was the server. The dialog must
+// gate on the same verdict the menu prints.
+assert.match(
+  dialogSource,
+  /const recurrenceProblem = dailyRecurrence \? validateDailyDraft\(dailyRecurrence, new Date\(\)\) : null;/,
+  "The dialog must validate the repeat rule with the same function the options menu uses.",
+);
+assert.match(
+  dialogSource,
+  /const validation = \{[\s\S]{0,200}recurrence: recurrenceProblem === null,[\s\S]{0,40}\};\s*const canSubmit = Object\.values\(validation\)\.every\(Boolean\);/,
+  "An invalid repeat rule must make canSubmit false, which is what disables the button.",
+);
+
 console.log("Daily recurrence contract OK");

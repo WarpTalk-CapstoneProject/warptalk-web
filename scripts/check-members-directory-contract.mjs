@@ -64,8 +64,14 @@ for (const [mutation, what] of [
 // The owner asked for the invite flow to start from a button, not a permanent form rail.
 assert.match(
   members,
-  /<span>Invite new member<\/span>/,
+  /<span>\{t\("toolbar\.inviteNewMember"\)\}<\/span>/,
   "Members must offer an explicit Invite new member button.",
+);
+const membersMessagesEn = JSON.parse(read("messages/en/members.json"));
+assert.equal(
+  membersMessagesEn.toolbar.inviteNewMember,
+  "Invite new member",
+  "The English catalog must still say Invite new member.",
 );
 
 /**
@@ -107,6 +113,14 @@ assert.match(
   members,
   /canGrantAdmin=\{isOwner\}/,
   "Members must pass Owner-only Admin granting to the invite dialog.",
+);
+
+// WT-847: when internal membership is disallowed by workspace domain policy,
+// the dialog falls back to External and must display internalDisabledReason so the user understands why Member is disabled.
+assert.match(
+  dialog,
+  /!internalAllowed\s*&&\s*policy\?\.internalDisabledReason/,
+  "The invite dialog must render internalDisabledReason when internal membership is disallowed.",
 );
 
 /**

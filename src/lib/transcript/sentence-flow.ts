@@ -113,10 +113,13 @@ const ABBREVIATIONS = new Set([
 ]);
 
 function endsWithAbbreviation(text: string): boolean {
-  const lastWord = text.split(/\s+/).at(-1)?.replace(/[.!?…]+$/, "").toLowerCase() ?? "";
+  const lastWord = text.split(/\s+/).at(-1)?.replace(/[.!?…]+$/, "") ?? "";
   if (!lastWord) return false;
-  // A single character is an initial: "A." in "A. Nguyễn" is not the end of a sentence.
-  return lastWord.length === 1 || ABBREVIATIONS.has(lastWord);
+  // A single unaccented capital is an initial: "A." in "A. Nguyễn" is not the end of a sentence.
+  // Any other one-letter word is not. Vietnamese has them as particles and interjections —
+  // "Chào ạ.", "Ừ.", "Ờ." — and reading those as initials glued the sentence they end onto the
+  // next one.
+  return /^[A-ZĐ]$/.test(lastWord) || ABBREVIATIONS.has(lastWord.toLowerCase());
 }
 
 /**

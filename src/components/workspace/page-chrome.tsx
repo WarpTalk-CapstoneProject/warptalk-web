@@ -18,9 +18,14 @@
  * sidebar — a 30px `<h1>Knowledge</h1>` under a breadcrumb that reads "knowledge" is the same word
  * three times, and the paragraph under it is documentation living in the furniture.
  *
- * So: no page title, no description, no eyebrow, and the page's own background is
- * `bg-surface-1` — not a panel floating on a grey wash, which is what made Knowledge and Billing
- * read as bolted on from somewhere else.
+ * So: no page title, no description, no eyebrow.
+ *
+ * THE PAGE'S BACKGROUND IS `bg-panel` (owner's call, 2026-09-16 — this REVERSES the earlier rule).
+ * It was `bg-surface-1`, white, on the reasoning that a page should not be a panel floating on a
+ * grey wash. That held until the cards arrived: a white card on a white page has only its hairline
+ * to say it is a separate object, and the owner's complaint was that the components sank into the
+ * page. The ladder is now canvas (shell) → panel (this) → surface-1 (cards on it); see globals.css.
+ * A page that sets its own `bg-surface-1` root is now a white slab on that ground — don't.
  *
  * ADMIN PAGES KEEP THEIR OWN CHROME. `/admin/*` is a different product surface with a different
  * subject (the whole platform, not one workspace) and its title block orients someone who arrived
@@ -42,7 +47,7 @@ export function WorkspacePage({
   className?: string;
 }) {
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-surface-1 text-ink", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col bg-panel text-ink", className)}>
       {children}
     </div>
   );
@@ -259,12 +264,12 @@ export function WorkspaceEmptyState({
  * a page header: it is a card with a 15px heading, not a 30px page title, so a page made of four
  * of them does not read as four pages stacked.
  *
- * The card is `bg-surface-1` — the SAME white as the page under it, separated by its border alone.
- * It was `bg-canvas`, a grey fill, and the owner's complaint was that the cards read as grey
- * patches on a white page. White-on-white with a hairline is the shape every reference surface
- * uses; it also keeps a card from looking like a disabled input. Nested boxes INSIDE a card
- * (hint blocks, icon tiles, progress tracks) still take a grey — that contrast is what gives them
- * their level, and it only works while the card itself is white.
+ * The card is `bg-surface-1`, white, and it now sits on `bg-panel` rather than on more white —
+ * so the border is no longer the only thing separating the two. The card colour never changed
+ * through any of this; what moved was the ground. (It was briefly `bg-canvas`, a grey card on a
+ * white page, which is the inversion of this and read as grey patches.) Nested boxes INSIDE a card
+ * — hint blocks, icon tiles, progress tracks — still take `surface-2`, and that still works
+ * because the card itself is the lightest thing on the page.
  */
 export function WorkspaceSection({
   title,

@@ -23,8 +23,9 @@ export interface LanguageCatalogRow extends ServerLanguage {
   offeredForMeetings: boolean;
 }
 
-export interface LanguageCatalogComparison {
-  rows: LanguageCatalogRow[];
+export interface LanguageCatalogComparison<T extends ServerLanguage = ServerLanguage> {
+  /** Every server row with whatever else it carried (e.g. WT-691's meeting counts), plus the two flags. */
+  rows: (T & Omit<LanguageCatalogRow, keyof ServerLanguage>)[];
   /**
    * Languages this app offers for meetings that the server catalog has no active row for. Every
    * one of these is a picker entry that produces "Source language is not supported."
@@ -44,7 +45,9 @@ export function primarySubtag(code: string): string {
   return code.trim().toLowerCase().split("-")[0] ?? "";
 }
 
-export function compareLanguageCatalog(server: ServerLanguage[]): LanguageCatalogComparison {
+export function compareLanguageCatalog<T extends ServerLanguage>(
+  server: T[],
+): LanguageCatalogComparison<T> {
   const app = SUPPORTED_LANGUAGES.map((language) => ({
     key: primarySubtag(language.code),
     name: language.name,
@@ -53,7 +56,7 @@ export function compareLanguageCatalog(server: ServerLanguage[]): LanguageCatalo
 
   const appByKey = new Map(app.map((entry) => [entry.key, entry]));
 
-  const rows: LanguageCatalogRow[] = server.map((language) => {
+  const rows = server.map((language) => {
     const match = appByKey.get(primarySubtag(language.code));
     return {
       ...language,

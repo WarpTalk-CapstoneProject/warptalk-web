@@ -1,0 +1,267 @@
+{
+  "gate": {
+    "noPermissionTitle": "Không thuộc vai trò của bạn",
+    "noPermissionBody": "Vai trò nhân sự của bạn ({role}) không bao gồm trang này. Hãy nhờ Super Admin nếu bạn cần.",
+    "goToAllowed": "Đến trang bạn được dùng"
+  },
+  "status": {
+    "active": "Đang hoạt động",
+    "suspended": "Đã tạm ngưng",
+    "accountDeactivated": "Tài khoản bị vô hiệu hoá"
+  },
+  "roleChoice": {
+    "allPermissions": "Toàn bộ quyền",
+    "permissionCount": "{count}/{total} quyền",
+    "current": "Vai trò hiện tại",
+    "beyondYou": "Cấp những quyền mà chính bạn không có"
+  },
+  "reasonDialog": {
+    "reasonLabel": "Lý do (ghi vào nhật ký kiểm toán)",
+    "reasonPlaceholder": "Vì sao thực hiện thao tác này?",
+    "reasonTooShort": "Viết ít nhất {count} ký tự. Lý do là bằng chứng duy nhất cho thao tác này.",
+    "genericError": "Không có gì thay đổi. Máy chủ đã từ chối hoặc không ghi được vào nhật ký kiểm toán.",
+    "back": "Quay lại"
+  },
+  "invite": {
+    "title": "Mời nhân viên",
+    "description": "Địa chỉ đã có tài khoản WarpTalk sẽ được cấp quyền ngay. Địa chỉ khác sẽ nhận lời mời, có hiệu lực khi đăng nhập lần đầu bằng địa chỉ đó (đã xác minh) trong vòng 7 ngày.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "ten@warptalk.vn",
+    "roleLabel": "Vai trò",
+    "noteLabel": "Ghi chú (không bắt buộc, ghi vào nhật ký kiểm toán)",
+    "notePlaceholder": "Nhân viên hỗ trợ mới bắt đầu thứ Hai",
+    "invalidEmail": "Nhập địa chỉ email hợp lệ.",
+    "chooseRole": "Chọn một vai trò.",
+    "grantedToast": "{email} đã có quyền nhân sự.",
+    "invitedToast": "Đã gửi lời mời tới {email}.",
+    "emailNotSent": "Không gửi được email. Quyền vẫn có hiệu lực; hãy báo trực tiếp cho họ.",
+    "genericError": "Chưa tạo được lời mời.",
+    "cancel": "Huỷ",
+    "sending": "Đang mời…",
+    "send": "Mời"
+  },
+  "changeRole": {
+    "title": "Đổi vai trò của {name}",
+    "description": "Có hiệu lực trên mọi dịch vụ trong vòng 30 giây. Lần đăng nhập kế tiếp sẽ hiển thị vai trò mới.",
+    "chooseRole": "Chọn một vai trò khác.",
+    "doneToast": "Đã đổi vai trò của {name}.",
+    "saving": "Đang lưu…",
+    "save": "Đổi vai trò"
+  },
+  "staff": {
+    "eyebrow": "Nhân sự",
+    "title": "Nhân viên",
+    "description": "Những người vận hành WarpTalk, vai trò của từng người và lần gần nhất họ dùng cổng quản trị.",
+    "refresh": "Làm mới",
+    "invite": "Mời nhân viên",
+    "filterLabel": "Lọc nhân viên theo trạng thái",
+    "statusTabs": {
+      "all": "Tất cả ({count})",
+      "active": "Đang hoạt động ({count})",
+      "suspended": "Đã tạm ngưng ({count})"
+    },
+    "filters": {
+      "role": "Vai trò",
+      "lastActive": "Hoạt động gần nhất",
+      "lastActiveOptions": {
+        "7d": "Trong 7 ngày qua",
+        "30d": "Trong 30 ngày qua",
+        "90d": "Trong 90 ngày qua",
+        "inactive30d": "Không hoạt động trong 30 ngày",
+        "never": "Chưa bao giờ"
+      }
+    },
+    "columns": {
+      "person": "Người",
+      "role": "Vai trò",
+      "status": "Trạng thái",
+      "lastActive": "Hoạt động gần nhất",
+      "lastSignIn": "Đăng nhập gần nhất",
+      "added": "Ngày thêm",
+      "actions": "Thao tác"
+    },
+    "you": "(bạn)",
+    "never": "Chưa bao giờ",
+    "source": {
+      "migrated": "Quản trị hệ thống cũ",
+      "invited": "Được mời",
+      "invitation_accepted": "Đã nhận lời mời",
+      "legacy_bridge": "Quản trị hệ thống cũ"
+    },
+    "searchPlaceholder": "Tìm theo tên, email hoặc vai trò",
+    "count": "{count} nhân viên",
+    "sort": {
+      "name": "Tên",
+      "email": "Email",
+      "role": "Vai trò",
+      "lastActive": "Hoạt động gần nhất",
+      "lastSignIn": "Đăng nhập gần nhất",
+      "created": "Ngày thêm"
+    },
+    "emptyTitle": "Không có nhân viên phù hợp",
+    "emptyDescription": "Xoá tìm kiếm hoặc bộ lọc để xem tất cả.",
+    "invitations": {
+      "title": "Lời mời đang chờ",
+      "description": "Các địa chỉ chưa có tài khoản WarpTalk. Mỗi lời mời có hiệu lực ở lần đăng nhập đã xác minh đầu tiên.",
+      "expired": "Đã hết hạn",
+      "expires": "Hết hạn {date}",
+      "revoke": "Thu hồi"
+    },
+    "menu": {
+      "open": "Thao tác cho {name}",
+      "activity": "Xem hoạt động",
+      "changeRole": "Đổi vai trò",
+      "suspend": "Tạm ngưng",
+      "reactivate": "Kích hoạt lại",
+      "remove": "Gỡ quyền nhân sự"
+    }
+  },
+  "actions": {
+    "suspend": {
+      "title": "Tạm ngưng quyền nhân sự",
+      "description": "Họ giữ tài khoản WarpTalk nhưng mất quyền vào cổng quản trị trên mọi dịch vụ trong vòng 30 giây. Có thể kích hoạt lại sau.",
+      "confirm": "Tạm ngưng",
+      "pending": "Đang tạm ngưng…",
+      "done": "Đã tạm ngưng {name}."
+    },
+    "reactivate": {
+      "title": "Kích hoạt lại quyền nhân sự",
+      "description": "Vai trò của họ có hiệu lực lại trên mọi dịch vụ trong vòng 30 giây.",
+      "confirm": "Kích hoạt lại",
+      "pending": "Đang kích hoạt…",
+      "done": "Đã kích hoạt lại {name}."
+    },
+    "remove": {
+      "title": "Gỡ quyền nhân sự",
+      "description": "Tài khoản vẫn còn; chỉ quyền nhân sự bị gỡ. Nhật ký kiểm toán giữ lại mọi việc họ đã làm.",
+      "confirm": "Gỡ quyền",
+      "pending": "Đang gỡ…",
+      "done": "{name} không còn là nhân viên."
+    },
+    "revoke": {
+      "title": "Thu hồi lời mời",
+      "description": "Địa chỉ này sẽ không được cấp quyền nhân sự khi đăng nhập.",
+      "confirm": "Thu hồi",
+      "pending": "Đang thu hồi…",
+      "done": "Đã thu hồi lời mời gửi {email}."
+    }
+  },
+  "roleEditor": {
+    "viewTitle": "Vai trò",
+    "editTitle": "Sửa vai trò",
+    "createTitle": "Vai trò mới",
+    "builtInDescription": "Không thể sửa vai trò mặc định. Hãy nhân bản để tạo vai trò tuỳ chỉnh có thể sửa.",
+    "ownRoleDescription": "Đây là vai trò của chính bạn nên bạn không thể sửa. Hãy nhờ quản trị viên khác.",
+    "description": "Chọn những gì người giữ vai trò này được xem và làm. Bạn chỉ cấp được những quyền mà chính bạn có.",
+    "nameLabel": "Tên",
+    "namePlaceholder": "Hỗ trợ cấp 2",
+    "descriptionLabel": "Dùng để làm gì",
+    "descriptionPlaceholder": "Xử lý các ca cần thao tác trên tài khoản",
+    "superAdminNote": "Super Admin có mọi quyền, kể cả các quyền được thêm sau này.",
+    "matrixPermission": "Quyền",
+    "matrixGranted": "Được cấp",
+    "clearArea": "Bỏ chọn nhóm",
+    "selectArea": "Chọn cả nhóm",
+    "kindView": "Xem",
+    "kindChange": "Sửa",
+    "notGrantable": "Bạn không có quyền này",
+    "nameRequired": "Hãy đặt tên cho vai trò.",
+    "permissionsRequired": "Chọn ít nhất một quyền.",
+    "savedToast": "Đã lưu {name}.",
+    "createdToast": "Đã tạo {name}.",
+    "genericError": "Chưa lưu được vai trò.",
+    "duplicate": "Nhân bản",
+    "close": "Đóng",
+    "cancel": "Huỷ",
+    "saving": "Đang lưu…",
+    "save": "Lưu",
+    "create": "Tạo vai trò"
+  },
+  "areas": {
+    "workspaces": "Không gian làm việc",
+    "accounts": "Tài khoản",
+    "meetings": "Cuộc họp",
+    "billing": "Thanh toán",
+    "finance": "Tài chính",
+    "plugins": "Plugin",
+    "content": "Nội dung",
+    "glossary": "Thuật ngữ",
+    "settings": "Cài đặt",
+    "operations": "Vận hành",
+    "inbox": "Hộp việc",
+    "audit": "Kiểm toán",
+    "staff": "Nhân sự",
+    "assistant": "WarpBot"
+  },
+  "holders": {
+    "loading": "Đang tải…",
+    "error": "Không tải được danh sách người có quyền này.",
+    "roles": "{count} vai trò cấp quyền này",
+    "members": "{count} người có quyền này",
+    "nobody": "Hiện chưa ai có quyền này.",
+    "openStaff": "Mở trang Nhân viên"
+  },
+  "roles": {
+    "eyebrow": "Nhân sự",
+    "title": "Vai trò",
+    "description": "Mỗi vai trò nhân sự được xem và làm gì. Vai trò mặc định chỉ đọc; hãy nhân bản để tạo vai trò tuỳ chỉnh.",
+    "create": "Tạo vai trò",
+    "viewLabel": "Vai trò hoặc quyền",
+    "views": {
+      "roles": "Vai trò",
+      "permissions": "Quyền"
+    },
+    "filters": {
+      "kind": "Loại",
+      "builtIn": "Mặc định",
+      "custom": "Tuỳ chỉnh"
+    },
+    "columns": {
+      "role": "Vai trò",
+      "permissions": "Quyền",
+      "members": "Số người",
+      "updated": "Cập nhật",
+      "actions": "Thao tác"
+    },
+    "builtIn": "Mặc định",
+    "custom": "Tuỳ chỉnh",
+    "all": "Tất cả",
+    "permissionCount": "{count}/{total}",
+    "pendingInvites": "{count} lời mời",
+    "menu": {
+      "open": "Thao tác cho {name}",
+      "edit": "Sửa",
+      "view": "Xem",
+      "duplicate": "Nhân bản",
+      "delete": "Xoá",
+      "deleteInUse": "Đang được dùng, không thể xoá"
+    },
+    "duplicatedToast": "Đã tạo {name}. Hãy sửa bên dưới.",
+    "duplicateError": "Chưa nhân bản được vai trò.",
+    "permissionColumns": {
+      "permission": "Quyền",
+      "roles": "Vai trò",
+      "members": "Số người",
+      "who": "Người có quyền"
+    },
+    "whoHasIt": "Ai có quyền",
+    "searchPlaceholder": "Tìm vai trò",
+    "count": "{count} vai trò",
+    "sort": {
+      "name": "Tên",
+      "permissions": "Số quyền",
+      "members": "Số người",
+      "updated": "Cập nhật gần nhất"
+    },
+    "emptyTitle": "Chưa có vai trò",
+    "emptyFilteredTitle": "Không có vai trò phù hợp",
+    "emptyDescription": "Xoá tìm kiếm hoặc bộ lọc để xem mọi vai trò.",
+    "deleteDialog": {
+      "title": "Xoá {name}",
+      "description": "Chỉ xoá được vai trò không ai giữ. Vai trò sẽ biến mất khỏi danh sách; nhật ký kiểm toán vẫn giữ lịch sử.",
+      "confirm": "Xoá vai trò",
+      "pending": "Đang xoá…",
+      "done": "Đã xoá {name}."
+    }
+  }
+}

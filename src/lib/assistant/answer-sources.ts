@@ -25,7 +25,9 @@ export type AnswerSourceKind =
   | "knowledge"
   | "meeting"
   | "transcript"
-  | "web";
+  | "web"
+  /** Platform-scope WarpBot only: a page of the admin portal; `ref` is its /admin path. */
+  | "admin";
 
 const KNOWN_KINDS: readonly AnswerSourceKind[] = [
   "document",
@@ -34,6 +36,7 @@ const KNOWN_KINDS: readonly AnswerSourceKind[] = [
   "meeting",
   "transcript",
   "web",
+  "admin",
 ];
 
 export interface AnswerSource {
@@ -53,6 +56,7 @@ export const SOURCE_KIND_LABEL: Record<AnswerSourceKind, string> = {
   meeting: "Meeting",
   transcript: "Transcript",
   web: "Web",
+  admin: "Admin page",
 };
 
 export function parseAnswerSources(
@@ -127,11 +131,26 @@ export function answerSourceHref(
     }
   }
 
+  if (source.kind === "admin") {
+    return isAdminPath(source.ref) ? source.ref : null;
+  }
+
   if (source.kind === "document" && workspaceSlug && isUuid(source.ref)) {
     return `/${workspaceSlug}/documents/${source.ref}`;
   }
 
   return null;
+}
+
+/**
+ * An admin chip links only to a same-origin /admin path. The ref came out of a model's tool
+ * result, so "//evil.test", "/admin/../x" or a backslash trick must never become an href: the
+ * path has to start with /admin, carry no scheme or authority, and climb no directories.
+ */
+const ADMIN_PATH = /^\/admin(?:[/?#][^\s\\]*)?$/;
+
+export function isAdminPath(value: string): boolean {
+  return ADMIN_PATH.test(value) && !value.startsWith("//") && !value.includes("..");
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

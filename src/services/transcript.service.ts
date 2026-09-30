@@ -6,6 +6,7 @@ import type {
   CreateTranscriptRequest,
   PagedResult,
   ProcessAudioChunkRequest,
+  TranscriptCleanSentenceDto,
   TranscriptCorrectionDto,
   TranscriptDto,
   TranscriptExportDto,
@@ -59,6 +60,17 @@ export const transcriptService = {
 
   segments(id: string, params?: { skip?: number; take?: number }) {
     return apiClient.get<PagedResult<TranscriptSegmentDto>>(API.transcripts.segments(id), { params });
+  },
+
+  /**
+   * WT-716 tier 2: whole sentences merged across the segments they were said in. Same access rule
+   * as `segments` (401/403/404). The realtime event can deliver a newer revision than this read
+   * returned (and the read can land after the event), which is why callers upsert by revision.
+   */
+  cleanSentences(id: string, params?: { skip?: number; take?: number }) {
+    return apiClient.get<PagedResult<TranscriptCleanSentenceDto>>(API.transcripts.cleanSentences(id), {
+      params,
+    });
   },
 
   translations(id: string, params?: { skip?: number; take?: number }) {

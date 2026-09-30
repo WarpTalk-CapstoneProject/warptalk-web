@@ -1,0 +1,118 @@
+{
+  "heading": "セキュリティ",
+  "subheading": "誰がこのワークスペースにアクセスでき、誰が内部の人と見なされ、何が文字起こしに残るかを設定します。",
+  "accessDenied": {
+    "title": "アクセス拒否",
+    "description": "ワークスペースのオーナーと管理者のみがセキュリティ設定を表示できます。"
+  },
+  "loadError": {
+    "title": "セキュリティ設定を読み込めませんでした",
+    "description": "このワークスペースのものではない既定値を表示するのではなく、何も表示していません。再試行し、それでも失敗する場合はワークスペースサービスに到達できるか確認してください。",
+    "retrying": "再試行中…",
+    "retry": "再試行"
+  },
+  "toasts": {
+    "saveFailed": "セキュリティ設定の保存に失敗しました。",
+    "keywordExists": "そのキーワードは既にリストにあります。",
+    "transferSuccess": "ワークスペースの所有権を正常に移譲しました。",
+    "transferFailed": "所有権の移譲に失敗しました。",
+    "confirmNameMismatch": "確認名がワークスペース名と一致しません。",
+    "deleteSuccess": "ワークスペースを削除しました。",
+    "deleteFailed": "ワークスペースの削除に失敗しました。"
+  },
+  "membership": {
+    "heading": "メンバーシップ",
+    "howDecided": "内部メンバーシップの決め方",
+    "decidedByDomain": "検証済みドメインで決定されます — {domains}。これらのドメインのアドレスのみが内部メンバーとして招待できます。",
+    "assignedByHand": "手動で割り当てます。招待する人ごとに内部か外部かを選択します。",
+    "domainVerified": "ドメイン検証済み",
+    "manual": "手動",
+    "verifiedDomains": "検証済みドメイン",
+    "ownerOnly": "オーナーのみ",
+    "verifiedDomainsHint": "これらのいずれかで招待された人は内部メンバーにできます。最後の1つを削除すると、メンバーシップは再び手動割り当てに戻ります。",
+    "noVerifiedDomains": "検証済みドメインはありません。ワークスペースのオーナーのみが追加できます。"
+  },
+  "access": {
+    "heading": "アクセス",
+    "allowExternalCollaboration": {
+      "label": "外部コラボレーションを許可",
+      "hint": "このワークスペース外の人がゲストとしてミーティングルームに参加できるようにします。"
+    },
+    "invitationExpiry": {
+      "label": "招待の有効期限",
+      "hint": "ワークスペース招待リンクが失効するまでの日数(1〜365日)です。"
+    }
+  },
+  "dataProtection": {
+    "heading": "データ保護",
+    "redactPii": {
+      "label": "個人情報(PII)を編集",
+      "hint": "文字起こしが保存または翻訳される前に、メールアドレス、電話番号、ID番号などの機密識別情報を検出してマスクします。"
+    },
+    "restrictedKeywords": {
+      "label": "制限キーワード(DLP)",
+      "hint": "ミーティングがリアルタイムで翻訳されている間、指定した用語にフラグを立てるかブロックします。"
+    },
+    "keywordList": {
+      "label": "キーワードリスト",
+      "hint": "ここにある単語はすべて、文字起こしされる各行に対してチェックされます。",
+      "placeholder": "キーワードを入力(例: 機密、社内限定)",
+      "addKeyword": "キーワードを追加",
+      "noKeywords": "制限キーワードは設定されていません。"
+    }
+  },
+  "management": {
+    "heading": "ワークスペース管理",
+    "transferOwnership": {
+      "label": "所有権を移譲",
+      "hint": "このワークスペースを別の内部メンバーに引き渡します。あなたは管理者になり、後で自分でこれを取り消すことはできません。",
+      "button": "移譲"
+    },
+    "deleteWorkspace": {
+      "label": "ワークスペースを削除",
+      "hint": "すべてのメンバーシップが即座に終了します。ミーティング、ドキュメント、用語集も一緒に削除されます。これは取り消せません。",
+      "button": "削除"
+    }
+  },
+  "transferDialog": {
+    "title": "ワークスペースの所有権を移譲",
+    "description": "新しいオーナーになるメンバーを選択してください。<strong>警告:</strong> あなたは管理者に降格され、この操作を取り消すことはできません。",
+    "selectLabel": "新しいオーナーを選択",
+    "choosePlaceholder": "メンバーを選択...",
+    "confirmWarning": "この人は即座にオーナーになり、あなたは管理者になります。確認のためフルネームを入力してください。",
+    "cancel": "キャンセル",
+    "confirm": "移譲を確定"
+  },
+  "deleteDialog": {
+    "title": "ワークスペースを削除",
+    "description": "これは取り消せません。<name></name>と、ドキュメント、メンバー、用語集を含む関連するすべてのデータが完全に削除されます。",
+    "confirmLabel": "確認のため<name></name>と入力してください。",
+    "cancel": "キャンセル",
+    "confirm": "ワークスペースを削除"
+  },
+  "verifiedDomainsManager": {
+    "dnsDisclaimer": "WarpTalkはDNSを確認しません。ここに記載された各ドメインは、あなたの組織がそのドメインを所有しているという主張です — そこで招待された人は内部メンバーにできます。",
+    "domainPlaceholder": "ドメインを入力(例: company.com)",
+    "addDomain": "ドメインを追加",
+    "loadingDomains": "ドメインを読み込み中…",
+    "noDomains": "検証済みドメインはありません。追加されるまでは、招待時に内部と外部を手動で割り当てます。",
+    "selfAsserted": "自己申告",
+    "ownerEmail": "オーナーのメール",
+    "selfAssertedTitle": "ワークスペースのオーナーによる申告です。DNSに対して検証されていません。",
+    "ownerEmailTitle": "ワークスペースのオーナー自身のメールドメインと一致します。",
+    "revokeTitle": "{domain}を取り消す",
+    "selfAssertedConsentIntro": "WarpTalkはドメインの所有権を検証しません。{domain}を追加すると、あなたの組織がこのドメインを所有しているという主張が記録されます。",
+    "selfAssertedConsentConfirm": "あなたの組織が{domain}を所有していること、そして@{domain}のアドレスで招待された人は誰でも内部メンバーとして割り当てられる可能性があることを理解していることを確認してください。",
+    "lastDomainRevokeIntro": "{domain}はこのワークスペースの最後の検証済みドメインです。",
+    "lastDomainRevokeDetail": "これを取り消すと、メールドメインによるメンバーシップの決定が停止します。以降は招待時に内部と外部を手動で割り当てます。既に内部のメンバーはアクセス権を維持します。",
+    "toasts": {
+      "invalidFormat": "ドメインの形式が無効です。",
+      "publicDomainRefused": "公開メールドメインは会社ドメインとして検証できません。",
+      "alreadyAdded": "そのドメインは既に追加されています。",
+      "added": "{domain}は検証済みドメインになりました。",
+      "addFailed": "検証済みドメインの追加に失敗しました。",
+      "revoked": "{domain}は検証済みドメインではなくなりました。",
+      "revokeFailed": "検証済みドメインの取り消しに失敗しました。"
+    }
+  }
+}

@@ -47,6 +47,7 @@ export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHist
     createdAt: artifact.createdAt,
     updatedAt: artifact.updatedAt ?? null,
     recordingStartedAt: artifact.recordingStartedAt ?? null,
+    failureReason: artifact.failureReason ?? null,
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
     // Not "granted". The DTO says consent is REQUIRED, never that it was given — see
@@ -157,6 +158,8 @@ export const roomHistoryService = {
     status?: "ended" | "cancelled";
     /** Server-side search over the whole archive, not just the loaded page. */
     search?: string;
+    /** "mine" narrows an Owner/Admin to their own meetings — see translationRoomService.history. */
+    scope?: "mine";
   }): Promise<RoomHistoryResponse> {
     const page = options.page && options.page > 0 ? Math.floor(options.page) : 1;
     const pageSize = options.pageSize ?? ROOM_HISTORY_PAGE_SIZE;
@@ -174,6 +177,7 @@ export const roomHistoryService = {
       search: options.search?.trim() || undefined,
       page,
       pageSize,
+      scope: options.scope,
     });
     const rooms = data.rooms.map(mapHistoryItem);
 

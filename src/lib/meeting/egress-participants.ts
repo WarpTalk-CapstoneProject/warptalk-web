@@ -33,3 +33,24 @@ export function isRecordableParticipant(identity: string | null | undefined): bo
   if (!identity) return false;
   return !AI_PARTICIPANT_PREFIXES.some((prefix) => identity.startsWith(prefix));
 }
+
+/**
+ * What to print under a recorded participant's tile.
+ *
+ * `RemoteParticipant.name` carries the real display name today — `LiveKitTokenService.GenerateToken`
+ * embeds it as the JWT's `name` claim, and `MeetingRoomService` resolves it from the caller's own
+ * display name (or the translation room's roster) before minting the token, falling back to the
+ * literal string "Participant" only when neither is available. That fallback, and a guest who
+ * somehow reaches the room with an empty name claim, are the two cases this function exists for:
+ * the LiveKit identity (a stable id, never blank) reads better on a recording than an empty label.
+ *
+ * Mirrors the fallback `meeting-stage.tsx` already uses for the live UI
+ * (`trackRef.participant.name || identity || fallbackName`) so the recording names people the same
+ * way the meeting itself does.
+ */
+export function resolveEgressDisplayName(
+  name: string | null | undefined,
+  identity: string | null | undefined,
+): string {
+  return name?.trim() || identity?.trim() || "Participant";
+}

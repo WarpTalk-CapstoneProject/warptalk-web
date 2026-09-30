@@ -104,7 +104,7 @@ assert.ok(
 // ---------------------------------------------------------------------------
 const SURFACES = [
   [
-    "src/app/(app)/[workspaceSlug]/artifacts/[roomId]/page.tsx",
+    "src/components/artifacts/artifact-record-header.tsx",
     "the record page's `CODE · host` line — the one in the bug report",
   ],
   [

@@ -160,6 +160,18 @@ export interface MeetingMinutesDto {
   content: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * What THIS viewer may do, decided by the server so the page never re-derives a permission.
+   *
+   * canEdit — host, workspace Owner/Admin, or the secretary the host assigned; false once approved.
+   * canDesignateSecretary — host authority, until somebody has signed.
+   * canApprove — host authority: approve, open an addendum, share.
+   *
+   * Optional because an older server does not send them; callers fall back to the host rule.
+   */
+  canEdit?: boolean;
+  canDesignateSecretary?: boolean;
+  canApprove?: boolean;
 }
 
 const EMPTY_ATTENDANCE: MinutesAttendance = {

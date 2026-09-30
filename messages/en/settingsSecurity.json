@@ -1,0 +1,118 @@
+{
+  "heading": "Security",
+  "subheading": "Who can reach this workspace, who counts as one of your own people, and what leaves it in a transcript.",
+  "accessDenied": {
+    "title": "Access Denied",
+    "description": "Only workspace Owners and Administrators can view security settings."
+  },
+  "loadError": {
+    "title": "Couldn't load security settings",
+    "description": "Nothing is shown rather than defaults that are not this workspace's. Retry, and if it keeps failing check that the workspace service is reachable.",
+    "retrying": "Retrying…",
+    "retry": "Retry"
+  },
+  "toasts": {
+    "saveFailed": "Failed to save security settings.",
+    "keywordExists": "Keyword already in the list.",
+    "transferSuccess": "Workspace ownership transferred successfully.",
+    "transferFailed": "Failed to transfer ownership.",
+    "confirmNameMismatch": "Confirmation name does not match workspace name.",
+    "deleteSuccess": "Workspace deleted successfully.",
+    "deleteFailed": "Failed to delete workspace."
+  },
+  "membership": {
+    "heading": "Membership",
+    "howDecided": "How internal membership is decided",
+    "decidedByDomain": "Decided by verified domain — {domains}. Only addresses on these domains can be invited as internal members.",
+    "assignedByHand": "Assigned by hand. You choose internal or external for each person you invite.",
+    "domainVerified": "Domain-verified",
+    "manual": "Manual",
+    "verifiedDomains": "Verified domains",
+    "ownerOnly": "Owner only",
+    "verifiedDomainsHint": "Anyone invited on one of these can be made an internal member. Removing the last one puts membership back to being assigned by hand.",
+    "noVerifiedDomains": "No verified domains. Only the workspace owner can add one."
+  },
+  "access": {
+    "heading": "Access",
+    "allowExternalCollaboration": {
+      "label": "Allow external collaboration",
+      "hint": "Let people outside this workspace join meeting rooms as guests."
+    },
+    "invitationExpiry": {
+      "label": "Invitation expiry",
+      "hint": "Days before a workspace invitation link expires (1 - 365 days)."
+    }
+  },
+  "dataProtection": {
+    "heading": "Data protection",
+    "redactPii": {
+      "label": "Redact personal information (PII)",
+      "hint": "Detect and mask sensitive identifiers — emails, phone numbers, ID numbers — before a transcript is stored or translated."
+    },
+    "restrictedKeywords": {
+      "label": "Restricted keywords (DLP)",
+      "hint": "Flag or block designated terms while a meeting is being translated live."
+    },
+    "keywordList": {
+      "label": "Keyword list",
+      "hint": "Every word here is checked against each line as it is transcribed.",
+      "placeholder": "Enter keyword (e.g., Confidential, Internal-Only)",
+      "addKeyword": "Add keyword",
+      "noKeywords": "No restricted keywords configured."
+    }
+  },
+  "management": {
+    "heading": "Workspace management",
+    "transferOwnership": {
+      "label": "Transfer ownership",
+      "hint": "Hand this workspace to another internal member. You become an Admin, and cannot undo this yourself afterwards.",
+      "button": "Transfer"
+    },
+    "deleteWorkspace": {
+      "label": "Delete workspace",
+      "hint": "Ends every membership immediately. Meetings, documents and glossaries go with it. This cannot be undone.",
+      "button": "Delete"
+    }
+  },
+  "transferDialog": {
+    "title": "Transfer workspace ownership",
+    "description": "Select a member to become the new owner. <strong>Warning:</strong> you will be demoted to Admin and cannot undo this action.",
+    "selectLabel": "Select new owner",
+    "choosePlaceholder": "Choose a member...",
+    "confirmWarning": "This person becomes Owner immediately; you become Admin. Type their full name to confirm.",
+    "cancel": "Cancel",
+    "confirm": "Confirm transfer"
+  },
+  "deleteDialog": {
+    "title": "Delete workspace",
+    "description": "This cannot be undone. It permanently deletes <name></name> and all associated data including documents, members and glossaries.",
+    "confirmLabel": "Please type <name></name> to confirm.",
+    "cancel": "Cancel",
+    "confirm": "Delete workspace"
+  },
+  "verifiedDomainsManager": {
+    "dnsDisclaimer": "WarpTalk does not check DNS. Each domain listed here is your organization's assertion that it owns that domain — anyone invited on it can be made an internal member.",
+    "domainPlaceholder": "Enter a domain (e.g., company.com)",
+    "addDomain": "Add domain",
+    "loadingDomains": "Loading domains…",
+    "noDomains": "No verified domains. Until one is added, you assign internal and external membership by hand when inviting.",
+    "selfAsserted": "Self-asserted",
+    "ownerEmail": "Owner email",
+    "selfAssertedTitle": "Asserted by the workspace owner. Not verified against DNS.",
+    "ownerEmailTitle": "Matches the workspace owner's own email domain.",
+    "revokeTitle": "Revoke {domain}",
+    "selfAssertedConsentIntro": "WarpTalk does not verify domain ownership. Adding {domain} records your organization's assertion that it owns this domain.",
+    "selfAssertedConsentConfirm": "Confirm that your organization owns {domain}, and that you understand anyone invited with an @{domain} address can be assigned Internal membership.",
+    "lastDomainRevokeIntro": "{domain} is the last verified domain for this workspace.",
+    "lastDomainRevokeDetail": "Revoking it stops membership being decided by email domain: from then on you assign Internal and External by hand when inviting. Members who are already Internal keep their access.",
+    "toasts": {
+      "invalidFormat": "Invalid domain format.",
+      "publicDomainRefused": "Public email domains cannot be verified as company domains.",
+      "alreadyAdded": "Domain already added.",
+      "added": "{domain} is now a verified domain.",
+      "addFailed": "Failed to add verified domain.",
+      "revoked": "{domain} is no longer a verified domain.",
+      "revokeFailed": "Failed to revoke verified domain."
+    }
+  }
+}

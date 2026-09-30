@@ -2,6 +2,8 @@
 
 This document tracks the host history UI at `/history`.
 
+> **Superseded.** `/history` is gone. The workspace's transcripts, summaries and minutes live at `/{workspaceSlug}/artifacts`; see [artifacts-library.md](./artifacts-library.md).
+
 ## Current Behavior
 
 - `/history` has been converted to the shadcn dashboard style: stat cards, search, status tabs, ended-room list, selected transcript preview, artifact cards, and detail sidebar.

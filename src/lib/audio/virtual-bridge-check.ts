@@ -16,15 +16,46 @@
  * tick that means less than it appears to.
  */
 
-/** Names as CoreAudio reports them, which is also what the Meet device picker shows. */
-export const OUTBOUND_DEVICE_LABEL = "BlackHole 2ch";
-export const INBOUND_DEVICE_LABEL = "BlackHole 16ch";
+/**
+ * Names as CoreAudio reports them, which is also what the Meet device picker shows.
+ *
+ * WarpTalk's own macOS devices: BlackHole's source built under WarpTalk's names by the desktop
+ * app (warptalk-desktop/scripts/build-mac-audio-driver.sh) and installed from inside it.
+ */
+export const OUTBOUND_DEVICE_LABEL = "WarpTalk Microphone";
+export const INBOUND_DEVICE_LABEL = "WarpTalk Speaker";
+
+/** Upstream BlackHole, which every Mac set up before the rename has, and which still works. */
+export const LEGACY_OUTBOUND_DEVICE_LABEL = "BlackHole 2ch";
+export const LEGACY_INBOUND_DEVICE_LABEL = "BlackHole 16ch";
 
 /** Windows exposes the free VB-CABLE as two endpoints with opposite names.
  * WarpTalk writes to CABLE Input; the meeting app reads that signal as CABLE Output.
  */
 export const WINDOWS_OUTBOUND_SINK_LABEL = "CABLE Input (VB-Audio Virtual Cable)";
 export const WINDOWS_OUTBOUND_CAPTURE_LABEL = "CABLE Output (VB-Audio Virtual Cable)";
+
+/**
+ * The second free cable on Windows, which carries the far side back: Google Meet plays into Hi-Fi
+ * Cable Input and WarpTalk records Hi-Fi Cable Output. Same opposite-names shape as VB-CABLE.
+ *
+ * WHY A SECOND CABLE WHEN LOOPBACK EXISTS
+ *   Process loopback takes the whole browser, so every other audible tab reaches the pipeline as
+ *   the far side's speech, and the host hears Meet and the dub stacked with no way to lower one.
+ *   Pointing Meet's own speaker picker at a cable scopes the capture to the Meet tab, and hands the
+ *   host's ears to WarpTalk, which can then duck the original under the translation.
+ *
+ * WHY THESE ARE SHORTER THAN THE VB-CABLE NAMES
+ *   Matched as a substring, and without the "(VB-Audio …)" suffix on purpose: the exact suffix this
+ *   driver reports on Windows 10/11 has not been checked on a real machine. The stem alone cannot
+ *   collide with VB-CABLE — "hi-fi cable output" is not inside "cable output (vb-audio virtual
+ *   cable)", and the full VB-CABLE names are not inside these.
+ */
+export const WINDOWS_INBOUND_SINK_LABEL = "Hi-Fi Cable Input";
+export const WINDOWS_INBOUND_CAPTURE_LABEL = "Hi-Fi Cable Output";
+
+/** Where both free Windows cables are published. */
+export const WINDOWS_CABLES_DOWNLOAD_PAGE = "https://vb-audio.com/Cable/";
 
 /**
  * Four names, because a device has a different name depending on who is being told about it.
@@ -50,19 +81,28 @@ export type BridgeDeviceLabels = {
   meetMicrophone: string;
   /** What the user selects as the meeting app's SPEAKER, or null where they change nothing. */
   meetSpeaker: string | null;
+  /**
+   * Whether the bridge still hears the far side when the inbound device is absent.
+   *
+   * True on Windows only: without Hi-Fi Cable, process loopback takes over. A missing inbound
+   * device there costs scope, not a direction, so it must not block the wizard — and the user must
+   * not be told to point Meet's speaker at a device that is not installed, which would make the
+   * call inaudible.
+   */
+  inboundOptional: boolean;
+  /** Which install instructions apply. The device names alone cannot say it without re-parsing. */
+  platform: "windows" | "macos";
 };
 
 export function bridgeDeviceLabelsForPlatform(platform: string): BridgeDeviceLabels {
   if (/windows|win32|win64/i.test(platform)) {
     return {
       outboundSink: WINDOWS_OUTBOUND_SINK_LABEL,
-      // The free VB-CABLE has one cable. Windows captures the far side with process loopback.
-      inboundCapture: null,
+      inboundCapture: WINDOWS_INBOUND_CAPTURE_LABEL,
       meetMicrophone: WINDOWS_OUTBOUND_CAPTURE_LABEL,
-      // Nothing to change: process loopback reads the browser's own output, so the user keeps
-      // their real speakers and can still hear the meeting. Telling them to point Meet at a
-      // virtual device here would make the call inaudible for no gain.
-      meetSpeaker: null,
+      meetSpeaker: WINDOWS_INBOUND_SINK_LABEL,
+      inboundOptional: true,
+      platform: "windows",
     };
   }
 
@@ -71,6 +111,8 @@ export function bridgeDeviceLabelsForPlatform(platform: string): BridgeDeviceLab
     inboundCapture: INBOUND_DEVICE_LABEL,
     meetMicrophone: OUTBOUND_DEVICE_LABEL,
     meetSpeaker: INBOUND_DEVICE_LABEL,
+    inboundOptional: false,
+    platform: "macos",
   };
 }
 
@@ -88,6 +130,31 @@ export function currentBridgeDeviceLabels(): BridgeDeviceLabels {
   }
 
   return bridgeDeviceLabelsForPlatform(`${navigator.userAgent} ${navigator.platform}`);
+}
+
+/**
+ * The labels for the devices this Mac actually has, when it was set up with BlackHole.
+ *
+ * The pair is swapped as a pair, and only when WarpTalk's own outbound device is absent and
+ * BlackHole's is present: a Mac with both keeps WarpTalk's names, and a Mac with neither is told
+ * the new ones. Swapping one leg alone would route the dub into one driver while telling the user
+ * to pick the other driver's device in Meet.
+ */
+export function resolveBridgeDeviceLabels(
+  labels: BridgeDeviceLabels,
+  availableDeviceLabels: readonly string[],
+): BridgeDeviceLabels {
+  if (labels.platform !== "macos") return labels;
+  const has = (label: string) =>
+    availableDeviceLabels.some((available) => available.toLowerCase().includes(label.toLowerCase()));
+  if (has(OUTBOUND_DEVICE_LABEL) || !has(LEGACY_OUTBOUND_DEVICE_LABEL)) return labels;
+  return {
+    ...labels,
+    outboundSink: LEGACY_OUTBOUND_DEVICE_LABEL,
+    inboundCapture: LEGACY_INBOUND_DEVICE_LABEL,
+    meetMicrophone: LEGACY_OUTBOUND_DEVICE_LABEL,
+    meetSpeaker: LEGACY_INBOUND_DEVICE_LABEL,
+  };
 }
 
 /** Well clear of speech formants and of mains hum, so a false pass is unlikely. */
@@ -111,6 +178,8 @@ export interface DeviceProbe {
   carriesSignal: boolean | null;
   /** Set when the probe could not be run at all, as opposed to running and failing. */
   error?: string;
+  /** Absent is acceptable for this leg; see `BridgeDeviceLabels.inboundOptional`. */
+  optional?: boolean;
 }
 
 export interface BridgeCheckResult {
@@ -122,6 +191,11 @@ export interface BridgeCheckResult {
    * before that reports everything absent. Callers prompt instead of showing a false negative.
    */
   needsPermission: boolean;
+  /**
+   * The names this check actually probed, after `resolveBridgeDeviceLabels`. Instructions should
+   * use these: on a Mac set up with BlackHole they name BlackHole, not devices that are not there.
+   */
+  labels?: BridgeDeviceLabels;
 }
 
 function findDeviceId(devices: MediaDeviceInfo[], label: string, kind: MediaDeviceKind): string | null {
@@ -154,7 +228,10 @@ export async function findBridgeDeviceIds(): Promise<{
     return { outboundDeviceId: null, inboundDeviceId: null };
   }
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const labels = currentBridgeDeviceLabels();
+  const labels = resolveBridgeDeviceLabels(
+    currentBridgeDeviceLabels(),
+    devices.map((device) => device.label),
+  );
   return {
     outboundDeviceId: findDeviceId(devices, labels.outboundSink, "audiooutput"),
     inboundDeviceId: labels.inboundCapture
@@ -238,42 +315,77 @@ async function probeLoopback(outputDeviceId: string, inputDeviceId: string): Pro
   }
 }
 
-export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
-  const labels = currentBridgeDeviceLabels();
-  const legs = labels.inboundCapture
-    ? [
-        {
-          leg: "outbound" as const,
-          expectedLabel: labels.outboundSink,
-          outputLabel: labels.outboundSink,
-          inputLabel: labels.outboundSink,
-        },
-        {
-          leg: "inbound" as const,
-          expectedLabel: labels.inboundCapture,
-          outputLabel: labels.inboundCapture,
-          inputLabel: labels.inboundCapture,
-        },
-      ]
-    : [
-        {
-          leg: "outbound" as const,
-          expectedLabel: WINDOWS_OUTBOUND_CAPTURE_LABEL,
-          outputLabel: labels.outboundSink,
-          inputLabel: WINDOWS_OUTBOUND_CAPTURE_LABEL,
-        },
-      ];
+export interface BridgeProbeLeg {
+  leg: BridgeLeg;
+  /** The name shown to the user: what they pick in the meeting app. */
+  expectedLabel: string;
+  /** The endpoint the probe tone is played INTO. */
+  outputLabel: string;
+  /** The endpoint the probe listens on. */
+  inputLabel: string;
+  optional: boolean;
+}
 
+/**
+ * Which endpoints each leg is probed across.
+ *
+ * A cable is played into on one name and read on the other. On macOS the two names coincide
+ * (BlackHole is one duplex device); on Windows they are opposite, so each leg is probed from the
+ * name WarpTalk or Meet writes into to the name the other side reads — the same pair the meeting
+ * itself uses.
+ */
+export function bridgeProbeLegs(labels: BridgeDeviceLabels): BridgeProbeLeg[] {
+  const legs: BridgeProbeLeg[] = [
+    {
+      leg: "outbound",
+      expectedLabel: labels.meetMicrophone,
+      outputLabel: labels.outboundSink,
+      inputLabel: labels.meetMicrophone,
+      optional: false,
+    },
+  ];
+  if (labels.inboundCapture) {
+    const sink = labels.meetSpeaker ?? labels.inboundCapture;
+    legs.push({
+      leg: "inbound",
+      expectedLabel: sink,
+      outputLabel: sink,
+      inputLabel: labels.inboundCapture,
+      optional: labels.inboundOptional,
+    });
+  }
+  return legs;
+}
+
+/**
+ * Every required leg carries sound, and an optional leg is either absent or carries sound too.
+ *
+ * An optional device that is present but silent is NOT acceptable: `findBridgeDeviceIds` will find
+ * it and route the far side through it, so a broken Hi-Fi Cable would silence the meeting rather
+ * than fall back to loopback.
+ */
+export function isBridgeCheckReady(probes: readonly DeviceProbe[]): boolean {
+  return probes.every(
+    (probe) => (probe.optional === true && !probe.present) || (probe.present && probe.carriesSignal === true),
+  );
+}
+
+export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const needsPermission = devices.every((device) => device.label === "");
+  const labels = resolveBridgeDeviceLabels(
+    currentBridgeDeviceLabels(),
+    devices.map((device) => device.label),
+  );
+  const legs = bridgeProbeLegs(labels);
 
   const probes: DeviceProbe[] = [];
-  for (const { leg, expectedLabel, outputLabel, inputLabel } of legs) {
+  for (const { leg, expectedLabel, outputLabel, inputLabel, optional } of legs) {
     const outputId = findDeviceId(devices, outputLabel, "audiooutput");
     const inputId = findDeviceId(devices, inputLabel, "audioinput");
 
     if (!outputId || !inputId) {
-      probes.push({ leg, expectedLabel, present: false, carriesSignal: null });
+      probes.push({ leg, expectedLabel, present: false, carriesSignal: null, optional });
       continue;
     }
 
@@ -283,6 +395,7 @@ export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
         expectedLabel,
         present: true,
         carriesSignal: await probeLoopback(outputId, inputId),
+        optional,
       });
     } catch (error) {
       probes.push({
@@ -291,13 +404,15 @@ export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
         present: true,
         carriesSignal: null,
         error: error instanceof Error ? error.message : String(error),
+        optional,
       });
     }
   }
 
   return {
     probes,
-    ready: probes.every((probe) => probe.present && probe.carriesSignal === true),
+    ready: isBridgeCheckReady(probes),
     needsPermission,
+    labels,
   };
 }

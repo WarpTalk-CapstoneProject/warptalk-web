@@ -184,6 +184,10 @@ export function monthsSpanning(from: Date, to: Date): Date[] {
 export const ROOM_STATUSES = [
   "scheduled",
   "waiting",
+  // WT-612 / WT-621. A room the clock opened is the one a user is most likely to be looking for,
+  // and a status the server does not hear about is a status whose rooms come back in no tab at
+  // all — the `EXPIRED`/`FAILED` omission above, repeated on a live meeting.
+  "open",
   "in_progress",
   "paused",
   "ended",
@@ -222,3 +226,22 @@ export const ALL_ROOM_STATUSES_FILTER = ROOM_STATUSES.map((status) => status.toU
 export function isMeetingOver(status: string): boolean {
   return OVER_ROOM_STATUSES.has(status);
 }
+
+/**
+ * The list endpoint's `status` filter for a surface that only wants meetings which can still
+ * happen — the home page's day panel and the dashboard's "up next" list.
+ *
+ * Derived from `ROOM_STATUSES` rather than typed out, because typing it out is what this whole
+ * section of the file is about: both callers spelled `SCHEDULED,WAITING,IN_PROGRESS,PAUSED` by
+ * hand (the dashboard by sending nothing at all and inheriting the server's default, which is the
+ * same four), and a status added to the enum — `OPEN`, WT-612 / WT-621 — would have been missing
+ * from both without either of them looking wrong.
+ *
+ * Declared after `isMeetingOver` on purpose: it runs the predicate at module load, and
+ * `OVER_ROOM_STATUSES` is a `const` that would still be in its temporal dead zone higher up.
+ */
+export const UNFINISHED_ROOM_STATUSES_FILTER = ROOM_STATUSES.filter(
+  (status) => !isMeetingOver(status),
+)
+  .map((status) => status.toUpperCase())
+  .join(",");

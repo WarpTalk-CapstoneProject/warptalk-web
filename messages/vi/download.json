@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "title": "Tải WarpTalk",
+    "description": "Tải ứng dụng WarpTalk cho máy tính trên macOS, Windows và Linux."
+  },
+  "navbar": {
+    "homeAria": "Trang chủ WarpTalk",
+    "home": "Trang chủ",
+    "login": "Đăng nhập",
+    "register": "Đăng ký",
+    "back": "Quay lại"
+  },
+  "hero": {
+    "title": "Tải WarpTalk",
+    "subtitle": "Có sẵn cho macOS, Windows và Linux.",
+    "version": "Phiên bản {version}",
+    "released": "Phát hành {date}",
+    "releaseNotes": "Ghi chú phát hành",
+    "viewReleases": "Xem các phiên bản",
+    "comingSoonNotice": "Bản dựng cho máy tính sẽ xuất hiện ở đây khi có phiên bản được phát hành."
+  },
+  "cta": {
+    "seeAllDownloads": "Xem tất cả bản tải",
+    "downloadFor": "Tải cho {platform}",
+    "alsoOn": "Cũng có trên",
+    "allDownloads": "Tất cả bản tải",
+    "platformJoiner": " và "
+  },
+  "assets": {
+    "sectionTitle": "WarpTalk Desktop",
+    "sectionDescription": "Trải nghiệm ứng dụng máy tính tập trung cho dịch trực tiếp, thu âm hệ thống và các quy trình họp bên ngoài trình duyệt.",
+    "download": "Tải xuống",
+    "comingSoon": "Sắp ra mắt"
+  },
+  "installNotes": {
+    "mac": {
+      "title": "Lần đầu mở trên macOS",
+      "summary": "WarpTalk đã được ký nhưng chưa được Apple công chứng (notarize), nên macOS sẽ yêu cầu bạn xác nhận trong lần mở đầu tiên.",
+      "steps": [
+        "Mở tệp WarpTalk .pkg đã tải về. macOS sẽ báo không thể xác minh tệp này không chứa mã độc — nhấn Done.",
+        "Mở System Settings › Privacy & Security, cuộn xuống mục Security và nhấn Open Anyway bên cạnh thông báo về WarpTalk. Tùy chọn này xuất hiện trong khoảng một giờ sau bước 1.",
+        "Xác nhận bằng Touch ID hoặc mật khẩu, sau đó chọn Open Anyway một lần nữa và làm theo trình cài đặt. Bước này cũng thêm thiết bị âm thanh WarpTalk Microphone và WarpTalk Speaker mà tính năng dịch Google Meet sử dụng — không cần cài đặt riêng.",
+        "Mở WarpTalk từ Applications. Các bản cập nhật sau đó sẽ tự động cài đặt."
+      ],
+      "footnote": "Gatekeeper vẫn được bật trong suốt quá trình — bạn chỉ đang cho phép riêng ứng dụng này, không phải tắt tính năng kiểm tra."
+    },
+    "windows": {
+      "title": "Cài đặt trên Windows",
+      "summary": "Trình cài đặt không có chứng chỉ ký mã, nên SmartScreen sẽ cảnh báo về nó. Điều này có thể xảy ra ở mọi bản phát hành mới, không chỉ lần đầu.",
+      "steps": [
+        "Chạy tệp WarpTalk Setup .exe. Windows sẽ hiện màn hình xanh “Windows protected your PC”.",
+        "Nhấn More info, ngay bên dưới thông báo đó.",
+        "Nhấn Run anyway, rồi tiếp tục quá trình cài đặt như bình thường.",
+        "Gần cuối, Windows sẽ hỏi quyền để thiết lập các thiết bị âm thanh cho Google Meet (VB-CABLE và Hi-Fi Cable của VB-Audio). Nhấn Yes — không cần cài đặt riêng."
+      ],
+      "footnote": "Trên máy tính do công ty hoặc trường học quản lý, SmartScreen có thể chặn hẳn tệp mà không có nút Run anyway. Trang này không thể vượt qua điều đó — hãy liên hệ người quản trị máy, hoặc dùng WarpTalk trực tiếp trên trình duyệt.",
+      "linkLabel": "Mở WarpTalk trên trình duyệt"
+    }
+  },
+  "footer": {
+    "copyright": "© {year} WarpTalk",
+    "releases": "Các phiên bản"
+  }
+}

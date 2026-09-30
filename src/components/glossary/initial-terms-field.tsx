@@ -12,6 +12,7 @@
  * dialog's schema and this field cannot disagree about what a half-filled row means.
  */
 
+import { useTranslations } from "next-intl";
 import { Plus, Trash } from "@phosphor-icons/react";
 import type { FieldErrors, Path, UseFormRegister } from "react-hook-form";
 
@@ -45,11 +46,12 @@ export function InitialTermsField<TForm extends FormWithInitialTerms>({
   onAppend: () => void;
   onRemove: (index: number) => void;
 }) {
+  const t = useTranslations("glossary.initialTermsField");
   return (
     <div className="rounded-md border border-hairline p-3" data-testid="initial-terms-field">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-medium text-ink">First terms</p>
-        <p className="text-[11px] text-ink-muted">Optional — you can add more later</p>
+        <p className="text-[12px] font-medium text-ink">{t("title")}</p>
+        <p className="text-[11px] text-ink-muted">{t("optionalHint")}</p>
       </div>
 
       <div className="mt-2 space-y-2">
@@ -59,7 +61,7 @@ export function InitialTermsField<TForm extends FormWithInitialTerms>({
             <div key={field.id} className="space-y-1">
               <div className="flex items-start gap-2">
                 <Input
-                  placeholder={`Term in ${sourceLanguageName}`}
+                  placeholder={t("termInLanguage", { language: sourceLanguageName })}
                   data-testid={`initial-term-source-${index}`}
                   className="flex-1"
                   {...register(`initialTerms.${index}.sourceTerm` as Path<TForm>)}
@@ -68,7 +70,7 @@ export function InitialTermsField<TForm extends FormWithInitialTerms>({
                   →
                 </span>
                 <Input
-                  placeholder={`Use this in ${targetLanguageName}`}
+                  placeholder={t("useThisInLanguage", { language: targetLanguageName })}
                   data-testid={`initial-term-target-${index}`}
                   className="flex-1"
                   {...register(`initialTerms.${index}.targetTerm` as Path<TForm>)}
@@ -80,7 +82,7 @@ export function InitialTermsField<TForm extends FormWithInitialTerms>({
                   // to type into, and "+ Add term" becomes the only way back into the thing the
                   // reader opened the dialog to do.
                   disabled={fields.length === 1}
-                  aria-label={`Remove term ${index + 1}`}
+                  aria-label={t("removeTerm", { index: index + 1 })}
                   className="mt-1 shrink-0 cursor-pointer rounded-md p-1 text-ink-subtle transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <Trash size={14} />
@@ -102,7 +104,7 @@ export function InitialTermsField<TForm extends FormWithInitialTerms>({
         className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[12px] font-medium text-primary transition-colors hover:text-primary-hover"
       >
         <Plus size={12} />
-        Add term
+        {t("addTerm")}
       </button>
     </div>
   );

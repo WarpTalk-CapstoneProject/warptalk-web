@@ -22,7 +22,9 @@ import { useState } from "react";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
 import { ArtifactRecordView } from "@/components/artifacts/artifact-reader";
 import {
+  LIBRARY_KINDS,
   groupEntriesByMeeting,
+  listLibrary,
   preferredEntry,
 } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind, LibraryEntry } from "@/lib/meeting/artifact-library";
@@ -30,10 +32,16 @@ import type { ArtifactKind, LibraryEntry } from "@/lib/meeting/artifact-library"
 // i18n-allow: a Vietnamese transcript is the PRODUCT'S OWN DATA, not UI copy — WarpTalk exists
 // to transcribe this, and previewing the card with English lorem would hide the two things the
 // preview is for: how diacritics sit at 8.5px, and how far four lines of Vietnamese actually get.
-const TRANSCRIPT_BODY = `Tú: Chào mọi người, hôm nay mình review sprint.
-Nhi: Phần dịch tiếng Việt đã ổn hơn nhiều so với tuần trước.
-Tú: Còn cái voice clone thì sao?
-Nhi: Vẫn chưa đều, lúc nghe tiếng Việt lúc không.`;
+// The export exactly as ArtifactsFinalizer writes it — header, bracketed speaker markers and the
+// pipeline's end sentinel — so the preview shows what the card makes of the real thing.
+const TRANSCRIPT_BODY = `# WarpTalk Transcription Room - Room: 01a0a94a-2fb2-7f2d-95f5-79cf2a9246af
+Generated on: 2026-09-16 08:40:12 UTC
+---
+**[Tú (VI)]**: Chào mọi người, hôm nay mình review sprint.
+**[Nhi (VI)]**: Phần dịch tiếng Việt đã ổn hơn nhiều so với tuần trước.
+**[Tú (VI)]**: Còn cái voice clone thì sao?
+**[Nhi (VI)]**: Vẫn chưa đều, lúc nghe tiếng Việt lúc không.
+**[System (SYSTEM)]**: __MEETING_END__`;
 
 const SUMMARY_BODY = `The team reviewed the sprint. Vietnamese translation quality has improved
 noticeably. Voice cloning remains inconsistent and was raised as the main risk for the demo.`;
@@ -166,14 +174,18 @@ export default function RecordsLibraryPreviewPage() {
           </p>
         </div>
 
-        {/* The real list page's grid: one column, cards are links. */}
-        <section aria-label="Meeting records">
-          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {groups.map((group) => (
-              <ArtifactCard key={group.roomId} group={group} workspaceSlug="preview" />
-            ))}
-          </div>
-        </section>
+        {/* The real list page's grid, one row per kind tab: only what the viewer can read, one card
+            per document, the picture being the first page of the .docx it downloads as. */}
+        {LIBRARY_KINDS.map((kindTab) => (
+          <section key={kindTab} aria-label={kindTab} className="space-y-2">
+            <h2 className="text-[12px] font-medium uppercase tracking-wide text-ink-subtle">{kindTab}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {listLibrary(ENTRIES, { kind: kindTab, scope: "all" }).map((item) => (
+                <ArtifactCard key={item.id} entry={item} workspaceSlug="preview" />
+              ))}
+            </div>
+          </section>
+        ))}
 
         {/* What the detail page renders. Driven by a local picker here rather than by the route,
             because a preview has no workspace to route inside. */}

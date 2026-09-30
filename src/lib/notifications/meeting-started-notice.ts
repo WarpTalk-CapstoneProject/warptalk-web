@@ -33,7 +33,19 @@ export type RawNotification = {
   data?: { actionUrl?: string | null } | null;
 };
 
+/**
+ * Which of the two "you can go in now" notifications this is.
+ *
+ * `started` is somebody pressing Start. `opened` is MEETING_OPENED (WT-612 / WT-621): the clock
+ * reaching `scheduledAt` and unlocking the room, with nobody in it and no translation session
+ * behind it. They are one notice type because they interrupt the reader for the same reason, and
+ * two kinds because what waits on the other side of the button is not the same thing — see the
+ * destination rule on `readMeetingStartedNotice`.
+ */
+export type MeetingNoticeKind = "started" | "opened";
+
 export type MeetingStartedNotice = {
+  kind: MeetingNoticeKind;
   /** The room's own title, when the payload carried one; otherwise the server's sentence. */
   title: string;
   /** Where Join goes. Null when neither a link nor a room id arrived — the notice still informs. */
@@ -113,24 +125,60 @@ export function toInternalHref(
   }
 }
 
+export const MEETING_STARTED_TYPE = "MEETING_STARTED";
+
 /**
- * What to show for a MEETING_STARTED notification, or null if this is not one.
+ * WT-612 / WT-621 — the clock opened a scheduled room. Same payload shape as MEETING_STARTED
+ * (`room_id`, `room_title`), a different thing on the other side of the button.
+ */
+export const MEETING_OPENED_TYPE = "MEETING_OPENED";
+
+/**
+ * What to show for a MEETING_STARTED or MEETING_OPENED notification, or null if it is neither.
  *
- * The Join target is the server's `action_url` when it survived the trip, and `/room/{room_id}`
- * otherwise — `room_id` is a REQUIRED field of this notification type (see the backend's
- * NotificationValidator), so the fallback is not a guess.
+ * WHERE THE BUTTON GOES, AND WHY THE TWO DIFFER
+ *   MEETING_STARTED means the call is up: its target is the server's `action_url` when that
+ *   survived the trip, and `/room/{room_id}` otherwise — `room_id` is a REQUIRED field of this
+ *   notification type (see the backend's NotificationValidator), so the fallback is not a guess.
+ *   `/room/{id}` forwards straight into `/live`, which is correct for a meeting already running:
+ *   the reader is late and wants to be in it.
+ *
+ *   MEETING_OPENED is NOT that, and sending it to the same address is the mistake worth naming.
+ *   Nobody is in the room, nothing is running, and the reader has not chosen a camera or a
+ *   microphone yet — dropping them into `/live` skips device setup entirely and puts them in an
+ *   empty call with whatever hardware state happened to be lying around. So it goes to the room's
+ *   own page, `/rooms/{room_id}`, which forwards to `/{slug}/rooms/{id}`: from there "Join
+ *   meeting" opens the setup modal, which is what the action word ("Set up & join") promises.
+ *
+ *   That also means an `action_url` is deliberately IGNORED for the opened notice. The server
+ *   mints one link per notification and emails it too, so it is the live door by construction;
+ *   honouring it here would quietly reintroduce the skipped setup this branch exists to avoid.
+ *   Without a `room_id` there is simply no button, and the banner says so.
  */
 export function readMeetingStartedNotice(
   raw: RawNotification,
   appOrigin: string | null = currentOrigin(),
 ): MeetingStartedNotice | null {
-  if (raw.type !== "MEETING_STARTED") return null;
+  if (raw.type !== MEETING_STARTED_TYPE && raw.type !== MEETING_OPENED_TYPE) return null;
 
   const { roomId, roomTitle } = readPayload(raw);
+  const title = roomTitle ?? firstString(raw.title, raw.content, raw.message) ?? "A meeting";
+
+  if (raw.type === MEETING_OPENED_TYPE) {
+    return {
+      kind: "opened",
+      title,
+      // Plural `/rooms/`, which lands on the room page. The singular `/room/` beside it is the
+      // live door, and it is the one thing this must not be.
+      joinHref: roomId ? `/rooms/${roomId}` : null,
+    };
+  }
+
   const actionUrl = firstString(raw.action_url, raw.actionUrl, raw.data?.actionUrl);
 
   return {
-    title: roomTitle ?? firstString(raw.title, raw.content, raw.message) ?? "A meeting",
+    kind: "started",
+    title,
     // A rejected link falls back to the room id rather than to nothing: an off-origin action_url
     // must not be able to REMOVE the Join button any more than it may redirect it.
     joinHref: toInternalHref(actionUrl, appOrigin) ?? (roomId ? `/room/${roomId}` : null),

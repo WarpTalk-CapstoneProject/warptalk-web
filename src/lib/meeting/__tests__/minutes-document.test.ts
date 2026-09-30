@@ -16,6 +16,10 @@ import {
   externalGuestNotice,
   formatDocumentDate,
   formatDocumentTime,
+  inInternationalLayout,
+  DRAFTED_AGENDA_PREFACE,
+  DRAFTED_LOCATION,
+  DRAFTED_QUORUM_RULE,
   isMinutesTemplate,
   motionLines,
   numberClauses,
@@ -28,6 +32,14 @@ import {
   resolveMinutesTemplate,
   romanNumeral,
   translationLanguagesOf,
+  addMinutesItem,
+  DISCUSSION_KEY,
+  removeMinutesClause,
+  setMinutesItemOwner,
+  cleanTranslations,
+  originalOnly,
+  readMinutesIn,
+  untranslatedNotice,
 } from "../minutes-document.ts";
 import type {
   MeetingMinutesContent,
@@ -36,6 +48,155 @@ import type {
 } from "../../../types/meetingMinutes.ts";
 
 const titleOf = (key: string) => key;
+
+/* ── WT-685: one language at a time ── */
+
+const multilingual = (): MeetingMinutesContent => ({
+  attendance: emptyAttendance(),
+  votes: [],
+  primaryLanguage: "en",
+  sections: [
+    { key: "summary", kind: "paragraph", text: "The team reviewed the launch." },
+    { key: "decisions", kind: "items", items: [{ text: "Launch on Friday", atMs: 1000 }] },
+  ],
+  translations: {
+    en: [{ key: "summary", kind: "paragraph", text: "The team reviewed the launch." }],
+    ja: [
+      { key: "summary", kind: "paragraph", text: "チームはローンチを確認した。" },
+      { key: "decisions", kind: "items", items: [{ text: "金曜日にローンチ", atMs: 1000 }] },
+    ],
+    "vi-VN": [{ key: "summary", kind: "paragraph", text: "Nhóm đã xem lại buổi ra mắt." }],
+  },
+});
+
+test("WT-685: with no reading language only the original is shown", () => {
+  const view = originalOnly(multilingual());
+
+  assert.equal(view.translations, null);
+  assert.equal(view.sections[0].text, "The team reviewed the launch.");
+});
+
+test("WT-685: reading in a language shows the whole document in that language", () => {
+  const view = readMinutesIn(multilingual(), "ja");
+
+  assert.equal(view.translations, null);
+  assert.equal(view.sections[0].text, "チームはローンチを確認した。");
+  assert.equal(view.sections[1].items?.[0].text, "金曜日にローンチ");
+});
+
+test("WT-685: an untranslated section says so instead of borrowing another language", () => {
+  const view = readMinutesIn(multilingual(), "vi");
+
+  assert.equal(view.sections[0].text, "Nhóm đã xem lại buổi ra mắt.");
+  assert.deepEqual(view.sections[1], {
+    key: "decisions",
+    kind: "paragraph",
+    text: untranslatedNotice("vi"),
+  });
+});
+
+test("WT-685: choosing the record's own language is the original", () => {
+  assert.equal(readMinutesIn(multilingual(), "en-US").translations, null);
+  assert.equal(readMinutesIn(multilingual(), "en-US").sections[0].text, "The team reviewed the launch.");
+});
+
+test("WT-685: a reading generated on request wins over nothing stored", () => {
+  const view = readMinutesIn(multilingual(), "es", [
+    { key: "summary", kind: "paragraph", text: "El equipo revisó el lanzamiento." },
+  ]);
+
+  assert.equal(view.sections[0].text, "El equipo revisó el lanzamiento.");
+});
+
+test("WT-685: the record's own language is not a translation, and region tags fold", () => {
+  assert.deepEqual(Object.keys(cleanTranslations(multilingual())).sort(), ["ja", "vi"]);
+  assert.deepEqual(translationLanguagesOf(multilingual()), ["ja", "vi"]);
+});
+
+/* ── Editing the structure ── */
+
+const docWith = (sections: MinutesSection[]): MeetingMinutesContent => ({
+  attendance: emptyAttendance(),
+  sections,
+  votes: [],
+});
+
+const SUMMARY: MinutesSection = { key: "summary", kind: "paragraph", text: "Reviewed the release." };
+
+test("a point added to a document that only has a summary becomes clause 3.2", () => {
+  const next = addMinutesItem(docWith([SUMMARY]), DISCUSSION_KEY);
+
+  assert.deepEqual(next.sections[1], { key: DISCUSSION_KEY, kind: "items", items: [{ text: "" }] });
+  const clauses = numberClauses(3, planMinutesDocument(next.sections).proceedings, titleOf);
+  assert.deepEqual(
+    clauses.map((clause) => clause.clause),
+    ["3.1", "3.2"],
+  );
+});
+
+test("a second decision grows the decisions section instead of opening another one", () => {
+  const twice = addMinutesItem(addMinutesItem(docWith([SUMMARY]), "decisions"), "decisions");
+
+  assert.equal(twice.sections.filter((section) => section.key === "decisions").length, 1);
+  assert.equal(twice.sections[1].items?.length, 2);
+  assert.equal(planMinutesDocument(twice.sections).decisions.length, 1);
+});
+
+test("removing the last line of a section removes its heading too", () => {
+  const withDecision = addMinutesItem(docWith([SUMMARY]), "decisions");
+
+  assert.deepEqual(removeMinutesClause(withDecision, 1, 0).sections, [SUMMARY]);
+});
+
+test("removing one line keeps the other lines and their citations", () => {
+  const doc = docWith([
+    { key: "actionItems", kind: "items", items: [{ text: "A", atMs: 1000 }, { text: "B", atMs: 2000 }] },
+  ]);
+
+  assert.deepEqual(removeMinutesClause(doc, 0, 0).sections[0].items, [{ text: "B", atMs: 2000 }]);
+});
+
+test("removing a paragraph section removes that section and nothing else", () => {
+  const doc = addMinutesItem(docWith([SUMMARY]), "decisions");
+
+  assert.deepEqual(
+    removeMinutesClause(doc, 0, null).sections.map((section) => section.key),
+    ["decisions"],
+  );
+});
+
+test("assigning an owner changes nothing else on the line", () => {
+  const doc = docWith([{ key: "actionItems", kind: "items", items: [{ text: "Ship it", atMs: 5000 }] }]);
+
+  assert.deepEqual(setMinutesItemOwner(doc, 0, 0, "Tu").sections[0].items?.[0], {
+    text: "Ship it",
+    atMs: 5000,
+    owner: "Tu",
+  });
+});
+
+test("WT-685: the International layout reads the drafter's Vietnamese lines in English", () => {
+  assert.equal(inInternationalLayout(DRAFTED_LOCATION), "Online via WarpTalk");
+  assert.equal(inInternationalLayout(DRAFTED_QUORUM_RULE), "a majority of those invited");
+  assert.equal(
+    inInternationalLayout(`${DRAFTED_AGENDA_PREFACE}\nReview Q3`),
+    "From the meeting description at booking:\nReview Q3",
+  );
+});
+
+test("WT-685: a line the secretary wrote is printed as written, not translated", () => {
+  assert.equal(inInternationalLayout("Phòng họp tầng 3"), "Phòng họp tầng 3");
+  assert.equal(inInternationalLayout(null), null);
+  assert.equal(inInternationalLayout(""), "");
+});
+
+test("WT-685: the drafted strings match the backend drafter byte for byte", () => {
+  // MeetingMinutesDrafter.DraftedLocation / DraftedQuorumRule / DraftedAgendaPreface. A drift here
+  // silently puts Vietnamese back into English documents.
+  assert.equal(DRAFTED_LOCATION, "Trực tuyến qua WarpTalk");
+  assert.equal(DRAFTED_QUORUM_RULE, "Quá bán số người được mời");
+  assert.equal(DRAFTED_AGENDA_PREFACE, "Theo mô tả cuộc họp khi đặt lịch:");
+});
 
 const emptyAttendance = (): MinutesAttendance => ({
   present: [],
@@ -412,7 +573,12 @@ test("translation languages come back in a stable order", () => {
     attendance: emptyAttendance(),
     sections: [],
     votes: [],
-    translations: { vi: [], en: [] },
+    // Each carries a section: since WT-685 a language with nothing in it is not one a reader can
+    // be offered, so an empty array would not exercise the ordering this pins.
+    translations: {
+      vi: [{ key: "summary", kind: "paragraph", text: "Tóm tắt" }],
+      en: [{ key: "summary", kind: "paragraph", text: "Summary" }],
+    },
   };
   assert.deepEqual(translationLanguagesOf(content), ["en", "vi"]);
   assert.deepEqual(

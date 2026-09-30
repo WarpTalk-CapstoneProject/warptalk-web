@@ -8,6 +8,17 @@ const TERMINAL_ROOM_STATUSES: ReadonlySet<TranslationRoomStatus> = new Set([
   "timeout",
 ]);
 
+/**
+ * Created, and nobody has opened the door yet.
+ *
+ * `open` is DELIBERATELY ABSENT, and both sets on this page are worth stating for it, because
+ * `open` (WT-612 / WT-621) is the first status that belongs to neither. It is not terminal — the
+ * meeting has not happened, let alone finished — and it is not "not started": the clock unlocked
+ * the room at `scheduledAt`, so there is nothing left for anyone to start. It therefore falls
+ * through both branches of `resolveRoomEntryIntent` to `join`, which is the whole point: the
+ * viewer goes through device setup into the call, exactly as they would for `in_progress`, and is
+ * never offered a "Start meeting" button for a door that is already open.
+ */
 const NOT_STARTED_ROOM_STATUSES: ReadonlySet<TranslationRoomStatus> = new Set([
   "scheduled",
   "waiting",
@@ -107,7 +118,10 @@ export function resolveRoomEntryIntent(input: {
     };
   }
 
-  if (input.isActiveInMeeting && input.status === "in_progress") {
+  // `open` alongside `in_progress`: the person is in this room in this tab, and that is true
+  // whether or not anyone has taken it to IN_PROGRESS yet. Without it they would be offered
+  // device setup for a call they are already sitting in.
+  if (input.isActiveInMeeting && (input.status === "in_progress" || input.status === "open")) {
     return {
       mode: "join",
       label: "Return to meeting",

@@ -8,6 +8,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Spinner, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function ChangePlanDialog({
   onSubmit: (planId: string) => Promise<unknown>;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminSubscriptions.changePlanDialog");
   const open = subscription !== null;
   const plansQuery = useAdminPlans();
   const [planId, setPlanId] = useState("");
@@ -62,7 +64,7 @@ export function ChangePlanDialog({
       await onSubmit(planId);
       onOpenChange(false);
     } catch (err) {
-      setError(getErrorMessage(err, "The plan could not be changed."));
+      setError(getErrorMessage(err, t("genericError")));
     }
   };
 
@@ -70,17 +72,17 @@ export function ChangePlanDialog({
     <Dialog open={open} onOpenChange={(next) => (isSaving ? undefined : onOpenChange(next))}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Change plan</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Moves this workspace&rsquo;s subscription from{" "}
-            <span className="font-medium text-ink">{subscription?.planName}</span> onto the plan
-            you choose. The credit balance does not move with it — compensate separately with a
-            credit adjustment if the change warrants one.
+            {t.rich("description", {
+              strong: (chunks) => <span className="font-medium text-ink">{chunks}</span>,
+              planName: subscription?.planName ?? "",
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
-          <Label htmlFor="change-plan-target">New plan</Label>
+          <Label htmlFor="change-plan-target">{t("newPlanLabel")}</Label>
           <select
             id="change-plan-target"
             value={planId}
@@ -89,13 +91,13 @@ export function ChangePlanDialog({
             className="h-10 w-full rounded-md border border-hairline bg-surface-2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-primary-focus"
           >
             <option value="">
-              {plansQuery.isPending ? "Loading plans…" : "Choose a plan…"}
+              {plansQuery.isPending ? t("loadingPlans") : t("choosePlan")}
             </option>
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id} disabled={plan.slug === currentSlug}>
                 {plan.name} — {formatAdminMoney({ amount: plan.price, currency: plan.currency })}/
                 {plan.billingCycle}
-                {plan.slug === currentSlug ? " (current)" : ""}
+                {plan.slug === currentSlug ? t("currentSuffix") : ""}
               </option>
             ))}
           </select>
@@ -110,16 +112,16 @@ export function ChangePlanDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button disabled={!planId || isSaving} onClick={() => void handleConfirm()}>
             {isSaving ? (
               <>
                 <Spinner size={14} className="animate-spin" />
-                Changing…
+                {t("pending")}
               </>
             ) : (
-              "Change plan"
+              t("confirm")
             )}
           </Button>
         </DialogFooter>
