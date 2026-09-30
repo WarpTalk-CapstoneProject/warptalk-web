@@ -23,7 +23,6 @@ import {
   Copy,
   Download,
   FileText,
-  FileType,
   GitCommitVertical,
   History,
   Languages,
@@ -539,8 +538,8 @@ export function MeetingTranscriptArtifact({
     revision: `${blocks.length}:${layout}`,
   });
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
-  /** Which download is being built, so the button can say so and refuse a second click. */
-  const [buildingDocument, setBuildingDocument] = useState<"docx" | "txt" | null>(null);
+  /** Whether the download is being built, so the button can say so and refuse a second click. */
+  const [buildingDocument, setBuildingDocument] = useState(false);
 
   const displayLanguage =
     chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
@@ -1362,8 +1361,8 @@ export function MeetingTranscriptArtifact({
    * The language goes in the file name only when the reader CHOSE one. "As spoken" is the
    * transcript's own languages, and "(AS-SPOKEN)" in a file name would read as a language code.
    */
-  async function downloadTranscriptDocument(format: "docx" | "txt") {
-    setBuildingDocument(format);
+  async function downloadTranscriptDocument() {
+    setBuildingDocument(true);
     try {
       const model = transcriptDocumentModel();
       const fileName = recordFileName({
@@ -1371,26 +1370,15 @@ export function MeetingTranscriptArtifact({
         kind: "Transcript",
         startedAt: meetingStartedAt,
         language: displayLanguage === AS_SPOKEN ? undefined : displayLanguage,
-        extension: format,
+        extension: "docx",
       });
-
-      if (format === "txt") {
-        // From record-document-layout, which pulls in no docx writer — the plain text option must
-        // not cost the reader the library it does not use.
-        const { transcriptPlainText } = await import("@/lib/documents/record-document-layout");
-        saveBlobDownload(
-          new Blob([transcriptPlainText(model)], { type: "text/plain;charset=utf-8" }),
-          fileName,
-        );
-        return;
-      }
 
       const { buildTranscriptDocx } = await import("@/lib/documents/transcript-docx");
       saveBlobDownload(await buildTranscriptDocx(model), fileName);
     } catch {
       toast.error(t("toasts.downloadFailed"));
     } finally {
-      setBuildingDocument(null);
+      setBuildingDocument(false);
     }
   }
 
@@ -1486,37 +1474,24 @@ export function MeetingTranscriptArtifact({
               <Copy className="size-3.5" />
               {t("toolbar.copy")}
             </button>
-            {/* Two formats, one control. A bare Download button had to pick one — it wrote .txt,
-                which is the right answer for grepping a transcript and the wrong one for sending it
-                to anybody, and a reader who wanted the other had no way to say so. The menu is the
-                shadcn DropdownMenu the language picker beside it already uses, so Escape closes it,
-                a click outside closes it, and the trigger carries aria-haspopup without this file
-                spelling any of that out. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                disabled={buildingDocument !== null}
-                title={t("toolbar.downloadTitle")}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
-              >
-                {buildingDocument ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Download className="size-3.5" />
-                )}
-                {t("toolbar.download")}
-                <ChevronDown className="size-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[212px]">
-                <DropdownMenuItem onClick={() => void downloadTranscriptDocument("docx")}>
-                  <FileText className="size-3.5" />
-                  {t("toolbar.downloadWord")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void downloadTranscriptDocument("txt")}>
-                  <FileType className="size-3.5" />
-                  {t("toolbar.downloadText")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* One format. Every transcript and summary download in the app is the same .docx
+                layout (src/lib/documents) — a second, plain-text option here was the one place a
+                transcript still left as a different file from the one the rest of the app hands
+                over. Copy, beside this, is the plain-text path. */}
+            <button
+              type="button"
+              onClick={() => void downloadTranscriptDocument()}
+              disabled={buildingDocument}
+              title={t("toolbar.downloadTitle")}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+            >
+              {buildingDocument ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              {t("toolbar.download")}
+            </button>
             {/* WT-589. Two states, one button, and the second one is not a toggle — it commits.
                 "Edit all" reads as a mode; leaving it has to say what leaving does, or somebody
                 clicks the same button again expecting it to close and loses their typing. */}
