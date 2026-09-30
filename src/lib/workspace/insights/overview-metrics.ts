@@ -123,6 +123,26 @@ export function creditsByDay(items: readonly CreditTransactionDto[], range: Time
   return days;
 }
 
+/**
+ * The first local day a ledger read holds in full, or null when it holds everything. A capped read
+ * lacks its oldest rows, so the day of the oldest row it has may be partial, and the days before it
+ * are unknown — a per-day chart leaves them blank rather than drawing 0.
+ */
+export function ledgerFirstFullDay(read: LedgerRead): string | null {
+  if (read.complete) return null;
+  let oldest = Number.POSITIVE_INFINITY;
+  for (const tx of read.items) {
+    const at = timeOf(tx.createdAt);
+    if (at < oldest) oldest = at;
+  }
+  // Incomplete with nothing read: no day is known.
+  if (!Number.isFinite(oldest)) return "9999-12-31";
+  const next = new Date(oldest);
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() + 1);
+  return dayKey(next);
+}
+
 export interface ServiceCredits {
   key: string;
   /** English; the page translates known keys. */

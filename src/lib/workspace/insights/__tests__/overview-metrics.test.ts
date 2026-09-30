@@ -17,6 +17,7 @@ import {
   creditsUsedIn,
   elapsedDayKeys,
   lastMonthKeys,
+  ledgerFirstFullDay,
   meetingFigures,
   meetingsByDay,
   meetingsHeldIn,
@@ -66,6 +67,13 @@ test("credits used is the spend inside the window, adjustments included, top-ups
 test("a ledger read that stopped at its cap is a floor with no comparison", () => {
   const items = [tx(at(9, 2), -100), tx(at(8, 5), -70)];
   assert.deepEqual(creditsFigure({ items, complete: false }, SEP, AUG), { value: 100, previous: null, atLeast: true });
+});
+
+test("a capped ledger read is only whole from the day after its oldest row", () => {
+  const items = [tx(at(9, 9), -10), tx(at(9, 4, 15), -10)];
+  assert.equal(ledgerFirstFullDay({ items, complete: true }), null);
+  assert.equal(ledgerFirstFullDay({ items, complete: false }), "2026-09-05");
+  assert.equal(ledgerFirstFullDay({ items: [], complete: false }), "9999-12-31");
 });
 
 test("credits by day and by service add up to credits used", () => {
