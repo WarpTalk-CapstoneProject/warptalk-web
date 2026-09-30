@@ -179,7 +179,7 @@
     "test:catalog-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/catalog-drift.test.ts src/lib/language/__tests__/admin-language-form.test.ts",
     "test:artifact-content": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/artifact-content.test.ts",
     "test:media-devices": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/media-device-label.test.ts",
-    "test:hub-language-sync": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/wait-for-hub-connection.test.ts",
+    "test:hub-language-sync": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/wait-for-hub-connection.test.ts src/stores/__tests__/participant-language-sync.test.ts",
     "test:plan-request": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/plan-request.test.ts",
     "test:translation-credits-wired": "node scripts/check-translation-credits-wired.mjs",
     "test:frozen-credits-wired": "node scripts/check-frozen-credits-wired.mjs",

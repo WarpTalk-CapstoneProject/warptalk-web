@@ -64,7 +64,7 @@ import {
   resolveTranscriptPause,
   type TranscriptPauseState,
 } from "@/lib/meeting/transcript-pause";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { sameUserId, useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
@@ -2539,6 +2539,16 @@ export function PersistentMeetingSession({
     connection.on("SpotlightChanged", (targetUserId: string, on: boolean) => {
       setSpotlightedUserId(on ? targetUserId : null);
     });
+    // WT-862. A language update for somebody the live roster does not hold has nowhere to land:
+    // their row then comes only from the participants query, which the store update above
+    // cannot touch, so the badge stayed at the join-time language until a reload. Re-read the
+    // participants in that case — the gateway has already published the change to the row.
+    const refetchIfNotInLiveRoster = (userId: string) => {
+      const inLiveRoster = useTranslationRoomStore
+        .getState()
+        .participants.some((participant) => sameUserId(participant.userId, userId));
+      if (!inLiveRoster) void refetchParticipants();
+    };
     // Live speak-language change from ANOTHER participant — keeps speakerLanguageByUserId
     // (and therefore FilteredRoomAudio's mute-real-mic-if-different-language logic) correct
     // without waiting for a refetchParticipants() round-trip.
@@ -2546,6 +2556,7 @@ export function PersistentMeetingSession({
       "ParticipantSpeakLanguageChanged",
       (userId: string, speakLanguage: string) => {
         updateParticipantSpeakLanguage(userId, speakLanguage);
+        refetchIfNotInLiveRoster(userId);
       },
     );
     // The listen half. The hub has broadcast this ("ParticipantLanguageChanged" — the event
@@ -2560,6 +2571,7 @@ export function PersistentMeetingSession({
       "ParticipantLanguageChanged",
       (userId: string, listenLanguage: string) => {
         updateParticipantListenLanguage(userId, listenLanguage);
+        refetchIfNotInLiveRoster(userId);
       },
     );
 
