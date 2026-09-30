@@ -70,7 +70,8 @@ import { cn } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { FrozenCreditsDto, PlanDto } from "@/types/billing";
+import type { BillingInterval } from "@/lib/billing/plan-pricing";
+import type { FrozenCreditsDto, PlanDto, SubscriptionDto } from "@/types/billing";
 
 import {
   BannerRow,
@@ -107,6 +108,30 @@ function isNoSubscriptionError(error: unknown): boolean {
 }
 
 type BillingT = ReturnType<typeof useTranslations>;
+
+/**
+ * How the current subscription is billed, or null when nothing says.
+ *
+ * Read in order of how directly the source answers: an explicit `billingCycle` on the
+ * subscription (the type does not declare one yet, so it is read defensively), then the length of
+ * the period it is actually paying for — a year-long period IS a yearly subscription whatever the
+ * plan's own cycle says, because a monthly-priced plan can be bought yearly. The plan's own
+ * cycle is deliberately NOT consulted: it describes how the plan is priced, not how it was bought.
+ */
+function subscriptionInterval(subscription: SubscriptionDto | null | undefined): BillingInterval | null {
+  if (!subscription) return null;
+  const declared = (subscription as { billingCycle?: string | null }).billingCycle?.toLowerCase();
+  if (declared === "yearly" || declared === "year" || declared === "annual") return "yearly";
+  if (declared === "monthly" || declared === "month") return "monthly";
+
+  const start = Date.parse(subscription.currentPeriodStart);
+  const end = Date.parse(subscription.currentPeriodEnd);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const days = Math.round((end - start) / 86_400_000);
+  if (days >= 360 && days <= 370) return "yearly";
+  if (days >= 28 && days <= 31) return "monthly";
+  return null;
+}
 
 function getBillingErrorMessage(error: unknown, t: BillingT): string {
   if (isAxiosError<BillingErrorBody>(error)) {
@@ -147,6 +172,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // Below 1000px the plan ladder and the Extras panel take turns instead of sitting side by side.
   const [zoneTab, setZoneTab] = useState<"plans" | "extras">("plans");
   const hasExtras = useHasCatalogExtras(workspaceId);
+  // Null until somebody picks; then it follows the subscription's own cycle, else monthly.
+  const [pickedInterval, setPickedInterval] = useState<BillingInterval | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -237,6 +264,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }, [plans]);
 
   const activePlan = activePlans.find((plan) => plan.id === subscription?.planId) ?? null;
+  const currentInterval = subscriptionInterval(subscription);
+  const interval: BillingInterval = pickedInterval ?? currentInterval ?? "monthly";
 
   // backend#467: the server refuses a top-up or pack without a live plan (409), so every way to
   // buy one is hidden in exactly that case. The same rule as the server's, not hasPaidEntitlement.
@@ -269,7 +298,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // There is no in-place "change plan" call to make: WT-381 established that the change-plan route
   // never existed, and that a payment for a different plan IS the change.
   const goToCheckout = (plan: PlanDto) => {
-    window.location.assign(`/${workspaceSlug}/payment/plans?plan=${plan.slug}`);
+    // `billingCycle` is the parameter lib/billing/plan-pricing's readBillingInterval reads.
+    window.location.assign(
+      `/${workspaceSlug}/payment/plans?plan=${plan.slug}&billingCycle=${interval}`,
+    );
   };
 
   if (!role) {
@@ -387,6 +419,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   price: formatMoney(subscription.price, activePlan?.currency),
                 })
               : t("stats.currentPlan.noBalance"),
+            currentInterval
+              ? t(
+                  currentInterval === "yearly"
+                    ? "stats.currentPlan.billedYearly"
+                    : "stats.currentPlan.billedMonthly",
+                )
+              : null,
             activePlan
               ? t("stats.currentPlan.limits", {
                   participants: activePlan.maxParticipants,
@@ -396,7 +435,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             subscription?.cancelAtPeriodEnd
               ? t("stats.currentPlan.cancelled", { date: renewsDate })
               : t("stats.currentPlan.renews", { date: renewsDate }),
-          ]}
+          ].filter((line): line is string => line !== null)}
           actions={
             <>
               {/* backend#467: extra credits are sold only on top of a live plan. */}
@@ -473,6 +512,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   plans={activePlans}
                   currentPlanId={subscription?.planId ?? null}
                   onSelect={goToCheckout}
+                  interval={interval}
+                  onIntervalChange={setPickedInterval}
                 />
               </div>
             ) : null}

@@ -24,6 +24,11 @@
  * The pane sits beside the Extras panel from 1000px, so the wide breakpoint is `2xl`, not `xl`:
  * four columns are only comfortable when the pane itself is roughly a thousand pixels wide.
  *
+ * MONTHLY / YEARLY. The header carries the same two-way choice the payment page offers, and prices
+ * go through the same two functions that page uses (`monthlyDisplayPrice` for the headline,
+ * `checkoutTotal` for "Billed yearly: X"), so this grid can never quote a figure the checkout
+ * will not charge. The saving in the label is derived from `YEARLY_PRICE_MULTIPLIER`, not typed.
+ *
  * MOTION: hover and current-plan tints ease over ~180ms under `motion-safe:` only.
  *
  * No shadows: see billing-primitives.
@@ -33,6 +38,12 @@ import { CaretRight, Check } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 
 import { formatAmount, formatMoney } from "@/lib/format/currency";
+import {
+  YEARLY_PRICE_MULTIPLIER,
+  checkoutTotal,
+  monthlyDisplayPrice,
+  type BillingInterval,
+} from "@/lib/billing/plan-pricing";
 import { cn } from "@/lib/utils";
 import type { PlanDto } from "@/types/billing";
 
@@ -53,22 +64,32 @@ function capabilitiesOf(plan: PlanDto, t: BillingT): string[] {
 }
 
 /** Per-cycle price rendered the way a price is read: amount large, unit small. */
-function PriceLine({ plan }: { plan: PlanDto }) {
+function PriceLine({ plan, interval }: { plan: PlanDto; interval: BillingInterval }) {
+  const t = useTranslations("settingsBilling");
   const cycle = (plan.billingCycle ?? "").toLowerCase();
-  const unit =
-    cycle === "yearly" || cycle === "year" || cycle === "annual"
-      ? "/yr"
-      : cycle === "semiannual"
-        ? "/6mo"
-        : "/mo";
+  const pricedYearly = cycle === "yearly" || cycle === "year" || cycle === "annual";
+  const unit = pricedYearly ? "/yr" : cycle === "semiannual" ? "/6mo" : "/mo";
+  const price = monthlyDisplayPrice(plan, interval);
+  // A plan already priced per year has no monthly figure to discount (monthlyDisplayPrice leaves
+  // it alone), so "billed yearly: price x 12 x 0.79" would be a number nobody is charged.
+  const showsYearlyTotal = interval === "yearly" && price > 0 && !pricedYearly;
 
   return (
-    <p className="flex flex-wrap items-baseline gap-1">
-      <span className="text-[22px] font-semibold leading-none tabular-nums text-ink">
-        {formatMoney(plan.price, plan.currency)}
-      </span>
-      {plan.price > 0 ? <span className="text-[12px] text-ink-muted">{unit}</span> : null}
-    </p>
+    <div>
+      <p className="flex flex-wrap items-baseline gap-1">
+        <span className="text-[22px] font-semibold leading-none tabular-nums text-ink">
+          {formatMoney(price, plan.currency)}
+        </span>
+        {price > 0 ? <span className="text-[12px] text-ink-muted">{unit}</span> : null}
+      </p>
+      {showsYearlyTotal ? (
+        <p className="mt-1 text-[11px] tabular-nums text-ink-muted">
+          {t("planGrid.billedYearly", {
+            total: formatMoney(checkoutTotal(plan, "yearly"), plan.currency),
+          })}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -85,13 +106,20 @@ export function PlanGrid({
   plans,
   currentPlanId,
   onSelect,
+  interval = "monthly",
+  onIntervalChange,
 }: {
   /** Active plans, cheapest first. Sorting is the caller's job — it owns `sortOrder`. */
   plans: PlanDto[];
   currentPlanId: string | null;
   onSelect: (plan: PlanDto) => void;
+  /** The billing period being quoted. Controlled by the page, which also hands it to checkout. */
+  interval?: BillingInterval;
+  /** When given, the header offers the Monthly / Yearly choice. */
+  onIntervalChange?: (interval: BillingInterval) => void;
 }) {
   const t = useTranslations("settingsBilling");
+  const yearlySavingPercent = Math.round((1 - YEARLY_PRICE_MULTIPLIER) * 100);
   const currentIndex = plans.findIndex((plan) => plan.id === currentPlanId);
 
   // The most expensive plan carries the badge. Not a hardcoded slug: the ladder is administered
@@ -107,11 +135,39 @@ export function PlanGrid({
 
   return (
     <div className="min-w-0">
-      <div className="border-b border-hairline px-4 py-3.5 sm:px-6">
-        <h2 className="text-[14px] font-semibold leading-tight text-ink">{t("planGrid.title")}</h2>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
-          {t("planGrid.description")}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-hairline px-4 py-3.5 sm:px-6">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold leading-tight text-ink">{t("planGrid.title")}</h2>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
+            {t("planGrid.description")}
+          </p>
+        </div>
+        {onIntervalChange ? (
+          <div
+            role="group"
+            aria-label={t("planGrid.interval.ariaLabel")}
+            className="inline-flex shrink-0 overflow-hidden rounded-[8px] border border-hairline bg-surface-1"
+          >
+            {(["monthly", "yearly"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={interval === value}
+                onClick={() => onIntervalChange(value)}
+                className={cn(
+                  "h-7 cursor-pointer border-r border-hairline px-3 text-[12px] font-medium whitespace-nowrap outline-none last:border-r-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors motion-safe:duration-150",
+                  interval === value
+                    ? "bg-surface-3 text-ink"
+                    : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                )}
+              >
+                {value === "yearly"
+                  ? t("planGrid.interval.yearly", { percent: yearlySavingPercent })
+                  : t("planGrid.interval.monthly")}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div
         className={cn(
@@ -155,7 +211,7 @@ export function PlanGrid({
                 ) : null}
               </div>
 
-              <PriceLine plan={plan} />
+              <PriceLine plan={plan} interval={interval} />
 
               {isCurrent ? (
                 <BillingButton tone="quiet">{t("planGrid.currentPlan")}</BillingButton>

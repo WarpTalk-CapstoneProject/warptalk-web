@@ -30,6 +30,8 @@
       "label": "現在のプラン",
       "noPlan": "有効なプランがありません",
       "pricePerCycle": "サイクルごとに {price}。",
+      "billedMonthly": "月払いです。",
+      "billedYearly": "年払いです。",
       "noBalance": "会議はクレジット残高に対して課金されます。",
       "limits": "1会議あたり参加者{participants}人・{languages}言語。",
       "limitsUnavailable": "プランの上限情報がありません。",
@@ -69,7 +71,13 @@
     "description": "WarpTalk が公開しているプランです。プランを開くと含まれる内容を確認できます。",
     "yourPlan": "ご利用中",
     "seeMore": "詳細を見る",
-    "coreTranslation": "基本のライブ翻訳"
+    "coreTranslation": "基本のライブ翻訳",
+    "billedYearly": "年額: {total}",
+    "interval": {
+      "ariaLabel": "請求期間",
+      "monthly": "月払い",
+      "yearly": "年払い · {percent}% お得"
+    }
   },
   "planPanel": {
     "currentPlan": "現在のプラン",

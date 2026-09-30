@@ -30,6 +30,8 @@
       "label": "Gói hiện tại",
       "noPlan": "Chưa có gói đang hoạt động",
       "pricePerCycle": "{price} mỗi chu kỳ.",
+      "billedMonthly": "Thanh toán hằng tháng.",
+      "billedYearly": "Thanh toán hằng năm.",
       "noBalance": "Cuộc họp được tính vào số dư credit.",
       "limits": "{participants} người tham gia · {languages} ngôn ngữ mỗi cuộc họp.",
       "limitsUnavailable": "Không có thông tin giới hạn gói.",
@@ -69,7 +71,13 @@
     "description": "Các gói do WarpTalk phát hành. Mở một gói để xem nó bao gồm những gì.",
     "yourPlan": "Gói của bạn",
     "seeMore": "Xem thêm",
-    "coreTranslation": "Dịch trực tiếp cơ bản"
+    "coreTranslation": "Dịch trực tiếp cơ bản",
+    "billedYearly": "Thanh toán hằng năm: {total}",
+    "interval": {
+      "ariaLabel": "Kỳ thanh toán",
+      "monthly": "Hằng tháng",
+      "yearly": "Hằng năm · Tiết kiệm {percent}%"
+    }
   },
   "planPanel": {
     "currentPlan": "Gói hiện tại",

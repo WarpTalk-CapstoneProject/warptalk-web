@@ -30,6 +30,8 @@
       "label": "Current Plan",
       "noPlan": "No active plan",
       "pricePerCycle": "{price} per cycle.",
+      "billedMonthly": "Billed monthly.",
+      "billedYearly": "Billed yearly.",
       "noBalance": "Meetings translate against a credit balance.",
       "limits": "{participants} participants · {languages} languages per meeting.",
       "limitsUnavailable": "Plan limits unavailable.",
@@ -69,7 +71,13 @@
     "description": "Plans published by WarpTalk. Open a plan to see what it includes.",
     "yourPlan": "Your plan",
     "seeMore": "See more",
-    "coreTranslation": "Core live translation"
+    "coreTranslation": "Core live translation",
+    "billedYearly": "Billed yearly: {total}",
+    "interval": {
+      "ariaLabel": "Billing period",
+      "monthly": "Monthly",
+      "yearly": "Yearly · Save {percent}%"
+    }
   },
   "planPanel": {
     "currentPlan": "Current plan",
