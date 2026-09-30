@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,7 +17,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { languagesInScope } from "@/lib/language/languages";
+import { getLanguageName } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import type {
   MinutesClassification,
@@ -37,7 +37,20 @@ import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 import { describeLanguageCeiling, describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
+import {
+  RESTRICT_TARGET_LANGUAGES_FIELD,
+  defaultLanguageOptions,
+  isDefaultLanguageOutOfPolicy,
+  meetingScopeLanguages,
+  readLanguagePolicy,
+  setLanguageRestriction,
+  toLanguagePolicyPatch,
+  toggleAllowedLanguage,
+  type LanguagePolicyChange,
+  type LanguagePolicyState,
+} from "@/lib/workspace/language-policy-settings";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
+import { getErrorMessage } from "@/lib/api/errors";
 
 function getSettingsSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
@@ -67,6 +80,9 @@ function getSettingsSchema(t: ReturnType<typeof useTranslations>) {
     voiceCloningEnabled: z.boolean(),
     isProfanityFilterEnabled: z.boolean(),
     allowAnyPlugins: z.boolean(),
+    // Keyed off the constant rather than typed out, so the wire name for WT-706's restriction
+    // flag stays spelled in exactly one file — see lib/workspace/language-policy-settings.
+    [RESTRICT_TARGET_LANGUAGES_FIELD]: z.boolean(),
     allowedTargetLanguages: z.array(z.string()),
     verifiedDomains: z.array(z.string()),
     allowExternalCollaboration: z.boolean(),
@@ -94,7 +110,7 @@ type ApiErrorLike = {
 
 // The workspace default language and the allowed-target list are both meeting languages, so
 // they follow the registry rather than a third copy that only ever listed en/vi/ja.
-const languages = languagesInScope("meeting").map((language) => ({
+const languages = meetingScopeLanguages().map((language) => ({
   code: language.code,
   label: language.name,
 }));
@@ -147,6 +163,9 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
   allowAnyPlugins: true,
+  // Not restricting is the posture a workspace that has never opened this control is in, and
+  // now it says so rather than being inferred from an empty list (WT-706).
+  [RESTRICT_TARGET_LANGUAGES_FIELD]: false,
   // Empty means unrestricted — every meeting-scope language is offered. It used to read
   // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
   // that had never set one got a three-language allowlist, and Korean, French and Spanish
@@ -172,6 +191,11 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
 };
 
 function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
+  // One reader for both halves of the language policy, so the form cannot disagree with itself
+  // about whether an empty list is a restriction. It also copes with a server that has not
+  // shipped the flag yet, by inferring the posture from the list.
+  const languagePolicy = readLanguagePolicy(settings);
+
   return {
     ...DEFAULT_SETTINGS_FORM_DATA,
     defaultLanguage: settings.defaultLanguage || DEFAULT_SETTINGS_FORM_DATA.defaultLanguage,
@@ -186,7 +210,8 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     allowAnyPlugins: settings.allowAnyPlugins ?? DEFAULT_SETTINGS_FORM_DATA.allowAnyPlugins,
     // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
     // restricting anything, and substituting a list here turns "no policy" into a real one.
-    allowedTargetLanguages: settings.allowedTargetLanguages || [],
+    [RESTRICT_TARGET_LANGUAGES_FIELD]: languagePolicy.restricted,
+    allowedTargetLanguages: languagePolicy.allowed,
     verifiedDomains: settings.verifiedDomains || [],
     allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
     requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
@@ -217,6 +242,15 @@ export default function WorkspaceSettingsPage() {
   const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
   const initializedWorkspaceRef = useRef<string | null>(null);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
+  /**
+   * What the last language-policy interaction has to say for itself — a refusal to untick the
+   * last language, or a default language that moved because the Owner unticked it.
+   *
+   * Inline rather than a toast: both messages explain something the Owner is looking at right
+   * now, and a toast that has faded leaves a control that "did not respond" with no reason
+   * on screen. Cleared by the next interaction with the same control.
+   */
+  const [languagePolicyNotice, setLanguagePolicyNotice] = useState<string | null>(null);
 
   const settingsSchema = useMemo(() => getSettingsSchema(t), [t]);
   const minutesTemplateOptions = useMemo(() => getMinutesTemplateOptions(t), [t]);
@@ -285,10 +319,15 @@ export default function WorkspaceSettingsPage() {
 
   const autoSave = useAutoSaveQueue<Partial<WorkspaceSettingsDto>>({
     save: saveWorkspacePatch,
+    // Through the shared reader, not `response.data.error` by hand. A refusal from this endpoint
+    // arrives in either of two shapes — `{ error, code }` from the service and
+    // ValidationProblemDetails from a validator — and the hand-written version could only read
+    // the first. WT-706 makes the second one routine here: rejecting an unknown language code, an
+    // empty restricted list or a default outside the list are all validator failures, and every
+    // one of them would have shown "Failed to save workspace settings." while the server was
+    // naming the exact code it refused.
     onError: (error) => {
-      const errorMsg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || t("toasts.saveFailed");
-      toast.error(errorMsg);
+      toast.error(getErrorMessage(error, t("toasts.saveFailed")));
     },
   });
 
@@ -397,15 +436,69 @@ export default function WorkspaceSettingsPage() {
     queuePatch(key, { aiUsagePolicy: policy }, policy);
   };
 
-  const allowedLangs = watchAll.allowedTargetLanguages || [];
-  const handleLanguageToggle = (code: string) => {
-    let next: string[];
-    if (allowedLangs.includes(code)) {
-      next = allowedLangs.filter((c) => c !== code);
-    } else {
-      next = [...allowedLangs, code];
+  // The whole of the workspace's language policy as one value: the posture, the list and the
+  // default language, which the rules below relate to one another. Read from the form so the
+  // section reacts to a tick immediately rather than after the save round-trips.
+  const languagePolicy: LanguagePolicyState = {
+    restricted: watchAll[RESTRICT_TARGET_LANGUAGES_FIELD] ?? false,
+    allowed: watchAll.allowedTargetLanguages || [],
+    defaultLanguage: watchAll.defaultLanguage || "",
+  };
+  const allowedLangs = languagePolicy.allowed;
+  const defaultLanguageChoices = defaultLanguageOptions(languagePolicy);
+  const defaultLanguageOutOfPolicy = isDefaultLanguageOutOfPolicy(languagePolicy);
+
+  /**
+   * Apply one policy transition.
+   *
+   * The flag, the list and the default language are saved as ONE patch, because they are one
+   * decision: sending "restricted: true" and an empty list as separate writes would put the
+   * server — and every other reader — through the exact state this ticket exists to prevent,
+   * however briefly.
+   */
+  const commitLanguagePolicy = (change: LanguagePolicyChange) => {
+    setLanguagePolicyNotice(
+      change.blocked === "lastLanguage"
+        ? t("general.allowedTargetLanguages.lastLanguageBlocked")
+        : change.notice === "defaultLanguageMoved" && change.noticeLanguage
+          ? t("general.allowedTargetLanguages.defaultLanguageMoved", {
+            removed: getLanguageName(change.noticeLanguage),
+            language: getLanguageName(change.next.defaultLanguage),
+          })
+          : change.notice === "seededFromDefault" && change.noticeLanguage
+            ? t("general.allowedTargetLanguages.seededFromDefault", {
+              language: getLanguageName(change.noticeLanguage),
+            })
+            : null,
+    );
+
+    if (!change.changed) return;
+
+    const patch = toLanguagePolicyPatch(change.next);
+    setValue(RESTRICT_TARGET_LANGUAGES_FIELD, change.next.restricted, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("allowedTargetLanguages", patch.allowedTargetLanguages, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+    if (change.next.defaultLanguage !== languagePolicy.defaultLanguage) {
+      // Its own patch, and through commitTopLevel, because saving the default language also
+      // rewrites the active-workspace record in the store — see saveWorkspacePatch.
+      commitTopLevel("defaultLanguage", change.next.defaultLanguage);
     }
-    commitTopLevel("allowedTargetLanguages", next);
+
+    queuePatch("languagePolicy", patch, patch);
+  };
+
+  const handleLanguageToggle = (code: string) => {
+    commitLanguagePolicy(toggleAllowedLanguage(languagePolicy, code));
+  };
+
+  const handleAllowAllLanguages = (allowAll: boolean) => {
+    commitLanguagePolicy(setLanguageRestriction(languagePolicy, !allowAll));
   };
 
   const effectiveSaveStatus = autoSave.status;
@@ -503,6 +596,18 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">{t("general.defaultLanguage.label")}</span>
                 <span className="text-[11px] text-ink-muted">{t("general.defaultLanguage.description")}</span>
+                {/* A saved default outside the workspace's own allowlist is a contradiction the
+                    server now refuses to store, and it used to sit here looking settled. It is
+                    said out loud rather than corrected behind the Owner's back: which language a
+                    workspace defaults to is their decision, and the two ways out — pick a
+                    permitted one, or permit this one — are different decisions. */}
+                {defaultLanguageOutOfPolicy ? (
+                  <span className="text-[11px] text-amber-600">
+                    {t("general.defaultLanguage.outOfPolicy", {
+                      language: getLanguageName(languagePolicy.defaultLanguage),
+                    })}
+                  </span>
+                ) : null}
               </div>
               <Select
                 value={watchAll.defaultLanguage}
@@ -520,8 +625,15 @@ export default function WorkspaceSettingsPage() {
                   {/* Through LanguageLabel like every other picker, rather than a bare name.
                       It is the single place that turns a language value into display text,
                       and it takes the bare codes this form holds as readily as the locale
-                      tags rooms carry. */}
-                  {languages.map((l) => (
+                      tags rooms carry.
+
+                      Narrowed to what the workspace permits (WT-706). Offering a language the
+                      allowlist excludes handed an Owner a setting the server would then refuse,
+                      from the control directly above the list that refuses it. The saved value
+                      stays in the list even when the policy excludes it, for the same reason the
+                      timezone picker keeps its stored zone — a picker missing its own value
+                      renders blank and drops the setting on the next save. */}
+                  {defaultLanguageChoices.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs">
                       <LanguageLabel value={l.code} />
                     </SelectItem>
@@ -705,38 +817,77 @@ export default function WorkspaceSettingsPage() {
             {/* Invitation expiry moved to Settings › Security (2026-09-16) — how long a way IN
                 stays open is an access question, and it now sits beside the rest of them. */}
 
-            {/* Allowed Target Languages */}
+            {/* Allowed Target Languages.
+
+                WT-706: the list used to be the whole control, and an empty list means
+                "unrestricted" to every reader in the system — so an Owner unticking their way
+                down to nothing tightened the policy into no policy at all, silently, from a
+                screen that looked as restrictive as it could get. The posture is now a switch the
+                Owner sets, and the list below it can never reach zero: unticking the last
+                language is refused and explained. */}
             <div className="py-3.5 px-4 flex flex-col gap-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">{t("general.allowedTargetLanguages.label")}</span>
-                <span className="text-[11px] text-ink-muted">{t("general.allowedTargetLanguages.description")}</span>
-                {languageCeilingNotice ? (
-                  <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
-                ) : null}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-semibold text-ink">{t("general.allowedTargetLanguages.label")}</span>
+                  <span className="text-[11px] text-ink-muted">
+                    {languagePolicy.restricted
+                      ? t("general.allowedTargetLanguages.description")
+                      : t("general.allowedTargetLanguages.allowAll.description")}
+                  </span>
+                  {/* The plan's per-meeting quota. Only meaningful against a list, so it is not
+                      shown to a workspace that has not made one. */}
+                  {languagePolicy.restricted && languageCeilingNotice ? (
+                    <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-[11px] text-ink-muted">
+                    {t("general.allowedTargetLanguages.allowAll.label")}
+                  </span>
+                  <Switch
+                    checked={!languagePolicy.restricted}
+                    onCheckedChange={handleAllowAllLanguages}
+                    disabled={isSubmitting || !isOwnerOrAdmin}
+                    aria-label={t("general.allowedTargetLanguages.allowAll.label")}
+                  />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {languages.map((l) => {
-                  const selected = allowedLangs.includes(l.code);
-                  return (
-                    <button
-                      key={l.code}
-                      type="button"
-                      onClick={() => handleLanguageToggle(l.code)}
-                      disabled={isSubmitting || !isOwnerOrAdmin}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs cursor-pointer transition ${
-                        selected
-                          ? "bg-primary/10 border-primary text-primary font-semibold"
-                          : "bg-surface-2 border-hairline text-ink-muted hover:text-ink"
-                      }`}
-                    >
-                      {selected && <Checks size={12} className="text-primary" />}
-                      {/* Was "Vietnamese (VI)" — the code repeated the name it sat beside and
-                          told the reader nothing the flag does not. */}
-                      <LanguageLabel value={l.code} />
-                    </button>
-                  );
-                })}
-              </div>
+              {languagePolicy.restricted ? (
+                <>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {languages.map((l) => {
+                      const selected = allowedLangs.includes(l.code);
+                      return (
+                        <button
+                          key={l.code}
+                          type="button"
+                          onClick={() => handleLanguageToggle(l.code)}
+                          disabled={isSubmitting || !isOwnerOrAdmin}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs cursor-pointer transition ${
+                            selected
+                              ? "bg-primary/10 border-primary text-primary font-semibold"
+                              : "bg-surface-2 border-hairline text-ink-muted hover:text-ink"
+                          }`}
+                          aria-pressed={selected}
+                        >
+                          {selected && <Checks size={12} className="text-primary" />}
+                          {/* Was "Vietnamese (VI)" — the code repeated the name it sat beside and
+                              told the reader nothing the flag does not. */}
+                          <LanguageLabel value={l.code} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[11px] text-ink-subtle">
+                    {t("general.allowedTargetLanguages.restrictedHint")}
+                  </span>
+                </>
+              ) : null}
+              {/* A refusal, or a correction the Owner is owed. Stays on screen rather than
+                  passing as a toast: it explains a control they are still looking at. */}
+              {languagePolicyNotice ? (
+                <span role="status" className="text-[11px] text-amber-600">{languagePolicyNotice}</span>
+              ) : null}
             </div>
 
             {/* Voice Cloning */}

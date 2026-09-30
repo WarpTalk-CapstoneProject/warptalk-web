@@ -366,7 +366,11 @@ export function GlossaryImportDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-[760px] rounded-[14px] border-border bg-surface-1 shadow-none">
+      {/* WT-886: DialogContent is a CSS grid whose implicit column sizes to its widest child's
+          min-content, so one unbreakable term in the preview used to push the whole column past
+          the dialog edge. `minmax(0,1fr)` pins the column to the dialog width. The width override
+          must carry the `sm:` variant, or the base `sm:max-w-sm` keeps the dialog at 24rem. */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] rounded-[14px] border-border bg-surface-1 shadow-none sm:max-w-[760px]">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-[16px] font-semibold text-ink">
@@ -401,7 +405,7 @@ export function GlossaryImportDialog({
               </button>
             </div>
           </div>
-          <DialogDescription className="text-[12px] text-ink-muted">
+          <DialogDescription className="text-[12px] text-ink-muted [overflow-wrap:anywhere]">
             {t.rich("description", {
               glossaryName: () => <span className="font-medium text-ink">{glossaryName}</span>,
               term: (chunks) => <span className="font-medium">{chunks}</span>,
@@ -411,7 +415,7 @@ export function GlossaryImportDialog({
         </DialogHeader>
 
         {activeTab === "templates" ? (
-          <div className="py-1">
+          <div className="min-w-0 py-1">
             <GlossaryTemplateGallery
               onSelectTemplate={(template, loadedRows) => {
                 setRows(loadedRows);
@@ -421,7 +425,7 @@ export function GlossaryImportDialog({
             />
           </div>
         ) : (
-          <div>
+          <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
               {expectedPair ? (
                 <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
@@ -464,7 +468,10 @@ export function GlossaryImportDialog({
               )}
             >
               <FileArrowUp className="h-6 w-6 text-ink-muted" />
-              <span className="text-[13px] font-medium text-ink">
+              <span
+                className="max-w-full truncate text-[13px] font-medium text-ink"
+                title={fileName ?? undefined}
+              >
                 {fileName ?? t("chooseFile")}
               </span>
               <span className="text-[11px] text-ink-subtle">
@@ -482,7 +489,7 @@ export function GlossaryImportDialog({
             {error ? (
               <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
                 <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
-                <span>{error}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">{error}</span>
               </p>
             ) : null}
 
@@ -492,7 +499,16 @@ export function GlossaryImportDialog({
                 {/* The preview is what catches a header row read as data, or a file whose columns
                     are in another language — before it becomes 200 junk terms. */}
                 <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
-                  <table className="w-full text-left text-[12px]">
+                  {/* WT-886: `table-fixed` + explicit column widths, so a cell's content can never
+                      widen its column. Term/translation wrap anywhere (the preview exists to show
+                      what was parsed); context/field truncate with the full text in `title`. */}
+                  <table className="w-full table-fixed text-left text-[12px]">
+                    <colgroup>
+                      <col className="w-[30%]" />
+                      <col className="w-[30%]" />
+                      <col className="w-[25%]" />
+                      <col className="w-[15%]" />
+                    </colgroup>
                     <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
                       <tr>
                         <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
@@ -504,10 +520,10 @@ export function GlossaryImportDialog({
                     <tbody>
                       {rows.slice(0, 50).map((row, index) => (
                         <tr key={`${row.sourceTerm}-${index}`} className="border-t border-hairline">
-                          <td className="px-2.5 py-1.5 text-ink font-medium">{row.sourceTerm || "—"}</td>
-                          <td className="px-2.5 py-1.5 text-ink font-semibold text-primary">{row.targetTerm || "—"}</td>
-                          <td className="px-2.5 py-1.5 text-ink-muted max-w-[200px] truncate" title={row.context ?? ""}>{row.context || "—"}</td>
-                          <td className="px-2.5 py-1.5 text-ink-muted">{row.domain || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink font-medium [overflow-wrap:anywhere]">{row.sourceTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink font-semibold text-primary [overflow-wrap:anywhere]">{row.targetTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.context || undefined}>{row.context || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.domain || undefined}>{row.domain || "—"}</td>
                         </tr>
                       ))}
                     </tbody>

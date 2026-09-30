@@ -26,6 +26,40 @@ test("workspace settings use queued auto-save and commit numeric values on blur 
   assert.doesNotMatch(source, /japaneseHonorificStyle/);
 });
 
+/**
+ * WT-706. The rules themselves live in `language-policy-settings` and are tested there; what is
+ * pinned here is that the PAGE goes through them, because the defect was a page that did its own
+ * arithmetic on the list. An Owner unticking the last language wrote `[]`, and `[]` is what the
+ * whole system reads as "every language allowed" — so the one gesture that looks like the
+ * tightest possible policy was the gesture that removed it.
+ */
+test("workspace settings edit the language policy through the shared rules, never the raw list", () => {
+  const source = page("../../../app/(app)/[workspaceSlug]/settings/page.tsx");
+
+  // The posture is a control the Owner sets, and it is saved WITH the list, in one patch.
+  assert.match(source, /RESTRICT_TARGET_LANGUAGES_FIELD/);
+  assert.match(source, /setLanguageRestriction/);
+  assert.match(source, /toLanguagePolicyPatch/);
+  assert.match(source, /toggleAllowedLanguage/);
+
+  // The checkbox list only exists while the workspace is restricting, so there is no "ticked
+  // nothing" state for it to sit in.
+  assert.match(source, /languagePolicy\.restricted \? \(/);
+
+  // The default language is offered from the permitted set, not from the whole registry.
+  assert.match(source, /defaultLanguageChoices\.map/);
+  assert.match(source, /isDefaultLanguageOutOfPolicy/);
+
+  // The save failure says what the server said. The validator's refusals — an unknown code, an
+  // empty restricted list, a default outside the list — arrive as ValidationProblemDetails, which
+  // the old hand-rolled `response.data.error` read could not see at all.
+  assert.match(source, /getErrorMessage\(error, t\("toasts\.saveFailed"\)\)/);
+
+  // The list is never rebuilt inline: that is how it reached zero.
+  assert.doesNotMatch(source, /allowedLangs\.filter/);
+  assert.doesNotMatch(source, /commitTopLevel\("allowedTargetLanguages"/);
+});
+
 test("personal preferences match the backend room-type contract, auto-save controls, and error retry state", () => {
   const source = page(
     "../../../app/(app)/[workspaceSlug]/settings/account/preferences/page.tsx",
