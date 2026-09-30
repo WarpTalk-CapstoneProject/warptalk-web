@@ -71,6 +71,14 @@ function isRefusal(code: string | number | null | undefined): boolean {
   return normalized === "FORBIDDEN" || normalized === "403" || normalized === "UNAUTHORIZED";
 }
 
+/** Whether a failure is the server saying there is no such transcript. */
+function isNotFound(code: string | number | null | undefined): boolean {
+  if (code == null) return false;
+  if (typeof code === "number") return code === 404;
+  const normalized = code.trim().toUpperCase();
+  return normalized === "NOT_FOUND" || normalized === "404";
+}
+
 /**
  * What to say instead of showing the transcript, or null when there is a transcript to show.
  */
@@ -88,6 +96,13 @@ export function describeTranscriptAbsence(
   // Above `not-yet`: a refusal is a definite answer, and it does not become less true because
   // the meeting happens to still be running.
   if (isRefusal(input.errorCode)) return "withheld";
+  // WT-870: a finished meeting that was set not to keep a transcript never gets a transcript
+  // row, so the lookup answers NOT_FOUND — that IS the answer, not a failure. Read as a failure
+  // it printed "could not be loaded right now. Refresh to try again" beside a meeting that had
+  // deliberately saved nothing, which no refresh would ever change.
+  if (input.isEnded && input.saveTranscript === false && isNotFound(input.errorCode)) {
+    return "not-kept";
+  }
   if (input.errorCode != null) return "unavailable";
 
   if (!input.isEnded) return "not-yet";

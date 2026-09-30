@@ -145,4 +145,24 @@ describe("WT-828 — an empty record of a finished meeting says WHY", () => {
     // saveTranscript absent reads as a kept meeting (WT-587), so it is silence, not "not kept".
     assert.equal(describeTranscriptAbsence({ lineCount: 0, isEnded: true }), "none");
   });
+
+  test("WT-870 — a meeting that kept nothing has no transcript to find, and says why", () => {
+    // Production room 01a0e5ff: saveTranscript off, no transcripts row, so by-room answered 404
+    // and the tab said "could not be loaded right now. Refresh to try again."
+    for (const errorCode of ["NOT_FOUND", 404] as const) {
+      assert.equal(
+        describeTranscriptAbsence({ lineCount: 0, isEnded: true, errorCode, saveTranscript: false }),
+        "not-kept",
+      );
+    }
+    // Any other failure is still a failure, and a kept meeting's 404 is not explained away.
+    assert.equal(
+      describeTranscriptAbsence({ lineCount: 0, isEnded: true, errorCode: 500, saveTranscript: false }),
+      "unavailable",
+    );
+    assert.equal(
+      describeTranscriptAbsence({ lineCount: 0, isEnded: true, errorCode: "NOT_FOUND" }),
+      "unavailable",
+    );
+  });
 });
