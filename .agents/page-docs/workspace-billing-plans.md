@@ -32,3 +32,14 @@ and the Auto-renew row:
   longer called from these pages; it ended entitlements mid-period. The method itself is kept.
 - `/{slug}/payment/plans` keeps its cancel-reason picker; `PUT /auto-renew` takes no reason, so the
   choice is only logged to the browser console.
+
+## Credit meter wording
+
+`settings/billing/components/credit-meter.tsx` takes its wording decisions from the pure helpers in
+`src/lib/billing/credit-meter-format.ts` (`npm run test:credit-meter-format`):
+
+- `usedPercentLabel(used, total)`: exactly 0 → "0% used"; any use below 1% → "<1% used" (also in
+  the meter's `aria-valuetext`); otherwise floored to one decimal, capped at 100.
+- `paceProjectionMessage(daysToEmpty, daysLeft)`: under one day the pace sentence uses
+  `meter.paceRunsOutWithinDay` / `meter.paceRunsOutWithinDayAtEnd` ("runs out within a day"),
+  never "in about 0 days"; otherwise `paceRunsOut` / `paceRunsOutAtEnd` with ICU plurals.

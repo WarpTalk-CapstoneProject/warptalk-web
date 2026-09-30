@@ -29,7 +29,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { paceProjectionMessage } from "@/lib/billing/credit-meter-format";
+import { paceProjectionMessage, usedPercentLabel } from "@/lib/billing/credit-meter-format";
 import { creditUsageLevel, type CreditUsageLevel } from "@/lib/billing/credit-usage-level";
 import {
   cycleElapsedPercent,
@@ -119,7 +119,8 @@ export function CreditMeter({
 
   // Clamped: an overage cycle has spent more than this cycle held, and the bar ends at its end.
   const usedPercent = drawable ? Math.min(100, (used / total) * 100) : 0;
-  const usedLabel = Math.min(100, Math.floor((used / total) * 100 * 10) / 10);
+  // "<1" for any use under 1%, so a sliver of spend never reads "0% used" (credit-meter-format).
+  const usedLabel = usedPercentLabel(used, total);
   const elapsed = drawable ? cycleElapsedPercent(balance, now) : null;
   const tickAt = Math.round(100 - WARN_BELOW_FRACTION * 100);
 
