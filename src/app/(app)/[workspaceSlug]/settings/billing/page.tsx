@@ -50,7 +50,7 @@ import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AdminBillingPage from "@/app/(internal)/billing/page";
 import {
@@ -62,11 +62,13 @@ import {
 } from "@/components/ui/card";
 import { ExtraCreditsNeedPlan } from "@/components/billing/extra-credits-need-plan";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
+import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { canBuyExtraCredits } from "@/lib/billing/extra-credits";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -92,6 +94,9 @@ import { CatalogSection, useHasCatalogExtras } from "./components/catalog-sectio
  * legitimate account state, not a broken request, and the two must not collapse into one UI.
  */
 const NO_SUBSCRIPTION_CODE = "BILLING_SUBSCRIPTION_NOT_FOUND";
+
+/** The Usage page's cadence: frequent enough to follow a meeting, rare enough for the gateway. */
+const POLL_INTERVAL_MS = 30_000;
 
 interface BillingErrorBody {
   error?: string;
@@ -162,9 +167,23 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const { isAuthenticated, accessToken } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const workspaceSlug =
-    useWorkspaceStore((state) => state.activeWorkspaceSlug) || slug || "";
-  const workspaceId = activeWorkspaceId || "";
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+
+  /**
+   * WT-878 — the workspace is the one in the URL, and the store only supplies its id.
+   *
+   * This used to take the id from the store and the slug from wherever it could find one. For
+   * the moment between a workspace switch writing the store and the URL catching up (or the other
+   * way round), every query and mutation below targeted the workspace the page was NOT showing —
+   * Cancel renewal on the wrong workspace, a top-up credited elsewhere. The layout re-selects the
+   * workspace for the URL slug; until the store says it has, the id here is empty (no query is
+   * enabled on an empty id) and the page shows a spinner instead of rendering any control.
+   */
+  const urlSlug = normalizeWorkspaceSlug(slug);
+  const storeMatchesUrl =
+    !!urlSlug && !!activeWorkspaceId && activeWorkspaceSlug === urlSlug;
+  const workspaceId = storeMatchesUrl ? (activeWorkspaceId ?? "") : "";
+  const workspaceSlug = urlSlug ?? slug ?? "";
   const role = useWorkspaceRole();
 
   const [isManageOpen, setIsManageOpen] = useState(false);
@@ -208,6 +227,34 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       connection.stop();
     };
   }, [queryClient, accessToken, isAuthenticated, workspaceId]);
+
+  /**
+   * WT-878 — freshness, the way Usage does it.
+   *
+   * The notification hub above only fires if the backend publishes `billing.credits_updated`,
+   * which today nothing does, so the balance sat still until a reload. The billing hub
+   * (`useBillingRealtime`) carries subscription, plan, payment and overage events and refreshes
+   * everything; a 30s poll, only while the tab is visible, follows the numbers spending moves.
+   *
+   * The poll is narrower than Usage's on purpose: this page also mounts the recurring-billing
+   * query, which reads the card from Stripe, and re-asking Stripe every half minute for a card
+   * that does not change with spending is load for nothing.
+   */
+  const refreshAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["billing"] });
+  }, [queryClient]);
+  useBillingRealtime(refreshAll);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      for (const key of ["balance", "subscription", "overage", "frozen"]) {
+        queryClient.invalidateQueries({ queryKey: ["billing", key, workspaceId] });
+      }
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [queryClient, workspaceId]);
 
   const {
     data: balance,
@@ -304,7 +351,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     );
   };
 
-  if (!role) {
+  // A store that has not caught up with the URL is not an answer about this workspace.
+  if (!role || !storeMatchesUrl) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

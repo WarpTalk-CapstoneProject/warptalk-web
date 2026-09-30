@@ -39,11 +39,18 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
-import { checkoutTotal, checkoutCurrency, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
+import {
+  checkoutTotal,
+  checkoutCurrency,
+  monthlyDisplayPrice,
+  readBillingInterval,
+  selectablePlans,
+  yearlySavingPercent,
+} from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -101,8 +108,11 @@ export default function WorkspacePlansPage() {
   const role = useWorkspaceRole();
   const isRoleLoaded = useWorkspaceRoleLoaded();
 
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
-    "monthly",
+  const searchParams = useSearchParams();
+  // WT-878: Billing links here as `?plan=<slug>&billingCycle=<monthly|yearly>`. The cycle the
+  // owner picked there is the one this page opens on; `plan` is not read here (unchanged).
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(() =>
+    readBillingInterval(searchParams),
   );
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -400,7 +410,7 @@ export default function WorkspacePlansPage() {
                 value="yearly"
                 className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly · save 21%
+                Yearly · save {yearlySavingPercent()}%
               </TabsTrigger>
             </TabsList>
           </Tabs>
