@@ -1,16 +1,317 @@
 {
   "brand": "WarpTalk",
+  "document": {
+    "effective": "Có hiệu lực từ {date}",
+    "contents": "Mục lục",
+    "questions": "Có câu hỏi về tài liệu này? Liên hệ với chúng tôi qua",
+    "backToHome": "Về trang chủ",
+    "backToSignIn": "Về trang đăng nhập"
+  },
   "terms": {
     "title": "Điều khoản sử dụng",
-    "summary": "Các điều khoản chi phối việc bạn sử dụng WarpTalk — tài khoản, không gian làm việc, cuộc họp, và các tính năng dịch thuật, giọng nói."
+    "summary": "Các điều khoản này điều chỉnh việc bạn sử dụng WarpTalk — tài khoản của bạn, các không gian làm việc bạn tham gia, các cuộc họp bạn tổ chức, cùng các tính năng dịch thuật, ghi chép, AI và giọng nói chạy trong đó. Vui lòng đọc kỹ: khi tạo tài khoản hoặc sử dụng WarpTalk, bạn đồng ý với các điều khoản này.",
+    "sections": {
+      "acceptance": {
+        "heading": "1. Chấp nhận điều khoản",
+        "body": [
+          "WarpTalk (\"WarpTalk\", \"chúng tôi\") cung cấp nền tảng họp trực tuyến đa ngôn ngữ theo thời gian thực thông qua trang web, ứng dụng web, ứng dụng máy tính và các dịch vụ liên quan (gọi chung là \"Dịch vụ\"). Điều khoản sử dụng này (\"Điều khoản\") là thỏa thuận ràng buộc giữa bạn và WarpTalk.",
+          "Khi tạo tài khoản, tham gia cuộc họp hoặc sử dụng Dịch vụ dưới bất kỳ hình thức nào, bạn xác nhận đã đọc, hiểu và đồng ý với Điều khoản này và Chính sách bảo mật của chúng tôi. Nếu bạn sử dụng Dịch vụ thay mặt một tổ chức, bạn xác nhận mình được ủy quyền chấp nhận Điều khoản này cho tổ chức đó, và \"bạn\" bao gồm cả tổ chức đó.",
+          "Nếu bạn không đồng ý với Điều khoản này, vui lòng không sử dụng Dịch vụ."
+        ]
+      },
+      "eligibility": {
+        "heading": "2. Điều kiện sử dụng và tài khoản",
+        "body": [
+          "Bạn phải từ đủ 16 tuổi trở lên để tạo tài khoản. Nếu bạn chưa đủ tuổi thành niên theo pháp luật nơi bạn sinh sống, bạn chỉ được sử dụng Dịch vụ khi có sự đồng ý của cha mẹ hoặc người giám hộ hợp pháp.",
+          "Bạn đồng ý cung cấp thông tin chính xác khi đăng ký và cập nhật thông tin khi có thay đổi. Bạn chịu trách nhiệm bảo mật mật khẩu và các phương thức đăng nhập, cũng như mọi hoạt động diễn ra dưới tài khoản của mình. Hãy báo ngay cho chúng tôi qua {email} nếu bạn cho rằng tài khoản của mình đã bị truy cập trái phép.",
+          "Bạn không được chia sẻ tài khoản cho người khác, tạo tài khoản cho người khác khi chưa được họ cho phép, hoặc tạo tài khoản mới sau khi tài khoản của bạn đã bị chúng tôi tạm ngưng hoặc chấm dứt."
+        ]
+      },
+      "workspaces": {
+        "heading": "3. Không gian làm việc và vai trò",
+        "body": [
+          "Cuộc họp, bản ghi chép, tài liệu và các nội dung khác trong WarpTalk được tổ chức theo không gian làm việc (workspace). Cá nhân hoặc tổ chức tạo ra không gian làm việc (\"Chủ sở hữu không gian làm việc\") quyết định ai được tham gia, các thành viên có vai trò và quyền hạn gì, tính năng nào được bật và nội dung được lưu giữ trong bao lâu.",
+          "Nếu bạn tham gia một không gian làm việc thuộc về người khác — ví dụ như công ty nơi bạn làm việc — thì Chủ sở hữu không gian làm việc và các quản trị viên do họ chỉ định có thể xem, quản lý, xuất và xóa nội dung trong không gian làm việc đó, cũng như có thể thu hồi quyền truy cập của bạn. Việc bạn sử dụng không gian làm việc đó cũng có thể chịu sự điều chỉnh của các chính sách riêng của Chủ sở hữu không gian làm việc.",
+          "Chủ sở hữu không gian làm việc chịu trách nhiệm về gói thuê bao của không gian làm việc, về các thành viên được mời, và bảo đảm không gian làm việc được sử dụng đúng theo Điều khoản này."
+        ]
+      },
+      "service": {
+        "heading": "4. Dịch vụ",
+        "body": [
+          "WarpTalk cho phép bạn tổ chức các cuộc họp trực tuyến với nhận dạng giọng nói trực tiếp, dịch thời gian thực, phụ đề, giọng nói đã dịch (lồng tiếng), ghi hình, bản ghi chép, tóm tắt và biên bản do AI tạo ra, trợ lý AI (WarpBot), và tích hợp với các công cụ bên thứ ba. Một số tính năng chỉ có trong một số gói nhất định.",
+          "Chúng tôi liên tục cải tiến Dịch vụ và có thể thêm, thay đổi hoặc ngừng cung cấp tính năng. Nếu chúng tôi ngừng một tính năng quan trọng thuộc gói trả phí bạn đã mua, chúng tôi sẽ thông báo trước trong thời gian hợp lý và, khi phù hợp, đưa ra phương án bù trừ tương ứng.",
+          "Chúng tôi nỗ lực duy trì Dịch vụ hoạt động liên tục, nhưng không bảo đảm Dịch vụ sẽ không bị gián đoạn hoặc không có lỗi. Việc bảo trì theo kế hoạch, điều kiện mạng và các nhà cung cấp bên thứ ba có thể ảnh hưởng đến khả năng truy cập."
+        ]
+      },
+      "aiOutput": {
+        "heading": "5. Kết quả do AI tạo ra",
+        "body": [
+          "Bản ghi chép, bản dịch, phụ đề, giọng nói đã dịch, bản tóm tắt, biên bản, đầu việc và câu trả lời của trợ lý được tạo tự động bởi các hệ thống học máy. Các kết quả này có thể không đầy đủ, không chính xác, hoặc bỏ sót sắc thái, tên riêng, con số và thuật ngữ chuyên môn.",
+          "Bạn có trách nhiệm kiểm tra kết quả do AI tạo ra trước khi sử dụng. Không sử dụng WarpTalk làm căn cứ duy nhất cho các quyết định có hệ quả pháp lý, y tế, tài chính, an toàn hoặc các hệ quả quan trọng khác, và không coi bản dịch tự động là bản dịch có chứng thực.",
+          "Giữa bạn và WarpTalk, kết quả được tạo ra từ nội dung của bạn thuộc về bạn theo cùng các điều kiện áp dụng cho nội dung của bạn (xem mục 9)."
+        ]
+      },
+      "recording": {
+        "heading": "6. Ghi hình, ghi chép và sự đồng ý",
+        "body": [
+          "Giọng nói trong cuộc họp WarpTalk được xử lý theo thời gian thực để hiển thị phụ đề và bản dịch, và cuộc họp có thể được ghi hình, ghi chép và tóm tắt. WarpTalk hiển thị cho người tham gia biết khi tính năng ghi hình hoặc ghi chép đang hoạt động.",
+          "Nếu bạn tổ chức cuộc họp, bắt đầu ghi hình, hoặc thu âm thanh từ ứng dụng khác bằng ứng dụng WarpTalk trên máy tính, bạn có trách nhiệm thông báo cho mọi người tham gia và có được sự đồng ý theo quy định của pháp luật áp dụng cho bạn và cho họ trước khi thực hiện.",
+          "Bạn không được sử dụng WarpTalk để ghi âm hoặc ghi chép bất kỳ cuộc trò chuyện nào mà bạn không có quyền hợp pháp để ghi lại."
+        ]
+      },
+      "voice": {
+        "heading": "7. Hồ sơ giọng nói và nhân bản giọng nói",
+        "body": [
+          "WarpTalk có thể tạo hồ sơ giọng nói từ các bản ghi âm bạn cung cấp để giọng nói đã dịch nghe giống giọng của bạn. Khi tạo hồ sơ giọng nói, bạn xác nhận rằng các bản ghi âm là giọng nói của chính bạn, hoặc bạn đã có sự cho phép rõ ràng, có văn bản chứng minh, của người sở hữu giọng nói đó.",
+          "Bạn không được sử dụng các tính năng giọng nói để mạo danh bất kỳ ai, để khiến người nghe hiểu sai về người đang nói, để lừa đảo, hoặc để tạo nội dung mang tính phỉ báng, quấy rối hoặc vi phạm pháp luật.",
+          "Bạn có thể xóa hồ sơ giọng nói bất cứ lúc nào. Sau khi bị xóa, hồ sơ giọng nói không thể được dùng để tạo giọng nói nữa. Chúng tôi có thể vô hiệu hóa bất kỳ hồ sơ giọng nói nào mà chúng tôi có cơ sở hợp lý để cho rằng đã được tạo hoặc sử dụng trái với Điều khoản này."
+        ]
+      },
+      "acceptableUse": {
+        "heading": "8. Quy tắc sử dụng",
+        "body": [
+          "Bạn đồng ý không thực hiện, và không cho phép người khác thực hiện, các hành vi sau:",
+          "- vi phạm pháp luật, hoặc xâm phạm quyền sở hữu trí tuệ, quyền riêng tư, quyền hình ảnh hay các quyền khác của bất kỳ ai;",
+          "- tải lên hoặc chia sẻ nội dung vi phạm pháp luật, gây hại, đe dọa, lăng mạ, quấy rối, kích động thù ghét, bóc lột tình dục, hoặc nội dung bạn không có quyền chia sẻ;",
+          "- gửi thư rác hoặc liên lạc không mong muốn, hoặc mời người khác vào cuộc họp vì mục đích đó;",
+          "- tải lên virus hoặc mã độc, hoặc dò quét, kiểm tra lỗ hổng của Dịch vụ khi chưa có sự cho phép bằng văn bản của chúng tôi;",
+          "- can thiệp, làm gián đoạn Dịch vụ hoặc hạ tầng vận hành Dịch vụ, hoặc lách giới hạn sử dụng, giới hạn tín dụng hay cơ chế kiểm soát truy cập;",
+          "- truy cập Dịch vụ bằng phương tiện tự động ngoài các tính năng và giao diện do chúng tôi cung cấp, hoặc thu thập dữ liệu tự động (scraping);",
+          "- dịch ngược, giải mã hoặc tháo rời Dịch vụ, trừ khi pháp luật cho phép rõ ràng;",
+          "- bán lại, cấp phép lại hoặc cung cấp Dịch vụ cho bên thứ ba ngoài phạm vi gói dịch vụ của bạn cho phép;",
+          "- sử dụng Dịch vụ hoặc kết quả của Dịch vụ để phát triển sản phẩm cạnh tranh hoặc để huấn luyện mô hình học máy.",
+          "Chúng tôi có thể điều tra các hành vi bị nghi ngờ vi phạm và thực hiện biện pháp mà chúng tôi thấy phù hợp, bao gồm gỡ bỏ nội dung và tạm ngưng tài khoản hoặc không gian làm việc."
+        ]
+      },
+      "content": {
+        "heading": "9. Nội dung của bạn",
+        "body": [
+          "\"Nội dung của bạn\" là mọi thứ bạn hoặc không gian làm việc của bạn đưa vào Dịch vụ — âm thanh, hình ảnh, tin nhắn trò chuyện, tài liệu, bảng thuật ngữ, mẫu giọng nói — cùng các bản ghi chép, bản dịch, bản ghi hình và kết quả AI được tạo ra từ đó. Bạn giữ toàn bộ quyền sở hữu đối với nội dung của mình.",
+          "Bạn cấp cho WarpTalk quyền sử dụng toàn cầu, không độc quyền, miễn phí bản quyền để lưu trữ, xử lý, truyền tải, sao chép và hiển thị nội dung của bạn chỉ nhằm mục đích cung cấp, bảo mật và hỗ trợ Dịch vụ cho bạn và không gian làm việc của bạn, và như được mô tả trong Chính sách bảo mật. Quyền này chấm dứt khi nội dung của bạn bị xóa khỏi Dịch vụ, trừ các bản sao được lưu trong bản sao lưu trong thời gian giới hạn hoặc theo yêu cầu của pháp luật.",
+          "Chúng tôi không sử dụng nội dung cuộc họp hay mẫu giọng nói của bạn để huấn luyện các mô hình AI đa dụng.",
+          "Bạn chịu trách nhiệm về nội dung của mình và xác nhận rằng bạn có đầy đủ quyền cần thiết để sử dụng nội dung đó với Dịch vụ."
+        ]
+      },
+      "payment": {
+        "heading": "10. Gói dịch vụ, thanh toán và tín dụng",
+        "body": [
+          "Một số tính năng yêu cầu gói trả phí hoặc tín dụng sử dụng. Giá, lượng sử dụng đi kèm và giới hạn của gói được hiển thị trong Dịch vụ tại thời điểm mua. Thanh toán được xử lý bởi nhà cung cấp dịch vụ thanh toán Stripe; chúng tôi không lưu trữ đầy đủ thông tin thẻ của bạn.",
+          "Gói thuê bao tự động gia hạn vào cuối mỗi chu kỳ thanh toán theo mức giá hiện hành cho đến khi bị hủy. Chúng tôi sẽ thông báo cho bạn trước khi gói thuê bao được gia hạn. Bạn có thể hủy bất cứ lúc nào trong phần cài đặt thanh toán của không gian làm việc; việc hủy có hiệu lực vào cuối chu kỳ thanh toán hiện tại và bạn vẫn được sử dụng đến thời điểm đó.",
+          "Tín dụng sử dụng (ví dụ: số phút dịch) được trừ dần khi bạn sử dụng các tính năng liên quan, gắn với không gian làm việc đã mua, không thể chuyển nhượng hoặc quy đổi thành tiền mặt. Tín dụng chưa sử dụng có thể hết hạn theo thông tin được nêu tại thời điểm mua.",
+          "Trừ trường hợp pháp luật yêu cầu — bao gồm các quyền của bạn với tư cách người tiêu dùng — hoặc có quy định rõ ràng khác, các khoản thanh toán không được hoàn lại. Giá chưa bao gồm các loại thuế áp dụng, bạn có trách nhiệm thanh toán các loại thuế đó. Nếu thanh toán không thành công, chúng tôi có thể giới hạn các tính năng trả phí cho đến khi vấn đề được giải quyết.",
+          "Chúng tôi có thể thay đổi giá với thông báo trước ít nhất 30 ngày. Mức giá mới có hiệu lực từ đầu chu kỳ thanh toán tiếp theo của bạn. Nếu không chấp nhận mức giá mới, bạn có thể hủy gói trước khi mức giá đó có hiệu lực mà không phải chịu bất kỳ khoản phạt nào."
+        ]
+      },
+      "thirdParty": {
+        "heading": "11. Dịch vụ và tích hợp của bên thứ ba",
+        "body": [
+          "WarpTalk cho phép bạn kết nối các dịch vụ bên thứ ba, như lịch, lưu trữ và công cụ năng suất, đồng thời sử dụng các nhà cung cấp bên thứ ba để cung cấp một số tính năng. Khi kết nối dịch vụ bên thứ ba, bạn cho phép WarpTalk trao đổi dữ liệu với dịch vụ đó thay mặt bạn, và việc bạn sử dụng dịch vụ đó chịu sự điều chỉnh của điều khoản và chính sách bảo mật riêng của họ.",
+          "Chúng tôi không chịu trách nhiệm về các dịch vụ bên thứ ba, khả năng hoạt động của chúng, hoặc cách họ xử lý dữ liệu mà bạn chọn gửi cho họ."
+        ]
+      },
+      "ip": {
+        "heading": "12. Quyền sở hữu trí tuệ của chúng tôi",
+        "body": [
+          "Dịch vụ, bao gồm phần mềm, thiết kế, văn bản, đồ họa, logo và tên WarpTalk, thuộc sở hữu của WarpTalk và các bên cấp phép, được bảo hộ theo pháp luật về sở hữu trí tuệ. Điều khoản này cấp cho bạn quyền giới hạn, có thể thu hồi, không độc quyền và không thể chuyển nhượng để sử dụng Dịch vụ theo Điều khoản; Điều khoản không chuyển giao bất kỳ quyền sở hữu nào cho bạn.",
+          "Nếu bạn gửi cho chúng tôi góp ý hoặc đề xuất, chúng tôi có thể sử dụng chúng mà không bị hạn chế và không có nghĩa vụ nào với bạn."
+        ]
+      },
+      "termination": {
+        "heading": "13. Tạm ngưng và chấm dứt",
+        "body": [
+          "Bạn có thể ngừng sử dụng Dịch vụ và xóa tài khoản bất cứ lúc nào trong phần cài đặt tài khoản hoặc bằng cách liên hệ với chúng tôi.",
+          "Chúng tôi có thể tạm ngưng hoặc chấm dứt quyền truy cập của bạn vào Dịch vụ hoặc vào một không gian làm việc nếu bạn vi phạm nghiêm trọng Điều khoản này, nếu pháp luật yêu cầu, hoặc nếu việc sử dụng của bạn gây rủi ro về bảo mật hoặc pháp lý cho WarpTalk, người dùng khác hoặc bên thứ ba. Khi hợp lý, chúng tôi sẽ thông báo trước và tạo cơ hội để bạn khắc phục.",
+          "Khi tài khoản hoặc không gian làm việc bị chấm dứt, nội dung liên quan sẽ được xóa theo mô tả trong Chính sách bảo mật. Các mục mà theo bản chất cần tiếp tục có hiệu lực sau khi chấm dứt — bao gồm các mục 9, 12, 14, 15, 16 và 18 — vẫn tiếp tục có hiệu lực."
+        ]
+      },
+      "disclaimer": {
+        "heading": "14. Miễn trừ bảo đảm",
+        "body": [
+          "Trong phạm vi tối đa pháp luật cho phép, Dịch vụ và mọi kết quả AI được cung cấp theo nguyên trạng (\"as is\") và theo khả năng sẵn có (\"as available\"), không kèm bất kỳ bảo đảm nào, dù rõ ràng hay ngụ ý, bao gồm bảo đảm về khả năng thương mại, sự phù hợp cho một mục đích cụ thể, tính chính xác và không vi phạm quyền.",
+          "Không nội dung nào trong Điều khoản này loại trừ hoặc giới hạn bất kỳ bảo đảm hoặc quyền nào không thể bị loại trừ hoặc giới hạn theo pháp luật về bảo vệ quyền lợi người tiêu dùng."
+        ]
+      },
+      "liability": {
+        "heading": "15. Giới hạn trách nhiệm",
+        "body": [
+          "Trong phạm vi tối đa pháp luật cho phép, WarpTalk không chịu trách nhiệm đối với bất kỳ thiệt hại gián tiếp, ngẫu nhiên, đặc biệt, hệ quả hoặc mang tính trừng phạt nào, hay bất kỳ tổn thất nào về lợi nhuận, doanh thu, dữ liệu, uy tín hoặc cơ hội kinh doanh phát sinh từ hoặc liên quan đến Dịch vụ hoặc Điều khoản này.",
+          "Nếu bạn sử dụng Dịch vụ cho mục đích kinh doanh, trong phạm vi tối đa pháp luật cho phép, tổng trách nhiệm của WarpTalk đối với mọi khiếu nại phát sinh từ hoặc liên quan đến Dịch vụ hoặc Điều khoản này được giới hạn ở mức cao hơn giữa tổng số tiền bạn đã thanh toán cho WarpTalk để sử dụng Dịch vụ trong 12 tháng trước sự kiện dẫn đến khiếu nại, hoặc 1.000.000 VND.",
+          "Nếu bạn là người tiêu dùng, không nội dung nào trong Điều khoản này giới hạn hoặc loại trừ trách nhiệm của WarpTalk đối với bạn theo Luật Bảo vệ quyền lợi người tiêu dùng hoặc pháp luật khác. Các giới hạn này cũng không áp dụng đối với trách nhiệm không thể bị giới hạn theo pháp luật, bao gồm trách nhiệm đối với thiệt hại về tính mạng hoặc sức khỏe do lỗi bất cẩn, hoặc đối với hành vi gian lận."
+        ]
+      },
+      "indemnity": {
+        "heading": "16. Bồi hoàn",
+        "body": [
+          "Bạn đồng ý bồi hoàn và bảo vệ WarpTalk khỏi mọi khiếu nại, thiệt hại, tổn thất và chi phí (bao gồm chi phí pháp lý hợp lý) do bên thứ ba đưa ra phát sinh từ nội dung của bạn, việc bạn vi phạm Điều khoản này, hoặc việc bạn vi phạm pháp luật hay quyền của bên thứ ba, bao gồm việc ghi âm hoặc nhân bản giọng nói của một người khi chưa có sự đồng ý cần thiết."
+        ]
+      },
+      "changes": {
+        "heading": "17. Thay đổi điều khoản",
+        "body": [
+          "Chúng tôi có thể cập nhật Điều khoản này theo thời gian. Chúng tôi sẽ đăng phiên bản cập nhật trên trang này và thay đổi ngày hiệu lực ở trên. Nếu thay đổi là quan trọng, chúng tôi sẽ thông báo cho bạn qua email hoặc trong Dịch vụ ít nhất 30 ngày trước khi thay đổi có hiệu lực.",
+          "Nếu không đồng ý với thay đổi, bạn có thể ngừng sử dụng Dịch vụ và chấm dứt Điều khoản này trước khi thay đổi có hiệu lực; nếu bạn đã trả trước cho một chu kỳ chưa kết thúc, chúng tôi sẽ hoàn lại phần chưa sử dụng. Nếu bạn tiếp tục sử dụng Dịch vụ sau khi Điều khoản cập nhật có hiệu lực, bạn được xem là đã chấp nhận Điều khoản đó."
+        ]
+      },
+      "law": {
+        "heading": "18. Luật áp dụng và giải quyết tranh chấp",
+        "body": [
+          "Điều khoản này được điều chỉnh bởi pháp luật nước Cộng hòa Xã hội Chủ nghĩa Việt Nam.",
+          "Khi phát sinh tranh chấp, vui lòng liên hệ với chúng tôi trước qua {email} để hai bên cùng cố gắng giải quyết một cách thiện chí. Nếu tranh chấp không được giải quyết bằng thương lượng trong vòng 30 ngày, tranh chấp sẽ được đưa ra Tòa án có thẩm quyền tại Việt Nam. Không nội dung nào trong Điều khoản này hạn chế quyền của bạn với tư cách người tiêu dùng trong việc khiếu nại đến cơ quan bảo vệ quyền lợi người tiêu dùng hoặc khởi kiện theo quy định của pháp luật.",
+          "Nếu bất kỳ điều khoản nào của Điều khoản này bị xác định là không thể thi hành, các điều khoản còn lại vẫn giữ nguyên hiệu lực. Việc chúng tôi không thực thi một điều khoản không có nghĩa là từ bỏ điều khoản đó. Bạn không được chuyển nhượng Điều khoản này khi chưa có sự đồng ý của chúng tôi; chúng tôi có thể chuyển nhượng Điều khoản trong trường hợp sáp nhập, mua lại hoặc bán tài sản.",
+          "Nếu một điều khoản trong Điều khoản này có thể được hiểu theo nhiều cách khác nhau, điều khoản đó sẽ được giải thích theo hướng có lợi nhất cho bạn với tư cách người tiêu dùng. Điều khoản này được công bố bằng tiếng Việt, tiếng Anh và tiếng Nhật; nếu có sự khác biệt giữa các phiên bản, phiên bản tiếng Việt được ưu tiên áp dụng."
+        ]
+      },
+      "contact": {
+        "heading": "19. Liên hệ",
+        "body": [
+          "Nếu có bất kỳ câu hỏi nào về Điều khoản này, vui lòng liên hệ với chúng tôi qua {email}."
+        ]
+      }
+    }
   },
   "privacy": {
     "title": "Chính sách bảo mật",
-    "summary": "WarpTalk thu thập những gì, lưu trữ trong bao lâu, và điều gì xảy ra với âm thanh, bản ghi và mô hình giọng nói được tạo ra từ một cuộc họp."
-  },
-  "placeholder": {
-    "disclaimer": "Tài liệu này chưa được công bố. Cho đến khi được công bố, không phiên bản nào của tài liệu có hiệu lực, và không nội dung nào trên trang này nên được hiểu là một thỏa thuận. Nếu có câu hỏi về cách WarpTalk xử lý tài khoản, bản ghi hoặc dữ liệu giọng nói của bạn, hãy liên hệ với đội ngũ trước khi tạo tài khoản.",
-    "backToHome": "Về trang chủ",
-    "backToSignIn": "Về trang đăng nhập"
+    "summary": "Chính sách này giải thích WarpTalk thu thập những dữ liệu cá nhân nào, vì sao thu thập, lưu giữ trong bao lâu, chia sẻ với ai, cùng các lựa chọn và quyền của bạn — bao gồm cả âm thanh, bản ghi chép và hồ sơ giọng nói được tạo ra khi bạn sử dụng WarpTalk.",
+    "sections": {
+      "scope": {
+        "heading": "1. Chúng tôi là ai và phạm vi của chính sách",
+        "body": [
+          "WarpTalk (\"WarpTalk\", \"chúng tôi\") cung cấp nền tảng họp trực tuyến đa ngôn ngữ theo thời gian thực thông qua trang web, ứng dụng web, ứng dụng máy tính và các dịch vụ liên quan (\"Dịch vụ\"). Chính sách này mô tả cách chúng tôi xử lý dữ liệu cá nhân khi bạn truy cập trang web, tạo tài khoản, tham gia không gian làm việc hoặc cuộc họp, hay sử dụng Dịch vụ dưới hình thức khác.",
+          "Chúng tôi xử lý dữ liệu cá nhân theo quy định pháp luật về bảo vệ dữ liệu, bao gồm Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Nghị định số 356/2025/NĐ-CP hướng dẫn thi hành Luật, và, khi áp dụng đối với bạn, các quy định khác như Quy định chung về bảo vệ dữ liệu của Liên minh châu Âu (GDPR)."
+        ]
+      },
+      "roles": {
+        "heading": "2. Vai trò của chúng tôi và của không gian làm việc",
+        "body": [
+          "Đối với thông tin tài khoản, thanh toán và trang web của chúng tôi, WarpTalk quyết định mục đích và cách thức xử lý dữ liệu cá nhân của bạn.",
+          "Nội dung bên trong một không gian làm việc — cuộc họp, bản ghi hình, bản ghi chép, tin nhắn, tài liệu và kết quả AI — do Chủ sở hữu không gian làm việc kiểm soát; họ quyết định ai được truy cập và nội dung được lưu giữ bao lâu. Khi không gian làm việc thuộc về một tổ chức, chẳng hạn công ty nơi bạn làm việc, chúng tôi xử lý nội dung đó thay mặt và theo chỉ dẫn của tổ chức, và các yêu cầu liên quan có thể cần được gửi đến tổ chức đó."
+        ]
+      },
+      "collect": {
+        "heading": "3. Thông tin chúng tôi thu thập",
+        "body": [
+          "Thông tin bạn cung cấp:",
+          "- Thông tin tài khoản: họ tên, địa chỉ email, mật khẩu (chỉ được lưu dưới dạng mã băm an toàn), ảnh đại diện, ngôn ngữ ưu tiên, múi giờ và tùy chọn giao diện. Nếu bạn đăng nhập bằng Google hoặc Microsoft, chúng tôi nhận họ tên, địa chỉ email và ảnh đại diện của bạn từ nhà cung cấp đó.",
+          "- Thông tin không gian làm việc: các không gian làm việc bạn tạo hoặc tham gia, vai trò của bạn, lời mời bạn gửi, và các cài đặt như bảng thuật ngữ và chính sách ngôn ngữ.",
+          "- Nội dung cuộc họp: âm thanh và hình ảnh bạn chia sẻ trong cuộc họp, tin nhắn trò chuyện, tệp và tài liệu bạn tải lên, cùng thông tin cuộc họp như tiêu đề, chương trình họp và lịch họp.",
+          "- Mẫu giọng nói: các bản ghi âm bạn cung cấp để tạo hồ sơ giọng nói.",
+          "- Trao đổi với chúng tôi: tin nhắn bạn gửi, góp ý và câu trả lời khảo sát.",
+          "Thông tin được tạo ra khi bạn sử dụng Dịch vụ:",
+          "- Bản ghi chép, bản dịch, phụ đề, giọng nói đã dịch, bản ghi hình (khi người chủ trì ghi hình cuộc họp), bản tóm tắt, biên bản, đầu việc và các cuộc trò chuyện với trợ lý.",
+          "- Hồ sơ giọng nói được tạo từ mẫu giọng nói của bạn.",
+          "- Dữ liệu sử dụng và thiết bị: các trang và tính năng bạn sử dụng, thông tin tham gia cuộc họp (thời điểm vào và rời, thời lượng, ngôn ngữ), số phút dịch đã sử dụng, địa chỉ IP, loại trình duyệt và thiết bị, hệ điều hành, cùng nhật ký chẩn đoán và lỗi.",
+          "- Dữ liệu phiên: các phiên đăng nhập, thiết bị tương ứng, và các sự kiện bảo mật như thay đổi mật khẩu.",
+          "Thông tin từ bên thứ ba:",
+          "- Thông tin thanh toán từ Stripe, như tên và địa chỉ thanh toán, loại thẻ, bốn chữ số cuối của thẻ và trạng thái thanh toán. Chúng tôi không bao giờ nhận hoặc lưu trữ đầy đủ số thẻ của bạn.",
+          "- Dữ liệu từ các dịch vụ bên thứ ba mà bạn chọn kết nối, như sự kiện lịch hoặc tệp, trong phạm vi bạn cho phép."
+        ]
+      },
+      "use": {
+        "heading": "4. Cách chúng tôi sử dụng thông tin",
+        "body": [
+          "Chúng tôi sử dụng dữ liệu cá nhân để:",
+          "- tạo và quản lý tài khoản, không gian làm việc của bạn, và xác thực danh tính của bạn;",
+          "- vận hành cuộc họp và cung cấp nhận dạng giọng nói thời gian thực, dịch thuật, phụ đề, giọng nói đã dịch, ghi hình, bản ghi chép, bản tóm tắt và trợ lý WarpBot;",
+          "- xử lý thanh toán, quản lý gói thuê bao và tín dụng, và xuất hóa đơn;",
+          "- gửi cho bạn các thông báo dịch vụ, như lời mời họp, cảnh báo bảo mật, thông báo thanh toán và thay đổi điều khoản;",
+          "- hỗ trợ và phản hồi các yêu cầu của bạn;",
+          "- bảo đảm an toàn cho Dịch vụ, ngăn chặn gian lận và lạm dụng, và thực thi Điều khoản sử dụng;",
+          "- theo dõi hiệu năng, khắc phục sự cố và cải thiện Dịch vụ dựa trên dữ liệu sử dụng và chẩn đoán;",
+          "- tuân thủ các nghĩa vụ pháp lý của chúng tôi.",
+          "Chúng tôi xử lý dữ liệu cá nhân khi có sự đồng ý của bạn, hoặc không cần sự đồng ý trong các trường hợp pháp luật cho phép — chẳng hạn để thực hiện hợp đồng giữa chúng tôi và bạn, để thực hiện nghĩa vụ pháp lý, hoặc để bảo vệ tính mạng, sức khỏe, tài sản. Đối với dữ liệu cá nhân nhạy cảm, như hồ sơ giọng nói, chúng tôi luôn xin sự đồng ý riêng và rõ ràng của bạn. Khi xử lý dựa trên sự đồng ý, bạn có thể rút lại sự đồng ý bất cứ lúc nào; việc này không ảnh hưởng đến hoạt động xử lý đã được thực hiện trước đó."
+        ]
+      },
+      "ai": {
+        "heading": "5. Xử lý nội dung cuộc họp bằng AI",
+        "body": [
+          "Để cung cấp phụ đề, bản dịch, giọng nói đã dịch, bản tóm tắt và câu trả lời của trợ lý, âm thanh và văn bản cuộc họp được gửi đến các nhà cung cấp dịch vụ nhận dạng giọng nói, dịch thuật, mô hình ngôn ngữ lớn và tổng hợp giọng nói để xử lý thay mặt chúng tôi.",
+          "Các nhà cung cấp này chỉ được xử lý nội dung của bạn để cung cấp tính năng bạn yêu cầu. Chúng tôi lựa chọn các nhà cung cấp có điều khoản không cho phép họ dùng nội dung của bạn để huấn luyện mô hình, và bản thân chúng tôi cũng không sử dụng nội dung cuộc họp hay mẫu giọng nói của bạn để huấn luyện các mô hình AI đa dụng.",
+          "Âm thanh trực tiếp chỉ dùng cho phụ đề và dịch thời gian thực sẽ không được lưu trữ, trừ khi cuộc họp đó đang được ghi hình hoặc lưu bản ghi chép."
+        ]
+      },
+      "voice": {
+        "heading": "6. Hồ sơ giọng nói",
+        "body": [
+          "Mẫu giọng nói và hồ sơ giọng nói là dữ liệu sinh trắc học, thuộc nhóm dữ liệu cá nhân nhạy cảm theo pháp luật Việt Nam. Hồ sơ giọng nói chỉ được tạo khi bạn chủ động tạo và đưa ra sự đồng ý riêng, rõ ràng sau khi đã được thông báo rằng đây là dữ liệu nhạy cảm. Chúng tôi chỉ sử dụng mẫu giọng nói và hồ sơ giọng nói của bạn để tạo giọng nói đã dịch bằng giọng của bạn trong Dịch vụ, theo yêu cầu của bạn, và bảo vệ chúng bằng các biện pháp bảo mật tăng cường.",
+          "Bạn có thể nghe lại, thay thế hoặc xóa hồ sơ giọng nói bất cứ lúc nào tại trang Hồ sơ giọng nói. Khi bạn xóa, chúng tôi sẽ xóa mẫu giọng nói và hồ sơ giọng nói, đồng thời yêu cầu nhà cung cấp dịch vụ giọng nói xóa các bản sao họ lưu giữ, trong vòng 30 ngày.",
+          "Chúng tôi không sử dụng giọng nói của bạn để nhận diện bạn (ví dụ: sinh trắc học giọng nói hoặc xác thực), và không bán hay chia sẻ hồ sơ giọng nói của bạn cho bất kỳ ai ngoài nhà cung cấp tạo giọng nói cho bạn."
+        ]
+      },
+      "share": {
+        "heading": "7. Cách chúng tôi chia sẻ thông tin",
+        "body": [
+          "Chúng tôi không bán dữ liệu cá nhân của bạn và không chia sẻ dữ liệu cho mục đích quảng cáo nhắm mục tiêu. Chúng tôi chỉ chia sẻ dữ liệu cá nhân trong các trường hợp sau:",
+          "- Trong không gian làm việc của bạn: các thành viên khác và người tham gia cuộc họp có thể thấy tên, ảnh đại diện và những gì bạn nói hoặc chia sẻ trong cuộc họp, và — tùy theo phân quyền của không gian làm việc — bản ghi chép, bản ghi hình, bản tóm tắt và tài liệu từ các cuộc họp bạn tham dự.",
+          "- Nhà cung cấp dịch vụ: các công ty xử lý dữ liệu thay mặt chúng tôi theo hợp đồng yêu cầu họ bảo vệ dữ liệu, bao gồm lưu trữ đám mây, hạ tầng âm thanh và hình ảnh thời gian thực, nhà cung cấp nhận dạng giọng nói, dịch thuật, AI và giọng nói, xử lý thanh toán (Stripe) và gửi email.",
+          "- Các tích hợp bạn kết nối: dữ liệu bạn chọn gửi đến dịch vụ bên thứ ba.",
+          "- Lý do pháp lý: khi pháp luật, quyết định của tòa án hoặc cơ quan có thẩm quyền yêu cầu, hoặc khi cần thiết để bảo vệ quyền, sự an toàn và an ninh của người dùng, cộng đồng hoặc WarpTalk.",
+          "- Chuyển giao doanh nghiệp: trong trường hợp sáp nhập, mua lại hoặc bán tài sản, với điều kiện dữ liệu của bạn tiếp tục được bảo vệ theo chính sách này."
+        ]
+      },
+      "transfers": {
+        "heading": "8. Chuyển dữ liệu ra nước ngoài",
+        "body": [
+          "Các nhà cung cấp dịch vụ của chúng tôi có thể xử lý dữ liệu tại các quốc gia khác với nơi bạn sinh sống, bao gồm ngoài lãnh thổ Việt Nam. Khi chuyển dữ liệu cá nhân ra nước ngoài, chúng tôi tuân thủ quy định pháp luật áp dụng, bao gồm việc lập hồ sơ đánh giá tác động chuyển dữ liệu ra nước ngoài theo quy định của pháp luật Việt Nam và áp dụng các biện pháp bảo vệ theo hợp đồng với nhà cung cấp."
+        ]
+      },
+      "retention": {
+        "heading": "9. Thời gian lưu giữ thông tin",
+        "body": [
+          "Chúng tôi chỉ lưu giữ dữ liệu cá nhân trong thời gian cần thiết cho các mục đích được mô tả trong chính sách này:",
+          "- Nội dung cuộc họp (bản ghi hình, bản ghi chép, bản tóm tắt, tin nhắn và tài liệu) được lưu giữ theo thời hạn do Chủ sở hữu không gian làm việc thiết lập, cho đến khi bị một thành viên có thẩm quyền xóa, hoặc cho đến khi không gian làm việc bị xóa.",
+          "- Thông tin tài khoản được lưu giữ trong thời gian tài khoản còn hoạt động. Khi bạn xóa tài khoản, chúng tôi sẽ xóa hoặc ẩn danh hóa dữ liệu cá nhân của bạn trong vòng 30 ngày.",
+          "- Hồ sơ giọng nói được lưu giữ cho đến khi bạn xóa hồ sơ hoặc xóa tài khoản.",
+          "- Bản sao lưu được ghi đè theo chu kỳ, và dữ liệu đã xóa sẽ được loại khỏi bản sao lưu trong vòng 90 ngày.",
+          "- Hồ sơ thanh toán và giao dịch được lưu giữ trong thời gian theo yêu cầu của pháp luật về kế toán và thuế.",
+          "- Nhật ký bảo mật và chẩn đoán được lưu giữ tối đa 12 tháng."
+        ]
+      },
+      "security": {
+        "heading": "10. Bảo mật",
+        "body": [
+          "Chúng tôi áp dụng các biện pháp kỹ thuật và tổ chức để bảo vệ dữ liệu cá nhân, bao gồm mã hóa khi truyền tải (TLS), kiểm soát truy cập theo vai trò và nguyên tắc đặc quyền tối thiểu, mã băm mật khẩu, quản lý phiên cho phép bạn đăng xuất khỏi các thiết bị khác, và nhật ký kiểm tra đối với các thao tác nhạy cảm.",
+          "Không có hệ thống nào an toàn tuyệt đối. Việc xử lý dữ liệu cá nhân trên môi trường mạng tiềm ẩn các rủi ro như bị truy cập trái phép, mất mát hoặc bị tiết lộ. Nếu xảy ra sự cố vi phạm dữ liệu cá nhân, chúng tôi sẽ thông báo cho cơ quan có thẩm quyền theo quy định của pháp luật và thông báo cho người dùng bị ảnh hưởng — trong vòng 72 giờ kể từ khi phát hiện đối với sự cố liên quan đến dữ liệu sinh trắc học như hồ sơ giọng nói."
+        ]
+      },
+      "rights": {
+        "heading": "11. Quyền và lựa chọn của bạn",
+        "body": [
+          "Theo quy định của pháp luật áp dụng, bạn có quyền:",
+          "- được biết về hoạt động xử lý dữ liệu cá nhân của mình;",
+          "- truy cập dữ liệu cá nhân của mình và nhận bản sao;",
+          "- chỉnh sửa dữ liệu không chính xác hoặc chưa đầy đủ;",
+          "- xóa dữ liệu, hoặc yêu cầu chúng tôi xóa dữ liệu;",
+          "- rút lại sự đồng ý, hoặc hạn chế hay phản đối việc xử lý dữ liệu;",
+          "- nhận dữ liệu của mình ở định dạng có thể chuyển giao;",
+          "- khiếu nại đến cơ quan có thẩm quyền về bảo vệ dữ liệu cá nhân.",
+          "Bạn có thể cập nhật hồ sơ, quản lý phiên đăng nhập, xóa hồ sơ giọng nói và xóa tài khoản trực tiếp trong Dịch vụ. Với các yêu cầu khác, vui lòng liên hệ với chúng tôi qua {email}. Chúng tôi sẽ phản hồi trong thời hạn pháp luật quy định và có thể cần xác minh danh tính của bạn trước. Việc rút lại sự đồng ý hoặc xóa dữ liệu có thể khiến một số tính năng, như giọng nói đã dịch, không còn hoạt động. Các yêu cầu liên quan đến nội dung trong không gian làm việc thuộc sở hữu của một tổ chức có thể được chuyển đến tổ chức đó."
+        ]
+      },
+      "cookies": {
+        "heading": "12. Cookie và bộ nhớ cục bộ",
+        "body": [
+          "Chúng tôi sử dụng cookie và các hình thức lưu trữ tương tự trên trình duyệt cần thiết để Dịch vụ hoạt động: duy trì trạng thái đăng nhập, ghi nhớ không gian làm việc đang dùng, ngôn ngữ giao diện và tùy chọn thiết bị của bạn, và phòng chống gian lận.",
+          "Chúng tôi không sử dụng cookie quảng cáo hay công cụ theo dõi của bên thứ ba cho mục đích quảng cáo. Bạn có thể xóa hoặc chặn cookie trong cài đặt trình duyệt, nhưng một số phần của Dịch vụ, như đăng nhập, sẽ không hoạt động nếu thiếu chúng."
+        ]
+      },
+      "children": {
+        "heading": "13. Trẻ em",
+        "body": [
+          "Dịch vụ không dành cho trẻ em dưới 16 tuổi, và chúng tôi không cố ý thu thập dữ liệu cá nhân của trẻ em. Nếu bạn cho rằng một trẻ em đã cung cấp dữ liệu cá nhân cho chúng tôi, vui lòng liên hệ để chúng tôi xóa dữ liệu đó."
+        ]
+      },
+      "changes": {
+        "heading": "14. Thay đổi chính sách",
+        "body": [
+          "Chúng tôi có thể cập nhật chính sách này theo thời gian. Chúng tôi sẽ đăng phiên bản cập nhật trên trang này và thay đổi ngày hiệu lực ở trên. Nếu thay đổi là quan trọng, chúng tôi sẽ thông báo cho bạn qua email hoặc trong Dịch vụ trước khi thay đổi có hiệu lực."
+        ]
+      },
+      "contact": {
+        "heading": "15. Liên hệ",
+        "body": [
+          "Nếu có bất kỳ câu hỏi nào về chính sách này hoặc cách chúng tôi xử lý dữ liệu cá nhân của bạn, hoặc muốn thực hiện các quyền của mình, vui lòng liên hệ với chúng tôi qua {email}."
+        ]
+      }
+    }
   }
 }

@@ -8,6 +8,10 @@
 
 ## Latest Changes
 
+### 2026-09-30 Footer legal links (WT-841)
+
+- Footer Company column: "Terms and Condition" → `/terms`, "Privacy Policy" → `/privacy` (were `#`). `footerCompanyKeys` became `footerCompany: { key, href }[]`, like `footerNavigation`. Blog/About still point at `#`. The pages themselves are documented in `legal-pages.md`.
+
 ### 2026-09-04 i18n migration (WT-607)
 
 - The landing page is the first fully-migrated screen for the new `next-intl` i18n layer (see `.agents/page-docs/i18n-localization.md` for the system-wide overview).
