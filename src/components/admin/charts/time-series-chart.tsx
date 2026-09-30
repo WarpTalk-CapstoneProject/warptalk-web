@@ -4,6 +4,12 @@
  * The one chart primitive of the admin dashboards: values over an ordered axis (days, months),
  * drawn as a soft area, a thin line, or columns.
  *
+ * COMBO (`variant="combo"`)
+ *   Columns and lines in one chart with two value axes, for two quantities of different unit or
+ *   size (credits a day as columns on the left, meetings a day as a line on the right). Each axis
+ *   is scaled from its own series only and gridlines follow the left axis; the arithmetic lives in
+ *   `lib/admin/chart-combo.ts`.
+ *
  * THE LOOK (Linear / Resend "Metrics")
  *   One 2px line on a monotone curve, a gradient wash under it that fades to nothing at the
  *   baseline, solid hairline gridlines at round ticks, and no chart furniture beyond that. The
@@ -22,6 +28,15 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 import { ChartTooltip, type TooltipAnchor, type TooltipRow } from "@/components/admin/charts/chart-tooltip";
+import {
+  comboDefaultColors,
+  computeComboScales,
+  gutterWidth,
+  routeComboSeries,
+  valueToY,
+  type ComboAxis,
+  type ComboKind,
+} from "@/lib/admin/chart-combo";
 import {
   columnPath,
   compactAxisNumber,
@@ -54,6 +69,10 @@ export interface ChartSeries {
   display?: (number | null)[];
   /** Formats this series' readout; defaults to the chart's `formatValue`. */
   formatValue?: (value: number) => string;
+  /** Combo only: column or line. Defaults to a column for the first series, a line for the rest. */
+  kind?: ComboKind;
+  /** Combo only: which value axis the series is read against. Defaults to left, then right. */
+  axis?: ComboAxis;
 }
 
 export interface TimeSeriesChartProps {
@@ -62,10 +81,11 @@ export interface TimeSeriesChartProps {
   /** Longer tooltip titles ("Tue, Sep 16"); defaults to `labels`. */
   titles?: string[];
   series: ChartSeries[];
-  variant?: "area" | "line" | "bar";
+  variant?: "area" | "line" | "bar" | "combo";
   /**
-   * Bar only: one column per position with the series stacked bottom-up (a total split into its
-   * parts, e.g. monthly spend by category) instead of side by side. Put the total in `tooltipFooter`.
+   * Bar (and the columns of a combo): one column per position with the series stacked bottom-up (a
+   * total split into its parts, e.g. monthly spend by category) instead of side by side. Put the
+   * total in `tooltipFooter`. Lines of a combo are unaffected.
    */
   stacked?: boolean;
   /** Plot plus the x-axis band. */
@@ -76,6 +96,10 @@ export interface TimeSeriesChartProps {
   formatAxis?: (value: number) => string;
   /** Counts: no fractional tick. */
   integer?: boolean;
+  /** Combo only: ticks of the right axis; compact numbers by default. */
+  formatAxisRight?: (value: number) => string;
+  /** Combo only: the right axis counts things, so no fractional tick. */
+  integerRight?: boolean;
   /** What the tooltip says for a gap at `index` — "Still to come", "No figure". */
   describeGap?: (index: number) => string;
   /** A secondary line under the tooltip's figures (e.g. "4.5 h translated"). */
@@ -126,6 +150,8 @@ export function TimeSeriesChart({
   formatValue,
   formatAxis = compactAxisNumber,
   integer = false,
+  formatAxisRight = compactAxisNumber,
+  integerRight = false,
   describeGap = () => "No figure",
   tooltipFooter,
   ariaLabel,
@@ -138,31 +164,50 @@ export function TimeSeriesChart({
   const [anchor, setAnchor] = useState<TooltipAnchor | null>(null);
 
   const count = labels.length;
-  const colored = useMemo(
-    () =>
-      series.map((s, index) => ({
-        ...s,
-        color: s.color ?? (index === 0 ? CHART_COLORS.primary : CHART_COLORS.secondary),
-      })),
-    [series],
-  );
+  const isCombo = variant === "combo";
+  const routes = useMemo(() => routeComboSeries(series), [series]);
+  const colored = useMemo(() => {
+    const comboColors = comboDefaultColors(routes);
+    return series.map((s, index) => ({
+      ...s,
+      color: s.color ?? (isCombo ? comboColors[index] : index === 0 ? CHART_COLORS.primary : CHART_COLORS.secondary),
+    }));
+  }, [series, routes, isCombo]);
+  /** Combo: is series `index` drawn as a column (every series of the other variants is not asked). */
+  const isBarAt = (index: number) => routes[index]?.kind === "bar";
+  const axisAt = (index: number): ComboAxis => routes[index]?.axis ?? "left";
 
-  const isStacked = stacked && variant === "bar";
+  const isStacked = stacked && (variant === "bar" || isCombo);
+  const isKnown = (v: number | null | undefined): v is number => v !== null && v !== undefined && Number.isFinite(v);
   const positive = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) || v < 0 ? 0 : v);
-  const stackTotal = (index: number) => colored.reduce((sum, s) => sum + positive(s.values[index]), 0);
-  const rawMax = isStacked
+  const stackTotal = (index: number) =>
+    colored.reduce((sum, s, seriesIndex) => (isCombo && !isBarAt(seriesIndex) ? sum : sum + positive(s.values[index])), 0);
+  const rawMax = isCombo
+    ? 0
+    : isStacked
     ? Math.max(0, ...labels.map((_, index) => stackTotal(index)))
     : Math.max(0, ...colored.flatMap((s) => s.values.map((v) => (v === null || !Number.isFinite(v) ? 0 : v))));
-  const scale = niceScale(rawMax, { integer, targetTicks: height < 170 ? 3 : 4 });
+  const targetTicks = height < 170 ? 3 : 4;
+  // Combo: each axis is scaled from its own series only; every other variant has the one scale.
+  const comboScales = isCombo
+    ? computeComboScales(colored, routes, { stacked: isStacked, integerLeft: integer, integerRight, targetTicks })
+    : null;
+  const scale = comboScales ? comboScales.left : niceScale(rawMax, { integer, targetTicks });
+  const rightScale = comboScales?.right ?? null;
   const tickLabels = scale.ticks.map((tick) => formatAxis(tick));
+  const rightTickLabels = rightScale ? rightScale.ticks.map((tick) => formatAxisRight(tick)) : [];
   const padLeft = Math.ceil(Math.max(...tickLabels.map(textWidth), 12)) + 12;
+  const padRight = rightScale ? gutterWidth(rightTickLabels, "right") : PAD_RIGHT;
   const plotLeft = padLeft;
-  const plotWidth = Math.max(40, width - padLeft - PAD_RIGHT);
+  const plotWidth = Math.max(40, width - padLeft - padRight);
   const plotHeight = Math.max(40, height - AXIS_BAND - PAD_TOP);
   const baseY = PAD_TOP + plotHeight;
   const y = (value: number) => PAD_TOP + plotHeight - (scale.max > 0 ? (value / scale.max) * plotHeight : 0);
+  /** The y of `value` on the axis series `index` is read against (the left one outside combos). */
+  const yFor = (index: number, value: number) =>
+    isCombo && axisAt(index) === "right" && rightScale ? valueToY(value, rightScale.max, PAD_TOP, plotHeight) : y(value);
 
-  const layout = variant === "bar" ? "band" : "point";
+  const layout = variant === "bar" || isCombo ? "band" : "point";
   const slot = plotWidth / Math.max(1, count);
   const x = (index: number) =>
     layout === "band"
@@ -173,11 +218,20 @@ export function TimeSeriesChart({
   const labelIndexes = xLabelIndexes(count, plotWidth, Math.max(0, ...labels.map(textWidth)) + 20);
 
   // Columns: grouped side by side for several series, each at most 24px, a 2px gap between.
-  const groupCount = isStacked ? 1 : colored.length;
+  const barIndexes = colored.map((_, index) => index).filter((index) => !isCombo || isBarAt(index));
+  const groupCount = isStacked ? 1 : Math.max(1, barIndexes.length);
   const column = Math.max(2, Math.min(MAX_COLUMN, (slot * 0.62 - GROUP_GAP * (groupCount - 1)) / groupCount));
   const groupWidth = column * groupCount + GROUP_GAP * (groupCount - 1);
 
   const topOf = (index: number): number => {
+    if (isCombo) {
+      const tops = colored.flatMap((s, seriesIndex) => {
+        const value = isStacked && isBarAt(seriesIndex) ? null : s.values[index];
+        return isKnown(value) ? [yFor(seriesIndex, value)] : [];
+      });
+      if (isStacked && stackTotal(index) > 0) tops.push(yFor(barIndexes[0] ?? 0, stackTotal(index)));
+      return tops.length ? Math.min(...tops) : baseY;
+    }
     if (isStacked) return stackTotal(index) > 0 ? y(stackTotal(index)) : baseY;
     const values = colored.map((s) => s.values[index]).filter((v): v is number => v !== null && Number.isFinite(v));
     return values.length ? y(Math.max(...values)) : baseY;
@@ -231,8 +285,8 @@ export function TimeSeriesChart({
   const tooltipRows: TooltipRow[] =
     active === null
       ? []
-      : colored.flatMap((s) => {
-          if (isStacked && positive(s.values[active]) === 0) return [];
+      : colored.flatMap((s, seriesIndex) => {
+          if (isStacked && (!isCombo || isBarAt(seriesIndex)) && positive(s.values[active]) === 0) return [];
           return [s];
         }).map((s) => {
           const value = (s.display ?? s.values)[active];
@@ -252,7 +306,7 @@ export function TimeSeriesChart({
         <div className="mb-2 flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] text-ink-muted">
           {colored.map((s) => (
             <span key={s.key} className="inline-flex items-center gap-1.5">
-              {variant === "bar" ? (
+              {variant === "bar" || (isCombo && isBarAt(colored.indexOf(s))) ? (
                 <i aria-hidden className="inline-block size-2 rounded-[2px]" style={{ background: s.color }} />
               ) : (
                 <i aria-hidden className="inline-block h-[2px] w-3 rounded-full" style={{ background: s.color }} />
@@ -293,7 +347,7 @@ export function TimeSeriesChart({
           <g key={tick}>
             <line
               x1={plotLeft}
-              x2={width - PAD_RIGHT}
+              x2={width - padRight}
               y1={Math.round(y(tick)) + 0.5}
               y2={Math.round(y(tick)) + 0.5}
               style={{ stroke: index === 0 ? "var(--hairline-strong)" : "var(--hairline)" }}
@@ -311,6 +365,23 @@ export function TimeSeriesChart({
           </g>
         ))}
 
+        {/* Combo: the right axis has ticks of its own and no gridlines (the left axis owns those). */}
+        {rightScale
+          ? rightScale.ticks.map((tick, index) => (
+              <text
+                key={`right-${tick}`}
+                x={plotLeft + plotWidth + 10}
+                y={valueToY(tick, rightScale.max, PAD_TOP, plotHeight) + 4}
+                textAnchor="start"
+                fontSize={TICK_FONT}
+                className="tabular-nums"
+                style={{ fill: "var(--muted-foreground)" }}
+              >
+                {rightTickLabels[index]}
+              </text>
+            ))
+          : null}
+
         {/* The active slot, behind the marks. */}
         {active !== null && layout === "band" ? (
           <rect
@@ -326,14 +397,14 @@ export function TimeSeriesChart({
         {isStacked
           ? labels.map((_, index) => {
               const parts = colored
-                .map((s) => ({ key: s.key, color: s.color, value: positive(s.values[index]) }))
-                .filter((part) => part.value > 0);
+                .map((s, seriesIndex) => ({ key: s.key, color: s.color, value: positive(s.values[index]), seriesIndex }))
+                .filter((part) => part.value > 0 && (!isCombo || isBarAt(part.seriesIndex)));
               let bottom = baseY;
               const left = x(index) - column / 2;
               return (
                 <g key={`stack-${index}`} style={{ opacity: active === null || active === index ? 1 : 0.45, transition: "opacity 120ms" }}>
                   {parts.map((part, partIndex) => {
-                    const height = Math.max(1, baseY - y(part.value));
+                    const height = Math.max(1, baseY - yFor(part.seriesIndex, part.value));
                     const top = bottom - height;
                     const isTop = partIndex === parts.length - 1;
                     const d = columnPath(left, top, column, height, isTop ? 4 : 0);
@@ -343,12 +414,13 @@ export function TimeSeriesChart({
                 </g>
               );
             })
-          : variant === "bar"
+          : variant === "bar" || isCombo
           ? colored.map((s, seriesIndex) =>
               s.values.map((value, index) => {
+                if (isCombo && !isBarAt(seriesIndex)) return null;
                 if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return null;
-                const left = x(index) - groupWidth / 2 + seriesIndex * (column + GROUP_GAP);
-                const top = Math.min(y(value), baseY - 1.5);
+                const left = x(index) - groupWidth / 2 + barIndexes.indexOf(seriesIndex) * (column + GROUP_GAP);
+                const top = Math.min(yFor(seriesIndex, value), baseY - 1.5);
                 return (
                   <path
                     key={`${s.key}-${index}`}
@@ -414,6 +486,69 @@ export function TimeSeriesChart({
                 </g>
               );
             })}
+
+        {/* Combo lines ride over the columns, through the band centres. A gap breaks the line. */}
+        {isCombo
+          ? colored.map((s, seriesIndex) => {
+              if (isBarAt(seriesIndex)) return null;
+              const runs = valueRuns(s.values);
+              // Dense charts (a month of days): markers only where the crosshair is, or they merge.
+              const markers = slot >= 9;
+              return (
+                <g key={s.key} pointerEvents="none">
+                  {runs.map((run, runIndex) => {
+                    const points = run.map((p) => ({ x: x(p.index), y: yFor(seriesIndex, p.value) }));
+                    return points.length > 1 ? (
+                      <path
+                        key={runIndex}
+                        d={monotonePath(points)}
+                        fill="none"
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        style={{ stroke: s.color }}
+                      />
+                    ) : null;
+                  })}
+                  {runs.flatMap((run) =>
+                    run
+                      // An isolated point has no line to carry it, so it always gets its dot.
+                      .filter((p) => (markers || run.length === 1) && p.index !== active)
+                      .map((p) => (
+                        <circle
+                          key={p.index}
+                          cx={x(p.index)}
+                          cy={yFor(seriesIndex, p.value)}
+                          r={2.5}
+                          strokeWidth={1.5}
+                          style={{ fill: s.color, stroke: "var(--surface-1)" }}
+                        />
+                      )),
+                  )}
+                </g>
+              );
+            })
+          : null}
+
+        {/* Combo crosshair: the slot is already tinted; a ringed dot on each line at the index. */}
+        {isCombo && active !== null ? (
+          <g pointerEvents="none">
+            {colored.map((s, seriesIndex) => {
+              const value = s.values[active];
+              if (isBarAt(seriesIndex) || !isKnown(value)) return null;
+              return (
+                <circle
+                  key={s.key}
+                  cx={x(active)}
+                  cy={yFor(seriesIndex, value)}
+                  r={4}
+                  strokeWidth={2}
+                  style={{ fill: s.color, stroke: "var(--surface-1)" }}
+                />
+              );
+            })}
+          </g>
+        ) : null}
 
         {/* Crosshair: a hairline at the snapped index, a ringed dot on every series there. */}
         {active !== null && layout === "point" ? (
