@@ -1030,27 +1030,27 @@ function GlobalGlossaryAdmin() {
                   });
                   setCsvText([header, ...rows].join("\n"));
                   setBulkImportTab("csv");
-                  toast.success(`Đã nạp ${template.sampleTerms.length} dòng từ mẫu "${template.name}" với cấu hình ngôn ngữ và lĩnh vực chuẩn`);
+                  toast.success(`Loaded ${template.sampleTerms.length} rows from template "${template.name}" with standard language and domain configuration`);
                 }}
               />
             </div>
           ) : (
             <div>
               <div className="mb-2 flex items-center justify-between text-xs text-ink-muted">
-                <span>Hỗ trợ các cột: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
+                <span>Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
                 <button
                   type="button"
                   onClick={() => setBulkImportTab("templates")}
                   className="flex items-center gap-1 font-medium text-primary hover:underline"
                 >
                   <Sparkle className="h-3.5 w-3.5" />
-                  Chọn từ Template Catalog
+                  Choose from Template Catalog
                 </button>
               </div>
               <textarea
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,quy trình CI/CD,en,vi,DevOps,Automated build and deploy process&#10;cache,bộ nhớ đệm,en,vi,IT Support,Temporary data storage for fast access"
+                placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,CI/CD pipeline,en,vi,DevOps,Automated build and deploy process&#10;cache,memory cache,en,vi,IT Support,Temporary data storage for fast access"
                 className="h-48 w-full rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
               />
             </div>

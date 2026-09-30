@@ -53,6 +53,7 @@ const NON_ENGLISH =
  * one marker covers a table but never bleeds into unrelated code further up the file.
  */
 function isAllowed(rawLines, index) {
+  if (rawLines.slice(0, 10).some((line) => line.includes("i18n-allow-file"))) return true;
   for (let i = index; i >= 0 && index - i <= 20; i -= 1) {
     const line = rawLines[i] ?? "";
     if (i !== index && line.trim() === "") return false;

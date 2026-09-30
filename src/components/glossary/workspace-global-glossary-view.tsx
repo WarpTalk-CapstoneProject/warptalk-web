@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import {
   MagnifyingGlass,
   ArrowSquareOut,
-  SlidersHorizontal,
   Info,
   Globe,
 } from "@phosphor-icons/react";

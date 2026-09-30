@@ -35,7 +35,6 @@ export function GlossaryLocalePills({ template }: { template: GlossaryTemplateDe
 export function GlossaryStatusChips({ template }: { template: GlossaryTemplateDefinition }) {
   const isPublished = template.status === "published";
   const isDraft = template.status === "draft";
-  const isArchived = template.status === "archived";
 
   return (
     <span className="flex flex-wrap items-center gap-1">
