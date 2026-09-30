@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { translationRoomService } from "@/services/translation-room.service";
 import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
 import { SERIES_ROOT_KEY } from "@/hooks/use-series";
+import { endRoomFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { FlashModeState } from "@/services/translation-room.service";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
@@ -408,9 +409,11 @@ export function useSetNoiseReduction(roomId: string) {
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      await translationRoomService.end(id);
-    },
+    // Single-flight per room, like useEndMeetingForAll: repeated presses share one request.
+    mutationFn: (id: string) =>
+      singleFlight(endRoomFlightKey(id), async () => {
+        await translationRoomService.end(id);
+      }),
     onSuccess: (_data, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
         current
