@@ -157,6 +157,7 @@ export const ADMIN_ROUTE_PERMISSIONS: readonly { href: string; permission: Admin
   { href: "/admin/settings", permission: ADMIN_PERMISSIONS.settingsRead },
   { href: "/admin/plugins", permission: ADMIN_PERMISSIONS.pluginsRead },
   { href: "/admin/global-glossary", permission: ADMIN_PERMISSIONS.glossaryRead },
+  { href: "/admin/glossary-templates", permission: ADMIN_PERMISSIONS.glossaryRead },
   { href: "/admin/staff", permission: ADMIN_PERMISSIONS.staffRead },
   { href: "/admin/roles", permission: ADMIN_PERMISSIONS.staffRead },
   // G12 internal management. The inbox shows each person only the sources their role can read.

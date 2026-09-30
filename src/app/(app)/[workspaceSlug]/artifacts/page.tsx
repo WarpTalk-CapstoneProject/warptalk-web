@@ -1,9 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { FileText, SpinnerGap, User, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  FileText,
+  ListBullets,
+  Sparkle,
+  SpinnerGap,
+  SquaresFour,
+  Stamp,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
 
 import {
   WorkspaceBody,
@@ -11,15 +19,20 @@ import {
   WorkspacePage,
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Button } from "@/components/ui/button";
-import { ArtifactCard } from "@/components/artifacts/artifact-card";
+import { ArtifactCard, ArtifactRow } from "@/components/artifacts/artifact-card";
 import { useArtifactLibrary } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { countByKind, groupEntriesByMeeting, narrowLibrary } from "@/lib/meeting/artifact-library";
-import type { ArtifactKind } from "@/lib/meeting/artifact-library";
+import {
+  LIBRARY_KINDS,
+  LIBRARY_SCOPES,
+  libraryCounts,
+  listLibrary,
+} from "@/lib/meeting/artifact-library";
+import type { ArtifactKind, LibraryScope } from "@/lib/meeting/artifact-library";
+import { cn } from "@/lib/utils";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -49,51 +62,89 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
  *   Recordings, debug logs and audio samples. A video is not read, searched or cited; the other
  *   two are engineering output stored beside the record. They stay on the meeting page, which is
  *   where somebody hunting a FILE goes.
+ *
+ * BY KIND, THEN BY WHOSE (2026-09-30)
+ *   Three kind tabs — Transcripts (the default), AI summaries, Minutes; there is no "All records"
+ *   — and inside each, All / Yours / Shared with you. One card is one document, and its picture is
+ *   the first page of the .docx it downloads as.
+ *
+ *   The page is PERSONAL for every role: only documents the viewer can open are listed. It used to
+ *   list every meeting an Owner/Admin could see and lock most of them — HOST_ONLY is the default,
+ *   and the workspace role grants no read — so eleven cards in twelve said "not shared with you".
+ *   A document the viewer cannot read has no card, no tab and no count here.
+ *
+ *   Search is by title: the meeting's name and room code (and a minutes number), never the body.
  */
 
-type KindFilter = ArtifactKind | "all";
+const KIND_TAB_ICONS: Record<ArtifactKind, React.ElementType> = {
+  transcript: FileText,
+  summary: Sparkle,
+  minutes: Stamp,
+};
 
-const KIND_FILTER_VALUES: KindFilter[] = ["all", "transcript", "summary", "minutes"];
+function parseKind(value: string | null): ArtifactKind {
+  return (LIBRARY_KINDS as readonly string[]).includes(value ?? "") ? (value as ArtifactKind) : "transcript";
+}
+
+function parseScope(value: string | null): LibraryScope {
+  return (LIBRARY_SCOPES as readonly string[]).includes(value ?? "") ? (value as LibraryScope) : "all";
+}
+
 
 export default function ArtifactsPage() {
   const t = useTranslations("artifacts");
   const locale = useLocale();
   const params = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = params?.workspaceSlug ?? "";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const viewerId = useAuthStore((state) => state.user?.id ?? null);
 
+  // Kind, scope and layout live in the URL, so a pasted or reloaded link opens the same view —
+  // and the server render and the first client render agree on it.
+  const kind = parseKind(searchParams.get("kind"));
+  const scope = parseScope(searchParams.get("scope"));
+  const view: "grid" | "list" = searchParams.get("view") === "list" ? "list" : "grid";
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<KindFilter>("all");
-  const [mineOnly, setMineOnly] = useState(false);
-  const library = useArtifactLibrary(activeWorkspaceId, { search: query });
 
-  const entries = useMemo(
-    () =>
-      narrowLibrary(library.entries, {
-        kind: kind === "all" ? null : kind,
-        hostedBy: mineOnly ? viewerId : null,
-        query,
-      }),
-    [kind, library.entries, mineOnly, query, viewerId],
+  const library = useArtifactLibrary(activeWorkspaceId, { search: query, viewerId });
+
+  /** Defaults are left out of the URL: a plain /artifacts is Transcripts · All · Grid. */
+  function setView(next: { kind?: ArtifactKind; scope?: LibraryScope; view?: "grid" | "list" }) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextKind = next.kind ?? kind;
+    const nextScope = next.scope ?? scope;
+    const nextView = next.view ?? view;
+    if (nextKind === "transcript") nextParams.delete("kind");
+    else nextParams.set("kind", nextKind);
+    if (nextScope === "all") nextParams.delete("scope");
+    else nextParams.set("scope", nextScope);
+    if (nextView === "grid") nextParams.delete("view");
+    else nextParams.set("view", nextView);
+    const search = nextParams.toString();
+    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
+  }
+
+  // Counted before the search narrows anything: a tab says how much is behind it.
+  const counts = useMemo(
+    () => libraryCounts(library.entries, kind, viewerId),
+    [kind, library.entries, viewerId],
   );
 
-  // Counts come from the UNNARROWED list, so a chip reads "how much is behind this" rather than
-  // "how much survived the filter I am already looking through".
-  const counts = useMemo(() => countByKind(library.entries), [library.entries]);
-
-  // Grouped AFTER narrowing, so "Transcripts" means "meetings that have one" and a body search
-  // surfaces the meeting whose body matched.
-  const groups = useMemo(() => groupEntriesByMeeting(entries), [entries]);
+  const entries = useMemo(
+    () => listLibrary(library.entries, { kind, scope, query, viewerId }),
+    [kind, library.entries, query, scope, viewerId],
+  );
 
   /**
    * No ambient context from the LIST.
    *
    * The assistant's ambient context must name a real entity — the sibling rule "@mention options
-   * always carry a real entity" is the same requirement from the other side. This page no longer
-   * has one: reading a record happens at `/artifacts/{roomId}`, and that page registers the
-   * meeting it is showing. Registering a context here with a count and a filter name would hand
-   * WarpBot something it cannot answer questions about.
+   * always carry a real entity" is the same requirement from the other side. This page has none:
+   * reading a record happens at `/artifacts/{roomId}`, and that page registers the meeting it is
+   * showing.
    */
   useRegisterAssistantContext(null);
 
@@ -101,72 +152,126 @@ export default function ArtifactsPage() {
     <WorkspacePage>
       <WorkspaceToolbar
         filters={
-          <FilterChipGroup label={t("filterByKindAria")}>
-            {KIND_FILTER_VALUES.map((value) => (
-              <FilterChip
-                key={value}
-                selected={kind === value}
-                onClick={() => setKind(value)}
-                // filter-chip.tsx keeps the count in `badge` and nothing else beside the label:
-                // "the label is the filter". A count spliced into the children would be the
-                // second place in the app that answers where a number goes.
-                badge={value !== "all" && counts[value] ? counts[value] : undefined}
-              >
-                {t(`filters.${value}`)}
-              </FilterChip>
-            ))}
-          </FilterChipGroup>
+          <div role="tablist" aria-label={t("filterByKindAria")} className="flex items-center gap-1.5">
+            {LIBRARY_KINDS.map((value) => {
+              const Icon = KIND_TAB_ICONS[value];
+              const selected = kind === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setView({ kind: value, scope: "all" })}
+                  className={cn(
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+                    selected
+                      ? "border-ink bg-ink text-surface-1"
+                      : "border-border text-ink-muted hover:bg-surface-2 hover:text-ink",
+                  )}
+                >
+                  <Icon size={13} weight={selected ? "fill" : "regular"} />
+                  {t(`filters.${value}`)}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-[11px] tabular-nums",
+                      selected ? "bg-surface-1/20 text-surface-1" : "bg-surface-2 text-ink-subtle",
+                    )}
+                  >
+                    {counts.byKind[value]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         }
         actions={
           <>
-            {/* Meetings, because meetings are what the grid lists now. Saying "202 records"
-                over 101 cards invited exactly one question — which card is the other 101? */}
-            <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
-              {t("meetingsCount", { count: groups.length })}
-            </span>
-            {/* Ownership is a second axis, so it gets its own control rather than a fifth chip in
-                a group that means "kind". Mixing the two in one row makes "Minutes" and "Mine"
-                look mutually exclusive, which they are not. */}
             <WorkspaceIconButton
-              title={mineOnly ? t("mineOnly.on") : t("mineOnly.off")}
-              onClick={() => setMineOnly((value) => !value)}
-              dotted={mineOnly}
-              disabled={!viewerId}
+              title={t("view.grid")}
+              onClick={() => setView({ view: "grid" })}
+              dotted={view === "grid"}
             >
-              <User size={14} weight={mineOnly ? "fill" : "regular"} />
+              <SquaresFour size={14} weight={view === "grid" ? "fill" : "regular"} />
+            </WorkspaceIconButton>
+            <WorkspaceIconButton
+              title={t("view.list")}
+              onClick={() => setView({ view: "list" })}
+              dotted={view === "list"}
+            >
+              <ListBullets size={14} weight={view === "list" ? "bold" : "regular"} />
             </WorkspaceIconButton>
             <ExpandingSearchDock
               value={query}
               onValueChange={setQuery}
               placeholder={t("search.placeholder")}
-              expandedWidth={340}
+              expandedWidth={300}
             />
           </>
         }
       />
 
       <WorkspaceBody>
-        {/* No frame around the grid. The cards are already bordered surfaces, so the section's
-            own border, radius and background were a second box drawn around boxes — and its
-            `overflow-hidden` was clipping the reader's own scroll region to it. The landmark and
-            its label stay; only the decoration went. */}
-        <section aria-label="Meeting records">
+        <div
+          role="tablist"
+          aria-label={t("scopeAria")}
+          className="flex flex-wrap items-center gap-x-5 border-b border-border"
+        >
+          {LIBRARY_SCOPES.map((value) => {
+            const selected = scope === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setView({ scope: value })}
+                className={cn(
+                  "-mb-px border-b-2 py-2 text-[14px] outline-none transition-colors focus-visible:text-ink",
+                  selected
+                    ? "border-ink font-semibold text-ink"
+                    : "border-transparent text-ink-subtle hover:text-ink",
+                )}
+              >
+                {t(`scopes.${value}`)}
+                <span className="ml-1 text-[11.5px] font-normal tabular-nums text-ink-subtle">
+                  {counts.byScope[value]}
+                </span>
+              </button>
+            );
+          })}
+          <span className="ml-auto py-2 text-[12px] tabular-nums text-ink-subtle">
+            {t(`documentsCount.${kind}`, { count: entries.length })}
+          </span>
+        </div>
+
+        <section aria-label={t(`filters.${kind}`)} className="pt-4">
           {library.isLoading ? (
             <LoadingState t={t} />
           ) : library.isError ? (
             <ErrorState t={t} onRetry={library.refetch} />
           ) : entries.length === 0 ? (
-            <EmptyState t={t} hasFilters={Boolean(query) || kind !== "all" || mineOnly} />
-          ) : (
-            /* One column, always. The second used to hold the reader; a record opens at its own
-               URL now, so the grid gets the whole width back and the cards stop having two sets
-               of proportions depending on whether something is selected. */
-            <div className="grid gap-3.5 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {groups.map((group) => (
+            <EmptyState t={t} kind={kind} scope={scope} hasQuery={Boolean(query.trim())} />
+          ) : view === "grid" ? (
+            <div className="grid gap-4 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {entries.map((entry) => (
                 <ArtifactCard
-                  key={group.roomId}
-                  group={group}
+                  key={entry.id}
+                  entry={entry}
                   workspaceSlug={workspaceSlug}
+                  viewerId={viewerId}
+                  locale={locale}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="pb-4">
+              {entries.map((entry) => (
+                <ArtifactRow
+                  key={entry.id}
+                  entry={entry}
+                  workspaceSlug={workspaceSlug}
+                  viewerId={viewerId}
                   locale={locale}
                 />
               ))}
@@ -174,9 +279,6 @@ export default function ArtifactsPage() {
           )}
         </section>
 
-        {/* Said once, at the bottom, rather than on every card that has no body. The reason a
-            record cannot be read is a property of the meeting's sharing policy, and repeating it
-            forty times would drown the forty documents that CAN be read. */}
         {!library.isLoading && !library.isError && library.failedSource ? (
           <p className="mt-3 flex items-center gap-2 text-[11px] text-ink-subtle">
             <WarningCircle size={13} className="shrink-0" />
@@ -218,21 +320,33 @@ function ErrorState({ t, onRetry }: { t: ArtifactsT; onRetry: () => void }) {
   );
 }
 
-function EmptyState({ t, hasFilters }: { t: ArtifactsT; hasFilters: boolean }) {
+function EmptyState({
+  t,
+  kind,
+  scope,
+  hasQuery,
+}: {
+  t: ArtifactsT;
+  kind: ArtifactKind;
+  scope: LibraryScope;
+  hasQuery: boolean;
+}) {
+  if (hasQuery) {
+    return (
+      <PagePlaceholder
+        kind="no-results"
+        className="min-h-[360px]"
+        title={t("empty.noResultsTitle")}
+        description={t("empty.noResultsDescription")}
+      />
+    );
+  }
   return (
     <PagePlaceholder
-      kind={hasFilters ? "no-results" : "documents"}
-      className="min-h-[420px]"
-      title={hasFilters ? t("empty.noResultsTitle") : t("empty.emptyTitle")}
-      description={hasFilters ? t("empty.noResultsDescription") : t("empty.emptyDescription")}
-      action={
-        hasFilters ? null : (
-          <span className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
-            <FileText size={13} />
-            {t("empty.footerNote")}
-          </span>
-        )
-      }
+      kind="documents"
+      className="min-h-[360px]"
+      title={t(`empty.${scope}.title`)}
+      description={t(`empty.${scope}.description.${kind}`)}
     />
   );
 }

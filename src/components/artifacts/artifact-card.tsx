@@ -2,49 +2,32 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import {
-  FileText,
-  LockSimple,
-  Sparkle,
-  SpinnerGap,
-  Stamp,
-  WarningCircle,
-} from "@phosphor-icons/react/dist/ssr";
+import { FileText, Sparkle, SpinnerGap, Stamp } from "@phosphor-icons/react/dist/ssr";
 
 import { cn } from "@/lib/utils";
-import {
-  describeAbsence,
-  preferredEntry,
-  relativeTime,
-} from "@/lib/meeting/artifact-library";
-import { artifactPreviewMarkdown } from "@/lib/meeting/artifact-preview";
-import { PreviewMarkdown } from "@/components/markdown/document-markdown";
-import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
+import { entryScope, relativeTime } from "@/lib/meeting/artifact-library";
+import type { ArtifactKind, LibraryEntry } from "@/lib/meeting/artifact-library";
 import { UserChip } from "@/components/user/user-chip";
+import { DocumentPageThumbnail } from "@/components/artifacts/document-page-thumbnail";
 import { recordDetailPath } from "@/lib/workspace/workspace-routes";
 
 /**
- * One MEETING, and what it left behind.
+ * One DOCUMENT the viewer can read.
  *
  * WHAT THIS REPLACED
- *   A card per document. A meeting with a transcript and a summary produced two cards, adjacent,
- *   under the same title and the same room code, differing only in an eight-point label — so a
- *   page of 101 meetings was 202 cards and the reader could not tell which three belonged
- *   together. "Bị rời rạc quá, tôi không biết combo transcript, summary, minutes là của meeting
- *   nào khi nhìn vào."
+ *   A card per meeting, carrying up to three documents as marks, with a text excerpt of whichever
+ *   one read best. The page is now split by kind, so a meeting has at most one document under the
+ *   tab being read, and the meeting-card's job — telling three documents of one meeting apart —
+ *   went with the "All records" tab.
  *
- *   The meeting is the thing being looked for, so the meeting is the card. Its documents are
- *   named on it as marks, and opening it is what shows them.
+ * THE THUMBNAIL IS THE FILE
+ *   The picture is the first page of the .docx this document downloads as (see
+ *   DocumentPageThumbnail). Below it the card says what a gallery card says: the name, and one line
+ *   of who and when.
  *
- * THE PREVIEW IS STILL THE POINT
- *   A grid of titles is a list of filenames with extra whitespace. The card shows the first lines
- *   of the meeting's most readable document, faded where it continues — that is what makes the
- *   library scannable, and the body already arrived with the list.
- *
- * WHEN THERE IS NOTHING TO PREVIEW
- *   The preview is replaced by the SENTENCE, not by an empty frame. A withheld transcript and a
- *   summary still being written look identical from outside, and the difference is the whole of
- *   what the reader needs.
+ * NO LOCKED CARDS
+ *   The grid only receives documents the viewer can open (`listLibrary`), so there is no withheld
+ *   state to draw here.
  */
 
 const KIND_ICONS: Record<ArtifactKind, React.ElementType> = {
@@ -53,191 +36,158 @@ const KIND_ICONS: Record<ArtifactKind, React.ElementType> = {
   minutes: Stamp,
 };
 
-/**
- * One accent per kind, used only as a small icon.
- *
- * Not a filled chip: three saturated tiles per card would make the grid louder than the meeting
- * pages it sits beside, and the accent is meant to let the eye sort kinds at a glance, not to
- * rank them.
- */
-const KIND_ACCENTS: Record<ArtifactKind, string> = {
-  transcript: "text-ink-muted",
-  summary: "text-primary",
-  minutes: "text-emerald-600 dark:text-emerald-400",
+/** The small tile that names the kind over the page's bottom-left corner. */
+const KIND_TILES: Record<ArtifactKind, string> = {
+  transcript: "bg-slate-500 text-white dark:bg-slate-400 dark:text-slate-950",
+  summary: "bg-primary text-primary-foreground",
+  minutes: "bg-emerald-600 text-white dark:bg-emerald-400 dark:text-emerald-950",
 };
 
+type ArtifactsT = ReturnType<typeof useTranslations>;
+
+function documentHref(workspaceSlug: string, entry: LibraryEntry): string {
+  return `${recordDetailPath(workspaceSlug, entry.roomId)}?kind=${entry.kind}`;
+}
+
+function edited(entry: LibraryEntry, t: ArtifactsT, locale?: string): string {
+  return relativeTime(
+    entry.changedAt ?? entry.meetingEndedAt,
+    undefined,
+    (key, values) => t(`relativeTime.${key}`, values),
+    locale,
+  );
+}
+
+function KindTile({ kind, className }: { kind: ArtifactKind; className?: string }) {
+  const Icon = KIND_ICONS[kind];
+  return (
+    <span className={cn("grid shrink-0 place-items-center rounded-md shadow-sm", KIND_TILES[kind], className)}>
+      <Icon size={14} weight="fill" />
+    </span>
+  );
+}
+
+/** The minutes' paper state, or a summary still being written. Nothing for a finished document. */
+function StatePill({ entry, t }: { entry: LibraryEntry; t: ArtifactsT }) {
+  if (entry.absence === "generating") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 px-1.5 text-[10.5px] text-primary">
+        <SpinnerGap size={10} className="animate-spin" />
+        {t("state.writing")}
+      </span>
+    );
+  }
+  if (entry.kind !== "minutes") return null;
+  const approved = entry.statusLabel === "Approved" || entry.statusLabel === "Signed";
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full border px-1.5 text-[10.5px]",
+        approved
+          ? "border-emerald-600/35 text-emerald-700 dark:text-emerald-400"
+          : "border-amber-600/35 text-amber-700 dark:text-amber-400",
+      )}
+    >
+      {entry.statusLabel}
+    </span>
+  );
+}
+
+/** "You", or the host as the shared chip — a name printed as text would be a dead end. */
+function Host({ entry, viewerId, t }: { entry: LibraryEntry; viewerId?: string | null; t: ArtifactsT }) {
+  if (entryScope(entry, viewerId) === "mine") {
+    return <span className="shrink-0">{t("host.you")}</span>;
+  }
+  return (
+    // The card is a <Link>; the chip renders a span and swallows its own click, so opening the
+    // host's card does not also open the document.
+    <UserChip
+      user={{ userId: entry.hostId, name: entry.hostName, role: "Host" }}
+      variant="text"
+      size="sm"
+      showAvatar={false}
+      className="min-w-0 truncate text-[12.5px] text-ink-subtle"
+    />
+  );
+}
+
 export function ArtifactCard({
-  group,
+  entry,
   workspaceSlug,
+  viewerId,
   locale,
 }: {
-  group: MeetingRecordGroup;
+  entry: LibraryEntry;
   workspaceSlug: string;
+  viewerId?: string | null;
   locale?: string;
 }) {
   const t = useTranslations("artifacts");
-  const lead = preferredEntry(group);
-  // Markdown, rendered: the stored transcript IS markdown, and printing it verbatim put a room
-  // UUID header and `**[Name (VI)]**:` markers at the top of every card. See artifact-preview.
-  const excerpt = artifactPreviewMarkdown(lead.body);
-
   return (
-    /* A link, not a button. The records open at their own URL now, so this has to be the thing a
-       browser already knows how to do with one — middle-click into a tab, copy the address, or
-       simply show it on hover. A button with a router.push does none of that. */
+    /* A link, not a button: middle-click into a tab, copy the address, see it on hover. */
     <Link
-      href={recordDetailPath(workspaceSlug, group.roomId)}
+      href={documentHref(workspaceSlug, entry)}
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface-1 text-left outline-none transition-colors",
-        "hover:border-border hover:bg-surface-2/40 focus-visible:ring-2 focus-visible:ring-ring/40",
+        "group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface-1 text-left outline-none transition-colors",
+        "hover:border-ink-subtle/40 focus-visible:ring-2 focus-visible:ring-ring/40",
       )}
     >
-      {/* The thumbnail: the document, in miniature. `select-none` because this is a picture of
-          text, not text somebody should be dragging out of a card. */}
-      <div className="relative h-[168px] shrink-0 select-none overflow-hidden border-b border-border bg-surface-2 px-3.5 pt-3.5">
-        {/* The meeting names itself first now. The kind used to lead here, which is what made two
-            cards for one meeting read as two unrelated things. */}
-        <p className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink" title={group.roomTitle}>
-          {group.roomTitle}
-        </p>
-        <p className="mt-1 truncate text-[8px] font-medium uppercase tracking-[0.08em] text-ink-subtle">
-          {group.roomCode}
-        </p>
-
-        {excerpt ? (
-          <PreviewMarkdown className="mt-2 text-[8.5px] leading-[1.5] text-ink-muted">
-            {excerpt}
-          </PreviewMarkdown>
-        ) : lead.body ? (
-          // A body with nothing left once the header and the pipeline's markers are gone — a
-          // transcript nobody spoke in. Said, rather than left as an empty frame.
-          <AbsenceNote entry={{ ...lead, absence: "empty" }} t={t} />
-        ) : (
-          <AbsenceNote entry={lead} t={t} />
-        )}
-
-        {/* The document continues past the card. A hard edge reads as a document that ends here;
-            the fade says there is more, which is the reason to open it. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-canvas to-transparent" />
+      <div className="relative h-[190px] shrink-0 overflow-hidden border-b border-border bg-surface-2 px-3.5 pt-3.5">
+        <DocumentPageThumbnail entry={entry} />
+        {/* The page continues past the card; the fade says so. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-surface-2 from-10% to-transparent" />
+        <KindTile kind={entry.kind} className="absolute bottom-2.5 left-3.5 size-7" />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-3.5 py-3">
-        <RecordMarks group={group} t={t} />
-        <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-ink-subtle">
-          {/* The card is a <Link>, so the chip renders a span and swallows its own click —
-              opening the host's card must not also open the record. */}
-          {group.hostName ? (
-            <UserChip
-              user={{ userId: group.hostId, name: group.hostName, role: "Host" }}
-              variant="text"
-              size="sm"
-              showAvatar={false}
-              className="text-[10px] text-ink-subtle"
-            />
-          ) : (
-            <span className="truncate">—</span>
-          )}
-          <span className="text-ink-subtle/60">·</span>
-          <span className="shrink-0">
-            {relativeTime(
-              group.changedAt ?? group.meetingEndedAt,
-              undefined,
-              (key, values) => t(`relativeTime.${key}`, values),
-              locale,
-            )}
+      <div className="flex min-w-0 flex-col gap-1 px-3.5 pb-3.5 pt-3">
+        <p className="truncate text-[15px] font-semibold leading-snug text-ink" title={entry.roomTitle}>
+          {entry.roomTitle}
+        </p>
+        <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-ink-subtle">
+          <Host entry={entry} viewerId={viewerId} t={t} />
+          <span aria-hidden="true" className="text-ink-subtle/60">
+            ·
           </span>
+          <span className="shrink-0">{t("edited", { when: edited(entry, t, locale) })}</span>
+          <StatePill entry={entry} t={t} />
         </span>
       </div>
     </Link>
   );
 }
 
-/**
- * Which of the three this meeting produced.
- *
- * The card's whole job below the preview. Named rather than counted — "3 records" tells the
- * reader a number when the question is always *which*, and a meeting with a signed minutes is a
- * different thing from one with two auto-generated files.
- *
- * A record nobody here can open is dimmed rather than dropped: knowing a transcript exists and is
- * the host's to share is a different fact from there being no transcript, and it is the fact that
- * tells the reader who to ask.
- */
-function RecordMarks({
-  group,
-  t,
-}: {
-  group: MeetingRecordGroup;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const describeAbsenceT = (key: string) => t(`absence.${key}`);
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-      {group.entries.map((entry) => {
-        const Icon = KIND_ICONS[entry.kind];
-        const readable = Boolean(entry.body);
-        return (
-          <span
-            key={entry.id}
-            title={
-              readable
-                ? t(`kindLabels.${entry.kind}`)
-                : describeAbsence(entry.absence ?? "unavailable", entry.kind, describeAbsenceT)
-            }
-            className={cn(
-              "flex min-w-0 items-center gap-1 text-[10px] font-medium",
-              readable ? "text-ink" : "text-ink-subtle/70",
-            )}
-          >
-            <Icon
-              size={11}
-              weight="fill"
-              className={cn("shrink-0", readable ? KIND_ACCENTS[entry.kind] : "text-ink-subtle/60")}
-            />
-            <span className="truncate">{entry.title}</span>
-            {readable ? null : <LockOrState entry={entry} />}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-/** Why one of the marks is dimmed, in one glyph. */
-function LockOrState({ entry }: { entry: LibraryEntry }) {
-  if (entry.absence === "generating") {
-    return <SpinnerGap size={9} className="shrink-0 animate-spin" />;
-  }
-  if (entry.absence === "withheld") return <LockSimple size={9} className="shrink-0" />;
-  return <WarningCircle size={9} className="shrink-0" />;
-}
-
-/**
- * What the thumbnail says instead of a preview.
- *
- * Set in the same place and the same size as the text it replaces, so a card with nothing to show
- * still has the shape of a card — a grid where the empty ones collapse to half height reads as a
- * rendering fault.
- */
-function AbsenceNote({
+/** The same document as one row, for scanning by name when the preview is not needed. */
+export function ArtifactRow({
   entry,
-  t,
+  workspaceSlug,
+  viewerId,
+  locale,
 }: {
   entry: LibraryEntry;
-  t: ReturnType<typeof useTranslations>;
+  workspaceSlug: string;
+  viewerId?: string | null;
+  locale?: string;
 }) {
-  if (!entry.absence) return null;
-
+  const t = useTranslations("artifacts");
   return (
-    <p className="mt-3 flex items-start gap-1.5 text-[9px] leading-[1.6] text-ink-subtle">
-      {entry.absence === "generating" ? (
-        <SpinnerGap size={10} className="mt-px shrink-0 animate-spin" />
-      ) : entry.absence === "withheld" ? (
-        <LockSimple size={10} className="mt-px shrink-0" />
-      ) : (
-        <WarningCircle size={10} className="mt-px shrink-0" />
-      )}
-      <span>{describeAbsence(entry.absence, entry.kind, (key) => t(`absence.${key}`))}</span>
-    </p>
+    <Link
+      href={documentHref(workspaceSlug, entry)}
+      className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-1.5 py-2.5 outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 sm:grid-cols-[24px_minmax(0,1fr)_minmax(0,160px)_110px]"
+    >
+      <KindTile kind={entry.kind} className="size-6" />
+      <span className="min-w-0">
+        <span className="block truncate text-[14px] font-medium text-ink">{entry.roomTitle}</span>
+        <span className="block truncate font-mono text-[11px] text-ink-subtle">
+          {entry.kind === "minutes" ? `${entry.title} · ${entry.roomCode}` : entry.roomCode}
+        </span>
+      </span>
+      <span className="hidden min-w-0 truncate text-[12.5px] text-ink-subtle sm:block">
+        <Host entry={entry} viewerId={viewerId} t={t} />
+      </span>
+      <span className="flex items-center justify-end gap-1.5 whitespace-nowrap text-[12.5px] text-ink-subtle">
+        <StatePill entry={entry} t={t} />
+        {edited(entry, t, locale)}
+      </span>
+    </Link>
   );
 }

@@ -2,6 +2,9 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
+import { SERIES_ROOT_KEY } from "@/hooks/use-series";
+import { endRoomFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { FlashModeState } from "@/services/translation-room.service";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
@@ -153,9 +156,20 @@ export function useUpdateTranslationRoomSettings() {
     mutationFn: async ({ id, data }: { id: string; data: UpdateRoomSettingsRequest }) => {
       await translationRoomService.updateSettings(id, data);
     },
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
-      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    // WT-852: "Room updated successfully." used to appear over the old page. The saved edit is
+    // written into the cached room first, so the page shows it the moment the save succeeds;
+    // the refetches below then confirm it. Returned, so `mutateAsync` resolves only once the
+    // room has been re-read — the caller's toast never announces a save the page does not show.
+    onSuccess: (_, { id, data }) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (room) =>
+        room ? applyRoomSettingsPatch(room, data) : room,
+      );
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: MEETING_KEY }),
+        // A recurring meeting's "Daily · 20:40 / Next …" line is read from the series, which
+        // embeds this occurrence and lives under its own key — the meetings key never reached it.
+        queryClient.invalidateQueries({ queryKey: SERIES_ROOT_KEY }),
+      ]);
     },
   });
 }
@@ -395,9 +409,11 @@ export function useSetNoiseReduction(roomId: string) {
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      await translationRoomService.end(id);
-    },
+    // Single-flight per room, like useEndMeetingForAll: repeated presses share one request.
+    mutationFn: (id: string) =>
+      singleFlight(endRoomFlightKey(id), async () => {
+        await translationRoomService.end(id);
+      }),
     onSuccess: (_data, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
         current

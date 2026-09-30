@@ -15,12 +15,14 @@ import {
   Trash,
   Upload,
 } from "@phosphor-icons/react/dist/ssr";
+import { Sparkle, UploadSimple } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { GlossaryTemplateGallery } from "@/components/glossary/glossary-template-gallery";
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import {
   AdminDataTable,
@@ -53,7 +55,8 @@ import {
   useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { enumValue, type ListStateConfig } from "@/lib/admin/list-state";
+import { enumValue, singleEnumFilter, type ListStateConfig } from "@/lib/admin/list-state";
+import { cn } from "@/lib/utils";
 import { languagesInScope } from "@/lib/language/languages";
 import type {
   GlobalGlossaryTermDto,
@@ -176,6 +179,7 @@ function GlobalGlossaryAdmin() {
     term: string;
   } | null>(null);
   const [csvText, setCsvText] = useState("");
+  const [bulkImportTab, setBulkImportTab] = useState<"csv" | "templates">("csv");
 
   // The palette's "Add glossary term" and "Import glossary" actions.
   useAdminActionIntent({
@@ -341,10 +345,17 @@ function GlobalGlossaryAdmin() {
 
   const handleBulkImport = async () => {
     const lines = csvText.split(/\r?\n/).map((l) => l.split(","));
-    const headers = lines[0]?.map((h) => h.trim()) || [];
-    const idx = (name: string) => headers.indexOf(name);
-    const termIdx = idx("Term");
-    const transIdx = idx("Translation");
+    const rawHeaders = lines[0]?.map((h) => h.trim().toLowerCase().replace(/['"]/g, "")) || [];
+    const findCol = (aliases: string[]) => rawHeaders.findIndex((h) => aliases.includes(h));
+
+    const termIdx = findCol(["term", "sourceterm", "source term", "source"]);
+    const transIdx = findCol(["translation", "preferredtranslation", "preferred translation", "targetterm", "target term", "target"]);
+    const srcLangIdx = findCol(["sourcelanguage", "source language", "src_lang", "sourcelang"]);
+    const tgtLangIdx = findCol(["targetlanguage", "target language", "tgt_lang", "targetlang"]);
+    const domainIdx = findCol(["businessdomain", "business domain", "domain", "field"]);
+    const defIdx = findCol(["definition", "meaning"]);
+    const noteIdx = findCol(["usagenote", "usage note", "note"]);
+    const priorityIdx = findCol(["priority"]);
 
     if (termIdx === -1 || transIdx === -1) {
       toast.error(t("toasts.csvMissingColumns"));
@@ -353,28 +364,30 @@ function GlobalGlossaryAdmin() {
 
     const rows = lines
       .slice(1)
-      .filter((r) => r.length >= 2 && r[termIdx]?.trim())
-      .map((r) => ({
-        term: r[termIdx].trim(),
-        preferredTranslation: r[transIdx]?.trim() || r[termIdx].trim(),
-        sourceLanguage:
-          idx("SourceLanguage") >= 0
-            ? r[idx("SourceLanguage")]?.trim() || null
-            : null,
-        targetLanguage:
-          idx("TargetLanguage") >= 0
-            ? r[idx("TargetLanguage")]?.trim() || null
-            : null,
-        businessDomain:
-          idx("BusinessDomain") >= 0
-            ? r[idx("BusinessDomain")]?.trim() || null
-            : null,
-        definition:
-          idx("Definition") >= 0 ? r[idx("Definition")]?.trim() || null : null,
-        usageNote:
-          idx("UsageNote") >= 0 ? r[idx("UsageNote")]?.trim() || null : null,
-        priority: idx("Priority") >= 0 ? Number(r[idx("Priority")]) || 5 : 5,
-      }));
+      .filter((r) => r.length >= 2 && r[termIdx]?.replace(/^["']|["']$/g, "").trim())
+      .map((r) => {
+        const clean = (index: number) => (index >= 0 ? r[index]?.replace(/^["']|["']$/g, "").trim() || null : null);
+        const term = clean(termIdx) || "";
+        const preferredTranslation = clean(transIdx) || term;
+        const sourceLanguage = clean(srcLangIdx);
+        const targetLanguage = clean(tgtLangIdx);
+        const businessDomain = clean(domainIdx);
+        const definition = clean(defIdx);
+        const usageNote = clean(noteIdx);
+        const priorityRaw = clean(priorityIdx);
+        const priority = priorityRaw ? Number(priorityRaw) || 5 : 5;
+
+        return {
+          term,
+          preferredTranslation,
+          sourceLanguage,
+          targetLanguage,
+          businessDomain,
+          definition,
+          usageNote,
+          priority,
+        };
+      });
 
     if (rows.length === 0) {
       toast.error(t("toasts.csvNoValidRows"));
@@ -458,10 +471,17 @@ function GlobalGlossaryAdmin() {
       primary: true,
       sortField: "term",
       cell: (term) => (
-        <div className="min-w-0">
+        <div className="min-w-0 py-0.5">
           <span className="block truncate text-xs font-semibold text-ink">{term.term}</span>
           {term.definition ? (
-            <span className="block truncate text-[10px] font-normal text-ink-muted">{term.definition}</span>
+            <span className="block text-[11px] font-normal text-ink-muted leading-tight mt-0.5 line-clamp-2">
+              {term.definition}
+            </span>
+          ) : null}
+          {term.usageNote ? (
+            <span className="block text-[10px] italic text-ink-subtle leading-tight mt-0.5 line-clamp-1">
+              &ldquo;{term.usageNote}&rdquo;
+            </span>
           ) : null}
         </div>
       ),
@@ -469,7 +489,7 @@ function GlobalGlossaryAdmin() {
     {
       id: "translation",
       header: t("table.translation"),
-      cell: (term) => <span className="block truncate text-xs font-semibold text-primary">{term.preferredTranslation}</span>,
+      cell: (term) => <span className="block truncate text-xs font-semibold text-ink">{term.preferredTranslation}</span>,
     },
     {
       id: "languages",
@@ -487,8 +507,12 @@ function GlobalGlossaryAdmin() {
     {
       id: "domain",
       header: t("table.domain"),
-      className: "w-[120px]",
-      cell: (term) => <span className="block truncate text-xs text-ink-muted">{term.businessDomain || t("table.noDomain")}</span>,
+      className: "w-[130px]",
+      cell: (term) => (
+        <span className="inline-flex items-center rounded-[4px] border border-hairline bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink">
+          {term.businessDomain || t("table.noDomain")}
+        </span>
+      ),
     },
     {
       id: "priority",
@@ -613,6 +637,40 @@ function GlobalGlossaryAdmin() {
 
       <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filters.statusLabel")} />
 
+      {domains.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+          <button
+            type="button"
+            onClick={() => list.setFilter("domain", null)}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              !state.filters.domain
+                ? "border-border bg-surface-3 font-semibold text-ink"
+                : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+            }`}
+          >
+            {t("filters.allDomains")}
+            <span className="text-[10px] text-ink-subtle">({totalCount})</span>
+          </button>
+          {domains.map((d) => {
+            const active = enumValue(state.filters, "domain") === d;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => list.setFilter("domain", singleEnumFilter(d))}
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                  active
+                    ? "border-border bg-surface-3 font-semibold text-ink"
+                    : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <AdminListToolbar
         list={list}
         searchPlaceholder={t("filters.searchPlaceholder")}
@@ -670,7 +728,7 @@ function GlobalGlossaryAdmin() {
 
       {/* Create Term Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("createDialog.title")}
@@ -816,7 +874,7 @@ function GlobalGlossaryAdmin() {
         open={!!termToEdit}
         onOpenChange={(open) => !open && setTermToEdit(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("editDialog.title")}
@@ -908,22 +966,100 @@ function GlobalGlossaryAdmin() {
       </Dialog>
 
       {/* Bulk Import Dialog */}
-      <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="font-bold text-base">
-              {t("bulkImportDialog.title")}
-            </DialogTitle>
+      <Dialog open={isBulkImportOpen} onOpenChange={(open) => {
+        if (!open) setBulkImportTab("csv");
+        setIsBulkImportOpen(open);
+      }}>
+        {/* WT-879. `sm:` prefix, not bare `max-w-2xl`: the base DialogContent sets `sm:max-w-sm`,
+            which beats an unprefixed width at ≥sm and squeezed this dialog to 384px. DialogContent is
+            a grid, so every child below also carries `min-w-0` — without it the unbreakable column
+            list and the textarea size the grid track to their own width and spill past the card. */}
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-2xl">
+          <DialogHeader className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <DialogTitle className="font-bold text-base">
+                {t("bulkImportDialog.title")}
+              </DialogTitle>
+              <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-[11.5px]">
+                <button
+                  type="button"
+                  onClick={() => setBulkImportTab("csv")}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
+                    bulkImportTab === "csv"
+                      ? "bg-surface-1 text-ink shadow-sm"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  <UploadSimple className="h-3.5 w-3.5" />
+                  Direct CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkImportTab("templates")}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
+                    bulkImportTab === "templates"
+                      ? "bg-surface-1 text-ink shadow-sm"
+                      : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  <Sparkle className="h-3.5 w-3.5 text-primary" weight="fill" />
+                  Templates Catalog
+                </button>
+              </div>
+            </div>
             <DialogDescription className="text-xs text-ink-muted">
               {t("bulkImportDialog.description")}
             </DialogDescription>
           </DialogHeader>
-          <textarea
-            value={csvText}
-            onChange={(e) => setCsvText(e.target.value)}
-            placeholder="Term,Translation,Definition&#10;sprint,sprint,A fixed short work cycle in Agile"
-            className="h-40 w-full rounded-md border border-hairline bg-surface-2 p-2 text-xs font-mono outline-none focus:border-primary"
-          />
+
+          {bulkImportTab === "templates" ? (
+            <div className="min-w-0 py-1">
+              <GlossaryTemplateGallery
+                onSelectTemplate={(template) => {
+                  const header = "Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority";
+                  const rows = template.sampleTerms.map((item) => {
+                    const cells = [
+                      `"${item.term.replace(/"/g, '""')}"`,
+                      `"${item.translation.replace(/"/g, '""')}"`,
+                      `"${template.sourceLanguage}"`,
+                      `"${template.targetLanguage}"`,
+                      `"${(item.domain || "").replace(/"/g, '""')}"`,
+                      `"${(item.definition || "").replace(/"/g, '""')}"`,
+                      `"${(item.usageNote || "").replace(/"/g, '""')}"`,
+                      String(item.priority ?? 5),
+                    ];
+                    return cells.join(",");
+                  });
+                  setCsvText([header, ...rows].join("\n"));
+                  setBulkImportTab("csv");
+                  toast.success(`Loaded ${template.sampleTerms.length} rows from template "${template.name}" with standard language and domain configuration`);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-ink-muted">
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
+                <button
+                  type="button"
+                  onClick={() => setBulkImportTab("templates")}
+                  className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <Sparkle className="h-3.5 w-3.5" />
+                  Choose from Template Catalog
+                </button>
+              </div>
+              <textarea
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,CI/CD pipeline,en,vi,DevOps,Automated build and deploy process&#10;cache,memory cache,en,vi,IT Support,Temporary data storage for fast access"
+                className="block h-48 w-full min-w-0 resize-y rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
+              />
+            </div>
+          )}
+
           <DialogFooter className="mt-2 flex gap-2">
             <button
               type="button"
@@ -952,7 +1088,7 @@ function GlobalGlossaryAdmin() {
         open={!!auditsTermId}
         onOpenChange={(open) => !open && setAuditsTermId(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-lg">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("auditDialog.title")}
@@ -999,7 +1135,7 @@ function GlobalGlossaryAdmin() {
         open={!!termToDelete}
         onOpenChange={(open) => !open && setTermToDelete(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-center font-bold text-base">
               {t("deleteDialog.title")}

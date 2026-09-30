@@ -23,8 +23,6 @@
     "copyLabel": "Bản ghi",
     "download": "Tải xuống",
     "downloadTitle": "Tải bản ghi này đúng như đang hiển thị",
-    "downloadWord": "Tài liệu Word (.docx)",
-    "downloadText": "Văn bản thuần (.txt)",
     "discard": "Hủy bỏ",
     "saving": "Đang lưu…",
     "doneSaveAll": "Xong & lưu tất cả",
@@ -121,6 +119,9 @@
     "cleanTitle": "Đã bỏ từ đệm và từ lặp, mỗi dòng là một câu. Chỉ thay đổi cách bạn xem.",
     "verbatim": "Nguyên văn",
     "verbatimTitle": "Đúng những gì hệ thống nhận dạng giọng nói đã ghi lại. Chỉ thay đổi cách bạn xem.",
+    "original": "Bản gốc",
+    "originalTitle": "Xem lại bản ghi âm nguyên bản chưa lọc từ đệm. Chỉ thay đổi cách bạn xem.",
+    "showCleanTitle": "Quay lại bản gọn đã lọc từ đệm. Chỉ thay đổi cách bạn xem.",
     "selfRepair": "Người nói đã tự sửa lời. Nguyên văn: \"{rawText}\""
   }
 }

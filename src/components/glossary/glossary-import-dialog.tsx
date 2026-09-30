@@ -24,11 +24,12 @@
  */
 
 import { useTranslations } from "next-intl";
-import { FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
+import { FileArrowUp, Spinner, Warning, Sparkle, UploadSimple } from "@phosphor-icons/react";
 import {
   buildSampleTemplateRows,
   describeExpectedPair,
 } from "@/lib/glossary/sample-template";
+import { GlossaryTemplateGallery } from "./glossary-template-gallery";
 import ExcelJS from "exceljs";
 import { useRef, useState } from "react";
 
@@ -47,6 +48,7 @@ import { cn } from "@/lib/utils";
 export interface ParsedGlossaryRow {
   sourceTerm: string;
   targetTerm: string;
+  context?: string | null;
   domain?: string | null;
   definition?: string | null;
   usageNote?: string | null;
@@ -68,6 +70,16 @@ const HEADER_ALIASES: Record<string, keyof ParsedGlossaryRow> = {
   targetterm: "targetTerm",
   target: "targetTerm",
   "translate as": "targetTerm",
+  context: "context",
+  "usage context": "context",
+  "context sentence": "context",
+  // i18n-allow: Vietnamese column aliases supported by spreadsheet importer
+  "ngữ cảnh": "context",
+  "ngu canh": "context",
+  "câu ví dụ": "context",
+  "ví dụ": "context",
+  example: "context",
+  "example sentence": "context",
   domain: "domain",
   field: "domain",
   "business domain": "domain",
@@ -285,6 +297,7 @@ export function GlossaryImportDialog({
   const [rows, setRows] = useState<ParsedGlossaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"upload" | "templates">("upload");
 
   const reset = () => {
     setFileName(null);
@@ -346,113 +359,187 @@ export function GlossaryImportDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) reset();
+        if (!next) {
+          reset();
+          setActiveTab("upload");
+        }
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-[560px] rounded-[14px] border-border bg-surface-1 shadow-none">
+      {/* WT-886: DialogContent is a CSS grid whose implicit column sizes to its widest child's
+          min-content, so one unbreakable term in the preview used to push the whole column past
+          the dialog edge. `minmax(0,1fr)` pins the column to the dialog width. The width override
+          must carry the `sm:` variant, or the base `sm:max-w-sm` keeps the dialog at 24rem. */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] rounded-[14px] border-border bg-surface-1 shadow-none sm:max-w-[760px]">
         <DialogHeader>
-          <DialogTitle className="text-[16px] font-semibold text-ink">
-            {t("title")}
-          </DialogTitle>
-          <DialogDescription className="text-[12px] text-ink-muted">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-[16px] font-semibold text-ink">
+              {t("title")}
+            </DialogTitle>
+            <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-[11.5px]">
+              <button
+                type="button"
+                onClick={() => setActiveTab("upload")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
+                  activeTab === "upload"
+                    ? "bg-surface-1 text-ink shadow-sm"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                <UploadSimple className="h-3.5 w-3.5" />
+                Upload file
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("templates")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
+                  activeTab === "templates"
+                    ? "bg-surface-1 text-ink shadow-sm"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                <Sparkle className="h-3.5 w-3.5 text-primary" weight="fill" />
+                Templates Catalog
+              </button>
+            </div>
+          </div>
+          <DialogDescription className="text-[12px] text-ink-muted [overflow-wrap:anywhere]">
             {t.rich("description", {
               glossaryName: () => <span className="font-medium text-ink">{glossaryName}</span>,
               term: (chunks) => <span className="font-medium">{chunks}</span>,
               translation: (chunks) => <span className="font-medium">{chunks}</span>,
             })}
           </DialogDescription>
-          {/* WT-522: said in words, not left to the sample file. The sample was the only thing
-              telling anyone what belonged in the second column, and it was hardcoded to a pair
-              that had nothing to do with the glossary being imported into. */}
-          {expectedPair ? (
-            <p className="text-[12px] leading-relaxed text-ink-muted">{expectedPair}</p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
-            className="self-start text-[12px] font-medium text-primary underline-offset-2 hover:underline"
-          >
-            {t("downloadSample")}
-          </button>
         </DialogHeader>
 
-        <div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".xlsx,.csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className={cn(
-              "flex w-full flex-col items-center gap-2 rounded-[10px] border border-dashed border-border px-4 py-6 text-center shadow-none transition-colors hover:bg-surface-2",
-            )}
-          >
-            <FileArrowUp className="h-6 w-6 text-ink-muted" />
-            <span className="text-[13px] font-medium text-ink">
-              {fileName ?? t("chooseFile")}
-            </span>
-            <span className="text-[11px] text-ink-subtle">
-              {fileName ? t("chooseDifferentFile") : t("excelOrCsv")}
-            </span>
-          </button>
-
-          {isParsing ? (
-            <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-muted">
-              <Spinner className="h-3.5 w-3.5 animate-spin" />
-              {t("readingFile")}
-            </p>
-          ) : null}
-
-          {error ? (
-            <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
-              <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
-              <span>{error}</span>
-            </p>
-          ) : null}
-
-          {rows.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-[12px] text-ink-muted">{t("rowsReady", { count: rows.length })}</p>
-              {/* The preview is what catches a header row read as data, or a file whose columns
-                  are in another language — before it becomes 200 junk terms. */}
-              <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
-                <table className="w-full text-left text-[12px]">
-                  <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
-                    <tr>
-                      <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
-                      <th className="px-2.5 py-1.5 font-medium">{t("translation")}</th>
-                      <th className="px-2.5 py-1.5 font-medium">{t("field")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.slice(0, 50).map((row, index) => (
-                      <tr key={`${row.sourceTerm}-${index}`} className="border-t border-hairline">
-                        <td className="px-2.5 py-1.5 text-ink">{row.sourceTerm || "—"}</td>
-                        <td className="px-2.5 py-1.5 text-ink">{row.targetTerm || "—"}</td>
-                        <td className="px-2.5 py-1.5 text-ink-muted">{row.domain || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {activeTab === "templates" ? (
+          <div className="min-w-0 py-1">
+            <GlossaryTemplateGallery
+              onSelectTemplate={(template, loadedRows) => {
+                setRows(loadedRows);
+                setFileName(`${template.name} (Template)`);
+                setActiveTab("upload");
+              }}
+            />
+          </div>
+        ) : (
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+              {expectedPair ? (
+                <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
+              ) : <span />}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  {t("downloadSample")} (.csv)
+                </button>
+                <span className="text-border">|</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("templates")}
+                  className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  <Sparkle className="h-3.5 w-3.5" />
+                  Templates Catalog (.xlsx / .csv)
+                </button>
               </div>
-              {rows.length > 50 ? (
-                <p className="mt-1.5 text-[11px] text-ink-subtle">
-                  {t("showingFirst", { count: rows.length })}
-                </p>
-              ) : null}
             </div>
-          ) : null}
-        </div>
 
-        <DialogFooter>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.csv"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleFile(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className={cn(
+                "flex w-full flex-col items-center gap-2 rounded-[10px] border border-dashed border-border px-4 py-6 text-center shadow-none transition-colors hover:bg-surface-2",
+              )}
+            >
+              <FileArrowUp className="h-6 w-6 text-ink-muted" />
+              <span
+                className="max-w-full truncate text-[13px] font-medium text-ink"
+                title={fileName ?? undefined}
+              >
+                {fileName ?? t("chooseFile")}
+              </span>
+              <span className="text-[11px] text-ink-subtle">
+                {fileName ? t("chooseDifferentFile") : t("excelOrCsv")}
+              </span>
+            </button>
+
+            {isParsing ? (
+              <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-muted">
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
+                {t("readingFile")}
+              </p>
+            ) : null}
+
+            {error ? (
+              <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
+                <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{error}</span>
+              </p>
+            ) : null}
+
+            {rows.length > 0 ? (
+              <div className="mt-4">
+                <p className="text-[12px] text-ink-muted">{t("rowsReady", { count: rows.length })}</p>
+                {/* The preview is what catches a header row read as data, or a file whose columns
+                    are in another language — before it becomes 200 junk terms. */}
+                <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
+                  {/* WT-886: `table-fixed` + explicit column widths, so a cell's content can never
+                      widen its column. Term/translation wrap anywhere (the preview exists to show
+                      what was parsed); context/field truncate with the full text in `title`. */}
+                  <table className="w-full table-fixed text-left text-[12px]">
+                    <colgroup>
+                      <col className="w-[30%]" />
+                      <col className="w-[30%]" />
+                      <col className="w-[25%]" />
+                      <col className="w-[15%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
+                      <tr>
+                        <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
+                        <th className="px-2.5 py-1.5 font-medium">{t("translation")}</th>
+                        <th className="px-2.5 py-1.5 font-medium">Context</th>
+                        <th className="px-2.5 py-1.5 font-medium">{t("field")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.slice(0, 50).map((row, index) => (
+                        <tr key={`${row.sourceTerm}-${index}`} className="border-t border-hairline">
+                          <td className="px-2.5 py-1.5 align-top text-ink font-medium [overflow-wrap:anywhere]">{row.sourceTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink font-semibold text-primary [overflow-wrap:anywhere]">{row.targetTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.context || undefined}>{row.context || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.domain || undefined}>{row.domain || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.length > 50 ? (
+                  <p className="mt-1.5 text-[11px] text-ink-subtle">
+                    {t("showingFirst", { count: rows.length })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <DialogFooter className="mt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="shadow-none">
             {t("cancel")}
           </Button>

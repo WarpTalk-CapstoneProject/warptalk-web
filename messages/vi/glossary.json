@@ -78,8 +78,35 @@
     "glossaryDeleted": "Đã xóa bộ thuật ngữ.",
     "glossaryDeleteFailed": "Không thể xóa bộ thuật ngữ.",
     "termRemoved": "Đã xóa thuật ngữ.",
-    "termRemoveFailed": "Không thể xóa thuật ngữ."
+    "termRemoveFailed": "Không thể xóa thuật ngữ.",
+    "customizingTerm": "Đã nạp thuật ngữ '{term}' vào form tùy chỉnh.",
+    "createGlossaryFirstForCustom": "Vui lòng tạo một bộ thuật ngữ trước để tùy biến từ này."
   },
+  "tabs": {
+    "custom": "Thuật ngữ tùy chỉnh",
+    "global": "Thuật ngữ hệ thống"
+  },
+  "grouping": {
+    "label": "Gom nhóm",
+    "byDomain": "Lĩnh vực",
+    "alphabetical": "A-Z"
+  },
+  "domains": {
+    "all": "Tất cả lĩnh vực"
+  },
+  "globalView": {
+    "bannerTitle": "Thuật ngữ chuẩn hệ thống",
+    "bannerNotice": "Các thuật ngữ được công bố sẽ áp dụng mặc định khi dịch cuộc họp. Thuật ngữ tùy chỉnh của workspace luôn được ưu tiên cao nhất nếu trùng từ. Dữ liệu thuật ngữ của workspace hoàn toàn bảo mật và không bị chia sẻ với quản trị viên nền tảng.",
+    "searchPlaceholder": "Tìm theo thuật ngữ, bản dịch, lĩnh vực, ngữ cảnh...",
+    "emptyTitle": "Không tìm thấy thuật ngữ hệ thống nào",
+    "emptyDescription": "Hãy thử tìm kiếm với từ khóa hoặc lĩnh vực khác.",
+    "customizeAction": "Tùy biến",
+    "loadError": "Không thể tải danh sách thuật ngữ hệ thống."
+  },
+  "termsCount": "thuật ngữ",
+  "priorityLabel": "Ưu tiên",
+  "contextLabel": "Ngữ cảnh",
+  "multiDomainNotice": "Cũng có trong lĩnh vực",
   "validation": {
     "nameMin": "Tên phải có ít nhất 2 ký tự",
     "sourceLanguageRequired": "Chọn ngôn ngữ mọi người nói",

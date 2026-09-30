@@ -155,3 +155,21 @@ test("citation times read as minutes and seconds", () => {
   assert.equal(formatCitationTime(90_210), "1:30");
   assert.equal(formatCitationTime(3_600_000), "60:00");
 });
+
+test("snake_case action_items is recognized with correct section title and alias parsing", () => {
+  const sections = parseSummarySections({
+    action_items: [
+      { assignee: "Bob", description: "Set up staging environment", atMs: 12000 },
+      { owner: "Alice", task: "Review pull request" },
+    ],
+  });
+
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].key, "action_items");
+  assert.equal(sections[0].title, "Action items");
+  assert.deepEqual(sections[0].items, [
+    { text: "Set up staging environment", owner: "Bob", atMs: 12000, alsoAtMs: [] },
+    { text: "Review pull request", owner: "Alice", atMs: null, alsoAtMs: [] },
+  ]);
+});
+

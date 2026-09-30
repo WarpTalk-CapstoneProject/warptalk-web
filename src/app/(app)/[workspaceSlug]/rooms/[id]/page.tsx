@@ -114,6 +114,7 @@ import {
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
+import { buildRecordingMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -141,7 +142,7 @@ import {
   useTranslationRoomParticipants,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
-import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
@@ -357,6 +358,7 @@ export default function RoomInformationPage() {
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
   const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
+  const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   /**
@@ -591,6 +593,19 @@ export default function RoomInformationPage() {
     [transcriptSegments],
   );
   const transcriptEntryCount = transcriptRows.length;
+
+  /**
+   * Where each transcript turn falls on the RECORDING's own file-second axis, one mark per turn.
+   *
+   * Built from the exact same `transcriptRows` the transcript renders its timestamps from, and the
+   * exact same `seekSources` `requestSeek` measures against — so a mark on the scrubber and the
+   * transcript line it points at can never disagree about where a turn starts. See
+   * recording-marks.ts for why a turn that cannot be placed is dropped rather than clamped.
+   */
+  const recordingMarks = useMemo(
+    () => buildRecordingMarks(transcriptRows, seekSources),
+    [transcriptRows, seekSources],
+  );
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -1063,6 +1078,8 @@ export default function RoomInformationPage() {
                     }
                     user={user}
                     onCopy={handleCopy}
+                    canEdit={canEditRoom}
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
@@ -1189,6 +1206,8 @@ export default function RoomInformationPage() {
                 // is the wire it comes back up. See the note on `seekSources` above.
                 onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
+                marks={recordingMarks}
+                onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
@@ -1415,6 +1434,8 @@ function MeetingRecordSection({
   onTabChange,
   expanded,
   onToggleExpanded,
+  marks,
+  onMarkClick,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
@@ -1495,6 +1516,8 @@ function MeetingRecordSection({
   onToggleExpanded?: () => void;
   /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
   generatableLanguages?: readonly string[] | null;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingRoomPage");
   const { busyArtifactId, downloadArtifact } =
@@ -2042,6 +2065,8 @@ function MeetingRecordSection({
             onSelectRendering={endedRecord ? selectRendering : undefined}
             generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
+            marks={marks}
+            onMarkClick={onMarkClick}
           />
         ) : (
           transcript
@@ -2168,6 +2193,20 @@ function RoomNotesEditor({
   useEffect(() => {
     editor?.setEditable(canEdit);
   }, [editor, canEdit]);
+
+  // WT-852. `content` above is read once, at mount — so notes changed anywhere else (the Edit
+  // room dialog writes the same description) never reached this editor: the page kept showing
+  // the old notes after "Room updated successfully.", and the next keystroke here would have
+  // saved them back over the edit. A new description from the server replaces what is shown,
+  // unless the host is typing in here right now; their own save echoing back is a no-op because
+  // it is already lastSavedRef.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    if (initialContent === lastSavedRef.current || editor.isFocused) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    lastSavedRef.current = initialContent;
+    editor.commands.setContent(initialContent, { emitUpdate: false });
+  }, [editor, initialContent]);
 
   // Flush any pending debounced save immediately when the editor loses focus,
   // so quickly navigating away doesn't drop the last edit.

@@ -6,12 +6,8 @@
     "addOthers": "参加者を追加"
   },
   "captions": {
-    "earlierCaptions": "これまでの字幕",
-    "fullTranscript": "文字起こし全文",
-    "closeHistoryAria": "字幕履歴を閉じてライブ字幕に戻る",
-    "backToLive": "ライブ字幕に戻る",
     "openFullTranscript": "文字起こし全文を開く",
-    "liveRegionAria": "ライブ字幕。上にスクロールすると、これまでの字幕を確認できます。",
+    "liveRegionAria": "ライブ字幕",
     "emptyState": "誰かが話すと、ここに字幕が表示されます。"
   },
   "stage": {

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { meetingService } from "@/services/meeting.service";
+import { endMeetingFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { TriggerAiRequest } from "@/types/meeting";
 
 export function useJoinMeeting() {
@@ -106,10 +107,13 @@ export function useKickMeetingParticipant(roomId: string) {
 
 export function useEndMeetingForAll(roomId: string) {
   return useMutation({
-    mutationFn: async () => {
-      const { data } = await meetingService.endMeeting(roomId);
-      return data;
-    },
+    // Single-flight: every press, from every entry point, while an end is in flight shares that
+    // one request (prod: six POSTs for one End for Everyone). See lib/meeting/single-flight.
+    mutationFn: () =>
+      singleFlight(endMeetingFlightKey(roomId), async () => {
+        const { data } = await meetingService.endMeeting(roomId);
+        return data;
+      }),
   });
 }
 

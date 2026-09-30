@@ -5,7 +5,34 @@ const MENTION_TYPES: readonly AssistantMentionDto["entityType"][] = [
   "document",
   "member",
   "plugin",
+  "summary",
+  "transcript",
 ];
+
+/**
+ * WT-887: a summary or transcript is written into the text as "@Summary · Standup", not as the
+ * meeting's own title. The wire label is the bare title (the AI worker's contract), and a room
+ * mention of the same meeting carries that same label — two mentions of one meeting would then
+ * share one "@Standup" token, and neither the composer nor the bubble could tell which was which.
+ *
+ * The prefix is a fixed English word, not catalog copy: it is part of the stored message text, and
+ * a conversation reopened in another locale still has to find its chips.
+ */
+const TOKEN_PREFIX: Partial<Record<AssistantMentionDto["entityType"], string>> = {
+  summary: "Summary · ",
+  transcript: "Transcript · ",
+};
+
+/** The text a mention is written as after its "@", and the name its chip shows. */
+export function mentionTokenLabel(mention: {
+  entityType?: string;
+  label?: string | null;
+}): string {
+  const label = mention.label?.trim() ?? "";
+  if (!label) return "";
+  const prefix = TOKEN_PREFIX[mention.entityType as AssistantMentionDto["entityType"]];
+  return prefix ? `${prefix}${label}` : label;
+}
 
 /**
  * The @mentions a user message was sent with, read back out of `mentionsJson`.
@@ -138,10 +165,11 @@ export function splitMentionTokens(
 
   // Longest label first, so "@Google Meet" is not claimed by a shorter "@Google".
   const ordered = [...mentions].sort(
-    (a, b) => (b.label ?? "").length - (a.label ?? "").length,
+    (a, b) => mentionTokenLabel(b).length - mentionTokenLabel(a).length,
   );
   for (const mention of ordered) {
-    const label = mention.label?.trim();
+    // The token as it was written, which for a summary/transcript is not the bare label.
+    const label = mentionTokenLabel(mention);
     if (!label) {
       unplaced.push(mention);
       continue;

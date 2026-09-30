@@ -27,10 +27,26 @@ import type { LibraryEntry } from "@/lib/meeting/artifact-library";
 /** Deliberately below the room history's 100: every minutes row carries its whole document. */
 export const MINUTES_PAGE_SIZE = 50;
 
-export function useArtifactLibrary(workspaceId: string | null, options?: { search?: string }) {
+/**
+ * PERSONAL, for every role.
+ *
+ * History is asked with `scope: "mine"`: the meetings the viewer hosted, joined or was invited to.
+ * The Owner/Admin widening the workspace archive uses adds no document the viewer can READ — the
+ * artifact gate grants a body to the host, or to a participant/invitee of a room shared with
+ * participants, never on the workspace role — so on this page it only produced locked cards.
+ *
+ * Minutes come from the workspace minutes endpoint and are narrowed to the same meetings, so the
+ * three kinds describe one set of meetings. A minutes document for a meeting past the loaded
+ * history page is kept when the viewer hosted it.
+ */
+export function useArtifactLibrary(
+  workspaceId: string | null,
+  options?: { search?: string; viewerId?: string | null },
+) {
   const search = options?.search?.trim() || undefined;
+  const viewerId = options?.viewerId ?? null;
 
-  const history = useRoomHistory(workspaceId, { search });
+  const history = useRoomHistory(workspaceId, { search, scope: "mine" });
 
   const minutes = useQuery({
     // Workspace-first, matching the room-history key: the paging and filter terms narrow ONE
@@ -46,14 +62,18 @@ export function useArtifactLibrary(workspaceId: string | null, options?: { searc
     enabled: Boolean(workspaceId),
   });
 
-  const entries: LibraryEntry[] = useMemo(
-    () =>
-      buildArtifactLibrary({
-        rooms: history.data?.rooms ?? [],
-        minutes: minutes.data?.items ?? [],
-      }),
-    [history.data?.rooms, minutes.data?.items],
-  );
+  const entries: LibraryEntry[] = useMemo(() => {
+    const rooms = history.data?.rooms ?? [];
+    const personalRoomIds = new Set(rooms.map((room) => room.id));
+    return buildArtifactLibrary({
+      rooms,
+      minutes: (minutes.data?.items ?? []).filter(
+        (item) =>
+          personalRoomIds.has(item.minutes.translationRoomId) ||
+          (viewerId !== null && item.roomHostId === viewerId),
+      ),
+    });
+  }, [history.data?.rooms, minutes.data?.items, viewerId]);
 
   return {
     entries,
