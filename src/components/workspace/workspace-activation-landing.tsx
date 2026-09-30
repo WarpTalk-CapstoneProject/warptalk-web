@@ -22,7 +22,7 @@ import {
   checkoutTotal,
   monthlyDisplayPrice,
 } from "@/lib/billing/plan-pricing";
-import { buildFeatureList, getPlanDescription } from "@/lib/utils";
+import { buildFeatureList, describePlan } from "@/lib/utils";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import type { PlanDto } from "@/types/billing";
 
@@ -214,7 +214,7 @@ export function WorkspaceActivationLanding({
                   </div>
 
                   <p className="mt-1.5 min-h-[36px] text-pretty text-[12px] leading-relaxed text-ink-muted">
-                    {plan.description || getPlanDescription(plan.name)}
+                    {describePlan(plan)}
                   </p>
 
                   <div className="mt-4">

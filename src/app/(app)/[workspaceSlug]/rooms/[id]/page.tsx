@@ -2194,6 +2194,20 @@ function RoomNotesEditor({
     editor?.setEditable(canEdit);
   }, [editor, canEdit]);
 
+  // WT-852. `content` above is read once, at mount — so notes changed anywhere else (the Edit
+  // room dialog writes the same description) never reached this editor: the page kept showing
+  // the old notes after "Room updated successfully.", and the next keystroke here would have
+  // saved them back over the edit. A new description from the server replaces what is shown,
+  // unless the host is typing in here right now; their own save echoing back is a no-op because
+  // it is already lastSavedRef.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    if (initialContent === lastSavedRef.current || editor.isFocused) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    lastSavedRef.current = initialContent;
+    editor.commands.setContent(initialContent, { emitUpdate: false });
+  }, [editor, initialContent]);
+
   // Flush any pending debounced save immediately when the editor loses focus,
   // so quickly navigating away doesn't drop the last edit.
   useEffect(() => {
