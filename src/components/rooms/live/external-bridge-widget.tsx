@@ -12,6 +12,8 @@ import {
   Square,
 } from "lucide-react";
 
+import { inboundNoSignalHint, type InboundHealth } from "@/lib/audio/bridge-inbound-health";
+import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openInSystemBrowser } from "@/lib/desktop/bridge";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { MeetingExitControl } from "./meeting-top-bar";
@@ -25,6 +27,8 @@ export function ExternalBridgeWidget({
   translationStarted,
   bridgeOutboundReady,
   bridgeInboundLoopback,
+  hasInboundDevice,
+  inboundHealth,
   idleDisconnected,
   onRejoin,
   onToggleMicrophone,
@@ -41,6 +45,14 @@ export function ExternalBridgeWidget({
   translationStarted: boolean;
   bridgeOutboundReady: boolean;
   bridgeInboundLoopback: boolean;
+  /**
+   * The virtual speaker Meet plays into was found. The inbound row used to key on the OUTBOUND
+   * device, so a machine with the virtual microphone but no virtual speaker reported "Meet audio
+   * to WarpTalk" as ready while nothing from Meet could reach WarpTalk at all.
+   */
+  hasInboundDevice: boolean;
+  /** Whether sound is actually arriving from Meet; see lib/audio/bridge-inbound-health. */
+  inboundHealth: InboundHealth;
   /**
    * The idle reaper let go of this meeting: no Meet window and no speech for 15 minutes.
    *
@@ -71,6 +83,23 @@ export function ExternalBridgeWidget({
    * user needs to stop a session that is already publishing.
    */
   const needsSetup = !translationStarted && !bridgeOutboundReady;
+
+  // The inbound row answers two questions in one line: is there a way in at all, and is anything
+  // coming through it. The second only has an answer while a capture is running; before that the
+  // row names the mechanism, as it always did.
+  const inboundAvailable = hasInboundDevice || bridgeInboundLoopback;
+  const inboundNoSignal = inboundAvailable && inboundHealth === "no-signal";
+  const inboundDetail = !inboundAvailable
+    ? "Not set up"
+    : inboundHealth === "listening"
+      ? "Listening"
+      : inboundHealth === "quiet"
+        ? "Quiet"
+        : inboundHealth === "no-signal"
+          ? "No sound from Meet"
+          : bridgeInboundLoopback && !hasInboundDevice
+            ? "Meet window capture"
+            : "Virtual speaker";
 
   async function openGoogleMeet() {
     const openedInBrowser = await openInSystemBrowser("https://meet.google.com/new");
@@ -121,9 +150,27 @@ export function ExternalBridgeWidget({
           />
           <StatusRow
             label="Meet audio to WarpTalk"
-            detail={bridgeInboundLoopback ? "Meet window capture" : "Virtual speaker"}
-            ready={bridgeInboundLoopback || bridgeOutboundReady}
+            detail={inboundDetail}
+            ready={inboundAvailable && !inboundNoSignal}
           />
+
+          {/*
+            Only for "no-signal", which only the virtual-device path can reach: a capture that has
+            carried exact digital zeros since it opened. That is never a quiet meeting — a working
+            cable carries a noise floor — and it is almost always one of these two settings, both
+            of which live outside WarpTalk, so the hint names them rather than saying "check your
+            audio". The Device settings button right below is the action.
+          */}
+          {inboundNoSignal ? (
+            <div
+              data-bridge-inbound-no-signal
+              role="status"
+              className="flex gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/8 p-2 text-[10.5px] leading-relaxed text-ink-muted"
+            >
+              <AlertTriangle className="mt-0.5 size-3 shrink-0 text-amber-600" aria-hidden="true" />
+              <p>{inboundNoSignalHint(currentBridgeDeviceLabels())}</p>
+            </div>
+          ) : null}
 
           {/*
             WT-578. Under the three rows that report the devices, because this is what a reader

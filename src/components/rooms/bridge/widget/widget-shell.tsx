@@ -5,6 +5,7 @@
  *
  *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  [End · t3] ┐
  *   ├ consent, only while the main window is asking ───────────────────────────────┤
+ *   ├ "No sound from Meet", only while the main window hears digital silence ─────┤
  *   │                                                                               │
  *   │   TranscriptPane (t2)   or   WarpBotPane (t5)                                 │
  *   │                                                                               │
@@ -33,6 +34,8 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { inboundNoSignalHint } from "@/lib/audio/bridge-inbound-health";
+import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
@@ -43,6 +46,7 @@ import { DockSessionControls } from "./dock-session-controls";
 import { EndSessionButton } from "./end-session";
 import { EndedView } from "./ended-view";
 import { SettingsFlyout } from "./settings-flyout";
+import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import { TranscriptPane } from "./transcript-pane";
 import { WarpBotPane } from "./warpbot-pane";
 import {
@@ -70,10 +74,40 @@ export function WidgetShell() {
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
+          <InboundNoSignalNotice />
         </WidgetTabs>
       )}
       {ended ? null : <WidgetDock />}
     </main>
+  );
+}
+
+// ── inbound health, under the consent question ──────────────────────────────
+
+/**
+ * The main window hears only exact digital silence from Meet (lib/audio/bridge-inbound-health).
+ *
+ * Here and not only in the main window, because this is where the user is looking when it
+ * matters: they are in Meet, the far side is talking, and the transcript under this line stays
+ * empty. The fix is one setting in Meet or one in Windows, so the note names both. It has no
+ * button — the device wizard lives in the main window — and draws nothing in every other state,
+ * including against a main window old enough not to send the field.
+ */
+function InboundNoSignalNotice() {
+  const { roomId } = useBridgeWidget();
+  const { view } = useBridgeWidgetRelayClient(roomId);
+  const noSignal = view.status === "connected" && view.snapshot?.inboundHealth === "no-signal";
+  if (!noSignal) return null;
+
+  return (
+    <div
+      data-bridge-inbound-no-signal
+      role="status"
+      className="shrink-0 border-b border-border bg-status-waiting/15 px-3.5 py-2 text-[11px] leading-snug text-ink"
+    >
+      <span className="font-semibold">No sound from Meet.</span>{" "}
+      {inboundNoSignalHint(currentBridgeDeviceLabels())}
+    </div>
   );
 }
 

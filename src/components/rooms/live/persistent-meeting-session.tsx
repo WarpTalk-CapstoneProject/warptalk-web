@@ -130,6 +130,13 @@ import {
   startFarSideMonitor,
   type FarSideMonitor,
 } from "@/lib/audio/bridge-far-side-monitor";
+import {
+  createInboundHealthState,
+  reduceInboundHealth,
+  type InboundCapturePath,
+  type InboundHealth,
+} from "@/lib/audio/bridge-inbound-health";
+import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
@@ -426,10 +433,24 @@ export function PersistentMeetingSession({
     // difference — a cascading render to reach a state nothing can see.
     if (!isBridgeRoom) return;
     let cancelled = false;
-    void (async () => {
+    // Whether this effect run has resolved successfully once. A later re-resolve that throws
+    // keeps what the first one found: a transient enumerateDevices failure on a devicechange must
+    // not tear down a capture that is working.
+    let resolvedOnce = false;
+    // Serialises runs. devicechange fires in bursts (Windows reports each endpoint of a cable
+    // separately), and two resolves racing each other could land in either order.
+    let latest = 0;
+
+    // A function rather than a one-shot, because the answer changes while the room is open. The
+    // device list is read once on entry, and until now that was the only read: a user who plugged
+    // the cable in, installed it from the wizard, or granted microphone permission after entering
+    // kept the answer from before — no inbound leg, and a wizard telling them to install a device
+    // they had just installed.
+    const resolve = async () => {
+      const run = ++latest;
       try {
-        const { outboundDeviceId, inboundDeviceId } = await findBridgeDeviceIds();
-        if (cancelled) return;
+        const { outboundDeviceId, inboundDeviceId, needsPermission } = await findBridgeDeviceIds();
+        if (cancelled || run !== latest) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
 
@@ -438,9 +459,19 @@ export function PersistentMeetingSession({
         // no longer the same thing as no inbound leg. Asked through the tier picker rather than by
         // re-deriving the rules here: it already owns the question of what this machine can run.
         const status = await readVirtualAudioStatus();
-        if (cancelled) return;
+        if (cancelled || run !== latest) return;
         setBridgeInboundLoopback(selectBridgeTier(status)?.id === "loopback-bridge");
-        if (!outboundDeviceId) {
+        resolvedOnce = true;
+        // Empty labels mean the browser has not been given microphone permission yet, so every
+        // device reads as absent. That is not a missing cable, and telling the user it is sends
+        // them to reinstall a driver that is already there. The permission listener below
+        // resolves again once they allow it, and the real answer is given then.
+        if (needsPermission) return;
+        // Once per room, the toast as well as the wizard. The resolve now reruns on every
+        // devicechange, and a toast that fired on each of those would repeat every time a headset
+        // was plugged in for as long as the cable is missing.
+        if (!outboundDeviceId && bridgeSetupPromptedRef.current !== roomId) {
+          bridgeSetupPromptedRef.current = roomId;
           toast.error("This meeting cannot reach Google Meet yet.", {
             // Named for THIS platform. It used to be the macOS constant unconditionally, so a
             // Windows user missing VB-CABLE was told to install BlackHole — a device that does
@@ -450,20 +481,45 @@ export function PersistentMeetingSession({
           // WT-578: and then the wizard, which is the part that was missing. The toast alone named
           // a device and vanished; it never said where to get one, and the only screen that does
           // was reachable from nowhere in the product.
-          if (bridgeSetupPromptedRef.current !== roomId) {
-            bridgeSetupPromptedRef.current = roomId;
-            setBridgeSetupOpen(true);
-          }
+          setBridgeSetupOpen(true);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && run === latest && !resolvedOnce) {
           setBridgeOutboundDeviceId(null);
           setBridgeInboundDeviceId(null);
         }
       }
+    };
+
+    void resolve();
+
+    const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    const onDeviceChange = () => void resolve();
+    mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
+
+    // Granting the microphone does not fire devicechange, yet it is exactly what turns empty
+    // labels into names. `permissions.query({ name: "microphone" })` is not in every browser (and
+    // not in every TS lib's PermissionName), so both the call and the result are guarded; where it
+    // is missing, devicechange and the next room entry are the fallbacks.
+    let permission: PermissionStatus | null = null;
+    const onPermissionChange = () => {
+      if (permission?.state === "granted") void resolve();
+    };
+    void (async () => {
+      try {
+        const status = await navigator.permissions?.query({ name: "microphone" as PermissionName });
+        if (!status || cancelled) return;
+        permission = status;
+        status.addEventListener("change", onPermissionChange);
+      } catch {
+        // Unsupported permission name. Nothing to listen to.
+      }
     })();
+
     return () => {
       cancelled = true;
+      mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
+      permission?.removeEventListener("change", onPermissionChange);
     };
     // `roomId` is here because the wizard prompt above is remembered per room: a device that is
     // missing is missing for this meeting and for the next one, and the reader of that ref has to
@@ -890,7 +946,18 @@ export function PersistentMeetingSession({
   //
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
-  const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  // `deviceId` is the inbound device this capture was opened on — null for the loopback path — so
+  // a re-resolve that lands on a different device can tell the running capture is the wrong one.
+  const bridgeInboundRef = useRef<{ stop: () => Promise<void>; deviceId: string | null } | null>(
+    null,
+  );
+  /**
+   * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
+   * the published track, because an open, published leg carrying digital silence looks exactly
+   * like a working one to everything else in the app. Back to "unknown" whenever the capture is
+   * released, so a new capture is judged on its own samples and never inherits the last one's.
+   */
+  const [inboundHealth, setInboundHealth] = useState<InboundHealth>("unknown");
   // The host's own ear on the far side, on the virtual-device path only: once Meet's speaker points
   // at a cable, Meet plays nothing to the host. The gain lives in a ref because `voiceEnabled` is
   // declared far below this effect; see the effect beside it.
@@ -920,11 +987,24 @@ export function PersistentMeetingSession({
       bridgeInboundRef.current = null;
       return;
     }
-    if (bridgeInboundRef.current) return;
+    // A capture already running on the device the lookup names is left alone. One running on a
+    // DIFFERENT device is replaced: the lookup now reruns on devicechange and on the microphone
+    // permission being granted, so the device can change under a live capture — the cable plugged
+    // in after a loopback start, or a device id that has been re-issued. Keeping the old capture
+    // would leave the leg on a device the lookup no longer names, which is how a bridge ends up
+    // publishing silence while every row says it is fine.
+    const running = bridgeInboundRef.current;
+    if (running && running.deviceId === bridgeInboundDeviceId) return;
+    bridgeInboundRef.current = null;
 
     let cancelled = false;
     void (async () => {
       try {
+        // Awaited, unlike the teardown above: the replacement connects under the same stand-in
+        // identity, and LiveKit evicts the older of two connections with one identity — which
+        // would be the new one if the old one were still finishing its disconnect.
+        if (running) await running.stop();
+        if (cancelled) return;
         const { data } = await meetingService.bridgeToken(roomId);
         // Before the cancellation check and before publishing: which identity is the far side is a
         // fact about the room, and it has to be in place before the first frame of that track can
@@ -950,12 +1030,21 @@ export function PersistentMeetingSession({
           return;
         }
 
+        // Set once `release` has started. room.disconnect() raises the same Disconnected event a
+        // dropped connection does, and a deliberate release — now including a device switch —
+        // must not be announced to the user as the call having dropped.
+        let released = false;
+        let stopProbe: (() => void) | null = null;
         const handles = await openBridgeInbound({
           serverUrl,
           token: data.token,
           source: inbound.source,
           onDisconnected: () => {
+            if (released) return;
             bridgeInboundRef.current = null;
+            stopProbe?.();
+            stopProbe = null;
+            setInboundHealth("unknown");
             void farSideMonitorRef.current?.stop();
             farSideMonitorRef.current = null;
             setFarSideMonitoring(false);
@@ -982,7 +1071,30 @@ export function PersistentMeetingSession({
           }
         }
 
+        // Health is metered on both paths but judged differently: on the loopback path exact zeros
+        // are what "nothing is playing" looks like, so only the device path can report no-signal
+        // (see lib/audio/bridge-inbound-health). Best effort like the monitor: a meter that cannot
+        // start leaves the health "unknown", never the bridge down.
+        const healthPath: InboundCapturePath =
+          inbound.source.kind === "device" ? "device" : "loopback";
+        let health = createInboundHealthState(Date.now());
+        setInboundHealth(health.health);
+        try {
+          stopProbe = startInboundLevelProbe(handles.track, (sample) => {
+            health = reduceInboundHealth(health, sample, Date.now(), { path: healthPath });
+            // Same value bails out of the render, so four calls a second cost nothing while the
+            // state holds.
+            setInboundHealth(health.health);
+          });
+        } catch {
+          stopProbe = null;
+        }
+
         const release = async () => {
+          released = true;
+          stopProbe?.();
+          stopProbe = null;
+          setInboundHealth("unknown");
           if (farSideMonitorRef.current === monitor) farSideMonitorRef.current = null;
           if (monitor) setFarSideMonitoring(false);
           await monitor?.stop();
@@ -997,7 +1109,7 @@ export function PersistentMeetingSession({
           void release();
           return;
         }
-        bridgeInboundRef.current = { stop: release };
+        bridgeInboundRef.current = { stop: release, deviceId: bridgeInboundDeviceId };
         farSideMonitorRef.current = monitor;
         if (monitor) setFarSideMonitoring(true);
       } catch (error) {
@@ -2304,6 +2416,7 @@ export function PersistentMeetingSession({
       cloneCapture: cloneCaptureState,
       meetingAudioLevel: farSideMonitoring ? farSideMonitorLevel : null,
     },
+    inboundHealth,
     onSetLanguage: (language) =>
       applyRelayedLanguagePick(language, {
         onChangeSpeakLanguage: handleChangeSpeakLanguage,
@@ -3529,6 +3642,8 @@ export function PersistentMeetingSession({
             translationStarted={translationStarted}
             bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
             bridgeInboundLoopback={bridgeInboundLoopback}
+            hasInboundDevice={Boolean(bridgeInboundDeviceId)}
+            inboundHealth={inboundHealth}
             idleDisconnected={meetingIsIdleReaped}
             onRejoin={() => {
               markMeetingInteraction();

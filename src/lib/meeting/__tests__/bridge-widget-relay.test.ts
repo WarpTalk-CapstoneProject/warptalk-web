@@ -168,6 +168,43 @@ test("every consent state the main window can be in crosses the relay", () => {
   }
 });
 
+test("inbound health is optional: an older main window's snapshot without it still parses", () => {
+  const old = parseBridgeWidgetMessage(snapshotWire(), ROOM);
+  assert.ok(old.ok);
+  assert.equal(old.ok && old.message.type === "snapshot" ? old.message.inboundHealth : "x", undefined);
+
+  for (const inboundHealth of ["unknown", "listening", "quiet", "no-signal"]) {
+    const parsed = parseBridgeWidgetMessage(snapshotWire({ inboundHealth }), ROOM);
+    assert.ok(parsed.ok && parsed.message.type === "snapshot", inboundHealth);
+    assert.equal(parsed.message.type === "snapshot" && parsed.message.inboundHealth, inboundHealth);
+  }
+});
+
+test("an inbound health this build does not know is dropped, never the whole snapshot", () => {
+  // A newer main window may learn a fifth state. It feeds one line of status text, and must not
+  // cost this popup its language pill and consent row.
+  for (const inboundHealth of ["muted", "", 3, null, { state: "no-signal" }]) {
+    const parsed = parseBridgeWidgetMessage(snapshotWire({ inboundHealth }), ROOM);
+    assert.ok(parsed.ok, JSON.stringify(inboundHealth));
+    assert.equal(
+      parsed.ok && parsed.message.type === "snapshot" ? parsed.message.inboundHealth : "x",
+      undefined,
+      JSON.stringify(inboundHealth),
+    );
+  }
+});
+
+test("the main window sends inbound health only when it has one, and it survives the validator", () => {
+  const fields = { voiceEnabled: true, browserCaptureState: "not-required" } as const;
+  assert.equal("inboundHealth" in buildBridgeWidgetSnapshot(fields, 1), false);
+
+  const body = buildBridgeWidgetSnapshot({ ...fields, inboundHealth: "no-signal" }, 1);
+  assert.equal(body.inboundHealth, "no-signal");
+  const parsed = parseBridgeWidgetMessage({ ...body, v, roomId: ROOM }, ROOM);
+  assert.ok(parsed.ok && parsed.message.type === "snapshot");
+  assert.equal(parsed.message.type === "snapshot" && parsed.message.inboundHealth, "no-signal");
+});
+
 test("intents and host messages are told apart by type", () => {
   assert.equal(isBridgeWidgetIntent({ type: "set-language", language: "vi" }), true);
   assert.equal(isBridgeWidgetIntent({ type: "answer-browser-capture", granted: false }), true);
