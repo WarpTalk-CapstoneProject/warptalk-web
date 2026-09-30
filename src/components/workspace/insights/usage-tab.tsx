@@ -1,11 +1,121 @@
 "use client";
 
+/**
+ * Insights → Usage (WT-878): the workspace's Usage surface, inside the Insights page.
+ *
+ * NOTHING HERE IS A SECOND USAGE PAGE
+ *   The surface is `UsageOverview`, the same component `/settings/billing/usage` renders — its
+ *   member filter, refresh and CSV export included — fed by `useWorkspaceUsageOverview`, which
+ *   loads exactly what that page loads under the same query keys. What this tab adds is only what
+ *   the Insights frame needs around it:
+ *
+ *   - A caption, because the page's period bar is hidden on this tab: usage is counted per billing
+ *     cycle, so the tab follows the current cycle whatever period the other tabs show. The
+ *     `period` prop is therefore deliberately unused. Dates are formatted in the viewer's local
+ *     time, as `UsageOverview`'s own cycle pill formats them, so the two never disagree by a day.
+ *   - The states the old page left on an empty surface: loading, a billing service that did not
+ *     answer ("Not available yet" + retry, the admin Insights `SourceBody` wording), and a
+ *     workspace with no plan (BILLING_SUBSCRIPTION_NOT_FOUND), which is an account state with its
+ *     way out rather than a failure.
+ */
+
+import { ArrowClockwise, CalendarBlank } from "@phosphor-icons/react";
+import { format } from "date-fns";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
+import { UsageOverview } from "@/app/(app)/[workspaceSlug]/settings/billing/components/usage-overview";
 import type { InsightsTabProps } from "@/components/workspace/insights/insights-types";
+import { useWorkspaceUsageOverview } from "@/hooks/use-workspace-usage-overview";
 
-/** Placeholder body; the real tab replaces it against the same prop contract. */
-export function UsageTab(_props: InsightsTabProps) {
+/** The admin Insights card: a hairline box on the panel, one step up the surface ladder. */
+const CARD = "min-w-0 overflow-hidden rounded-xl border border-hairline bg-surface-1";
+
+export function UsageTab({ workspaceId, workspaceSlug }: InsightsTabProps) {
   const t = useTranslations("workspaceInsightsUsage");
-  return <div>{t("title")}</div>;
+  const tUsage = useTranslations("settingsBillingUsage");
+  const usage = useWorkspaceUsageOverview(workspaceId);
+
+  if (usage.roleLoaded && !usage.canView) {
+    return <StateCard>{tUsage("accessDenied")}</StateCard>;
+  }
+
+  const { balance } = usage;
+  const cycle = balance
+    ? t("caption.cycle", {
+        start: format(new Date(balance.currentPeriodStart), "MMM d"),
+        end: format(new Date(balance.currentPeriodEnd), "MMM d, yyyy"),
+      })
+    : t("caption.currentCycle");
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+          <CalendarBlank className="size-3.5 text-ink-muted" aria-hidden />
+          {cycle}
+        </span>
+        <span>{t("caption.followsCycle")}</span>
+      </div>
+
+      {usage.status === "loading" ? (
+        <div className={CARD} role="status" aria-label={t("state.loading")}>
+          <div className="h-[56px] border-b border-hairline" />
+          <div className="space-y-3 px-4 py-5 sm:px-6">
+            <div className="h-4 w-32 animate-pulse rounded bg-surface-2" />
+            <div className="h-7 w-48 animate-pulse rounded bg-surface-2" />
+            <div className="h-[260px] animate-pulse rounded-md bg-surface-2" />
+          </div>
+        </div>
+      ) : usage.status === "unavailable" ? (
+        <StateCard>
+          <p>{t("state.unavailable")}</p>
+          <button
+            type="button"
+            onClick={usage.onRefresh}
+            className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-ink outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          >
+            <ArrowClockwise className="size-3.5" aria-hidden />
+            {t("state.retry")}
+          </button>
+        </StateCard>
+      ) : usage.status === "noSubscription" ? (
+        <StateCard>
+          <p className="text-[13px] font-medium text-ink">{t("noSubscription.title")}</p>
+          <p className="mt-1 max-w-[420px]">{t("noSubscription.body")}</p>
+          <Link
+            href={`/${workspaceSlug}/settings/billing`}
+            className="mt-3 inline-flex h-8 items-center rounded-full border border-border px-3 text-[13px] font-medium text-ink outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          >
+            {t("noSubscription.action")}
+          </Link>
+        </StateCard>
+      ) : (
+        <div className={CARD}>
+          <UsageOverview
+            balance={balance}
+            ledger={usage.ledger}
+            serviceUsage={usage.serviceUsage}
+            members={usage.members}
+            rooms={usage.rooms}
+            now={usage.now}
+            isLoading={usage.isLoading}
+            workspaceSlug={workspaceSlug}
+            onRefresh={usage.onRefresh}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StateCard({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`${CARD} flex min-h-[240px] flex-col items-center justify-center px-4 py-8 text-center text-[12px] text-ink-muted`}
+    >
+      {children}
+    </div>
+  );
 }
