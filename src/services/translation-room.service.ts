@@ -499,6 +499,12 @@ export const translationRoomService = {
     to?: string;
     page?: number;
     pageSize?: number;
+    /**
+     * "mine": the caller's own meetings (hosted, joined or invited), even for a workspace
+     * Owner/Admin. The Artifacts library asks for it — the widening adds nothing the caller can
+     * read. Omitted keeps the archive's workspace reading.
+     */
+    scope?: "mine";
   }) {
     const response = await apiClient.get<TranslationRoomHistoryResponse>(API.translationRooms.history, { params });
     return {
