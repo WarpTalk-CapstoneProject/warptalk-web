@@ -675,6 +675,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
                       }
                     }
+                  } else if (feature === "insights") {
+                    // WT-878: the workspace Insights page, named as the settings nav names it.
+                    parts.push({ label: t("sidebar.settingsNav.insights") });
                   } else if (feature === "billing") {
                     parts.push({ label: t("sidebar.settingsNav.billing") });
                   } else if (feature === "payment") {
