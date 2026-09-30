@@ -27,96 +27,15 @@ import {
 import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
-  isTranscriptControlMarker,
 } from "@/lib/transcript/transcript-display";
 import { type TranscriptSpeaker } from "@/lib/transcript/speaker-color";
 import type { LibraryEntry } from "@/lib/meeting/artifact-library";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 import { cn } from "@/lib/utils";
 import { describeAbsence } from "@/lib/meeting/artifact-library";
+import { parseSavedTranscriptBody } from "@/lib/documents/saved-record-documents";
+import { downloadSavedTranscriptDocx } from "@/lib/documents/download-saved-record";
 import { useAuthStore } from "@/stores/auth-store";
-
-/**
- * Fallback parsed speaker turn when raw database segments are not available and we only have markdown body.
- */
-interface ParsedFallbackTurn {
-  key: string;
-  speakerName: string;
-  language?: string;
-  elapsedTime?: string;
-  paragraphs: string[];
-}
-
-const SPEAKER_LINE_REGEX = /^\*\*\[(.+?)(?:\s+\(([^()]*)\))?\]\*\*:\s*(.*)$/;
-// i18n-allow: Regex character class matching Unicode Vietnamese characters in transcript speaker names
-const PLAIN_SPEAKER_REGEX = /^([A-ZÀ-Ỹa-zà-ỹ0-9_.\s]+?):\s*(.*)$/;
-const TIMESTAMP_PREFIX_REGEX = /^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/;
-
-function parseMarkdownTranscript(body: string | null | undefined): ParsedFallbackTurn[] {
-  if (!body?.trim()) return [];
-
-  const rawLines = body.replace(/\r\n?/g, "\n").split("\n").map((l) => l.trim());
-  const turns: ParsedFallbackTurn[] = [];
-
-  for (let i = 0; i < rawLines.length; i++) {
-    const raw = rawLines[i];
-    if (!raw) continue;
-    // Skip header lines and sentinels
-    if (
-      /^#\s+WarpTalk Transcription Room\b/i.test(raw) ||
-      /^Generated on:/i.test(raw) ||
-      /^(-{3,}|\*{3,}|_{3,})$/.test(raw) ||
-      isTranscriptControlMarker(raw)
-    ) {
-      continue;
-    }
-
-    let line = raw;
-    let explicitTime: string | undefined;
-
-    const timeMatch = TIMESTAMP_PREFIX_REGEX.exec(line);
-    if (timeMatch) {
-      explicitTime = timeMatch[1];
-      line = timeMatch[2];
-    }
-
-    let speakerName = "Speaker";
-    let language: string | undefined;
-    let content = line;
-
-    const boldMatch = SPEAKER_LINE_REGEX.exec(line);
-    if (boldMatch) {
-      speakerName = boldMatch[1].trim();
-      language = boldMatch[2]?.trim();
-      content = boldMatch[3].trim();
-    } else {
-      const plainMatch = PLAIN_SPEAKER_REGEX.exec(line);
-      if (plainMatch && !plainMatch[1].toLowerCase().startsWith("http")) {
-        speakerName = plainMatch[1].trim();
-        content = plainMatch[2].trim();
-      }
-    }
-
-    if (speakerName.toLowerCase() === "system" || isTranscriptControlMarker(content)) {
-      continue;
-    }
-
-    const previous = turns[turns.length - 1];
-    if (previous && previous.speakerName === speakerName) {
-      if (content) previous.paragraphs.push(content);
-    } else {
-      turns.push({
-        key: `turn-${turns.length}-${speakerName}`,
-        speakerName,
-        language,
-        elapsedTime: explicitTime,
-        paragraphs: content ? [content] : [],
-      });
-    }
-  }
-
-  return turns;
-}
 
 export function TranscriptTimelineReader({
   entry,
@@ -127,6 +46,7 @@ export function TranscriptTimelineReader({
 }) {
   const [viewMode, setViewMode] = useState<"clean" | "verbatim">("clean");
   const [searchQuery, setSearchQuery] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const viewerId = useAuthStore((state) => state.user?.id);
 
   // Query database segments when room ID is present
@@ -146,7 +66,13 @@ export function TranscriptTimelineReader({
 
   // Fallback parsed turns if raw database segments are empty
   const fallbackTurns = useMemo(
-    () => (rawSegments.length === 0 && entry.body ? parseMarkdownTranscript(entry.body) : []),
+    () =>
+      rawSegments.length === 0 && entry.body
+        ? parseSavedTranscriptBody(entry.body).map((turn, index) => ({
+            ...turn,
+            key: `turn-${index}-${turn.speakerName}`,
+          }))
+        : [],
     [rawSegments.length, entry.body],
   );
 
@@ -171,16 +97,25 @@ export function TranscriptTimelineReader({
     }
   }
 
-  function downloadAsText() {
-    if (!entry.body) return;
-    const blob = new Blob([entry.body], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `transcript-${roomId}.txt`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    toast.success("Transcript downloaded");
+  /**
+   * The saved transcript as the same .docx the Recap downloads. This path only runs when the
+   * transcript has no saved segments, so the stored export is all there is to build from.
+   */
+  async function downloadAsDocument() {
+    if (!entry.body || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadSavedTranscriptDocx({
+        body: entry.body,
+        meetingTitle: entry.roomTitle,
+        startedAt: meetingStartedAt(entry),
+        hostName: entry.hostName,
+      });
+    } catch {
+      toast.error("Could not download transcript");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (entry.absence) {
@@ -292,11 +227,12 @@ export function TranscriptTimelineReader({
           </button>
           <button
             type="button"
-            onClick={downloadAsText}
-            title="Download transcript as text"
-            className="flex size-7 items-center justify-center rounded-md border border-border bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+            onClick={() => void downloadAsDocument()}
+            disabled={downloading}
+            title="Download transcript (.docx)"
+            className="flex size-7 items-center justify-center rounded-md border border-border bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink disabled:opacity-60"
           >
-            <DownloadSimple size={13} />
+            {downloading ? <SpinnerGap size={13} className="animate-spin" /> : <DownloadSimple size={13} />}
           </button>
         </div>
       </div>
@@ -352,6 +288,16 @@ export function TranscriptTimelineReader({
       </div>
     </div>
   );
+}
+
+/**
+ * When the meeting began. The library entry carries the end and the length rather than the start,
+ * and the document's header and file name are both dated by the start.
+ */
+function meetingStartedAt(entry: LibraryEntry): string | null {
+  const ended = Date.parse(entry.meetingEndedAt);
+  if (Number.isNaN(ended)) return null;
+  return new Date(ended - Math.max(0, entry.durationSeconds || 0) * 1000).toISOString();
 }
 
 function highlightQuery(text: string, query: string): React.ReactNode {
