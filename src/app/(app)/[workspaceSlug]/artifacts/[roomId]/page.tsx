@@ -44,7 +44,7 @@ export default function RecordDetailPage({ params }: PageProps) {
   const initialKind = searchParams.get("kind") as ArtifactKind | null;
   const [kind, setKind] = useState<ArtifactKind | null>(initialKind);
 
-  const library = useArtifactLibrary(activeWorkspaceId);
+  const library = useArtifactLibrary(activeWorkspaceId, { viewerId });
   const group =
     groupEntriesByMeeting(library.entries).find((candidate) => candidate.roomId === roomId) ?? null;
 

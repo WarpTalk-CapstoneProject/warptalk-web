@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowUp,
   ArrowSquareOut,
@@ -25,6 +26,9 @@ import {
   FileText,
   BookBookmark,
   PlugsConnected,
+  MagnifyingGlass,
+  Sparkle,
+  Subtitles,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -114,9 +118,18 @@ import {
   hasMentionToken,
   mentionToken,
   mentionTokenEndingAt,
+  mentionTokenLabel,
   parseMessageMentions,
   splitMentionTokens,
 } from "@/lib/assistant/message-mentions";
+import {
+  NAMESPACE_ENTITY_TYPES,
+  namespaceHints,
+  namespaceKeyword,
+  parseMentionTrigger,
+  type MentionNamespace,
+} from "@/lib/assistant/mention-trigger";
+import { matchesSearchText } from "@/lib/ui/search-text";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
@@ -152,7 +165,53 @@ interface AssistantContextOption {
   isAvatar?: boolean;
   entityType: AssistantMentionDto["entityType"];
   entityId: string;
+  /**
+   * What goes on the wire as the mention's label, when it is not `title`. WT-887: a summary or
+   * transcript option is titled — and written into the draft as — "Summary · Standup", while the
+   * AI worker's contract wants the bare meeting title. See mentionTokenLabel.
+   */
+  label?: string;
 }
+
+/**
+ * WT-887: a row in the "@" menu that is not an entity but a namespace to narrow to — "document:"
+ * under a typed "@doc". Picking it writes "@document:" into the draft and keeps the menu open on
+ * that namespace; it never becomes a selected context, so it can never be sent as a mention.
+ */
+interface MentionNamespaceHint {
+  id: string;
+  /** The keyword with its colon, "document:": what Tab completes "@doc" to. */
+  title: string;
+  type: string;
+  icon: ReactNode;
+  description: string;
+  isAvatar?: false;
+  namespace: MentionNamespace;
+}
+
+type MentionMenuItem = AssistantContextOption | MentionNamespaceHint;
+
+function isNamespaceHint(item: MentionMenuItem): item is MentionNamespaceHint {
+  return "namespace" in item;
+}
+
+/**
+ * A meeting status that means it never took place, so it has no summary or transcript to point
+ * at. Page snapshots carry the status in whatever case their page had it in.
+ */
+const NEVER_HELD_STATUSES = new Set(["scheduled", "open", "cancelled", "expired"]);
+
+/** Page types whose ambient entity is a meeting — the one whose record the user is looking at. */
+const MEETING_PAGE_TYPES = new Set(["room_detail", "history", "in_meeting"]);
+
+/** The catalog key under common.chatbot that says what each namespace hint narrows to. */
+const NAMESPACE_HINT_KEYS = {
+  document: "mentionNamespaceDocument",
+  meeting: "mentionNamespaceMeeting",
+  summary: "mentionNamespaceSummary",
+  transcript: "mentionNamespaceTranscript",
+  artifact: "mentionNamespaceArtifact",
+} as const satisfies Record<MentionNamespace, string>;
 
 type ChatRole = "user" | "assistant";
 
@@ -404,6 +463,8 @@ export function GlobalChatbot() {
   >([]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
+  /** WT-887: the namespace typed before the query ("@summary:…"), or null for a plain "@…". */
+  const [mentionNamespace, setMentionNamespace] = useState<MentionNamespace | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
@@ -905,6 +966,34 @@ export function GlobalChatbot() {
     5,
     mentionQuery,
   );
+  // WT-887: the meetings a "@summary:" / "@transcript:" / "@artifact:" option can point at. The
+  // same list endpoint the Meetings group reads, narrowed to ENDED — a meeting that has not ended
+  // has no summary yet and no finished transcript, and five scheduled rows would otherwise crowd
+  // out every meeting that does. Only fetched while one of those namespaces is being typed.
+  const wantsMeetingArtifacts =
+    mentionMenuOpen &&
+    !isPlatformScope &&
+    (mentionNamespace === "summary" ||
+      mentionNamespace === "transcript" ||
+      mentionNamespace === "artifact");
+  const { data: endedRoomResults } = useTranslationRooms({
+    search: mentionQuery,
+    status: "ENDED",
+    pageSize: 5,
+    workspaceId: activeWorkspaceId ?? undefined,
+    enabled: wantsMeetingArtifacts,
+  });
+  // The meeting the widget was opened over — a room page, its record, or the live meeting — goes
+  // first: "@summary:" on a meeting's own page is almost always about that meeting. Not when it
+  // never took place, since there is nothing of it to read.
+  const currentMeeting = useMemo(() => {
+    if (!ambientPageContext || !MEETING_PAGE_TYPES.has(ambientPageContext.pageType)) return null;
+    const id = ambientPageContext.entityId;
+    const title = ambientPageContext.snapshot?.title?.trim();
+    const status = ambientPageContext.snapshot?.status?.toLowerCase() ?? "";
+    if (!id || !title || NEVER_HELD_STATUSES.has(status)) return null;
+    return { id, title };
+  }, [ambientPageContext]);
   const CONTEXT_OPTIONS: AssistantContextOption[] = useMemo(() => {
     const memberOptions: AssistantContextOption[] = (
       memberResults?.items ?? []
@@ -956,8 +1045,51 @@ export function GlobalChatbot() {
       entityType: "plugin",
       entityId: plugin.key,
     }));
-    return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
-  }, [memberResults, roomResults, documentResults, mentionablePlugins]);
+    // WT-887: a meeting's summary and transcript. The id is the ROOM id and the wire label the bare
+    // meeting title (the AI worker's contract); the title is the token written into the draft —
+    // see mentionTokenLabel for why it carries the kind. All summaries, then all transcripts: the
+    // menu groups rows by `type` in order of first appearance and arrows walk this array, so
+    // interleaving them would make the highlight jump between groups.
+    const artifactMeetings = [
+      ...(currentMeeting ? [currentMeeting] : []),
+      ...(endedRoomResults?.rooms ?? [])
+        .filter((r) => r.id !== currentMeeting?.id)
+        .map((r) => ({ id: r.id, title: r.title })),
+    ];
+    const artifactOption = (
+      meeting: { id: string; title: string },
+      entityType: "summary" | "transcript",
+    ): AssistantContextOption => ({
+      id: `${entityType}-${meeting.id}`,
+      title: mentionTokenLabel({ entityType, label: meeting.title }),
+      label: meeting.title,
+      type: entityType === "summary" ? t("mentionGroupSummaries") : t("mentionGroupTranscripts"),
+      icon: entityType === "summary" ? <Sparkle size={14} /> : <Subtitles size={14} />,
+      description: meeting.id === currentMeeting?.id ? t("mentionCurrentMeeting") : "",
+      entityType,
+      entityId: meeting.id,
+    });
+    const summaryOptions = artifactMeetings.map((meeting) => artifactOption(meeting, "summary"));
+    const transcriptOptions = artifactMeetings.map((meeting) =>
+      artifactOption(meeting, "transcript"),
+    );
+    return [
+      ...memberOptions,
+      ...roomOptions,
+      ...documentOptions,
+      ...pluginOptions,
+      ...summaryOptions,
+      ...transcriptOptions,
+    ];
+  }, [
+    memberResults,
+    roomResults,
+    documentResults,
+    mentionablePlugins,
+    endedRoomResults,
+    currentMeeting,
+    t,
+  ]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
@@ -1307,10 +1439,12 @@ export function GlobalChatbot() {
     const textBeforeCursor = val.slice(0, cursorPosition);
 
     // No @mentions in platform scope: everything mentionable is a workspace entity or a plugin.
-    const mentionMatch = isPlatformScope ? null : textBeforeCursor.match(/@(\w*)$/);
-    if (mentionMatch) {
+    // WT-887: "@summary:standup" is a namespace and a query — see mention-trigger.ts.
+    const mentionTrigger = isPlatformScope ? null : parseMentionTrigger(textBeforeCursor);
+    if (mentionTrigger) {
       setMentionMenuOpen(true);
-      setMentionQuery(mentionMatch[1]);
+      setMentionNamespace(mentionTrigger.namespace);
+      setMentionQuery(mentionTrigger.query);
       // Back to the top on every keystroke, the way the slash menu already does it. The
       // highlight used to keep an index from the previous, longer list: typing one more letter
       // could leave it past the end, which reads as "nothing is selected" and now also costs
@@ -1494,9 +1628,32 @@ export function GlobalChatbot() {
     }
   };
 
-  const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
-    opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
+  // WT-887: a namespace narrows to its own kinds; a plain "@" offers everything it always did, and
+  // not summaries or transcripts — those are reached through "@summary:" and friends, so the plain
+  // list does not double in length with a copy of every meeting. Names match through the same
+  // folding the server's search uses, so "@meeting:hop" keeps the "họp" rows the API returned.
+  const namespaceEntityTypes = mentionNamespace ? NAMESPACE_ENTITY_TYPES[mentionNamespace] : null;
+  const matchingOptions: MentionMenuItem[] = CONTEXT_OPTIONS.filter(
+    (opt) =>
+      (namespaceEntityTypes
+        ? namespaceEntityTypes.includes(opt.entityType)
+        : opt.entityType !== "summary" && opt.entityType !== "transcript") &&
+      matchesSearchText(mentionQuery, opt.label ?? opt.title),
   );
+  // A plain "@doc" also offers the namespace it could be the start of. See namespaceHints for why
+  // the hint leads only when the query IS a keyword.
+  const hints = mentionNamespace ? null : namespaceHints(mentionQuery);
+  const hintOptions: MentionNamespaceHint[] = (hints?.namespaces ?? []).map((namespace) => ({
+    id: `namespace-${namespace}`,
+    title: namespaceKeyword(namespace),
+    type: t("mentionGroupNamespaces"),
+    icon: <MagnifyingGlass size={14} />,
+    description: t(NAMESPACE_HINT_KEYS[namespace]),
+    namespace,
+  }));
+  const filteredOptions: MentionMenuItem[] = hints?.exact
+    ? [...hintOptions, ...matchingOptions]
+    : [...matchingOptions, ...hintOptions];
 
   // The composer's text split around the mentions written into it, for the mirror's highlight.
   const composerMentionSegments = splitMentionTokens(
@@ -1504,7 +1661,7 @@ export function GlobalChatbot() {
     selectedContexts.map((ctx) => ({
       entityType: ctx.entityType,
       entityId: ctx.entityId,
-      label: ctx.title,
+      label: ctx.label ?? ctx.title,
     })),
   ).segments;
 
@@ -1517,22 +1674,41 @@ export function GlobalChatbot() {
       })
     : "";
 
-  const insertMention = (opt: (typeof CONTEXT_OPTIONS)[0]) => {
+  const insertMention = (opt: MentionMenuItem) => {
+    const cursorPosition = inputRef.current?.selectionStart || 0;
+    const textBeforeCursor = inputValue.slice(0, cursorPosition);
+    const textAfterCursor = inputValue.slice(cursorPosition);
+    const mentionTrigger = parseMentionTrigger(textBeforeCursor);
+
+    // WT-887: a namespace hint is not a mention. It rewrites "@doc" as "@document:" and leaves the
+    // menu open on that namespace, exactly as if the user had typed the colon.
+    if (isNamespaceHint(opt)) {
+      const keptBefore = textBeforeCursor.slice(0, mentionTrigger?.start ?? cursorPosition);
+      const nextBefore = `${keptBefore}@${opt.title}`;
+      setInputValue(nextBefore + textAfterCursor);
+      setMentionNamespace(opt.namespace);
+      setMentionQuery("");
+      setSelectedIndex(0);
+      setTimeout(() => {
+        const input = inputRef.current;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(nextBefore.length, nextBefore.length);
+      }, 0);
+      return;
+    }
+
     setSelectedContexts((prev) => {
       if (prev.find((p) => p.id === opt.id)) return prev;
       return [...prev, opt];
     });
 
-    const cursorPosition = inputRef.current?.selectionStart || 0;
-    const textBeforeCursor = inputValue.slice(0, cursorPosition);
-    const textAfterCursor = inputValue.slice(cursorPosition);
-
     // The mention stays in the sentence as "@Google Meet", where it was typed. It used to be cut
     // out and kept only as a chip, so "tạo 1 cuộc họp bằng @Google Meet" was sent - and shown
     // back in the bubble - as "tạo 1 cuộc họp bằng", with the chip stranded above it (17 Sep).
-    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-    const newTextBefore = mentionMatch
-      ? textBeforeCursor.slice(0, mentionMatch.index)
+    // A namespace goes with it: "@summary:stand" becomes "@Summary · Standup".
+    const newTextBefore = mentionTrigger
+      ? textBeforeCursor.slice(0, mentionTrigger.start)
       : textBeforeCursor;
     const token = `${mentionToken(opt.title)} `;
     const needsSpaceBefore = newTextBefore.length > 0 && !/\s$/.test(newTextBefore);
@@ -1551,7 +1727,7 @@ export function GlobalChatbot() {
   };
 
   const handleMentionClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const option = CONTEXT_OPTIONS.find(
+    const option = filteredOptions.find(
       (item) => item.id === event.currentTarget.dataset.optionId,
     );
     if (option) insertMention(option);
@@ -1714,7 +1890,7 @@ export function GlobalChatbot() {
       .map((ctx) => ({
         entityType: ctx.entityType,
         entityId: ctx.entityId,
-        label: ctx.title,
+        label: ctx.label ?? ctx.title,
       }));
 
     // Captured before the state is cleared, for the same reason mentions are: this handler runs
@@ -2235,8 +2411,13 @@ export function GlobalChatbot() {
                                         </span>
                                       )}
                                       <div className="flex items-center gap-1.5 truncate">
+                                        {/* A summary row shows the meeting's name: its group
+                                            heading already says "Summaries". A hint shows what it
+                                            will write, "@document:". */}
                                         <span className="font-medium truncate">
-                                          {opt.title}
+                                          {isNamespaceHint(opt)
+                                            ? `@${opt.title}`
+                                            : (opt.label ?? opt.title)}
                                         </span>
                                         {opt.description && (
                                           <span className="text-[12px] text-ink-subtle truncate">
@@ -2348,7 +2529,7 @@ export function GlobalChatbot() {
                           {composerMentionSegments.map((part, index) =>
                             part.kind === "mention" ? (
                               <span key={index} className="rounded-[3px] bg-primary/15 text-transparent">
-                                {mentionToken(part.mention.label ?? "")}
+                                {mentionToken(mentionTokenLabel(part.mention))}
                               </span>
                             ) : (
                               <span key={index} className="invisible">
@@ -2458,8 +2639,20 @@ export function GlobalChatbot() {
                               `cursor-default` text -- a menu that looked clickable, was not,
                               and told nobody what to do with it. */}
                           <section>
-                            <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
-                              {t("tools")}
+                            <div className="flex items-center justify-between px-2.5 pt-1 pb-1.5">
+                              <span className="text-[11px] font-medium text-ink-subtle">
+                                {t("tools")}
+                              </span>
+                              {activeWorkspaceSlug && (
+                                <Link
+                                  href={`/${activeWorkspaceSlug}/tools`}
+                                  onClick={() => setSkillsMenuOpen(false)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+                                >
+                                  <span>Explore</span>
+                                  <ArrowSquareOut size={11} />
+                                </Link>
+                              )}
                             </div>
                             {availableSlashCommands.length > 0 ? (
                               <ul className="flex flex-col">
@@ -2489,8 +2682,20 @@ export function GlobalChatbot() {
                             ) : (
                               // Not "loading": availableSlashCommands is filtered by the page
                               // you are on, so an empty list is an answer, not a wait.
-                              <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
-                                {t("noToolsForPage")}
+                              <div className="flex flex-col gap-1 px-2.5 py-2">
+                                <div className="text-[12px] text-ink-subtle">
+                                  {t("noToolsForPage")}
+                                </div>
+                                {activeWorkspaceSlug && (
+                                  <Link
+                                    href={`/${activeWorkspaceSlug}/tools`}
+                                    onClick={() => setSkillsMenuOpen(false)}
+                                    className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline pt-0.5"
+                                  >
+                                    <span>Browse All 14 WarpBot Tools</span>
+                                    <ArrowSquareOut size={11} />
+                                  </Link>
+                                )}
                               </div>
                             )}
                           </section>

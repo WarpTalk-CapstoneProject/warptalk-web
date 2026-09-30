@@ -32,15 +32,19 @@ export function SummaryReadingReader({
   const renderingsQuery = useSummaryRenderings(roomId);
   const renderings = renderingsQuery.data ?? [];
 
+  // The stored JSON when there is one: `body` is the flattened reading text and has lost the
+  // sections this page draws.
+  const source = entry.rawBody ?? entry.body;
+
   const parsedSummary = useMemo(() => {
-    if (!entry.body) return null;
-    return readSummaryArtifact(entry.body);
-  }, [entry.body]);
+    if (!source) return null;
+    return readSummaryArtifact(source);
+  }, [source]);
 
   const parsedSections = useMemo(() => {
-    if (!entry.body) return [];
+    if (!source) return [];
     try {
-      const rawObj = JSON.parse(entry.body);
+      const rawObj = JSON.parse(source);
       if (typeof rawObj === "object" && rawObj !== null && !Array.isArray(rawObj)) {
         return parseSummarySections(rawObj as Record<string, unknown>);
       }
@@ -48,7 +52,7 @@ export function SummaryReadingReader({
       // Body is plain markdown text, not JSON
     }
     return [];
-  }, [entry.body]);
+  }, [source]);
 
   async function copySummary() {
     if (!entry.body) return;
@@ -69,7 +73,7 @@ export function SummaryReadingReader({
     try {
       const ended = Date.parse(entry.meetingEndedAt);
       await downloadSavedSummaryDocx({
-        body: entry.body,
+        body: source,
         meetingTitle: entry.roomTitle,
         // The entry carries the end and the length; the document is dated by the start.
         startedAt: Number.isNaN(ended)

@@ -92,3 +92,44 @@ Now:
   card with a working link and code.
 - Ask for an ordinary meeting: the answer carries a WarpTalk room card instead.
 - Reload the conversation: both cards come back.
+
+## WT-887 — prefixed @mentions: documents, meetings, summaries, transcripts
+
+The composer's `@` accepts a namespace before the name:
+
+| Typed | Offers | Sent as `entityType` |
+| --- | --- | --- |
+| `@document:` / `@doc:` | documents only | `document` |
+| `@meeting:` / `@room:` | meetings only | `room` |
+| `@summary:` | a meeting's summary | `summary` |
+| `@transcript:` | a meeting's transcript | `transcript` |
+| `@artifact:` | both of the above | `summary` / `transcript` |
+
+- Text after the colon filters by name through `matchesSearchText` (diacritics-insensitive, the
+  same folding as the server search). A plain `@name` offers what it always did — members,
+  meetings, documents, plugins — and never summaries/transcripts.
+- A plain `@doc`, `@me`, `@summ`… also shows **namespace hint rows** ("Search within ·
+  `@document:`"). They sit under the real matches, except when the query *is* a keyword
+  (`@document`, `@doc`, `@room`), where the hint comes first, so Enter or Tab turns the bare
+  keyword into `@document:` and the menu stays open on that namespace. Tab's ghost text completes
+  `@doc` to `@document:`.
+- Summary/transcript options come from the same meeting list endpoint (`useTranslationRooms`,
+  `status: ENDED`, only fetched while one of those namespaces is typed). On a room page, its record
+  page or in the live meeting, that meeting comes first, marked "This meeting".
+- Wire contract (fixed with the AI worker): `{ entityType: "summary" | "transcript", entityId:
+  <room id>, label: <meeting title> }`. `minutes` is accepted by the worker but has no reading tool,
+  so the web never offers it and `parseMessageMentions` drops it.
+- In the text the token is `@Summary · <title>` / `@Transcript · <title>` (`mentionTokenLabel`), so
+  it never collides with `@<title>` for the room itself; the bubble chip shows the same text with a
+  Sparkle / Subtitles icon. The prefix is fixed English because it is stored in the message text.
+- An `@` glued to a word or dot (`an@example.com`) no longer opens the menu, and the query now runs
+  to the next space, so Vietnamese letters and `:` no longer close it.
+
+Files: `src/lib/assistant/mention-trigger.ts` (new — `parseMentionTrigger`, `namespaceHints`),
+`src/lib/assistant/message-mentions.ts` (`mentionTokenLabel`, new `MENTION_TYPES`),
+`src/components/assistant/message-mention-chips.tsx`, `src/components/layout/global-chatbot.tsx`,
+`src/types/assistant.ts`, `messages/{en,vi,ja}/common.json` (`common.chatbot.mention*`).
+Tests: `npm run test:mention-trigger`, `npm run test:message-mentions`.
+
+Known limitation: only the global WarpBot widget has the namespaces; the Meet-popup pane and the
+in-meeting chat keep their own mention menus.

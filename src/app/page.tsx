@@ -12,7 +12,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import { getPlanDescription, buildFeatureList, cn } from "@/lib/utils";
+import { describePlan, buildFeatureList, cn } from "@/lib/utils";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import {
   getLandingGetStartedHref,
@@ -995,7 +995,7 @@ function PricingSection() {
                       ? t("pricing.free")
                       : `${formatMoney(plan.price, plan.currency)}${t("pricing.perMonth")}`}
                   </h3>
-                  <p className="c3-desc">{getPlanDescription(plan.name, pricingT)}</p>
+                  <p className="c3-desc">{describePlan(plan, pricingT)}</p>
                   <ul className="c3-list">
                     {featureList.map((feature: string) => (
                       <li key={feature}>

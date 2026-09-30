@@ -64,7 +64,7 @@ import {
   resolveTranscriptPause,
   type TranscriptPauseState,
 } from "@/lib/meeting/transcript-pause";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { sameUserId, useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
@@ -521,6 +521,8 @@ export function PersistentMeetingSession({
   // rooms list. A ref, not state: the broadcast handler is installed once per connection and
   // must read the current value, not the one closed over at subscribe time.
   const endedByMeRef = useRef(false);
+  // handleExit single-flight: set while a leave/end is in flight, cleared when it settles.
+  const exitInFlightRef = useRef(false);
   // Imperative handle onto the LiveKit local participant, published by <LocalMediaController>
   // (a child of <LiveKitRoom>, because this component RENDERS the provider and so cannot read
   // it). Anything that must actually change what is being published — the host's ForceMuted
@@ -2539,6 +2541,16 @@ export function PersistentMeetingSession({
     connection.on("SpotlightChanged", (targetUserId: string, on: boolean) => {
       setSpotlightedUserId(on ? targetUserId : null);
     });
+    // WT-862. A language update for somebody the live roster does not hold has nowhere to land:
+    // their row then comes only from the participants query, which the store update above
+    // cannot touch, so the badge stayed at the join-time language until a reload. Re-read the
+    // participants in that case — the gateway has already published the change to the row.
+    const refetchIfNotInLiveRoster = (userId: string) => {
+      const inLiveRoster = useTranslationRoomStore
+        .getState()
+        .participants.some((participant) => sameUserId(participant.userId, userId));
+      if (!inLiveRoster) void refetchParticipants();
+    };
     // Live speak-language change from ANOTHER participant — keeps speakerLanguageByUserId
     // (and therefore FilteredRoomAudio's mute-real-mic-if-different-language logic) correct
     // without waiting for a refetchParticipants() round-trip.
@@ -2546,6 +2558,7 @@ export function PersistentMeetingSession({
       "ParticipantSpeakLanguageChanged",
       (userId: string, speakLanguage: string) => {
         updateParticipantSpeakLanguage(userId, speakLanguage);
+        refetchIfNotInLiveRoster(userId);
       },
     );
     // The listen half. The hub has broadcast this ("ParticipantLanguageChanged" — the event
@@ -2560,6 +2573,7 @@ export function PersistentMeetingSession({
       "ParticipantLanguageChanged",
       (userId: string, listenLanguage: string) => {
         updateParticipantListenLanguage(userId, listenLanguage);
+        refetchIfNotInLiveRoster(userId);
       },
     );
 
@@ -3073,6 +3087,10 @@ export function PersistentMeetingSession({
   }
 
   async function handleExit(action: "leave" | "end") {
+    // Single-flight: an exit already under way owns the redirect and the toast; a second call
+    // (another press, or the end dialog racing the leave menu) is ignored until it settles.
+    if (exitInFlightRef.current) return;
+    exitInFlightRef.current = true;
     try {
       if (action === "end") {
         // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
@@ -3109,6 +3127,8 @@ export function PersistentMeetingSession({
       toast.error(
         error instanceof Error ? error.message : "Could not leave the room.",
       );
+    } finally {
+      exitInFlightRef.current = false;
     }
   }
 
@@ -3775,11 +3795,9 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                // Not `overflow-hidden`, and z-30: scrolling up in the lane opens its caption
-                // history as a panel that grows UPWARD over the bottom of the camera view (so the
-                // video never reflows). Clipping here would cut that panel off at the lane's own
-                // height; z-30 puts it above the stage's badges and below the control dock (z-40).
-                className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center"
+                // WT-873: the lane is a fixed box that clips its own content — it no longer opens
+                // a history panel over the camera view, so nothing here may grow past it.
+                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -3797,8 +3815,8 @@ export function PersistentMeetingSession({
                   // ...but only once there IS another language. Before Start Translation the
                   // captions are the transcript and nothing else.
                   translationActive={translationStarted}
-                  // The lane's history is the recent past; the panel is the record. Both calls,
-                  // in this order — the panel only renders while the sidebar is open.
+                  // The lane shows the current caption only; the panel is where to read back.
+                  // Both calls, in this order — the panel only renders while the sidebar is open.
                   onOpenTranscript={() => {
                     setSidePanelMode("transcript");
                     setRightSidebarOpen(true);

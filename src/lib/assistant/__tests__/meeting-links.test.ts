@@ -61,6 +61,27 @@ describe("WarpBot — meeting cards come from the worker's marker", () => {
     ]);
   });
 
+  test("a room marker carrying a workspace slug extracts the room id and preserves the canonical url", () => {
+    const md = marker({
+      kind: "warptalk_room",
+      url: `/acme-team/rooms/${ROOM_ID}`,
+      title: "Weekly Standup",
+      code: "cdh-jtxv-ddy",
+    });
+    assert.deepEqual(extractMeetingLinks(md), [
+      {
+        kind: "warptalk_room",
+        url: `/acme-team/rooms/${ROOM_ID}`,
+        id: ROOM_ID,
+        code: "cdh-jtxv-ddy",
+        title: "Weekly Standup",
+        roomType: undefined,
+        start: undefined,
+        end: undefined,
+      },
+    ]);
+  });
+
   test("a meeting merely mentioned in prose gets no card", () => {
     const md = `Bạn có 2 cuộc họp: ${MEET_URL} và [Sync](/rooms/${ROOM_ID})`;
     assert.deepEqual(extractMeetingLinks(md), []);
