@@ -14,7 +14,6 @@ import {
   ChatsCircle,
   Check,
   Copy,
-  FileCheck,
   FileMagnifyingGlass,
   FileText,
   Info,
