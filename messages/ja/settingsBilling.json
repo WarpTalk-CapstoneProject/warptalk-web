@@ -64,7 +64,12 @@
     "creditsPerCycle": "{credits} クレジット/サイクル",
     "limits": "参加者{participants}人・{languages}言語",
     "everythingInPlus": "{name} のすべての機能に加えて",
-    "moreCreditsAndLimits": "クレジットと上限がさらに増加"
+    "moreCreditsAndLimits": "クレジットと上限がさらに増加",
+    "title": "プラン",
+    "description": "WarpTalk が公開しているプランです。プランを開くと含まれる内容を確認できます。",
+    "yourPlan": "ご利用中",
+    "seeMore": "詳細を見る",
+    "coreTranslation": "基本のライブ翻訳"
   },
   "planPanel": {
     "currentPlan": "現在のプラン",
@@ -167,5 +172,33 @@
     "failedTitle": "支払いに失敗しました — カードを更新してください",
     "failedBadge": "支払い失敗",
     "failedDescription": "プラン更新のためのカード請求ができませんでした。再試行の間、プランは{date}まで有効です。プランを維持するにはカードを更新してください。"
+  },
+  "meter": {
+    "level": {
+      "ok": "順調",
+      "warn": "残りが少なめ",
+      "critical": "ほぼ使い切り",
+      "full": "付与分を使い切り",
+      "unknown": "付与なし"
+    },
+    "ariaLabel": "このサイクルで使用したクレジット",
+    "ariaValueText": "{percent}% 使用、{level}",
+    "paceTitle": "サイクルの経過割合",
+    "usedPercent": "{percent}% 使用",
+    "leftAmount": "残り {left}",
+    "granted": "{total} 付与",
+    "noneGranted": "このサイクルにはクレジットが付与されていません。",
+    "paceDay": "サイクル {total} 日中 {day} 日目（{percent}% 経過）。",
+    "paceLasts": "このペースなら、付与分はサイクル終了まで持ちます。",
+    "paceRunsOut": "このペースだと約{days, plural, other {#日}}で使い切り、サイクル終了の{early, plural, other {#日}}前になります。",
+    "paceRunsOutAtEnd": "このペースだと約{days, plural, other {#日}}で使い切り、ちょうどサイクル終了時になります。",
+    "overageRunning": "超過利用中です。付与分を {credits} クレジット超えています。",
+    "overageRunningNoAmount": "超過利用中です。",
+    "allowanceUsedStopped": "付与分を使い切りました。クレジットを追加するかサイクルが更新されるまで、会議は停止します。"
+  },
+  "zone": {
+    "ariaLabel": "セクション",
+    "plans": "プラン",
+    "extras": "クレジットパックとアドオン"
   }
 }

@@ -64,7 +64,12 @@
     "creditsPerCycle": "{credits} credits/cycle",
     "limits": "{participants} participants · {languages} languages",
     "everythingInPlus": "Everything in {name}, plus",
-    "moreCreditsAndLimits": "More credits and higher limits"
+    "moreCreditsAndLimits": "More credits and higher limits",
+    "title": "Plans",
+    "description": "Plans published by WarpTalk. Open a plan to see what it includes.",
+    "yourPlan": "Your plan",
+    "seeMore": "See more",
+    "coreTranslation": "Core live translation"
   },
   "planPanel": {
     "currentPlan": "Current plan",
@@ -167,5 +172,33 @@
     "failedTitle": "Payment failed — update your card",
     "failedBadge": "Payment failed",
     "failedDescription": "We could not charge your card for this plan's renewal. Your plan stays active until {date} while we retry. Update your card to keep it."
+  },
+  "meter": {
+    "level": {
+      "ok": "On track",
+      "warn": "Running low",
+      "critical": "Almost out",
+      "full": "Allowance used",
+      "unknown": "No allowance"
+    },
+    "ariaLabel": "Credits used this cycle",
+    "ariaValueText": "{percent}% used, {level}",
+    "paceTitle": "Share of the cycle that has passed",
+    "usedPercent": "{percent}% used",
+    "leftAmount": "{left} left",
+    "granted": "{total} granted",
+    "noneGranted": "No credits granted this cycle.",
+    "paceDay": "Cycle day {day} of {total} ({percent}% passed).",
+    "paceLasts": "At this pace the allowance lasts past the cycle end.",
+    "paceRunsOut": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, {early, plural, one {# day} other {# days}} before the cycle ends.",
+    "paceRunsOutAtEnd": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, right as the cycle ends.",
+    "overageRunning": "Overage is running: {credits} credits beyond the allowance.",
+    "overageRunningNoAmount": "Overage is running.",
+    "allowanceUsedStopped": "The allowance is used up. Meetings stop until credits are added or the cycle renews."
+  },
+  "zone": {
+    "ariaLabel": "Section",
+    "plans": "Plans",
+    "extras": "Credit packs & add-ons"
   }
 }
