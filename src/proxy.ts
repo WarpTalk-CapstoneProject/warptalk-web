@@ -184,6 +184,39 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 
+  /**
+   * WT-891 — `/rooms/:id` and `/room/:id` legacy links forward to the active workspace.
+   *
+   * External notifications and WarpBot cards have historically minted `/rooms/{id}`.
+   * When visited directly or opened in a new tab, forwarding here via HTTP 307 prevents the
+   * client layout from getting stuck in an un-slugged loading state.
+   */
+  const legacyRooms = /^\/rooms\/([0-9a-fA-F-]{36})\/?$/.exec(pathname);
+  if (legacyRooms) {
+    const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
+    if (activeWorkspaceSlug) {
+      const destination = new URL(`/${activeWorkspaceSlug}/rooms/${legacyRooms[1]}`, request.url);
+      destination.search = request.nextUrl.search;
+      return NextResponse.redirect(destination);
+    }
+    const fallback = new URL("/workspace", request.url);
+    fallback.search = request.nextUrl.search;
+    return NextResponse.redirect(fallback);
+  }
+
+  const legacyLiveRoom = /^\/room\/([0-9a-fA-F-]{36})\/?$/.exec(pathname);
+  if (legacyLiveRoom) {
+    const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
+    if (activeWorkspaceSlug) {
+      const destination = new URL(`/${activeWorkspaceSlug}/rooms/${legacyLiveRoom[1]}/live`, request.url);
+      destination.search = request.nextUrl.search;
+      return NextResponse.redirect(destination);
+    }
+    const fallback = new URL("/workspace", request.url);
+    fallback.search = request.nextUrl.search;
+    return NextResponse.redirect(fallback);
+  }
+
   // A dead cookie must not survive the response that noticed it was dead, or the next page
   // load starts from the same misleading state. Applied to whatever response we return
   // below.
