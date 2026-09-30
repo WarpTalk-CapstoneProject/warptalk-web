@@ -16,8 +16,12 @@
  *
  * THE SHAPE
  *   Overages first, because it is a standing condition that changes what every number below it
- *   means. Then the two balances. Then the current plan with one control — Manage subscription —
- *   that owns every state change short of a purchase. Then the ladder.
+ *   means. Then the two balances: credits remaining carries the meter (WT-878), and the plan cell
+ *   carries the two buttons — Buy credits and Manage subscription, the latter owning every state
+ *   change short of a purchase — so there is no separate "current plan" row. Then auto-renew as
+ *   one line. Then the work zone: the plan ladder on the left, the Extras panel (credit packs and
+ *   add-ons) on the right, both in the first screen instead of under a scroll. Below 1000px the
+ *   zone is one pane at a time behind a two-way switch.
  *
  * THE FRAME: ONE RULED SURFACE, NOT A STACK OF CARDS
  *   Those four blocks used to be separate rounded boxes with gaps between them, and the ladder a
@@ -62,6 +66,7 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { canBuyExtraCredits } from "@/lib/billing/extra-credits";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { cn } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -70,15 +75,15 @@ import type { FrozenCreditsDto, PlanDto } from "@/types/billing";
 import {
   BannerRow,
   BillingButton,
-  GridRow,
   Pill,
   StatCell,
 } from "./components/billing-primitives";
+import { CreditLevelPill, CreditMeter, creditLook } from "./components/credit-meter";
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
 import { AutoRenewRow, PaymentFailedBanner } from "./components/auto-renew-section";
-import { CatalogSection } from "./components/catalog-section";
+import { CatalogSection, useHasCatalogExtras } from "./components/catalog-section";
 
 /**
  * The billing API answers "this workspace has no plan" with an explicit error code rather than an
@@ -139,6 +144,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  // Below 1000px the plan ladder and the Extras panel take turns instead of sitting side by side.
+  const [zoneTab, setZoneTab] = useState<"plans" | "extras">("plans");
+  const hasExtras = useHasCatalogExtras(workspaceId);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -240,8 +248,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // right if a top-up mid-cycle raises the total.
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
 
-  const usageRatioPercent = totalCredits > 0 ? (creditsUsed / totalCredits) * 100 : 0;
-  const remainingRatioPercent = 100 - usageRatioPercent;
+  // WT-878: one rule for the number's tint, the meter and the label — the thresholds the layout's
+  // low-credit banner already uses (this used to be a private "<= 15% left").
+  const { level: creditLevel, look: creditLevelLook } = creditLook(balance);
 
   const renewsDate = balance?.currentPeriodEnd
     ? format(new Date(balance.currentPeriodEnd), "MMM d, yyyy")
@@ -356,11 +365,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           label={t("stats.creditsRemaining.label")}
           className="sm:border-r"
           value={formatAmount(currentCredits)}
-          tone={totalCredits > 0 && remainingRatioPercent <= 15 ? "warn" : "default"}
+          badge={<CreditLevelPill level={creditLevel} />}
+          valueTone={creditLevelLook.valueTone}
+          meter={
+            balance ? (
+              <CreditMeter balance={balance} overage={overage} overagesOn={overagesOn} />
+            ) : undefined
+          }
           lines={[
-            totalCredits > 0
-              ? t("stats.creditsRemaining.granted", { total: formatAmount(totalCredits) })
-              : t("stats.creditsRemaining.noAllowance"),
             t("stats.creditsRemaining.spent", { used: formatAmount(creditsUsed) }),
             t("stats.creditsRemaining.cycleEnds", { date: renewsDate }),
           ]}
@@ -385,42 +397,30 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               ? t("stats.currentPlan.cancelled", { date: renewsDate })
               : t("stats.currentPlan.renews", { date: renewsDate }),
           ]}
+          actions={
+            <>
+              {/* backend#467: extra credits are sold only on top of a live plan. */}
+              {canBuyCredits ? (
+                <BillingButton
+                  tone="outline"
+                  className="w-auto px-3.5"
+                  onClick={() => setIsTopUpOpen(true)}
+                >
+                  <Wallet className="h-3.5 w-3.5" />
+                  {t("buyCredits")}
+                </BillingButton>
+              ) : null}
+              <BillingButton
+                tone="outline"
+                className="w-auto px-3.5"
+                onClick={() => setIsManageOpen(true)}
+              >
+                {t("manageSubscription")}
+              </BillingButton>
+            </>
+          }
         />
       </div>
-
-      <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[12px] text-ink-muted">{t("currentPlanRow.label")}</p>
-          <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
-            {subscription?.planName ?? t("stats.currentPlan.noPlan")}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <span className="hidden text-[12px] text-ink-muted sm:inline">
-            {subscription?.cancelAtPeriodEnd
-              ? t("currentPlanRow.endsOn", { date: renewsDate })
-              : t("currentPlanRow.renewsOn", { date: renewsDate })}
-          </span>
-          {/* backend#467: extra credits are sold only on top of a live plan. */}
-          {canBuyCredits ? (
-            <BillingButton
-              tone="outline"
-              className="w-auto px-3"
-              onClick={() => setIsTopUpOpen(true)}
-            >
-              <Wallet className="h-3.5 w-3.5" />
-              {t("buyCredits")}
-            </BillingButton>
-          ) : null}
-          <BillingButton
-            tone="outline"
-            className="w-auto px-3"
-            onClick={() => setIsManageOpen(true)}
-          >
-            {t("manageSubscription")}
-          </BillingButton>
-        </div>
-      </GridRow>
 
       {/* backend#466: auto-renew = the saved card is charged each cycle (Stripe). */}
       <AutoRenewRow workspaceId={workspaceId} plansHref={`/${workspaceSlug}/payment/plans`} />
@@ -431,15 +431,65 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         </div>
       )}
 
-      {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
-      <CatalogSection workspaceId={workspaceId} />
-
-      {activePlans.length > 0 ? (
-        <PlanGrid
-          plans={activePlans}
-          currentPlanId={subscription?.planId ?? null}
-          onSelect={goToCheckout}
-        />
+      {/* The work zone: plans on the left, what else can be bought on the right. The switch only
+          exists below 1000px, where the two can no longer sit side by side. */}
+      {activePlans.length > 0 || hasExtras ? (
+        <div className="min-w-0">
+          {activePlans.length > 0 && hasExtras ? (
+            <div className="border-b border-hairline px-4 py-2.5 min-[1000px]:hidden sm:px-6">
+              <div
+                role="group"
+                aria-label={t("zone.ariaLabel")}
+                className="inline-flex overflow-hidden rounded-[8px] border border-hairline bg-surface-1"
+              >
+                {(["plans", "extras"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={zoneTab === value}
+                    onClick={() => setZoneTab(value)}
+                    className={cn(
+                      "h-7 cursor-pointer border-r border-hairline px-3 text-[12px] font-medium outline-none last:border-r-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors motion-safe:duration-150",
+                      zoneTab === value
+                        ? "bg-surface-3 text-ink"
+                        : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                    )}
+                  >
+                    {t(`zone.${value}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              "grid min-w-0",
+              activePlans.length > 0 && hasExtras && "min-[1000px]:grid-cols-[minmax(0,1fr)_340px]",
+            )}
+          >
+            {activePlans.length > 0 ? (
+              <div className={cn("min-w-0", hasExtras && zoneTab === "extras" && "max-[999px]:hidden")}>
+                <PlanGrid
+                  plans={activePlans}
+                  currentPlanId={subscription?.planId ?? null}
+                  onSelect={goToCheckout}
+                />
+              </div>
+            ) : null}
+            {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
+            {hasExtras ? (
+              <aside
+                className={cn(
+                  "min-w-0 border-hairline",
+                  activePlans.length > 0 && "min-[1000px]:border-l",
+                  activePlans.length > 0 && zoneTab === "plans" && "max-[999px]:hidden",
+                )}
+              >
+                <CatalogSection workspaceId={workspaceId} variant="panel" />
+              </aside>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
       <ManageSubscriptionModal
