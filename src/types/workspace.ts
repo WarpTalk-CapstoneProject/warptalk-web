@@ -1,3 +1,9 @@
+// The only import in this file, and a type-only one. WT-706's restriction flag is named in
+// lib/workspace/language-policy-settings so that the wire spelling lives in exactly one place —
+// re-declaring the property here would be the second place, and the two halves of this ticket
+// were written in parallel with the backend, so that name is the thing most likely to move.
+import type { LanguageRestrictionFlag } from "@/lib/workspace/language-policy-settings";
+
 export interface WorkspaceDto {
   id: string;
   name: string;
@@ -50,9 +56,17 @@ export type MinutesClassification = "Internal" | "Confidential" | "Public";
 /** `vn-nd30` = Nghị định 30/2020 conventions; `global-en` = A4 / 25.4mm / sans 11pt / decimal clauses. */
 export type MinutesTemplate = "vn-nd30" | "global-en";
 
-export interface WorkspaceSettingsDto {
+export interface WorkspaceSettingsDto extends LanguageRestrictionFlag {
   defaultLanguage: string;
   timezone: string;
+  /**
+   * The meeting languages this workspace permits, as bare ISO-639-1 codes.
+   *
+   * EMPTY MEANS UNRESTRICTED, everywhere — the server short-circuits the whitelist check on an
+   * empty list, so this is not "no language permitted". The restriction flag inherited above says
+   * which of the two an empty list is: a posture the Owner chose, or a policy nobody has set.
+   * See lib/workspace/language-policy-settings (WT-706).
+   */
   allowedTargetLanguages: string[];
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
