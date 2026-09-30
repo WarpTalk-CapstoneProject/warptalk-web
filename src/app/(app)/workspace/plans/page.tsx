@@ -26,7 +26,7 @@ import { ArrowLeft, CheckCircle } from "@phosphor-icons/react/dist/ssr";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
-import { buildFeatureList, getPlanDescription } from "@/lib/utils";
+import { buildFeatureList, describePlan } from "@/lib/utils";
 import { readCheckoutIntent } from "@/lib/billing/checkout-intent";
 import { formatMoney } from "@/lib/format/currency";
 import {
@@ -148,7 +148,7 @@ export default function ChoosePlanBeforeWorkspacePage() {
                     )}
                   </div>
                   <p className="mt-1 text-[12px] leading-relaxed text-ink-muted text-pretty">
-                    {plan.description || getPlanDescription(plan.name)}
+                    {describePlan(plan)}
                   </p>
 
                   <div className="mt-4">
