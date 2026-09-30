@@ -1,3 +1,18 @@
 {
-  "title": "Usage"
+  "title": "Usage",
+  "caption": {
+    "cycle": "Cycle {start} – {end}",
+    "currentCycle": "Current billing cycle",
+    "followsCycle": "Usage follows the current billing cycle, not the period picked on the other tabs."
+  },
+  "state": {
+    "loading": "Loading usage",
+    "unavailable": "Not available yet",
+    "retry": "Retry"
+  },
+  "noSubscription": {
+    "title": "No active plan",
+    "body": "Usage is counted per billing cycle, and this workspace has no plan yet. Choose one to start a cycle.",
+    "action": "Go to billing"
+  }
 }
