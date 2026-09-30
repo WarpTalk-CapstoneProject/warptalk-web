@@ -41,12 +41,18 @@
  *                    answer-browser-capture   { granted, sourceId? }  the consent modal, answered here
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
- *                                                 micDeviceId?, browserCapture, voice?, at }
+ *                                                 micDeviceId?, browserCapture, voice?,
+ *                                                 inboundHealth?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
  *   snapshot without it, and the popup then says to reload that window instead of drawing a panel
  *   whose every pick would be dropped as an unknown intent.
+ *
+ *   `inboundHealth` is optional for the same reason, and more forgiving still: a value this build
+ *   does not know is dropped rather than failing the whole snapshot. It only ever feeds a warning,
+ *   and a newer main window that learns a fifth state must not cost an older popup its language
+ *   pill and consent row over a line of status text.
  *
  * VERSIONING
  *   `v` changes only when an EXISTING message changes shape. A new message type does not need a
@@ -60,6 +66,7 @@
 
 import { normalizeLanguageCode } from "../language/languages.ts";
 import type { BrowserCaptureConsentState } from "../audio/browser-capture-consent.ts";
+import type { InboundHealth } from "../audio/bridge-inbound-health.ts";
 import type { VoiceCloneStateDto } from "../../types/realtime.ts";
 import { applySingleLanguageChoice, describeLanguageChoice } from "./language-choice.ts";
 
@@ -113,6 +120,12 @@ export type BridgeWidgetSnapshot = {
   browserCapture: BridgeWidgetBrowserCapture;
   /** What the popup's Voice panel draws. Absent from a main window that predates the panel. */
   voice?: BridgeWidgetVoiceSnapshot;
+  /**
+   * Whether sound is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). The popup is
+   * where the user is looking when the far side is not being transcribed — they are in Meet — so
+   * "no-signal" has to be said there, not only in a main window hidden behind the call.
+   */
+  inboundHealth?: InboundHealth;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -196,6 +209,7 @@ export function isBridgeWidgetIntent(message: BridgeWidgetMessageBody): message 
 }
 
 const CONSENT_STATES = new Set<string>(["not-required", "required", "granted", "declined"]);
+const INBOUND_HEALTH_STATES = new Set<string>(["unknown", "listening", "quiet", "no-signal"] satisfies InboundHealth[]);
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
 function languageCode(value: unknown): string | null {
@@ -355,6 +369,10 @@ function parseSnapshot(raw: Record<string, unknown>): BridgeWidgetSnapshot | nul
     if (!voice) return null;
     snapshot.voice = voice;
   }
+  // Dropped, not rejected, when unrecognised: see "inboundHealth" in the header.
+  if (typeof raw.inboundHealth === "string" && INBOUND_HEALTH_STATES.has(raw.inboundHealth)) {
+    snapshot.inboundHealth = raw.inboundHealth as InboundHealth;
+  }
   return snapshot;
 }
 
@@ -390,6 +408,7 @@ export type BridgeWidgetSnapshotFields = {
   browserCaptureState: BrowserCaptureConsentState;
   selectedLoopbackSourceId?: string | null;
   voice?: BridgeWidgetVoiceSnapshot;
+  inboundHealth?: InboundHealth;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -411,6 +430,7 @@ export function buildBridgeWidgetSnapshot(
   };
   if (fields.micDeviceId) snapshot.micDeviceId = fields.micDeviceId;
   if (fields.voice) snapshot.voice = fields.voice;
+  if (fields.inboundHealth) snapshot.inboundHealth = fields.inboundHealth;
   return snapshot;
 }
 
