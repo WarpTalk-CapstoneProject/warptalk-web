@@ -118,5 +118,33 @@
     "uploadAnyway": "そのままアップロード",
     "uploadAnywayDetail": "同じ内容の2つ目の別ドキュメントを作成します。",
     "cancel": "キャンセル"
+  },
+  "detail": {
+    "notFoundError": "ドキュメントは存在しないか、非表示になっています。",
+    "notFound": {
+      "title": "ドキュメントが見つかりません",
+      "description": "指定されたドキュメントは存在しないか、このワークスペースから削除されています。",
+      "backToDocuments": "ドキュメント一覧に戻る"
+    },
+    "backToLibrary": "ライブラリに戻る",
+    "approve": "承認",
+    "approveTitle": "ドキュメントを承認",
+    "reject": "却下",
+    "rejectTitle": "ドキュメントを却下",
+    "download": "ダウンロード",
+    "toasts": {
+      "downloadSaved": "ファイルを保存しました!",
+      "downloadStarted": "ファイルをダウンロード中...",
+      "downloadFailed": "ドキュメントのダウンロードに失敗しました。",
+      "approved": "ドキュメントが承認され、AIに取り込まれます。",
+      "rejected": "ドキュメントを却下しました。アップロードした人には理由が表示されます。",
+      "approveActionFailed": "操作に失敗しました。",
+      "revisionSubmitted": "修正版を承認待ちとして送信しました。",
+      "revisionFailed": "修正版のアップロードに失敗しました。",
+      "visibilityChangeFailed": "このドキュメントの公開範囲を変更できませんでした。",
+      "aiIndexingEnabled": "AIインデックスを有効にしました。ドキュメントは再インデックスされます。",
+      "aiIndexingDisabled": "AIインデックスを無効にしました。既存のAI用コピーは削除中です。",
+      "aiIndexingFailed": "AIインデックス設定を変更できませんでした。"
+    }
   }
 }

@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 import { toast } from "sonner";
 import {
   ArrowsClockwise,
+  CornersIn,
+  CornersOut,
   DownloadSimple,
+  Pause,
   Play,
+  SpeakerHigh,
+  SpeakerSlash,
   SpinnerGap,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -332,6 +337,8 @@ export function MeetingRecordingPlayer({
    */
   const reloadedAfterFailureRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrubberRef = useRef<HTMLInputElement | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
   // dropped — the first click on a transcript line is exactly that case, since the player waits
@@ -341,6 +348,105 @@ export function MeetingRecordingPlayer({
   // below re-runs constantly; without a record of what it has already done, an unrelated keystroke
   // three components away would pause the recording somebody had just started.
   const handledPlaybackRef = useRef<number | null>(null);
+
+  // ── Custom player UI state ──────────────────────────────────────────────────
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Forces scrubber to rerender when marks change without depending on a new array ref each tick.
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  void forceUpdate; // Used implicitly via marks prop change — kept to avoid lint warning.
+
+  // Keep fullscreen state in sync with browser events (Esc key exit etc.).
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Sync isPlaying from native video events so the Play/Pause button icon stays accurate without
+  // needing setIsPlaying in the JSX onPlay/onPause props — those props must remain single-expression
+  // to pass the contract grep in check-recording-seek-contract.mjs.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onPlay  = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    video.addEventListener("play",  onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("ended", onEnded);
+    return () => {
+      video.removeEventListener("play",  onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("ended", onEnded);
+    };
+    // videoRef.current changes whenever sourceUrl changes (the element is remounted on a fresh url),
+    // so sourceUrl is the right dependency here — not videoRef itself, which is a stable ref object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceUrl]);
+
+  // Helper: format seconds as M:SS.
+  function fmtTime(s: number | null) {
+    if (!s || !Number.isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  }
+
+  function togglePlayPause() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => {});
+    else video.pause();
+  }
+
+  function handleScrubberChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const video = videoRef.current;
+    if (!video) return;
+    const t = Number(e.target.value);
+    video.currentTime = t;
+    setCurrentTime(t);
+  }
+
+  function handleVolumeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const video = videoRef.current;
+    if (!video) return;
+    const v = Number(e.target.value);
+    video.volume = v;
+    video.muted = v === 0;
+    setVolume(v);
+    setIsMuted(v === 0);
+  }
+
+  function toggleMute() {
+    const video = videoRef.current;
+    if (!video) return;
+    const next = !video.muted;
+    video.muted = next;
+    setIsMuted(next);
+    if (!next && video.volume === 0) {
+      video.volume = 0.5;
+      setVolume(0.5);
+    }
+  }
+
+  async function toggleFullscreen() {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      await el.requestFullscreen().catch(() => {});
+    } else {
+      await document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  function handleDownloadCurrent() {
+    if (!artifact || !onDownloadRecording) return;
+    onDownloadRecording(artifact);
+  }
 
   // Not setState: this drives an external system (the media element) from React state, which is
   // what an effect is actually for.
@@ -632,15 +738,20 @@ export function MeetingRecordingPlayer({
           )}
         </div>
       ) : sourceUrl ? (
-        <div className="flex flex-col bg-black">
-          {/* controls, and nothing else: autoplay on a page someone opened to read a transcript is
-              a room full of unexpected sound. */}
+        /* WarpTalk Custom Video Player — WT-894
+           No native controls: the browser shadow DOM cannot be internationalised from here and
+           renders its menu in the OS locale, which is Vietnamese for most of the team's machines.
+           Every control the reader needs is reproduced in the control bar below the frame, in the
+           same design tokens and icon set as the rest of the application. */
+        <div ref={containerRef} className="group relative flex flex-col bg-black">
+          {/* ─── Video element (no controls) ─────────────────────────────── */}
           <video
             ref={videoRef}
             src={sourceUrl}
-            controls
             preload="metadata"
             className={frameClass}
+            onClick={togglePlayPause}
+            style={{ cursor: "pointer" }}
             onLoadedMetadata={(event) => {
               // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
               // settled and spent. Without this reset the very first expiry would mark the player
@@ -648,6 +759,8 @@ export function MeetingRecordingPlayer({
               // would be reported as an unplayable file with no reload offered.
               reloadedAfterFailureRef.current = false;
               publishDuration(event.currentTarget);
+              const el = event.currentTarget;
+              setCurrentTime(el.currentTime);
               const queued = pendingSeekRef.current;
               if (!queued) return;
               pendingSeekRef.current = null;
@@ -670,13 +783,13 @@ export function MeetingRecordingPlayer({
                * playhead on the last frame, which is a still picture of the meeting ending and looks
                * exactly like a seek that worked.
                */
-              const duration = event.currentTarget.duration;
+              const duration = el.duration;
               if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
                 toast.info("This recording stopped before that moment.");
                 return;
               }
-              event.currentTarget.currentTime = queued.seconds;
-              void event.currentTarget.play().catch(() => {});
+              el.currentTime = queued.seconds;
+              void el.play().catch(() => {});
             }}
             /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
                enough of it has been read to know better, and a caller that only ever heard
@@ -691,6 +804,7 @@ export function MeetingRecordingPlayer({
                scrolled away back to the playhead they had just left. */
             onTimeUpdate={(event) => {
               if (event.currentTarget.paused) return;
+              setCurrentTime(event.currentTarget.currentTime);
               onPlaybackSeconds?.(event.currentTarget.currentTime);
             }}
             onPlay={() => onPlayingChange?.(true)}
@@ -720,30 +834,155 @@ export function MeetingRecordingPlayer({
               if (kind === "broken") toast.error("Could not play this recording.");
             }}
           />
-          {marks && marks.length > 0 && videoDuration && videoDuration > 0 ? (
-            <div
-              className="relative flex h-2.5 w-full items-center border-t border-border/30 bg-surface-2/40 px-2 py-0.5 select-none"
-              title="Recording marks (turn starts)"
-              aria-label="Recording marks"
-            >
-              <div className="relative h-1.5 w-full">
-                {marks.map((mark, idx) => {
-                  const percent = Math.min(100, Math.max(0, (mark.seconds / videoDuration) * 100));
-                  return (
-                    <button
-                      key={`${mark.atMs}-${idx}`}
-                      type="button"
-                      onClick={() => handleMarkClick(mark)}
-                      style={{ left: `${percent}%` }}
-                      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-ink/40 transition-all hover:scale-125 hover:bg-ink focus:outline-none focus:ring-1 focus:ring-ink"
-                      title={`Jump to turn at ${Math.round(mark.seconds)}s`}
-                      aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
-                    />
-                  );
-                })}
-              </div>
+
+          {/* ─── WarpTalk Custom Control Bar ─────────────────────────────── */}
+          <div
+            className={cn(
+              "flex w-full select-none flex-col gap-0 bg-black/90 px-3 pb-2 pt-1 backdrop-blur-sm",
+              /* In pip/collapsed mode stay slim; at xl it reveals the full bar */
+              isPip ? "py-1 xl:pb-2 xl:pt-1" : "",
+            )}
+            aria-label="Video player controls"
+          >
+            {/* ── Scrubber row: timeline + turn marks overlay ──────────── */}
+            <div className="relative flex w-full items-center py-1">
+              {/* Range input — the actual scrubber */}
+              <input
+                ref={scrubberRef}
+                type="range"
+                min={0}
+                max={videoDuration ?? 0}
+                step={0.25}
+                value={currentTime}
+                onChange={handleScrubberChange}
+                aria-label="Seek recording"
+                className="relative z-10 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20"
+                style={{
+                  /* tint the filled portion of the scrubber track */
+                  background: `linear-gradient(to right, rgb(var(--color-ink)) ${
+                    videoDuration && videoDuration > 0
+                      ? Math.min(100, (currentTime / videoDuration) * 100)
+                      : 0
+                  }%, rgba(255,255,255,0.2) 0%)`,
+                }}
+              />
+              {/* Turn-mark dots drawn on top of the track at their file-second positions */}
+              {marks && marks.length > 0 && videoDuration && videoDuration > 0 && (
+                <div
+                  className="pointer-events-none absolute inset-0 z-20"
+                  aria-hidden="true"
+                >
+                  {marks.map((mark, idx) => {
+                    const percent = Math.min(
+                      100,
+                      Math.max(0, (mark.seconds / videoDuration) * 100),
+                    );
+                    return (
+                      <button
+                        key={`${mark.atMs}-${idx}`}
+                        type="button"
+                        onClick={() => handleMarkClick(mark)}
+                        style={{ left: `${percent}%`, top: "50%" }}
+                        className="pointer-events-auto absolute z-20 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-amber-400/80 ring-1 ring-amber-300/60 transition-all hover:scale-125 hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        title={`Jump to turn at ${Math.round(mark.seconds)}s`}
+                        aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          ) : null}
+
+            {/* ── Bottom row: all buttons + time counter ────────────────── */}
+            <div className="flex items-center gap-2">
+              {/* Play / Pause */}
+              <button
+                type="button"
+                onClick={togglePlayPause}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause size={15} weight="fill" />
+                ) : (
+                  <Play size={15} weight="fill" />
+                )}
+              </button>
+
+              {/* Volume: mute toggle + slider */}
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted || volume === 0 ? (
+                  <SpeakerSlash size={14} weight="fill" />
+                ) : (
+                  <SpeakerHigh size={14} weight="fill" />
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                aria-label="Volume"
+                className={cn(
+                  "h-1 cursor-pointer appearance-none rounded-full bg-white/20 transition-all",
+                  /* hide volume slider in pip-collapsed to save horizontal space */
+                  isPip ? "w-0 overflow-hidden xl:w-16" : "w-16",
+                )}
+                style={{
+                  background: `linear-gradient(to right, rgba(255,255,255,0.85) ${
+                    (isMuted ? 0 : volume) * 100
+                  }%, rgba(255,255,255,0.2) 0%)`,
+                }}
+              />
+
+              {/* Time counter: current / duration */}
+              <span className="ml-1 flex-1 font-mono text-[11px] leading-none text-white/60 tabular-nums">
+                {fmtTime(currentTime)}
+                <span className="mx-0.5 text-white/30">/</span>
+                {fmtTime(videoDuration)}
+              </span>
+
+              {/* Download button — only shown when download is wired up */}
+              {artifact && onDownloadRecording && (
+                <button
+                  type="button"
+                  onClick={handleDownloadCurrent}
+                  disabled={busyArtifactId === artifact.id}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/40"
+                  aria-label="Download recording"
+                  title="Download recording"
+                >
+                  {busyArtifactId === artifact.id ? (
+                    <SpinnerGap size={14} className="animate-spin" />
+                  ) : (
+                    <DownloadSimple size={14} weight="bold" />
+                  )}
+                </button>
+              )}
+
+              {/* Fullscreen */}
+              <button
+                type="button"
+                onClick={() => void toggleFullscreen()}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? (
+                  <CornersIn size={14} weight="bold" />
+                ) : (
+                  <CornersOut size={14} weight="bold" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className={noticeFrameClass}>

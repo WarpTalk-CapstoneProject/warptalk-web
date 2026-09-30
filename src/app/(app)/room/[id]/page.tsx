@@ -24,9 +24,20 @@ export default function LegacyRoomRedirectPage() {
   const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
 
   useEffect(() => {
-    router.replace(
-      workspaceSlug ? `/${workspaceSlug}/rooms/${roomId}/live` : "/workspace",
-    );
+    let slug = workspaceSlug;
+    if (!slug && typeof document !== "undefined") {
+      const match = document.cookie.match(/(?:^|;\s*)active_workspace_slug=([^;]+)/);
+      if (match) slug = decodeURIComponent(match[1]);
+    }
+    const target = slug && roomId ? `/${slug}/rooms/${roomId}/live` : "/workspace";
+    router.replace(target);
+
+    const timer = window.setTimeout(() => {
+      if (window.location.pathname.startsWith("/room/")) {
+        window.location.replace(target);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
   }, [router, roomId, workspaceSlug]);
 
   return (

@@ -168,11 +168,18 @@ export function DocumentPreview({
     let cancelled = false;
     void (async () => {
       try {
-        const mammoth = await import("mammoth");
+        const [mammoth, { default: DOMPurify }] = await Promise.all([
+          import("mammoth"),
+          import("dompurify"),
+        ]);
         const { value } = await mammoth.convertToHtml({
           arrayBuffer: await blob.arrayBuffer(),
         });
-        if (!cancelled) setWordHtml(value);
+        // mammoth carries a docx's hyperlink hrefs through verbatim, including a
+        // javascript:-scheme one a crafted upload could embed — this is untrusted content
+        // nobody has approved yet, not markup we authored, so it gets sanitized like any
+        // other HTML from an outside source before it reaches dangerouslySetInnerHTML.
+        if (!cancelled) setWordHtml(DOMPurify.sanitize(value));
       } catch {
         // A file mammoth cannot read is a file to download, not a crash. The notice below says so.
         if (!cancelled) setParseFailed(true);
@@ -309,8 +316,9 @@ export function DocumentPreview({
   if (kind === "word") {
     if (wordHtml === null) return <ParsingNotice fileName={fileName} />;
     return (
-      /* mammoth emits headings, lists and tables and no <script>; the prose styling is ours
-         because the document's own styling is deliberately dropped. */
+      /* Sanitized with DOMPurify above, since mammoth carries hyperlink hrefs through
+         verbatim; the prose styling is ours because the document's own styling is
+         deliberately dropped. */
       <div
         className="document-preview-html text-[13px] leading-relaxed text-ink [&_h1]:mt-4 [&_h1]:text-[16px] [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-[14px] [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-[13px] [&_h3]:font-semibold [&_p]:mt-2 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_table]:mt-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-hairline [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-hairline [&_th]:bg-surface-2 [&_th]:px-2 [&_th]:py-1"
         dangerouslySetInnerHTML={{ __html: wordHtml }}
