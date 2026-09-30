@@ -4,7 +4,9 @@
     "hideTitle": "録画を非表示にして文字起こしを広げる",
     "showTitle": "文字起こしの横に録画を表示する",
     "hide": "非表示",
-    "show": "表示"
+    "show": "表示",
+    "downloadTitle": "録画をダウンロード",
+    "downloadAriaLabel": "録画をダウンロード"
   },
   "rail": {
     "ariaLabel": "会議の要約パネル",
@@ -13,7 +15,8 @@
   },
   "toasts": {
     "copySuccess": "要約をコピーしました。",
-    "copyError": "要約をコピーできませんでした。"
+    "copyError": "要約をコピーできませんでした。",
+    "downloadError": "ダウンロードを作成できませんでした。"
   },
   "empty": {
     "generating": "要約を生成しています…",

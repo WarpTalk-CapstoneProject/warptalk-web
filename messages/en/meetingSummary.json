@@ -4,7 +4,9 @@
     "hideTitle": "Hide the recording and widen the transcript",
     "showTitle": "Show the recording beside the transcript",
     "hide": "Hide",
-    "show": "Show"
+    "show": "Show",
+    "downloadTitle": "Download the recording",
+    "downloadAriaLabel": "Download the recording"
   },
   "rail": {
     "ariaLabel": "Meeting summary rail",
@@ -13,7 +15,8 @@
   },
   "toasts": {
     "copySuccess": "Summary copied.",
-    "copyError": "Could not copy the summary."
+    "copyError": "Could not copy the summary.",
+    "downloadError": "Could not build this download."
   },
   "empty": {
     "generating": "Generating summary…",

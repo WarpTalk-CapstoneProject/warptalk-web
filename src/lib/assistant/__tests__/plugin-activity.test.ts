@@ -75,11 +75,15 @@ test("plugin and tool labels come from the catalog, falling back to the raw keys
   assert.equal(retired.toolLabel, "old_crm_lookup");
 });
 
-test("a workspace-policy refusal reads as Blocked, not as a failure", () => {
+test("a workspace-policy refusal reads as Blocked, not as a failure, and carries an unblock hint", () => {
   const outcome = describePluginActivityOutcome("permission_denied");
   assert.equal(outcome.label, "Blocked");
   assert.equal(outcome.tone, "blocked");
   assert.equal(outcome.code, "permission_denied");
+  assert.equal(
+    outcome.hint,
+    "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+  );
 });
 
 test("success carries no code; setup gaps and unknown codes are told apart", () => {

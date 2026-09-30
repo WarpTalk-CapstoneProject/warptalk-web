@@ -12,7 +12,6 @@ import {
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
-  Archive,
   ArrowRight,
   Bold,
   Maximize2,
@@ -88,7 +87,6 @@ import {
   renderingAnswerMatches,
 } from "@/lib/meeting/summary-rendering-poll";
 import {
-  ArtifactsPanel,
   MeetingRecordTabButton,
   type SeekRequest,
   useArtifactDownload,
@@ -116,6 +114,7 @@ import {
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
+import { buildRecordingMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -143,7 +142,7 @@ import {
   useTranslationRoomParticipants,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
-import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
@@ -190,7 +189,13 @@ import { isAxiosError } from "axios";
  *
  * One tab now, named for what it actually contains.
  */
-type MeetingRecordTab = "recap" | "minutes" | "artifacts";
+/**
+ * "artifacts" was the third one, and it is gone: a list of a meeting's files reached by file type,
+ * beside two tabs that show what those files are copies of. Every download now hangs off the thing
+ * it copies, and the files that are nobody's reading surface live in the workspace's Artifacts
+ * library. Nothing may set this to "artifacts" again — see the note where ArtifactsPanel stood.
+ */
+type MeetingRecordTab = "recap" | "minutes";
 
 /**
  * Nothing cited, as ONE value rather than a new one every time.
@@ -353,6 +358,7 @@ export default function RoomInformationPage() {
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
   const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
+  const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   /**
@@ -587,6 +593,19 @@ export default function RoomInformationPage() {
     [transcriptSegments],
   );
   const transcriptEntryCount = transcriptRows.length;
+
+  /**
+   * Where each transcript turn falls on the RECORDING's own file-second axis, one mark per turn.
+   *
+   * Built from the exact same `transcriptRows` the transcript renders its timestamps from, and the
+   * exact same `seekSources` `requestSeek` measures against — so a mark on the scrubber and the
+   * transcript line it points at can never disagree about where a turn starts. See
+   * recording-marks.ts for why a turn that cannot be placed is dropped rather than clamped.
+   */
+  const recordingMarks = useMemo(
+    () => buildRecordingMarks(transcriptRows, seekSources),
+    [transcriptRows, seekSources],
+  );
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -1059,6 +1078,8 @@ export default function RoomInformationPage() {
                     }
                     user={user}
                     onCopy={handleCopy}
+                    canEdit={canEditRoom}
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
@@ -1168,6 +1189,11 @@ export default function RoomInformationPage() {
                 roomId={room.id}
                 isHost={isHost}
                 isEnded={isEnded}
+                // What a downloaded copy of this meeting is called — see recordFileName. The
+                // title as the host typed it, and the meeting's OWN start (WT-311(c)), which is
+                // the same source the duration chip counts from.
+                meetingTitle={room.title}
+                meetingStartedAt={room.startedAt}
                 artifactAccess={room.settings?.artifactAccess}
                 autoShareRecord={room.settings?.autoShareRecord}
                 endedRecord={endedRecordQuery.data ?? null}
@@ -1180,6 +1206,8 @@ export default function RoomInformationPage() {
                 // is the wire it comes back up. See the note on `seekSources` above.
                 onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
+                marks={recordingMarks}
+                onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
@@ -1203,6 +1231,7 @@ export default function RoomInformationPage() {
                     currentUserId={user?.id}
                     isEnded={isEnded}
                     onCopy={handleCopy}
+                    meetingTitle={room.title}
                     transcriptId={transcriptQuery.data?.id}
                     transcriptStatus={transcriptQuery.data?.status}
                     // WT-311(c): the meeting's own clock, not the translation session's. A
@@ -1382,6 +1411,8 @@ function MeetingRecordSection({
   roomId,
   isHost,
   isEnded,
+  meetingTitle,
+  meetingStartedAt,
   artifactAccess,
   autoShareRecord,
   transcript,
@@ -1403,10 +1434,17 @@ function MeetingRecordSection({
   onTabChange,
   expanded,
   onToggleExpanded,
+  marks,
+  onMarkClick,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
   isHost: boolean;
+  /** The meeting's own name, which every file downloaded from this record is named after. */
+  meetingTitle: string;
+  /** WT-311(c): the meeting's own start — the date in the file name, and the same source the
+   *  duration chip counts from. Null for a meeting with no start on record. */
+  meetingStartedAt?: string | null;
   /**
    * Whether the meeting is over, which is what separates "there is no record" from "the record
    * is not written yet". The host lands here the moment they press End, and the finalizer takes
@@ -1478,6 +1516,8 @@ function MeetingRecordSection({
   onToggleExpanded?: () => void;
   /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
   generatableLanguages?: readonly string[] | null;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingRoomPage");
   const { busyArtifactId, downloadArtifact } =
@@ -1908,16 +1948,8 @@ function MeetingRecordSection({
             icon={ClipboardList}
             label={t("record.tabs.minutes")}
           />
-          <MeetingRecordTabButton
-            active={activeTab === "artifacts"}
-            onClick={() => onTabChange("artifacts")}
-            icon={Archive}
-            label={t("record.tabs.artifacts")}
-            count={endedRecord?.artifacts.length}
-          />
-
           {/* WT-588. On the tab strip rather than inside the transcript toolbar, because it
-              widens the RECORD — summary, minutes and artifacts gain the same room, and a
+              widens the RECORD — the Recap tab and the minutes gain the same room, and a
               control that moved only when you were on one tab would read as belonging to that
               tab's content.
 
@@ -1952,23 +1984,16 @@ function MeetingRecordSection({
         <div className="mt-3" />
       )}
 
-      {/* WT-492: above the transcript, and only in that tab — the two are read together, and it
-          is the pairing the ticket asks for. On Summary and Artifacts it would push the panel the
-          reader came for down the page for no reason; Artifacts still lists the same file to
-          download. Rendered only when a ready recording exists, so a meeting nobody recorded shows
-          no empty frame promising one. */}
-      {/* On Summary as well as Transcript now. A summary citation is the same gesture as clicking
-          a transcript line, and it cannot move a player the reader cannot see — sending them to
-          another tab to watch what they just clicked is the long way round. Artifacts still gets
-          none: it is a list of files, and the player would push the list the reader came for down
-          the page.
+      {/* WT-492: the recording belongs beside the transcript, because the two are read together
+          — which is the pairing the ticket asks for, and the reason a summary citation can move a
+          player the reader can see.
 
-          Option C: on the TRANSCRIPT tab the player is no longer here at all. It has stopped being
-          a full-width block above the reading column and become the pip at the top of the reading
-          rail — the same component, the same element, one `variant` apart. A 16:9 frame the width
-          of the record is the single biggest reason the transcript below it was being read a
-          screenful at a time. The Summary tab keeps the block player, because there is no reading
-          column beside it there to compete with. */}
+          Option C: it is no longer HERE at all. It stopped being a full-width block above the
+          reading column and became the pip at the top of the reading rail — the same component,
+          the same element, one `variant` apart. A 16:9 frame the width of the record is the single
+          biggest reason the transcript below it was being read a screenful at a time. The pip is
+          also where its download now lives: the Artifacts tab that used to hold that file is
+          gone. */}
       {/* WT-655: the one line that stops the transcript's timestamps going quiet without a reason.
           Above the reading surface, because it is about the timestamps in it. A meeting that was
           simply never recorded produces no reason at all and so renders nothing — see
@@ -2021,6 +2046,8 @@ function MeetingRecordSection({
           <TranscriptReadingLayout
             transcript={transcript}
             record={endedRecord}
+            meetingTitle={meetingTitle}
+            meetingStartedAt={meetingStartedAt}
             segments={segments}
             hasTranscript={hasTranscript}
             recording={recording}
@@ -2038,6 +2065,8 @@ function MeetingRecordSection({
             onSelectRendering={endedRecord ? selectRendering : undefined}
             generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
+            marks={marks}
+            onMarkClick={onMarkClick}
           />
         ) : (
           transcript
@@ -2059,14 +2088,6 @@ function MeetingRecordSection({
             onTabChange("recap");
             onJumpToMoment(atMs);
           }}
-        />
-      ) : null}
-      {activeTab === "artifacts" && endedRecord ? (
-        <ArtifactsPanel
-          artifacts={endedRecord.artifacts}
-          endedAt={endedRecord.endedAt}
-          busyArtifactId={busyArtifactId}
-          onDownload={downloadArtifact}
         />
       ) : null}
     </section>

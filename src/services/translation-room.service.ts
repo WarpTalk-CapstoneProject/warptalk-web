@@ -550,13 +550,24 @@ export const translationRoomService = {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
 
-  artifactDownload(id: string) {
+  /**
+   * A link to one artifact's bytes.
+   *
+   * `disposition` decides what the presigned link DOES when it is opened, and the default is
+   * deliberate: the in-page <video> reads its source from this very endpoint, and a link carrying
+   * `Content-Disposition: attachment` would make the browser save the recording instead of playing
+   * it. Only a caller that means "put this on the reader's disk" asks for `attachment`, which is
+   * also what makes the server attach the file's proper name.
+   */
+  artifactDownload(id: string, disposition?: "attachment") {
     return apiClient.get<{
       url?: string | null;
       content?: string | null;
       fileName: string;
       contentType: string;
-    }>(API.roomArtifacts.download(id));
+    }>(API.roomArtifacts.download(id), {
+      params: disposition ? { disposition } : undefined,
+    });
   },
 
   approveArtifactConsent(id: string) {

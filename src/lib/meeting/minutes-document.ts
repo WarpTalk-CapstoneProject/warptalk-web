@@ -124,7 +124,7 @@ export interface MinutesDocumentPlan {
 
 /** The summary template keys that are not narrative — see meeting-summary.ts for the full set. */
 const DECISION_KEYS = new Set(["decisions"]);
-const ACTION_KEYS = new Set(["actionItems"]);
+const ACTION_KEYS = new Set(["actionItems", "action_items"]);
 
 /**
  * Sort the stored sections into the document's parts, keeping stored order inside each part.

@@ -38,6 +38,8 @@ export interface PluginActivityOutcome {
   tone: PluginActivityTone;
   /** The raw code, for everything but a plain success — it is what an operator would search for. */
   code: string | null;
+  /** Actionable hint or explanation for what this status means and how to unblock/fix it. */
+  hint?: string | null;
 }
 
 export interface PluginActivityRow extends WorkspacePluginToolAuditDto {
@@ -68,9 +70,13 @@ export type PluginActivityTranslator = (key: string) => string;
 const DEFAULT_PLUGIN_ACTIVITY_COPY: Record<string, string> = {
   "outcome.succeeded": "Succeeded",
   "outcome.blocked": "Blocked",
+  "outcome.blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
   "outcome.awaitingConfirmation": "Awaiting confirmation",
+  "outcome.awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
   "outcome.needsSetup": "Needs setup",
+  "outcome.needsSetupHint": "Plugin connection or configuration missing. Reconnect in Settings > Plugins.",
   "outcome.providerError": "Provider error",
+  "outcome.providerErrorHint": "Provider returned an error. Check service status or API quota.",
   "outcome.failed": "Failed",
   formerMember: "Former member",
 };
@@ -85,12 +91,23 @@ export function describePluginActivityOutcome(
 ): PluginActivityOutcome {
   const code = (resultStatus ?? "").trim().toLowerCase();
   if (code === "success") return { label: t("outcome.succeeded"), tone: "success", code: null };
-  if (BLOCKED.has(code)) return { label: t("outcome.blocked"), tone: "blocked", code };
-  if (code === "confirmation_required") {
-    return { label: t("outcome.awaitingConfirmation"), tone: "attention", code };
+  if (BLOCKED.has(code)) {
+    return { label: t("outcome.blocked"), tone: "blocked", code, hint: t("outcome.blockedHint") };
   }
-  if (NEEDS_SETUP.has(code)) return { label: t("outcome.needsSetup"), tone: "attention", code };
-  if (PROVIDER.has(code)) return { label: t("outcome.providerError"), tone: "failed", code };
+  if (code === "confirmation_required") {
+    return {
+      label: t("outcome.awaitingConfirmation"),
+      tone: "attention",
+      code,
+      hint: t("outcome.awaitingConfirmationHint"),
+    };
+  }
+  if (NEEDS_SETUP.has(code)) {
+    return { label: t("outcome.needsSetup"), tone: "attention", code, hint: t("outcome.needsSetupHint") };
+  }
+  if (PROVIDER.has(code)) {
+    return { label: t("outcome.providerError"), tone: "failed", code, hint: t("outcome.providerErrorHint") };
+  }
   return { label: t("outcome.failed"), tone: "failed", code: code || "failed" };
 }
 

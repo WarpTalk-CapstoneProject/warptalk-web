@@ -19,7 +19,7 @@ import type { PresenceChangedEvent } from "@/types/presence";
 import * as signalR from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Calendar, FileText, Settings, Video } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -98,16 +98,23 @@ export function RealtimeNotificationProvider({
     (state) => state.activeWorkspaceId,
   );
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
+
+  // `/egress/*` is LiveKit's headless recording template (see src/app/egress/composite/page.tsx):
+  // nobody is there to click Allow/Block, and Chrome's native permission bubble gets baked
+  // straight into the recorded .mp4 if we ever trigger it there.
+  const isEgressRoute = pathname?.startsWith("/egress") ?? false;
 
   // Request Native Browser Desktop OS Notification permissions on load
   useEffect(() => {
+    if (isEgressRoute) return;
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "default") {
         Notification.requestPermission().catch(() => {});
       }
     }
-  }, []);
+  }, [isEgressRoute]);
 
   const triggerNativeDesktopNotification = (
     title: string,
@@ -128,8 +135,9 @@ export function RealtimeNotificationProvider({
   };
 
   useEffect(() => {
-    // No token, or a session already known to be dead, means negotiation can only 401.
-    if (!accessToken || isSessionEnded()) {
+    // No token, a session already known to be dead, or the headless egress recorder (which has
+    // no session and nobody to see a toast) means negotiation can only 401 or is pointless.
+    if (isEgressRoute || !accessToken || isSessionEnded()) {
       return;
     }
 
@@ -495,7 +503,7 @@ export function RealtimeNotificationProvider({
       disposed = true;
       hubConn.stop();
     };
-  }, [accessToken, queryClient, router]);
+  }, [accessToken, queryClient, router, isEgressRoute]);
 
   // Subscribe/Unsubscribe workspace when active workspace changes
   useEffect(() => {

@@ -73,10 +73,23 @@ export function canDownloadArtifact(artifact: RoomHistoryArtifact): boolean {
 export function findPlayableRecording(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): RoomHistoryArtifact | null {
-  return (
-    artifacts?.find(
-      (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
-    ) ?? null
+  return playableRecordings(artifacts)[0] ?? null;
+}
+
+/**
+ * Every recording of this meeting that has a file behind it, in the order the record lists them.
+ *
+ * One answer, three callers: the player picks the first, the seek guard counts them, and the
+ * "more than one recording" notice offers all of them for download — which is the only route to
+ * those files now that the Artifacts tab is gone. Three copies of "a recording that can be
+ * fetched" is three places for the definition to drift, and a drift here reads as a recording
+ * that exists in one part of the page and not in another.
+ */
+export function playableRecordings(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): RoomHistoryArtifact[] {
+  return (artifacts ?? []).filter(
+    (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
   );
 }
 
@@ -122,10 +135,7 @@ function isRecording(artifact: RoomHistoryArtifact): boolean {
 export function countPlayableRecordings(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): number {
-  return (
-    artifacts?.filter((artifact) => isRecording(artifact) && canDownloadArtifact(artifact))
-      .length ?? 0
-  );
+  return playableRecordings(artifacts).length;
 }
 
 export type UnplayableRecordingState = "processing" | "failed";
@@ -160,7 +170,8 @@ const FAILED_RECORDING_STATUSES: ReadonlySet<RoomHistoryArtifact["status"]> = ne
  *   resolves itself. `expired` and `deleted` are NOT failures — retention ran out, or someone
  *   removed the file on purpose; the recording worked. Calling them failed would send a host
  *   looking for a fault that is really the policy working, so they return null here and the
- *   Artifacts tab's own status label is where they are named.
+ *   workspace's Artifacts library, which lists every retained file with its status, is where they
+ *   are named.
  *
  * Processing outranks failed: with a restart in the meeting, one run can have failed while the
  * next is still being written, and "wait a minute" is the answer that is about to change.
@@ -176,67 +187,3 @@ export function unplayableRecordingState(
   return null;
 }
 
-/**
- * How long after a meeting ends a missing transcript or summary is still "on its way".
- *
- * The same fifteen minutes `shouldPollRoomHistory` polls for, on purpose: the page stops asking at
- * the moment this stops promising, so a row can never say "Processing" to a page that has given up
- * refetching the answer.
- */
-export const ARTIFACT_OUTPUT_WINDOW_MS = 15 * 60 * 1000;
-
-export type PendingOutput = {
-  type: "transcript_export" | "summary_export";
-  state: "processing" | "not_produced";
-};
-
-/**
- * WT-683 — the outputs every ended meeting is owed that have no row yet.
- *
- * The finalizer writes the transcript and the AI summary a minute or so after the meeting ends, and
- * until then the Artifacts tab read "(0) · Nothing has been generated or retained for this meeting
- * yet." That sentence is true and useless: it cannot be told apart from a meeting whose outputs
- * failed, so a host who opened the tab straight after ending assumed nothing would ever arrive.
- *
- * So the two outputs that are ALWAYS produced get a row of their own before they exist — processing
- * inside the window, "not produced" after it — and a row that does exist speaks for itself.
- *
- * The recording is deliberately not in this list: not every meeting is recorded, so it is not owed.
- * It needs no placeholder either — since rec-loss the backend writes a recording row the moment
- * recording starts (processing, then ready or failed), so a recorded meeting's row speaks for itself.
- */
-export function pendingOutputs(
-  artifacts: RoomHistoryArtifact[] | undefined | null,
-  endedAt: string | null | undefined,
-  nowMs: number = Date.now(),
-): PendingOutput[] {
-  const present = new Set((artifacts ?? []).map((artifact) => artifact.type));
-  const endedMs = endedAt ? Date.parse(endedAt) : Number.NaN;
-  const stillOnItsWay = Number.isFinite(endedMs) && nowMs - endedMs <= ARTIFACT_OUTPUT_WINDOW_MS;
-
-  return (["transcript_export", "summary_export"] as const)
-    .filter((type) => !present.has(type))
-    .map((type) => ({ type, state: stillOnItsWay ? "processing" : "not_produced" }));
-}
-
-/**
- * The format the reader will actually receive — not the one the row is stored as.
- *
- * `artifact.format` is `TranslationRoomArtifact.FileFormat`, which describes the STORED bytes:
- * markdown for the transcript, json for the summary. Both of those are correct for the code that
- * reads them (the summary is parsed into prose by parseMeetingSummaryContent) and both were wrong
- * on screen, because the server serves those two as plain text — so a row that said JSON handed
- * over a .txt when clicked.
- *
- * Kept in step with the backend's ArtifactPlainText.IsTextExport, which decides the same thing for
- * the download itself. If a third text-bearing artifact type is added, both need the entry.
- */
-const TEXT_EXPORT_TYPES: ReadonlySet<RoomHistoryArtifact["type"]> = new Set([
-  "transcript_export",
-  "summary_export",
-]);
-
-export function artifactDownloadFormat(artifact: RoomHistoryArtifact): string {
-  if (TEXT_EXPORT_TYPES.has(artifact.type)) return "TXT";
-  return artifact.format?.toUpperCase() || "—";
-}

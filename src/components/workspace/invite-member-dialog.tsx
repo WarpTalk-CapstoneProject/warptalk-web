@@ -301,6 +301,11 @@ export function InviteMemberDialog({
                   External members are always assigned the Member role. They
                   cannot see the full member directory, and can only access
                   resources tied to meetings they participate in.
+                  {!internalAllowed && policy?.internalDisabledReason && (
+                    <span className="mt-1 block text-amber-600 dark:text-amber-400">
+                      {policy.internalDisabledReason}
+                    </span>
+                  )}
                   {optionState.External.disabled && optionState.External.reason && (
                     <span className="mt-1 block text-destructive">
                       {optionState.External.reason}

@@ -62,7 +62,9 @@ export function parseMeetingSummaryContent(raw: string | null | undefined): Meet
       (item) => item.text,
     );
     const actionItems = (
-      sections.find((section) => section.key === "actionItems")?.items ?? []
+      sections.find(
+        (section) => section.key === "actionItems" || section.key === "action_items",
+      )?.items ?? []
     ).map((item) => ({ owner: item.owner ?? "", task: item.text }));
 
     return {

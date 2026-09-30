@@ -9,6 +9,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { meetingTypeByValue, MEETING_TYPE_I18N_KEYS } from "@/lib/meeting/meeting-types";
 import { UserChip, type UserChipIdentity } from "@/components/user/user-chip";
 
+import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
+
 /**
  * Who hosts this room, from the two sources this component has: the signed-in user (when they
  * are the host) and the participant roster. Neither is guaranteed — a host who has not joined
@@ -38,7 +40,9 @@ export function MeetingPropertiesPills({
   occupancyLabel,
   occupancyNoun,
   user,
-  onCopy
+  onCopy,
+  canEdit = false,
+  allowedTargetLanguages,
 }: {
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
@@ -54,6 +58,8 @@ export function MeetingPropertiesPills({
   user: { id: string; fullName?: string } | null;
   /** WT-310(12) — the page's copy handler, so the room-code pill reuses its confirmation. */
   onCopy: (text: string, label: string) => void;
+  canEdit?: boolean;
+  allowedTargetLanguages?: string[] | null;
 }) {
   const t = useTranslations("rooms.create.templatePicker");
 
@@ -113,6 +119,8 @@ export function MeetingPropertiesPills({
       <LanguageSelector
         languages={room.targetLanguages?.length ? room.targetLanguages : [room.sourceLanguage].filter(Boolean) as string[]}
         onLanguagesChange={handleLanguagesChange}
+        readOnly={isFinishedStatus(room.status) || !canEdit}
+        allowedTargetLanguages={allowedTargetLanguages}
       />
 
       {/* WT-310(12): the room code is what a host actually came here for, and it lived only in

@@ -34,10 +34,15 @@
   "outcome": {
     "succeeded": "成功",
     "blocked": "ブロック済み",
+    "blockedHint": "ポリシーによりブロックされたか、確認が拒否されました。プラグイン設定で権限を確認してください。",
     "awaitingConfirmation": "確認待ち",
+    "awaitingConfirmationHint": "WarpBotでのユーザー確認が必要です。",
     "needsSetup": "設定が必要",
+    "needsSetupHint": "プラグインの接続または設定がありません。設定 > プラグインで再接続してください。",
     "providerError": "プロバイダーエラー",
+    "providerErrorHint": "プロバイダーがエラーを返しました。サービス状態またはAPI制限を確認してください。",
     "failed": "失敗"
   },
-  "formerMember": "元メンバー"
+  "formerMember": "元メンバー",
+  "managePlugins": "プラグインを管理"
 }

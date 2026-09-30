@@ -66,8 +66,7 @@
     "sectionsAriaLabel": "Meeting record sections",
     "tabs": {
       "recap": "Recap",
-      "minutes": "Minutes",
-      "artifacts": "Artifacts"
+      "minutes": "Minutes"
     },
     "expand": {
       "showDetails": "Show the meeting details again",

@@ -115,6 +115,14 @@ assert.match(
   "Members must pass Owner-only Admin granting to the invite dialog.",
 );
 
+// WT-847: when internal membership is disallowed by workspace domain policy,
+// the dialog falls back to External and must display internalDisabledReason so the user understands why Member is disabled.
+assert.match(
+  dialog,
+  /!internalAllowed\s*&&\s*policy\?\.internalDisabledReason/,
+  "The invite dialog must render internalDisabledReason when internal membership is disallowed.",
+);
+
 /**
  * A member asking to leave must be answerable (WT-559).
  *

@@ -66,8 +66,7 @@
     "sectionsAriaLabel": "Các mục của hồ sơ cuộc họp",
     "tabs": {
       "recap": "Tóm lược",
-      "minutes": "Biên bản",
-      "artifacts": "Tệp lưu trữ"
+      "minutes": "Biên bản"
     },
     "expand": {
       "showDetails": "Hiện lại thông tin chi tiết cuộc họp",

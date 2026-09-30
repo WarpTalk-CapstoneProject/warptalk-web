@@ -96,9 +96,16 @@ if (/\{\s*artifact\s*\?\s*\(/.test(panelCode)) {
   );
 }
 
-if (!/artifact\s*&&\s*summaryState\s*===\s*"ready"/.test(panel)) {
+// `artifact && summaryState === "ready"` was the expression pinned here until 2026-09-18, and the
+// `artifact &&` half has gone with the fetch it belonged to: the button no longer downloads the
+// server's summary_export row, it writes the summary ON SCREEN to a Word file, so requiring the row
+// would require something the download does not read. WT-369's rule is untouched and is the whole
+// of what is left — the gate is the RESOLVED STATE, never the row.
+if (!/summaryState\s*===\s*"ready"\s*\?/.test(panelCode)) {
   failures.push(
-    `${PANEL}: expected the Download button to be gated on \`artifact && summaryState === "ready"\`.`,
+    `${PANEL}: expected the Download button to be gated on \`summaryState === "ready"\`. The ` +
+      `artifact row is written even for a meeting with no summary, so only the resolved state may ` +
+      `decide whether a summary can be taken away.`,
   );
 }
 

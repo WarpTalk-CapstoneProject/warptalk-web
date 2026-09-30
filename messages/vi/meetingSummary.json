@@ -4,7 +4,9 @@
     "hideTitle": "Ẩn bản ghi và mở rộng bản chép",
     "showTitle": "Hiện bản ghi bên cạnh bản chép",
     "hide": "Ẩn",
-    "show": "Hiện"
+    "show": "Hiện",
+    "downloadTitle": "Tải bản ghi hình",
+    "downloadAriaLabel": "Tải bản ghi hình"
   },
   "rail": {
     "ariaLabel": "Thanh tóm tắt cuộc họp",
@@ -13,7 +15,8 @@
   },
   "toasts": {
     "copySuccess": "Đã sao chép tóm tắt.",
-    "copyError": "Không thể sao chép tóm tắt."
+    "copyError": "Không thể sao chép tóm tắt.",
+    "downloadError": "Không tạo được tệp tải về."
   },
   "empty": {
     "generating": "Đang tạo tóm tắt…",

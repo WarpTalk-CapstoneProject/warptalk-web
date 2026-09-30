@@ -66,8 +66,7 @@
     "sectionsAriaLabel": "ミーティング記録のセクション",
     "tabs": {
       "recap": "要約",
-      "minutes": "議事録",
-      "artifacts": "成果物"
+      "minutes": "議事録"
     },
     "expand": {
       "showDetails": "ミーティング情報を再表示",

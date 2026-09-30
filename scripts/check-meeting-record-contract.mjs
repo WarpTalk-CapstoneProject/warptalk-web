@@ -46,7 +46,6 @@ for (const [needle, what] of [
   // this rule is asserted below, so the merge cannot quietly lose what the tab carried.
   ["<TranscriptReadingLayout", "the transcript beside its summary"],
   ["<MinutesPanel", "the meeting minutes"],
-  ["<ArtifactsPanel", "the retained files"],
   ["<MeetingFeedbackMenu", "the meeting rating"],
 ]) {
   assert.ok(
@@ -60,6 +59,36 @@ const notesAt = roomDetail.indexOf("<RoomNotesEditor");
 const recordAt = roomDetail.indexOf("<MeetingRecordSection");
 assert.ok(notesAt > 0 && recordAt > notesAt, "The record must sit below the description.");
 
+// THE ARTIFACTS TAB IS GONE, DELIBERATELY (2026-09-18).
+//
+// `<ArtifactsPanel` used to be on the list above, for the same reason the rest of it is: deleting
+// the workspace-wide Transcripts page was only safe once everything it owned had somewhere to live.
+// The panel listed a meeting's files as rows named after their FILE TYPE — "recording",
+// "transcript export", "summary export" — beside two tabs that render those very things in full.
+// Reaching the video by its type, from a list, two clicks from the frame that plays it is the long
+// way round from every one of them.
+//
+// So the rule it stood for is unchanged and is asserted differently: every artifact a reader can
+// take away must be reachable FROM THE THING IT IS A COPY OF. The three needles below are that
+// rule. What is left over — debug logs, audio samples, nobody's reading surface — is listed by the
+// workspace's Artifacts library, which is a page of its own and covered by its own contract.
+const transcriptPanelDownloads = read("src/components/rooms/meeting-transcript-panel.tsx");
+assert.ok(
+  !fs.existsSync(path.join(root, "src/components/rooms/artifacts-panel.tsx")),
+  "The Artifacts tab must not come back as a file of its own either.",
+);
+assert.doesNotMatch(
+  roomDetail,
+  /MeetingRecordTab = [^;]*"artifacts"/,
+  'The record must not regrow an "artifacts" tab — each download belongs on the surface that '
+    + "shows what it copies.",
+);
+assert.match(
+  transcriptPanelDownloads,
+  /buildTranscriptDocumentModel\(/,
+  "The transcript's toolbar must hand over the transcript as it is on screen (.docx and .txt).",
+);
+
 // What the deleted Summary tab owned, in the rail that replaced it. Each of these was a control
 // or a message that existed nowhere else: the shape the summary is written in, a copy of it, the
 // file it was written to, the overview paragraph, and the four different reasons there may be no
@@ -69,7 +98,12 @@ const readingRail = read("src/components/rooms/meeting-reading-rail.tsx");
 for (const [needle, what] of [
   ["SUMMARY_TEMPLATES", "the summary shape picker"],
   ["copyAsText", "copying the summary as text"],
-  ["onDownload(artifact)", "downloading the summary file"],
+  // Was `onDownload(artifact)` — fetching the server's summary_export. That was the wrong document
+  // for any reader who had changed the shape or the language: the file that arrived was the host's
+  // published one. The rail writes the summary it is SHOWING instead.
+  ["downloadSummaryDocument", "downloading the summary as shown"],
+  // The recording's own download, which the Artifacts tab used to be the only route to.
+  ["onDownload(recording)", "downloading the recording"],
   ["summary.summary", "the summary's overview paragraph"],
   ["summaryAbsenceMessage", "why there is no summary"],
   ["SummaryStalenessNotice", "the notice that the transcript was corrected since"],

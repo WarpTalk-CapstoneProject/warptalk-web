@@ -18,6 +18,8 @@ How every transcript surface decides which words to print.
   raw text of the segments that line stands for.
 - Backward compatible: `cleanText` null/absent (an old meeting, or a line a correction just rewrote)
   renders `originalText` in both views.
+- Copy and the two downloads follow the same choice: in Clean they hand over the clean lines. See
+  `recap-downloads.md` for the Word/plain-text menu that reads from this.
 
 ## Surfaces
 

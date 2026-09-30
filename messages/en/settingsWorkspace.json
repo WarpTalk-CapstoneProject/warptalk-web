@@ -30,7 +30,8 @@
     "defaultLanguage": {
       "label": "Default Language",
       "description": "Default spoken language for new translation rooms.",
-      "placeholder": "Select language"
+      "placeholder": "Select language",
+      "outOfPolicy": "{language} is not in this workspace's permitted languages. Pick a permitted one, or tick {language} in the list below."
     },
     "timezone": {
       "label": "Timezone",
@@ -70,6 +71,14 @@
     "allowedTargetLanguages": {
       "label": "Allowed Target Translation Languages",
       "description": "Languages available for live translation in meeting rooms.",
+      "allowAll": {
+        "label": "Allow all languages",
+        "description": "Every language WarpTalk supports is available in this workspace's meetings. Turn this off to permit only a list you choose."
+      },
+      "restrictedHint": "Meetings may only use the languages ticked above. At least one must stay ticked — to open the workspace to every language, turn \"Allow all languages\" back on.",
+      "lastLanguageBlocked": "At least one language must stay ticked. To allow every language instead, turn on \"Allow all languages\" — leaving the list empty would permit all of them without saying so.",
+      "seededFromDefault": "{language} was ticked to start the list, because a restricted list may not be empty.",
+      "defaultLanguageMoved": "{removed} is no longer permitted, so the workspace's Default Language moved to {language}.",
       "ceiling": {
         "plan": "Your plan allows {ceiling} target languages per meeting. You may permit more here — a single meeting simply cannot use more than {ceiling} at once.",
         "platformDefault": "Until this workspace has an active plan it is limited to {ceiling} target languages per meeting. You may permit more here — a single meeting simply cannot use more than {ceiling} at once.",

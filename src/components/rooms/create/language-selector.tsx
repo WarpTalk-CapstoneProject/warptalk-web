@@ -36,11 +36,14 @@ export function LanguageSelector({
   languages,
   onLanguagesChange,
   allowedTargetLanguages,
+  readOnly = false,
 }: {
   languages: string[];
   onLanguagesChange: (languages: string[]) => void;
   /** The workspace's `allowedTargetLanguages`, as bare ISO-639-1 codes. Empty ⇒ unrestricted. */
   allowedTargetLanguages?: string[] | null;
+  /** When true, renders a static read-only pill without a popover or add button. */
+  readOnly?: boolean;
 }) {
   const t = useTranslations("rooms.create.language");
   // The picker offers locale tags ("vi-VN"); the server stores bare codes, because
@@ -82,6 +85,19 @@ export function LanguageSelector({
     isAllowed: isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
   }));
   const hasBlockedLanguage = options.some((language) => !language.isAllowed);
+
+  if (readOnly) {
+    return (
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/60 bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.02)] select-none text-[12px]">
+        {selected.map((code, i) => (
+          <div key={code} className="flex items-center">
+            {i > 0 && <span className="text-muted-foreground/40 px-1 text-[12px]">·</span>}
+            <LanguageLabel value={code} showName={selected.length === 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1 px-1 py-1 rounded-full border border-border/60 bg-transparent select-none text-[13px]">
