@@ -22,13 +22,24 @@
  */
 
 import { useMemo, useState } from "react";
-import { Check, Lock, Plus, Sparkle, X } from "@phosphor-icons/react";
+import { Check, Globe, Lock, LockSimple, Plus, Sparkle, Spinner, X } from "@phosphor-icons/react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { isImageExtension } from "@/constants/workspace-document";
 import { cn } from "@/lib/utils";
 import { documentActorName } from "@/lib/documents/document-actor";
+import {
+  broadAllowIsInert,
+  documentAudienceSummary,
+  documentVisibilityLabel,
+  externalAccessHint,
+  isPrivateDocument,
+  isPublicDocument,
+  memberAccessHint,
+  VISIBILITY_CONFIRM_COPY,
+  type VisibilityAction,
+} from "@/lib/documents/document-visibility";
 import { UserChip } from "@/components/user/user-chip";
 import {
   DOCUMENT_PERMISSIONS,
@@ -344,6 +355,9 @@ export function DocumentSidePanel({
   setMemberAccess,
   onToggleAiIndexing,
   isAiIndexingBusy,
+  visibilityAction,
+  onRequestVisibilityChange,
+  isVisibilityBusy,
 }: {
   doc: WorkspaceDocumentData;
   membersList: WorkspaceMemberItem[];
@@ -363,6 +377,11 @@ export function DocumentSidePanel({
   ) => Promise<void>;
   onToggleAiIndexing: (allowed: boolean) => Promise<void>;
   isAiIndexingBusy: boolean;
+  /** What this person may do to the document's visibility, or null for nothing. */
+  visibilityAction: VisibilityAction | null;
+  /** Opens the confirm step; the page owns the dialog and the mutation. */
+  onRequestVisibilityChange: (action: VisibilityAction) => void;
+  isVisibilityBusy: boolean;
 }) {
   // WT-551: null when there is nobody to name — an uploader who left the workspace, or one
   // past the page of members this panel fetched. It used to fall back to the literal word
@@ -372,6 +391,8 @@ export function DocumentSidePanel({
   const [permission, setPermission] = useState<DocumentPermission>("view");
 
   const status = doc.status?.toLowerCase() ?? "";
+  const isPrivate = isPrivateDocument(doc);
+  const isPublic = isPublicDocument(doc);
   const allowed = policiesList.filter((p) => isUserPolicy(p, permission, "allow"));
   const blocked = policiesList.filter((p) => isUserPolicy(p, permission, "deny"));
 
@@ -396,16 +417,18 @@ export function DocumentSidePanel({
             aria-hidden
             className={cn(
               "size-1.5 shrink-0 rounded-full",
-              status === "public" || status === "active"
+              isPublic
                 ? "bg-emerald-500"
-                : status.includes("pending")
+                : isPrivate
+                  ? "bg-ink-muted"
+                  : status.includes("pending")
                   ? "bg-amber-500"
                   : status === "rejected"
                     ? "bg-destructive"
                     : "bg-ink-subtle",
             )}
           />
-          {doc.status}
+          {documentVisibilityLabel(doc)}
         </span>
       </div>
 
@@ -430,6 +453,51 @@ export function DocumentSidePanel({
           </div>
         </Section>
 
+        {/* THE WAY BACK FROM "PUBLIC".
+            The badge above used to be the whole story: it said PUBLIC and nothing on this page
+            could change it. Public is the approval state — every internal member reads the
+            document — and this is where it is taken back (and given again). Outside the
+            owner/admin lock below on purpose: the uploader may withdraw their own document. */}
+        <Section title="Visibility">
+          <div className="flex flex-col gap-2.5 rounded-md border border-hairline bg-surface-2 p-2.5">
+            <span className="flex min-w-0 items-start gap-2">
+              {isPrivate ? (
+                <LockSimple className="mt-0.5 size-3.5 shrink-0 text-ink-muted" />
+              ) : (
+                <Globe className="mt-0.5 size-3.5 shrink-0 text-ink-muted" />
+              )}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-xs font-medium text-ink">{documentVisibilityLabel(doc)}</span>
+                <span className="text-[10px] leading-tight text-ink-muted">
+                  {documentAudienceSummary(doc)}
+                </span>
+              </span>
+            </span>
+            {visibilityAction ? (
+              <button
+                type="button"
+                onClick={() => onRequestVisibilityChange(visibilityAction)}
+                disabled={isVisibilityBusy}
+                className={cn(
+                  "inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md border text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                  visibilityAction === "make_private"
+                    ? "border-destructive/30 bg-surface-1 text-destructive hover:bg-destructive/10"
+                    : "border-hairline bg-surface-1 text-ink hover:bg-surface-3",
+                )}
+              >
+                {isVisibilityBusy ? (
+                  <Spinner className="size-3 animate-spin" />
+                ) : visibilityAction === "make_private" ? (
+                  <LockSimple className="size-3" />
+                ) : (
+                  <Globe className="size-3" />
+                )}
+                {VISIBILITY_CONFIRM_COPY[visibilityAction].confirm}
+              </button>
+            ) : null}
+          </div>
+        </Section>
+
         <Section title="Assistant">
           {/* THE SWITCH THAT ONLY EXISTED AT UPLOAD TIME.
               `isAiAllowed` was asked once, in the upload dialog, and after that it was read for a
@@ -447,9 +515,11 @@ export function DocumentSidePanel({
               <span className="text-[10px] leading-tight text-ink-muted">
                 {aiUnavailable
                   ? "Images have no text for the assistant to read"
-                  : doc.isAiAllowed
-                    ? "The assistant may answer from this document"
-                    : "Turning this on re-indexes the document"}
+                  : isPrivate && doc.isAiAllowed
+                    ? "Paused while private — re-indexed if the document is made public"
+                    : doc.isAiAllowed
+                      ? "The assistant may answer from this document"
+                      : "Turning this on re-indexes the document"}
               </span>
             </span>
             <Switch
@@ -470,14 +540,17 @@ export function DocumentSidePanel({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3 rounded-md border border-hairline bg-surface-2 p-2.5">
                 <span className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium text-ink">External users</span>
+                  <span className="text-xs font-medium text-ink">External members</span>
                   <span className="text-[10px] leading-tight text-ink-muted">
-                    Let guests outside the workspace read this
+                    {externalAccessHint(doc, isExternalAllowed)}
                   </span>
                 </span>
+                {/* Turning it ON is refused while private: the API ignores a MembershipType
+                    ALLOW on a private document, so the switch would claim access nobody gets.
+                    Turning an existing rule OFF stays possible. */}
                 <Switch
                   checked={isExternalAllowed}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || (isPrivate && !isExternalAllowed)}
                   onCheckedChange={(checked: boolean) => void toggleExternalAccess(checked)}
                 />
               </div>
@@ -495,6 +568,8 @@ export function DocumentSidePanel({
                   clearing a rule look like forbidding it. */}
               <MemberAccessControl
                 permission={permission}
+                hint={memberAccessHint(doc, permission, memberAccess(permission))}
+                allowInert={broadAllowIsInert(doc)}
                 value={memberAccess(permission)}
                 disabled={isSubmitting}
                 onChange={(next) => void setMemberAccess(permission, next)}
@@ -552,12 +627,17 @@ export function DocumentSidePanel({
  * lock yourself out of your own document.
  */
 function MemberAccessControl({
-  permission,
+  hint,
+  allowInert,
   value,
   disabled,
   onChange,
 }: {
   permission: DocumentPermission;
+  /** From memberAccessHint, which knows the document's visibility as well as the rule. */
+  hint: string;
+  /** Private documents ignore a Member-role ALLOW, so the option is not offered then. */
+  allowInert: boolean;
   value: "allow" | "deny" | null;
   disabled: boolean;
   onChange: (next: "allow" | "deny" | null) => void;
@@ -572,20 +652,14 @@ function MemberAccessControl({
     <div className="rounded-md border border-hairline bg-surface-2 p-2.5">
       <div className="flex flex-col gap-0.5">
         <span className="text-xs font-medium text-ink">Workspace members</span>
-        <span className="text-[10px] leading-tight text-ink-muted">
-          {value === null
-            ? `Members follow the document's own status for ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()}`
-            : value === "allow"
-              ? `Every member may ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()} this`
-              : `No member may ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()} this, whatever else allows it`}
-        </span>
+        <span className="text-[10px] leading-tight text-ink-muted">{hint}</span>
       </div>
       <div className="mt-2 flex gap-1">
         {options.map((option) => (
           <button
             key={option.label}
             type="button"
-            disabled={disabled}
+            disabled={disabled || (allowInert && option.key === "allow" && value !== "allow")}
             onClick={() => onChange(option.key)}
             aria-pressed={value === option.key}
             className={cn(

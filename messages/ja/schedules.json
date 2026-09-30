@@ -1,0 +1,136 @@
+{
+  "views": {
+    "agenda": "アジェンダ",
+    "month": "月",
+    "week": "週"
+  },
+  "filters": {
+    "all": "すべて",
+    "upcoming": "予定",
+    "joined": "参加済み"
+  },
+  "ariaLabels": {
+    "calendarView": "カレンダー表示",
+    "timelineFilters": "タイムラインの絞り込み",
+    "chipLegend": "チップの凡例",
+    "previousWeek": "前の週",
+    "previousMonth": "前の月",
+    "nextWeek": "次の週",
+    "nextMonth": "次の月",
+    "showAllMeetings": "{count, plural, other {{day}の# 件の会議をすべて表示}}",
+    "closeDayDetails": "日の詳細を閉じる",
+    "meetingsOnDay": "{day}の会議",
+    "currentTime": "現在時刻、{time}",
+    "agendaNavigator": "アジェンダナビゲーター"
+  },
+  "search": {
+    "placeholder": "タイトル、コード、説明を検索"
+  },
+  "legend": {
+    "youHost": "主催",
+    "youAreInvited": "招待されています"
+  },
+  "relation": {
+    "youHost": "主催",
+    "invited": "招待",
+    "invitedBy": "{name}からの招待",
+    "invitedByLabel": "招待元"
+  },
+  "monthView": {
+    "noMeetingsMatchSearch": "この検索に一致する会議はありません。",
+    "nothingThisMonth": "今月のタイムラインには何もありません。今後の招待や参加した会議がここに表示されます。",
+    "moreCount": "{count, plural, other {他+#件}}"
+  },
+  "weekView": {
+    "nothingThisWeek": "今週のタイムラインには何もありません。"
+  },
+  "agendaView": {
+    "thisWeek": "今週",
+    "weekOf": "{label}の週",
+    "endOfMonth": "{month}の終わり",
+    "noMeetingsMatchFilter": "この絞り込みに一致するものはありません",
+    "noMeetings": "会議はありません",
+    "now": "現在 {time}"
+  },
+  "navigator": {
+    "toggleWeek": "週",
+    "toggleMonth": "月",
+    "weekGroup": "週",
+    "previousMonth": "前の月",
+    "previousWeek": "前の週",
+    "nextMonth": "次の月",
+    "nextWeek": "次の週",
+    "todayPrefix": "本日、",
+    "dayButtonLabel": "{count, plural, =0 {{today}{day}に移動、会議はありません} other {{today}{day}に移動、# 件の会議}}"
+  },
+  "dayPanel": {
+    "nothingMatches": "この日に一致するものはありません",
+    "nothingOnDay": "この日には何もありません",
+    "clearSearchHint": "検索を消すか、すべてに切り替えてここで予定されているすべてを表示してください。",
+    "meetingsShowUpHere": "あなたが主催する、または招待されている会議がここに表示されます。"
+  },
+  "counts": {
+    "meetings": "{count, plural, =0 {会議はありません} other {# 件の会議}}",
+    "people": "{count, plural, other {# 人}}"
+  },
+  "toasts": {
+    "downloadNotReady": "このファイルはまだダウンロードできません。",
+    "downloadFailed": "このファイルをダウンロードできませんでした。"
+  },
+  "notices": {
+    "partialWeek": "この週は2つの月にまたがっており、一方の読み込みに失敗したため、一部の会議が表示されない場合があります。",
+    "truncated": "{total, plural, other {{scope}の# 件中{shown}件を表示しています。残りを表示するには検索を絞り込んでください。}}",
+    "scopeWeek": "この週にまたがる月",
+    "scopeMonth": "今月"
+  },
+  "loading": {
+    "meetings": "会議を読み込み中"
+  },
+  "error": {
+    "title": "会議を読み込めませんでした",
+    "description": "翻訳ルームサービスを確認してもう一度お試しください。",
+    "retry": "再試行"
+  },
+  "chip": {
+    "googleMeet": "Google Meet",
+    "join": "参加",
+    "cancelled": "キャンセル済み",
+    "onGoogleMeetSuffix": "、Google Meetで"
+  },
+  "dialog": {
+    "pastMeeting": "過去の会議",
+    "noDescription": "ルームの概要と保存された記録にすばやくアクセスできます。",
+    "when": "日時",
+    "duration": "所要時間",
+    "participants": "参加者",
+    "route": "言語ルート",
+    "hostedBy": "主催者",
+    "artifacts": "記録",
+    "noOutputs": "この会議に保存された出力はありません。",
+    "openMeeting": "会議を開く",
+    "unknownTime": "時刻不明"
+  },
+  "states": {
+    "live": "進行中",
+    "upcoming": "予定",
+    "joined": "参加済み",
+    "missed": "見逃し",
+    "cancelled": "キャンセル済み"
+  },
+  "artifactLabels": {
+    "transcript_export": "文字起こし",
+    "summary_export": "AI要約",
+    "recording": "録画",
+    "debug_log": "デバッグログ",
+    "audio_sample": "音声サンプル"
+  },
+  "artifactStatus": {
+    "consentRequired": "同意が必要",
+    "ready": "準備完了",
+    "processing": "処理中",
+    "expired": "期限切れ",
+    "missing": "見つかりません",
+    "failed": "失敗",
+    "deleted": "削除済み"
+  }
+}

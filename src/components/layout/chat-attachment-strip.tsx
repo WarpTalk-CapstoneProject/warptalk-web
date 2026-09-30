@@ -17,6 +17,8 @@
 import { FileCsv, FilePdf, FileText, FileCode, X } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
 import {
   formatAttachmentSize,
   isImageAttachment,
@@ -48,17 +50,25 @@ function typeLabel(mimeType: string): string {
   }
 }
 
+/**
+ * Two uses: the composer's pending files (`onRemove` given — removable, with the "this message
+ * only" line), and the files a SENT message went out with, under its bubble (`onRemove` omitted —
+ * read-only). The line is left off the sent copy on purpose: under a message already answered it
+ * reads as a warning about something the user is still about to do.
+ */
 export function ChatAttachmentStrip({
   attachments,
   onRemove,
+  className,
 }: {
   attachments: ChatAttachment[];
-  onRemove: (index: number) => void;
+  onRemove?: (index: number) => void;
+  className?: string;
 }) {
   if (attachments.length === 0) return null;
 
   return (
-    <div className="px-1.5 pb-1">
+    <div className={cn("px-1.5 pb-1", className)}>
       <div className="flex flex-wrap items-center gap-1.5">
         {attachments.map((attachment, index) => {
           const isImage = isImageAttachment(attachment);
@@ -69,7 +79,10 @@ export function ChatAttachmentStrip({
               className={
                 isImage
                   ? "group relative size-12 overflow-hidden rounded-[8px] border border-border"
-                  : "group relative flex items-center gap-2 rounded-[8px] border border-border bg-surface-2/60 py-1.5 pl-2 pr-6"
+                  : cn(
+                      "group relative flex items-center gap-2 rounded-[8px] border border-border bg-surface-2/60 py-1.5 pl-2",
+                      onRemove ? "pr-6" : "pr-2",
+                    )
               }
             >
               {isImage ? (
@@ -98,25 +111,29 @@ export function ChatAttachmentStrip({
                 </>
               )}
 
-              <button
-                type="button"
-                onClick={() => onRemove(index)}
-                title={`Remove ${attachment.name}`}
-                className={
-                  isImage
-                    ? "absolute right-0.5 top-0.5 grid size-4 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                    : "absolute right-1 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink"
-                }
-              >
-                <X size={8} weight="bold" />
-              </button>
+              {onRemove ? (
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  title={`Remove ${attachment.name}`}
+                  className={
+                    isImage
+                      ? "absolute right-0.5 top-0.5 grid size-4 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      : "absolute right-1 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink"
+                  }
+                >
+                  <X size={8} weight="bold" />
+                </button>
+              ) : null}
             </div>
           );
         })}
       </div>
-      <p className="mt-1 text-[10px] text-ink-subtle">
-        Sent with this message only — WarpBot cannot see it in later questions.
-      </p>
+      {onRemove ? (
+        <p className="mt-1 text-[10px] text-ink-subtle">
+          Sent with this message only — WarpBot cannot see it in later questions.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,11 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
   useAssistantConversations,
+  useAssistantPlugins,
   useCreateAssistantConversation,
+  usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
 import { Button } from "@/components/ui/button";
@@ -16,11 +20,21 @@ import {
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
+import {
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
 import type { AssistantConversationDto } from "@/types/assistant";
 
 export default function AiChatPage() {
+  const t = useTranslations("aiChat");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const conversationsQuery = useAssistantConversations(workspaceId);
   const createConversation = useCreateAssistantConversation();
@@ -28,6 +42,30 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  // What WarpBot is waiting on before it may act, as in the widget: one slot, one form, above the
+  // composer. This page used to keep only the questions, so a Connect prompt arrived and vanished
+  // without trace (WT-688).
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
+  // That prompt has been answered, and the last turn's end — null while a turn is open. The form
+  // draws the running write from the pair; it used to disappear on the press, which said nothing
+  // about a write that takes seconds.
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
+  const [turnEndedAt, setTurnEndedAt] = useState<number | null>(null);
+  const connectPlugin = usePluginConnectUrl();
+  // The same catalog the widget reads, scoped to the workspace so its plugin policy applies. This
+  // page passed an empty list, so one form carried the plugin's logo in the widget and a bare line
+  // of mono here.
+  const { data: assistantPlugins = [] } = useAssistantPlugins(workspaceId ?? undefined);
+
+  // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
+  // Cleared on send and on changing conversation, because a Connect card left over from an earlier
+  // turn or another conversation would open an OAuth flow nobody asked for. Never when its own
+  // turn completes or fails: the card is raised mid-turn and that answer is the one explaining it,
+  // so clearing there erases it before anyone can press it.
+  const clearPluginCards = useCallback(() => {
+    setPendingPermission(null);
+    setPermissionAnswered(false);
+  }, []);
 
   const conversations = conversationsQuery.data ?? [];
   const selectedId = activeId ?? conversations[0]?.id ?? null;
@@ -55,11 +93,21 @@ export default function AiChatPage() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== selectedId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
+        // A new ask replaces whatever the slot held, answered or not.
+        if (permission) {
+          setPendingPermission(permission);
+          setPermissionAnswered(false);
+        }
       },
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
       if (payload?.conversationId && payload.conversationId !== selectedId) return;
+      // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
+      // The permission form is told the turn is over — a stamp, not a clear, because the form
+      // owns how long its receipt lives.
+      setTurnEndedAt(Date.now());
       void refetchConversationRef.current();
       void refetchConversationsRef.current();
     };
@@ -78,16 +126,62 @@ export default function AiChatPage() {
     };
   }, [selectedId]);
 
+  function selectConversation(id: string) {
+    if (id !== selectedId) clearPluginCards();
+    setActiveId(id);
+  }
+
   async function handleCreateConversation() {
     if (!workspaceId || createConversation.isPending) return;
     const conversation = await createConversation.mutateAsync(workspaceId);
-    setActiveId(conversation.id);
+    selectConversation(conversation.id);
     await conversationsQuery.refetch();
   }
 
-  async function sendContent(content: string) {
+  // The widget's connect flow, unchanged: scoped to the workspace so its plugin policy applies,
+  // tagged with the client, and every outcome said out loud — including the one where the server
+  // connected the plugin itself and there is nothing to open.
+  async function handlePluginConnectionAction(pluginKey: string) {
+    try {
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: workspaceId ?? undefined,
+      });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
+      const consentUrl = result.url;
+      if (result.connected || !consentUrl) {
+        toast.success(t("toasts.pluginConnected"));
+      } else if (openProviderConsent(consentUrl)) {
+        toast.message(t("toasts.pluginConnectOpenBrowser"));
+      } else {
+        toast.error(t("toasts.pluginConnectBlocked"), {
+          action: {
+            label: t("toasts.pluginConnectBlockedAction"),
+            onClick: () => openProviderConsent(consentUrl),
+          },
+        });
+      }
+    } catch {
+      toast.error(t("toasts.pluginConnectFailed"));
+    }
+  }
+
+  // `keepPermissionPrompt` is set only by the permission form's own answer: every other send
+  // starts a turn the prompt on screen has nothing to do with, and that is what ends it. An answer
+  // is the one send that must not, because the form is what says the write is running.
+  async function sendContent(content: string, options?: { keepPermissionPrompt?: boolean }) {
     content = content.trim();
     if (!content || !workspaceId || sendMessage.isPending) return;
+
+    // A turn is opening, so the last one's end is no longer the state of anything. Before the
+    // awaits below: these two are what the permission form reads to tell an allowed write that is
+    // still running from one that is over.
+    setTurnEndedAt(null);
+    if (options?.keepPermissionPrompt) setPermissionAnswered(true);
 
     let conversationId = selectedId;
     if (!conversationId) {
@@ -98,9 +192,18 @@ export default function AiChatPage() {
 
     setDraft("");
     setPendingQuestions(null);
-    await sendMessage.mutateAsync({ conversationId, content });
-    await conversationQuery.refetch();
-    await conversationsQuery.refetch();
+    if (!options?.keepPermissionPrompt) clearPluginCards();
+    try {
+      await sendMessage.mutateAsync({ conversationId, content });
+      await conversationQuery.refetch();
+      await conversationsQuery.refetch();
+    } catch {
+      // The message never reached the server — give the draft back instead of losing what was
+      // typed, and say so instead of leaving the chat looking silently frozen. The sidebar
+      // widget (global-chatbot.tsx) already does this; this full page did not.
+      setDraft(content);
+      toast.error(t("toasts.messageSendFailed"));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -112,7 +215,7 @@ export default function AiChatPage() {
     <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <Card className="min-h-0 overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-base">AI conversations</CardTitle>
+          <CardTitle className="text-base">{t("conversations")}</CardTitle>
           <Button
             type="button"
             size="sm"
@@ -120,17 +223,17 @@ export default function AiChatPage() {
             onClick={() => void handleCreateConversation()}
             disabled={!workspaceId || createConversation.isPending}
           >
-            New
+            {t("new")}
           </Button>
         </CardHeader>
         <CardContent className="min-h-0 overflow-y-auto p-2">
           {conversationsQuery.isLoading ? (
-            <p className="p-3 text-sm text-muted-foreground">Loading conversations…</p>
+            <p className="p-3 text-sm text-muted-foreground">{t("loadingConversations")}</p>
           ) : conversationsQuery.isError ? (
-            <p className="p-3 text-sm text-destructive">Could not load conversations.</p>
+            <p className="p-3 text-sm text-destructive">{t("loadConversationsFailed")}</p>
           ) : conversations.length === 0 ? (
             <p className="p-3 text-sm text-muted-foreground">
-              Create a conversation to ask WarpTalk AI about this workspace.
+              {t("emptyConversations")}
             </p>
           ) : (
             <div className="space-y-1">
@@ -139,7 +242,7 @@ export default function AiChatPage() {
                   key={conversation.id}
                   conversation={conversation}
                   active={conversation.id === selectedId}
-                  onClick={() => setActiveId(conversation.id)}
+                  onClick={() => selectConversation(conversation.id)}
                 />
               ))}
             </div>
@@ -150,18 +253,18 @@ export default function AiChatPage() {
       <Card className="flex min-h-0 flex-col overflow-hidden">
         <CardHeader className="border-b">
           <CardTitle className="text-base">
-            {conversationQuery.data?.title ?? "WarpTalk AI"}
+            {conversationQuery.data?.title ?? t("defaultTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-4">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
             {conversationQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading messages…</p>
+              <p className="text-sm text-muted-foreground">{t("loadingMessages")}</p>
             ) : conversationQuery.isError ? (
-              <p className="text-sm text-destructive">Could not load this conversation.</p>
+              <p className="text-sm text-destructive">{t("loadMessagesFailed")}</p>
             ) : messages.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Ask a question about your meetings, transcripts, or workspace documents.
+                {t("emptyMessages")}
               </p>
             ) : (
               messages.map((message) => (
@@ -174,9 +277,17 @@ export default function AiChatPage() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    // Markdown, like every other WarpBot surface: this printed the source of the
+                    // answer, so "**bold**" and a meeting marker reached the reader as characters.
+                    <AssistantMarkdown withMeetingCards>{message.content}</AssistantMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">
+                      {userMessageDisplayText(message.content)}
+                    </p>
+                  )}
                   {message.status === "failed" ? (
-                    <p className="mt-1 text-xs text-destructive">Message processing failed.</p>
+                    <p className="mt-1 text-xs text-destructive">{t("messageFailed")}</p>
                   ) : null}
                 </div>
               ))
@@ -192,11 +303,28 @@ export default function AiChatPage() {
             ) : null}
           </div>
 
+          {/* Above the composer, not in the thread: it is a thing to act on, and in the thread it
+              scrolled away behind the answer that followed it. */}
+          {pendingPermission ? (
+            <AssistantPermissionPrompt
+              prompt={pendingPermission}
+              plugins={assistantPlugins}
+              busy={connectPlugin.isPending}
+              answered={permissionAnswered}
+              turnEndedAt={turnEndedAt}
+              // The slot is NOT cleared on an answer: the form stays, showing the write running.
+              onAnswer={(answer) => void sendContent(answer, { keepPermissionPrompt: true })}
+              onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+              onDismiss={clearPluginCards}
+              className="rounded-lg border border-border"
+            />
+          ) : null}
+
           <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
             <Input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask WarpTalk AI about this workspace…"
+              placeholder={t("inputPlaceholder")}
               disabled={!workspaceId || sendMessage.isPending}
               maxLength={4000}
             />
@@ -204,7 +332,7 @@ export default function AiChatPage() {
               type="submit"
               disabled={!draft.trim() || !workspaceId || sendMessage.isPending}
             >
-              {sendMessage.isPending ? "Sending…" : "Send"}
+              {sendMessage.isPending ? t("sending") : t("send")}
             </Button>
           </form>
         </CardContent>

@@ -92,12 +92,50 @@ test("a scheduled cancellation still has its plan until the period ends", () => 
 
 test("a billing outage is not an answer, and must not paywall anybody", () => {
   for (const code of ["INTERNAL_ERROR", "UNAUTHORIZED", null, undefined]) {
-    assert.deepEqual(
-      decidePaywall({ ...base, subscription: undefined, error: { code } }),
-      { kind: "open" },
-      `error code ${String(code)} must read as unknown, not unpaid`,
-    );
+    for (const standing of [null, { isKnown: false, hasActiveSubscription: false }, { isKnown: true, hasActiveSubscription: true }]) {
+      assert.deepEqual(
+        decidePaywall({ ...base, subscription: undefined, error: { code }, standing }),
+        { kind: "open" },
+        `error code ${String(code)} with standing ${JSON.stringify(standing)} must read as unknown, not unpaid`,
+      );
+    }
   }
+});
+
+// ── A member cannot read the subscription; the snapshot answers for them ─────
+
+test("a member of an expired workspace is kept outside, like its owner", () => {
+  // The subscription endpoint is owner/admin-only: a member always gets a 403. The snapshot is
+  // what the server's own gate reads, and billing republishes it when a plan expires.
+  assert.deepEqual(
+    decidePaywall({
+      ...base,
+      subscription: undefined,
+      error: { code: "FORBIDDEN" },
+      standing: { isKnown: true, hasActiveSubscription: false },
+    }),
+    { kind: "blocked" },
+  );
+});
+
+test("nothing is decided while the snapshot is still being asked for", () => {
+  assert.deepEqual(
+    decidePaywall({ ...base, subscription: undefined, error: { code: "FORBIDDEN" }, standing: undefined }),
+    { kind: "checking" },
+  );
+});
+
+test("a snapshot never overrules a subscription that answered", () => {
+  // Right after a payment the snapshot still says "no plan" until the entitlements event lands.
+  // Preferring it would bounce the buyer between the landing (paid → home) and the gate.
+  assert.deepEqual(
+    decidePaywall({
+      ...base,
+      subscription: subscription(),
+      standing: { isKnown: true, hasActiveSubscription: false },
+    }),
+    { kind: "open" },
+  );
 });
 
 test("nothing is decided while the answer is still in flight", () => {

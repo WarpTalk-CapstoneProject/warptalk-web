@@ -50,6 +50,60 @@ export interface TranscriptSegmentDto {
   isCorrected?: boolean;
   /** When the row last changed — moved by a correction. */
   updatedAt?: string | null;
+  /**
+   * WT-716: the line with fillers ("um", "ờ", "えーと") and stutters taken out, and its
+   * punctuation repaired. THREE states, and the client must keep them apart:
+   *
+   *   null / absent — never cleaned (a meeting from before WT-716, or a line a correction has
+   *                   just rewritten — the server clears it). Read `originalText`.
+   *   ""            — the whole line was filler (`filler_only`). Hidden in the Clean view,
+   *                   still shown in Verbatim.
+   *   anything else — the cleaned wording.
+   *
+   * `originalText` is never touched by cleaning: corrections, search of the raw record and the
+   * Verbatim view all read it.
+   */
+  cleanText?: string | null;
+  /** WT-716: what cleaning did to this line. Never null on the wire; absent on old clients. */
+  cleanFlags?: string[];
+}
+
+/**
+ * WT-716: the flags the server puts on a cleaned SEGMENT. Kept as a string union for reading, but
+ * the DTO field stays `string[]` so a flag added server-side is carried rather than rejected.
+ */
+export type TranscriptCleanSegmentFlag =
+  | "filler_only"
+  | "fillers_removed"
+  | "stutter_removed"
+  | "escalate";
+
+/** WT-716: the flags on a merged clean SENTENCE (tier 2). */
+export type TranscriptCleanSentenceFlag = "self_repair" | "fallback_raw" | "escalate";
+
+/**
+ * WT-716 tier 2: one whole sentence, merged across the STT segments it was said in.
+ * Source: GET /transcripts/{id}/clean-sentences, in conversation order.
+ *
+ * A sentence REPLACES the segments in `segmentIds` in the Clean view — it is not an extra line.
+ * Several revisions of one sentence can exist over a meeting (the model sees more context as the
+ * conversation goes on); the highest `revision` per `id` is the current one.
+ *
+ * NOT invalidated by a correction. The server clears the corrected segment's `cleanText` but leaves
+ * the sentence standing, so the client has to notice (see isCleanSentenceStale) and fall back to
+ * the segments themselves.
+ */
+export interface TranscriptCleanSentenceDto {
+  id: string;
+  speakerId: string | null;
+  segmentIds: string[];
+  cleanText: string;
+  language: string;
+  flags: string[];
+  source: "llm" | "prepass" | "unknown";
+  revision: number;
+  /** Absent on the realtime event (TranscriptCleanSentenceReceived); present from the REST read. */
+  updatedAt?: string | null;
 }
 
 export interface TranscriptTranslationDto {

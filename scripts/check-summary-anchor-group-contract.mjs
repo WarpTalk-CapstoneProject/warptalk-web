@@ -48,6 +48,7 @@ const read = (p) => readFileSync(join(root, p), "utf8");
 const PANEL = "src/components/rooms/meeting-transcript-panel.tsx";
 const PAGE = "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx";
 const SYNC = "src/components/rooms/transcript-reading-sync.tsx";
+const meetingRoomPageEn = JSON.parse(read("messages/en/meetingRoomPage.json"));
 
 /**
  * Comments out, before anything is asserted about what the code says.
@@ -197,12 +198,22 @@ if (!jump) {
     );
   }
 
-  const toast = jump.indexOf('toast.error("That moment is not in the saved transcript.")');
+  // The toast message moved into i18n (t("record.toasts.momentNotInTranscript")) — check both
+  // halves: the page still raises that key, and the English catalog still carries the wording.
+  const toast = jump.indexOf('toast.error(t("record.toasts.momentNotInTranscript"))');
   const resolve = jump.indexOf("findSegmentAtMs");
   if (toast === -1) {
     failures.push(
       `${PAGE}: the "not in the saved transcript" toast is gone. A citation into a trimmed ` +
         `transcript still has to say so rather than doing nothing.`,
+    );
+  } else if (
+    meetingRoomPageEn.record?.toasts?.momentNotInTranscript !==
+    "That moment is not in the saved transcript."
+  ) {
+    failures.push(
+      `messages/en/meetingRoomPage.json: record.toasts.momentNotInTranscript must still read ` +
+        `"That moment is not in the saved transcript."`,
     );
   } else if (resolve === -1 || toast < resolve) {
     failures.push(

@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, X } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 /**
  * "Your meeting's ready" — the link, inside the meeting.
@@ -27,23 +28,25 @@ export function MeetingReadyCard({
   onInvite: () => void;
   onDismiss: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.readyCard");
+
   return (
     <div
       data-meeting-ready-card
-      className="absolute bottom-4 left-4 z-30 w-[320px] max-w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-canvas/95 p-4 shadow-xl backdrop-blur"
+      className="absolute bottom-4 left-4 z-30 w-[320px] max-w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-surface-1/95 p-4 shadow-xl backdrop-blur"
     >
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={t("dismissAria")}
         className="absolute right-2.5 top-2.5 rounded-md p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
       >
         <X weight="bold" className="size-3.5" />
       </button>
 
-      <p className="text-[14px] font-semibold text-ink">Your meeting&rsquo;s ready</p>
+      <p className="text-[14px] font-semibold text-ink">{t("title")}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
-        Share this link with the people you want in the meeting.
+        {t("description")}
       </p>
 
       <button
@@ -69,7 +72,7 @@ export function MeetingReadyCard({
           onClick={onInvite}
           className="rounded-md px-2 py-1 text-[12px] font-medium text-primary transition hover:bg-primary/10"
         >
-          Add others
+          {t("addOthers")}
         </button>
       </div>
     </div>

@@ -12,13 +12,52 @@ test("workspace settings use queued auto-save and commit numeric values on blur 
   assert.match(source, /AutoSaveStatusBadge/);
   assert.match(source, /commitNumericField/);
   assert.match(source, /onBlur=\{\(event\) => commitNumericField/);
-  assert.match(source, /onKeyDown=\{\(e\) =>/);
+  // `(event)`, not `(e)`. This line is named for the numeric fields and those have always
+  // spelled it `(event)` — the `(e)` spelling it used to match belonged to the DLP keyword
+  // input, which moved to Settings › Security on 2026-09-16. So the assertion was passing on a
+  // different element from the one its own test name describes, and would have gone on passing
+  // if every numeric field had lost its Enter handler.
+  assert.match(source, /onKeyDown=\{\(event\) =>/);
   assert.match(source, /if \(!parsedInput\.ok\) return;/);
   assert.match(source, /if \(lastQueuedValuesRef\.current\[key\] === serializedValue\) return;/);
   assert.doesNotMatch(source, /Save Settings/);
   assert.doesNotMatch(source, /translationTone/);
   assert.doesNotMatch(source, /vietnameseHonorificStyle/);
   assert.doesNotMatch(source, /japaneseHonorificStyle/);
+});
+
+/**
+ * WT-706. The rules themselves live in `language-policy-settings` and are tested there; what is
+ * pinned here is that the PAGE goes through them, because the defect was a page that did its own
+ * arithmetic on the list. An Owner unticking the last language wrote `[]`, and `[]` is what the
+ * whole system reads as "every language allowed" — so the one gesture that looks like the
+ * tightest possible policy was the gesture that removed it.
+ */
+test("workspace settings edit the language policy through the shared rules, never the raw list", () => {
+  const source = page("../../../app/(app)/[workspaceSlug]/settings/page.tsx");
+
+  // The posture is a control the Owner sets, and it is saved WITH the list, in one patch.
+  assert.match(source, /RESTRICT_TARGET_LANGUAGES_FIELD/);
+  assert.match(source, /setLanguageRestriction/);
+  assert.match(source, /toLanguagePolicyPatch/);
+  assert.match(source, /toggleAllowedLanguage/);
+
+  // The checkbox list only exists while the workspace is restricting, so there is no "ticked
+  // nothing" state for it to sit in.
+  assert.match(source, /languagePolicy\.restricted \? \(/);
+
+  // The default language is offered from the permitted set, not from the whole registry.
+  assert.match(source, /defaultLanguageChoices\.map/);
+  assert.match(source, /isDefaultLanguageOutOfPolicy/);
+
+  // The save failure says what the server said. The validator's refusals — an unknown code, an
+  // empty restricted list, a default outside the list — arrive as ValidationProblemDetails, which
+  // the old hand-rolled `response.data.error` read could not see at all.
+  assert.match(source, /getErrorMessage\(error, t\("toasts\.saveFailed"\)\)/);
+
+  // The list is never rebuilt inline: that is how it reached zero.
+  assert.doesNotMatch(source, /allowedLangs\.filter/);
+  assert.doesNotMatch(source, /commitTopLevel\("allowedTargetLanguages"/);
 });
 
 test("personal preferences match the backend room-type contract, auto-save controls, and error retry state", () => {
@@ -44,6 +83,38 @@ test("personal preferences match the backend room-type contract, auto-save contr
   assert.doesNotMatch(source, /showTranslatedTranscript/);
   assert.doesNotMatch(source, /highContrast/);
   assert.doesNotMatch(source, /screenReaderMode/);
+});
+
+/**
+ * Security is the page the access settings were gathered onto, and the permission split is the
+ * reason it can hold them. An Owner adds verified domains — which decides who counts as Internal
+ * for everyone who joins afterwards — and an Admin only reads them; the danger zone is not
+ * rendered for an Admin at all. None of that is enforced by a type, so it is pinned here.
+ */
+test("workspace security gates domains and the danger zone on owner, and auto-saves the rest", () => {
+  const source = page("../../../app/(app)/[workspaceSlug]/settings/security/page.tsx");
+
+  // Saves the same way the other settings pages do — no manual save button.
+  assert.match(source, /useAutoSaveQueue/);
+  assert.match(source, /AutoSaveStatusBadge/);
+  assert.match(source, /parseIntegerInRange/);
+  assert.doesNotMatch(source, /Save Settings/);
+
+  // The four things it gathered, each still here.
+  assert.match(source, /allowExternalCollaboration/);
+  assert.match(source, /invitationExpiryDays/);
+  assert.match(source, /redactPii/);
+  assert.match(source, /keywordsBlacklist/);
+
+  // Owner-only: the editor for domains, and the danger zone as a whole.
+  assert.match(source, /isOwner \? \(\s*<VerifiedDomainsManager/);
+  assert.match(source, /\{isOwner && \(/);
+  assert.match(source, /useTransferWorkspaceOwnership/);
+  assert.match(source, /useDeleteWorkspace/);
+
+  // The flag is written out, never carried by a spread: DlpDto requires `enabled` while
+  // AiUsagePolicyDto.dlp is optional, so `{ ...policy.dlp }` alone does not typecheck.
+  assert.match(source, /enabled: policy\.dlp\?\.enabled \?\? true/);
 });
 
 test("profile settings auto-save text fields and select fields without a manual save button", () => {

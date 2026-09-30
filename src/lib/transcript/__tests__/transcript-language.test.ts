@@ -291,11 +291,11 @@ test("more than one translation session keeps its dividers", () => {
 });
 
 
-test("a language the meeting has no text in is still offered, so it can be asked for", () => {
-  // The list used to be exactly what there was text for. That was right while a language with
-  // no coverage could only return a page of untranslated lines — and wrong the moment choosing
-  // one started translating the meeting into it. A meeting where translation was never started
-  // has no entries of its own, and it is the case the picker is most needed for.
+test("a generatable language the meeting has no text in is still offered, so it can be asked for", () => {
+  // WT-705: the offers are the room's GENERATABLE languages, not the product catalogue. A
+  // zero-coverage entry is somewhere a confirmed translation can start from; choosing it only
+  // reads. A meeting where translation was never started has no entries of its own, and it is
+  // the case the picker is most needed for.
   const options = transcriptLanguageOptions(
     [line("s1", "Xin chao", "vi"), line("s2", "Cam on", "vi")],
     {},
@@ -339,7 +339,7 @@ test("a language already covered is not offered twice", () => {
 });
 
 test("the picker's list does not change what the transcript opens on", () => {
-  // defaultTranscriptLanguage reads the record, not the catalogue: a meeting held in one
+  // defaultTranscriptLanguage reads the record, not the offers: a meeting held in one
   // language opens as-spoken, and a list of things it COULD be translated into is not evidence
   // that it was multilingual.
   const options = transcriptLanguageOptions([line("s1", "Xin chao", "vi")], {});
@@ -348,6 +348,52 @@ test("the picker's list does not change what the transcript opens on", () => {
   assert.equal(withOfferableLanguages(options, ["en", "ja"], 1).length, 3);
 });
 
+
+test("a language the transcript holds but the meeting cannot generate is never the default", () => {
+  // WT-705: Spanish text exists and stays readable, but a meeting whose generatable set is
+  // VI/EN does not open on it — even though it is the most-covered language.
+  const index = indexTranslationsBySegment([
+    translation("s1", "es", "Hola"),
+    translation("s2", "es", "Gracias"),
+  ]);
+  const options = transcriptLanguageOptions(
+    [line("s1", "Xin chao", "vi"), line("s2", "Hello", "en")],
+    index,
+  );
+  assert.deepEqual(options.map((option) => option.code), ["es", "en", "vi"]);
+
+  assert.equal(defaultTranscriptLanguage(options, undefined, ["vi", "en"]), "en");
+  assert.equal(defaultTranscriptLanguage(options, "es", ["vi", "en"]), "en");
+  assert.equal(defaultTranscriptLanguage(options, "vi", ["vi", "en"]), "vi");
+  // Still in the list: reading what exists is never re-filtered.
+  assert.ok(options.some((option) => option.code === "es"));
+});
+
+test("a preferred language outside the generatable set falls back to the first allowed one", () => {
+  const index = indexTranslationsBySegment([translation("s1", "ja", "Konnichiwa")]);
+  const options = transcriptLanguageOptions(
+    [line("s1", "Hello", "en"), line("s2", "Xin chao", "vi")],
+    index,
+  );
+
+  // en and vi tie on coverage, so the list orders them alphabetically: en is the first allowed.
+  assert.deepEqual(options.map((option) => option.code), ["en", "vi", "ja"]);
+  assert.equal(defaultTranscriptLanguage(options, "ja", ["vi", "en-US"]), "en");
+  // Inside the set, the reader's own language still wins.
+  assert.equal(defaultTranscriptLanguage(options, "vi", ["en", "vi"]), "vi");
+});
+
+test("an empty generatable set opens as spoken", () => {
+  // The room has not loaded yet, or nothing may be generated: nothing is auto-selected.
+  const options = transcriptLanguageOptions(
+    [line("s1", "Xin chao", "vi"), line("s2", "Hello", "en")],
+    {},
+  );
+
+  assert.equal(defaultTranscriptLanguage(options, "en", []), AS_SPOKEN);
+  // Without the argument the old behaviour stands.
+  assert.equal(defaultTranscriptLanguage(options, "en"), "en");
+});
 
 test("a half-translated merged line is readable in that language and not complete in it", () => {
   // The picker used to count this line as readable and say "the whole meeting" over a transcript

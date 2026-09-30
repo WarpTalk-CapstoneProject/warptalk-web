@@ -9,7 +9,6 @@ import {
   pluginWorkspaceBlock,
   pluginsSharingConnection,
   scopesSatisfied,
-  sharedConnectionWarning,
   withEffectiveConnectionStatus,
 } from "../plugin-connection.ts";
 import type { AssistantPluginCatalogItemDto } from "../../../types/assistant.ts";
@@ -174,20 +173,6 @@ describe("WT-646 — disconnecting one plugin ends the grant behind all of them"
     assert.deepEqual(pluginsSharingConnection(opaque, [opaque, drive, calendar]), []);
   });
 
-  test("the warning names every plugin that goes down, and agrees with itself grammatically", () => {
-    assert.equal(sharedConnectionWarning([]), null);
-
-    const one = sharedConnectionWarning([calendar]);
-    assert.ok(one?.includes("Google Calendar"), one ?? "");
-    assert.ok(one?.includes("shares this account connection"), one ?? "");
-    assert.ok(one?.includes("it is disconnected too"), one ?? "");
-
-    const two = sharedConnectionWarning([calendar, meet]);
-    assert.ok(two?.includes("Google Calendar and Google Meet"), two ?? "");
-    assert.ok(two?.includes("share this account connection"), two ?? "");
-    assert.ok(two?.includes("they are disconnected too"), two ?? "");
-  });
-
   test("formatPluginLabelList reads as a sentence, not as an array", () => {
     assert.equal(formatPluginLabelList([]), "");
     assert.equal(formatPluginLabelList(["A"]), "A");
@@ -217,16 +202,23 @@ describe("WT-646 — a workspace's plugin policy, in words a member can act on",
     assert.equal(block?.remedy, null);
   });
 
-  test("plugins switched off is explained, and points at the one person who can undo it", () => {
-    // PluginConstants.WorkspacePolicyMessages.PluginsDisabled — the single refusal a workspace can
-    // now produce, since a workspace configures exactly one plugin attribute.
+  test("a plugin the workspace has not added points at the one person who can add it", () => {
+    // WorkspacePluginConstants.Messages.NotAdded — the refusal a workspace produces since the
+    // plugin marketplace replaced the single "allow personal plugins" switch.
     const block = pluginWorkspaceBlock(
       plugin({
-        workspacePolicyBlockReason: "Workspace settings do not allow personal plugins in WarpBot.",
+        workspacePolicyBlockReason:
+          "This plugin has not been added to this workspace. Ask your workspace owner to add it.",
       }),
     );
-    assert.ok(block?.remedy?.includes("turned plugins off"), block?.remedy ?? "");
-    assert.ok(block?.remedy?.includes("Owner or Admin"), block?.remedy ?? "");
+    assert.ok(block?.remedy?.includes("workspace owner"), block?.remedy ?? "");
+  });
+
+  test("the retired all-or-nothing sentence gets no remedy any more", () => {
+    const block = pluginWorkspaceBlock(
+      plugin({ workspacePolicyBlockReason: "Workspace settings do not allow personal plugins in WarpBot." }),
+    );
+    assert.equal(block?.remedy, null);
   });
 
   test("an unrecognised reason is still shown, with no invented advice attached", () => {

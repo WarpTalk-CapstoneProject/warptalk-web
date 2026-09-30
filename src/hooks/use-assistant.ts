@@ -3,7 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assistantService } from "@/services/assistant.service";
 import type { ChatAttachment } from "@/lib/assistant/attachments";
-import type { AssistantMentionDto, AssistantPageContextDto } from "@/types/assistant";
+import type {
+  AssistantMentionDto,
+  AssistantPageContextDto,
+  PluginToolPolicy,
+  WorkspacePluginToolAuditQuery,
+} from "@/types/assistant";
 
 /**
  * Prefix of every plugin-catalog query, whatever workspace it names. Invalidating this invalidates
@@ -14,6 +19,8 @@ const PLUGINS_QUERY_ROOT = ["assistant", "plugins"] as const;
 
 export const ASSISTANT_KEYS = {
   conversations: (workspaceId: string) => ["assistant", "conversations", workspaceId] as const,
+  /** Its own key root, so a platform list can never be served from a workspace list's cache. */
+  platformConversations: ["assistant", "platform", "conversations"] as const,
   conversation: (id: string) => ["assistant", "conversation", id] as const,
   skills: ["assistant", "skills"] as const,
   pluginsRoot: PLUGINS_QUERY_ROOT,
@@ -33,6 +40,18 @@ export function useAssistantConversations(workspaceId: string | null) {
       return data;
     },
     enabled: !!workspaceId,
+  });
+}
+
+/** A system admin's platform-scope conversations. Pass `enabled: false` outside platform mode. */
+export function usePlatformAssistantConversations(enabled: boolean) {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.platformConversations,
+    queryFn: async () => {
+      const { data } = await assistantService.platform.listConversations();
+      return data;
+    },
+    enabled,
   });
 }
 
@@ -57,6 +76,38 @@ export function useLoadAssistantConversation() {
     mutationFn: async (conversationId: string) => {
       const { data } = await assistantService.getConversation(conversationId);
       return data;
+    },
+  });
+}
+
+/** Imperative load of one platform-scope conversation — see useLoadAssistantConversation. */
+export function useLoadPlatformAssistantConversation() {
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data } = await assistantService.platform.getConversation(conversationId);
+      return data;
+    },
+  });
+}
+
+export function useCreatePlatformAssistantConversation() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await assistantService.platform.createConversation();
+      return data;
+    },
+  });
+}
+
+export function useSendPlatformAssistantMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
+      const { data } = await assistantService.platform.sendMessage(conversationId, content);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.platformConversations });
     },
   });
 }
@@ -96,6 +147,26 @@ export function useAssistantPlugins(workspaceId?: string | null) {
   });
 }
 
+/**
+ * The workspace's plugin activity log (Owner/Admin). Pass `enabled: false` until the caller's role
+ * is known to be Owner or Admin — a Member's request is a guaranteed 403.
+ *
+ * `placeholderData` keeps the previous page on screen while the next one loads, so paging and
+ * filtering do not flash the table empty.
+ */
+export function useWorkspacePluginToolAudits(query: WorkspacePluginToolAuditQuery, enabled: boolean) {
+  return useQuery({
+    queryKey: ["assistant", "plugin-tool-audits", query] as const,
+    queryFn: async () => {
+      const { data } = await assistantService.listWorkspacePluginToolAudits(query);
+      return data;
+    },
+    enabled: enabled && !!query.workspaceId,
+    placeholderData: (previous) => previous,
+    staleTime: 15_000,
+  });
+}
+
 export function useInstallAssistantPlugin() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -127,14 +198,35 @@ export function usePluginConnectUrl() {
       client?: string;
       workspaceId?: string | null;
     }) => {
-      const { data } = await assistantService.getPluginConnectUrl(pluginKey, client, workspaceId);
+      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId);
       return data;
     },
-    // Nothing has changed on the server yet — this only obtained a URL — but the catalog is about
-    // to change out from under us at the provider, and `staleTime: 60_000` would otherwise let a
-    // user finish consent, come back inside the minute, and be served the pre-consent answer from
-    // cache. Marking it stale here is what lets the global `refetchOnWindowFocus` do its job on
-    // every plugin surface, not just the one that started the flow.
+    // Either the plugin was just connected on the server (`connected: true`), or the catalog is
+    // about to change out from under us at the provider, and `staleTime: 60_000` would otherwise
+    // let a user finish consent, come back inside the minute, and be served the pre-consent answer
+    // from cache. Marking it stale here is what lets the global `refetchOnWindowFocus` do its job
+    // on every plugin surface, not just the one that started the flow.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
+  });
+}
+
+export function useConnectPluginWithApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+      apiKey,
+      workspaceId,
+    }: {
+      pluginKey: string;
+      apiKey: string;
+      workspaceId?: string | null;
+    }) => {
+      const { data } = await assistantService.connectPluginWithApiKey(pluginKey, apiKey, workspaceId);
+      return data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
     },
@@ -173,6 +265,26 @@ export function useDisableAssistantPlugin() {
   });
 }
 
+/** WT-687 — saves per-tool choices, then refreshes every cached view of the catalog. */
+export function useUpdatePluginToolPolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+      tools,
+    }: {
+      pluginKey: string;
+      tools: Record<string, PluginToolPolicy>;
+    }) => {
+      const { data } = await assistantService.updatePluginToolPolicy(pluginKey, tools);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
+  });
+}
+
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -182,6 +294,7 @@ export function useSendAssistantMessage() {
       pageContext,
       mentions,
       attachments,
+      disabledPluginKeys,
     }: {
       conversationId: string;
       content: string;
@@ -189,8 +302,17 @@ export function useSendAssistantMessage() {
       mentions?: AssistantMentionDto[];
       /** WT-474: attachments for this turn only. Not persisted. */
       attachments?: ChatAttachment[];
+      /** WT-687: plugins switched off for this conversation. */
+      disabledPluginKeys?: string[];
     }) => {
-      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions, attachments);
+      const { data } = await assistantService.sendMessage(
+        conversationId,
+        content,
+        pageContext,
+        mentions,
+        attachments,
+        disabledPluginKeys,
+      );
       return data;
     },
     onSuccess: (_data, variables) => {

@@ -92,6 +92,16 @@ test("an initial does not end the sentence", () => {
   assert.deepEqual(splitIntoSentences("A. Nguyễn phụ trách."), ["A. Nguyễn phụ trách."]);
 });
 
+test("a one-letter Vietnamese particle ends its sentence instead of reading as an initial", () => {
+  // Production: "Chào ạ. Chào lecturer Kenji, …" rendered as one line.
+  assert.deepEqual(
+    splitIntoSentences("Chào ạ. Chào lecturer Kenji, nhìn chung kết quả khá khả quan."),
+    ["Chào ạ.", "Chào lecturer Kenji, nhìn chung kết quả khá khả quan."],
+  );
+  assert.deepEqual(splitIntoSentences("Ừ. Được rồi."), ["Ừ.", "Được rồi."]);
+  assert.deepEqual(splitIntoSentences("Vậy à. Ờ. Để em xem."), ["Vậy à.", "Ờ.", "Để em xem."]);
+});
+
 test("an ellipsis is one boundary, not three", () => {
   assert.deepEqual(splitIntoSentences("Ừ thì... Chưa chắc."), ["Ừ thì...", "Chưa chắc."]);
 });

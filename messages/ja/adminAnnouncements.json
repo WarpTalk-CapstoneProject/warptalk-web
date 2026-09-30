@@ -1,0 +1,178 @@
+{
+  "list": {
+    "eyebrow": "運用",
+    "title": "お知らせ",
+    "description": "ユーザーに送信されたプラットフォーム全体のお知らせです。",
+    "compose": "作成",
+    "refresh": "更新",
+    "error": {
+      "title": "お知らせを読み込めませんでした。",
+      "description": "通知サービスの状態と、セッションがプラットフォーム管理者権限を保持しているかご確認ください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "まだお知らせはありません",
+      "description": "プラットフォームから送信されたお知らせがここに表示されます。"
+    },
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ · 全 {total} 件",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "footerNote": "お知らせは指定した相手に一度だけ配信され、後から編集・取り消し・削除はできません。「全員」という対象は存在せず、セグメント解決機能が用意されるまでは指定したリストのみを受け付けます。",
+    "delivery": {
+      "sentAt": "{date} に送信",
+      "createdTitle": "作成済み — 未送信",
+      "delivered": "{count, plural, =0 {配信なし} other {# 件配信}}"
+    }
+  },
+  "detail": {
+    "back": "お知らせ",
+    "eyebrow": "運用 · お知らせ",
+    "headerDescription": "{type} · 作成日 {date}",
+    "refresh": "更新",
+    "notFound": {
+      "title": "このお知らせは存在しません。",
+      "description": "リンクが古くなっている可能性があります。"
+    },
+    "loadError": {
+      "title": "お知らせを読み込めませんでした。",
+      "description": "通知サービスを確認し、もう一度お試しください。"
+    },
+    "retry": "再試行",
+    "sections": {
+      "message": "本文",
+      "record": "記録",
+      "audience": "対象",
+      "payload": "付随データ"
+    },
+    "fields": {
+      "type": "種類",
+      "status": "ステータス",
+      "author": "作成者",
+      "created": "作成日時",
+      "lastUpdated": "最終更新",
+      "announcementId": "お知らせID",
+      "mode": "モード",
+      "rawTargeting": "対象データ（生データ）",
+      "segment": "セグメント",
+      "namedRecipients": "指定された受信者",
+      "sentAt": "送信日時",
+      "delivered": "配信数"
+    },
+    "resolving": "· 取得中…",
+    "toasts": {
+      "copied": "{label}をコピーしました",
+      "copyFailed": "{label}をコピーできませんでした"
+    },
+    "recipients": {
+      "none": "登録された受信者はありません",
+      "count": "{count, plural, other {ユーザーID # 件}}",
+      "showFewer": "表示を減らす",
+      "showAll": "全 {count} 件を表示"
+    },
+    "payloadFields": {
+      "image": "画像",
+      "cta": "行動喚起リンク",
+      "discountCode": "割引コード",
+      "severity": "重大度",
+      "actionRequired": "対応要否",
+      "yes": "必要",
+      "no": "不要",
+      "downtimeWindow": "メンテナンス時間帯",
+      "downtimeRange": "{start} → {end}",
+      "empty": "画像、リンク、コード、メンテナンス時間帯のいずれもありません。"
+    },
+    "footerNote": "送信日時と配信件数は、すべての配信チャンクが集計された時点で記録されます。いずれかのチャンクが失敗したお知らせは Failed のままです。",
+    "notSent": "未送信",
+    "deliveryUnknown": "このサーバーからは報告されていません",
+    "deliveredCount": "{count, plural, =0 {受信者なし} other {受信者 # 人}}"
+  },
+  "composer": {
+    "types": {
+      "ANNOUNCEMENT": {
+        "label": "お知らせ",
+        "hint": "プラットフォームからの一般的なニュースです。"
+      },
+      "PROMOTION": {
+        "label": "プロモーション",
+        "hint": "特典、リンク、割引コードを含みます。"
+      },
+      "MAINTENANCE": {
+        "label": "メンテナンス",
+        "hint": "メンテナンス時間帯を明記します。開始・終了とも必須です。"
+      },
+      "SYSTEM": {
+        "label": "システム",
+        "hint": "プラットフォーム自身についての通知です。リンクや特典は含みません。"
+      }
+    },
+    "title": "お知らせを作成",
+    "description": "選んだ相手に一度だけ届きます — 指定したユーザー、1つのワークスペース、または全員。下書き・予約・取り消しはできません。",
+    "typeLabel": "種類",
+    "titleLabel": "タイトル",
+    "messageLabel": "本文",
+    "messageHint": "プレーンテキストのみです。通知サービスはHTMLタグらしき内容を拒否します。",
+    "ctaLabel": "行動喚起リンク",
+    "optional": "（任意）",
+    "imageLabel": "画像URL",
+    "discountLabel": "割引コード",
+    "noPayloadFields": "システム通知にはリンク・画像・割引コードを含められません。このタイプではサービス側で拒否されます。",
+    "downtimeStartLabel": "メンテナンス開始",
+    "downtimeEndLabel": "メンテナンス終了",
+    "downtimeHint": "入力はご自身のタイムゾーンで行い、絶対時刻として送信されます。",
+    "recipients": {
+      "label": "受信者",
+      "nobodySelected": "未選択",
+      "selectedCount": "{count, plural, other {# 件選択中}}",
+      "searchPlaceholder": "名前またはメールアドレスでプラットフォームの名簿を検索",
+      "searching": "検索中…",
+      "directoryError": "ユーザー名簿を読み込めませんでした。",
+      "noMatch": "該当するアカウントはありません。",
+      "selected": "選択済み",
+      "add": "追加",
+      "remove": "{email}を削除",
+      "clear": "クリア",
+      "footerNote": "指定したユーザーのみ。より広く送るには上で「1つのワークスペース」または「全員」を選んでください。"
+    },
+    "cancel": "キャンセル",
+    "review": "確認して送信へ進む",
+    "sendFailed": "このお知らせを送信できませんでした。",
+    "confirm": {
+      "title": "このお知らせを送信しますか？",
+      "description": "確認するとすぐに、以下の受信者全員に届きます。後から編集・取り消し・削除はできません。",
+      "recipientCount": "{count, plural, other {受信者 # 名}}",
+      "andMore": "他 {count} 名",
+      "back": "戻る",
+      "sending": "送信中…",
+      "send": "{count} 名に送信",
+      "everyone": "プラットフォームの有効なアカウント全員",
+      "segment": "{name} の有効なメンバー全員（現在 {count, plural, other {#人}}）",
+      "sendAudience": "送信"
+    },
+    "audience": {
+      "label": "宛先",
+      "SPECIFIC_USERS": {
+        "label": "指定したユーザー",
+        "hint": "ディレクトリからアカウントを選びます。"
+      },
+      "SEGMENT": {
+        "label": "1つのワークスペース",
+        "hint": "ワークスペースの有効なメンバー全員。"
+      },
+      "BROADCAST": {
+        "label": "全員",
+        "hint": "プラットフォームの有効なアカウント全員。"
+      }
+    },
+    "segment": {
+      "label": "ワークスペース",
+      "searchPlaceholder": "名前でワークスペースを検索",
+      "searching": "検索中…",
+      "directoryError": "ワークスペース一覧を読み込めませんでした。",
+      "noMatch": "一致するワークスペースはありません。",
+      "change": "変更",
+      "memberCount": "{count, plural, other {#人のメンバー}}"
+    }
+  }
+}

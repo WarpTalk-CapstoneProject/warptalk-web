@@ -2,6 +2,9 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
+import { SERIES_ROOT_KEY } from "@/hooks/use-series";
+import { endRoomFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { FlashModeState } from "@/services/translation-room.service";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
@@ -21,6 +24,28 @@ const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 /** Exported so a room-wide Start/Stop broadcast can refresh it without re-spelling the key. */
 export const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
+
+/**
+ * Second argument of the room-scoped polling hooks (participants, sessions).
+ *
+ * A bare boolean is the older `enabled` form and still works. `poll: false` fetches once and
+ * never refetches on an interval — an ENDED meeting's roster and sessions no longer change, and
+ * polling them every few seconds from the recap page only spent the per-user rate limit (WT-701).
+ */
+export type TranslationRoomPollOptions = {
+  /** Gate the request entirely. Defaults to true. */
+  enabled?: boolean;
+  /** Keep refetching on an interval. Defaults to true. */
+  poll?: boolean;
+};
+
+function resolvePollOptions(value: boolean | TranslationRoomPollOptions | undefined): {
+  enabled: boolean;
+  poll: boolean;
+} {
+  if (typeof value === "boolean") return { enabled: value, poll: true };
+  return { enabled: value?.enabled ?? true, poll: value?.poll ?? true };
+}
 
 export function useTranslationRooms(params?: {
   status?: string;
@@ -131,9 +156,20 @@ export function useUpdateTranslationRoomSettings() {
     mutationFn: async ({ id, data }: { id: string; data: UpdateRoomSettingsRequest }) => {
       await translationRoomService.updateSettings(id, data);
     },
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
-      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    // WT-852: "Room updated successfully." used to appear over the old page. The saved edit is
+    // written into the cached room first, so the page shows it the moment the save succeeds;
+    // the refetches below then confirm it. Returned, so `mutateAsync` resolves only once the
+    // room has been re-read — the caller's toast never announces a save the page does not show.
+    onSuccess: (_, { id, data }) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (room) =>
+        room ? applyRoomSettingsPatch(room, data) : room,
+      );
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: MEETING_KEY }),
+        // A recurring meeting's "Daily · 20:40 / Next …" line is read from the series, which
+        // embeds this occurrence and lives under its own key — the meetings key never reached it.
+        queryClient.invalidateQueries({ queryKey: SERIES_ROOT_KEY }),
+      ]);
     },
   });
 }
@@ -260,7 +296,11 @@ export function useResumeTranslationRoom() {
 /** All translation sessions for a room — used to bucket transcript segments into
  * "Translation 1", "Translation 2"... blocks. Polls while the room is live so every
  * participant's transcript picks up a Start/Pause/Resume without a manual refresh. */
-export function useTranslationRoomSessions(roomId: string, enabled = true) {
+export function useTranslationRoomSessions(
+  roomId: string,
+  options: boolean | TranslationRoomPollOptions = true,
+) {
+  const { enabled, poll } = resolvePollOptions(options);
   return useQuery({
     queryKey: sessionsKey(roomId),
     queryFn: async () => {
@@ -268,7 +308,7 @@ export function useTranslationRoomSessions(roomId: string, enabled = true) {
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: enabled ? 5000 : false,
+    refetchInterval: enabled && poll ? 5000 : false,
   });
 }
 
@@ -369,9 +409,11 @@ export function useSetNoiseReduction(roomId: string) {
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      await translationRoomService.end(id);
-    },
+    // Single-flight per room, like useEndMeetingForAll: repeated presses share one request.
+    mutationFn: (id: string) =>
+      singleFlight(endRoomFlightKey(id), async () => {
+        await translationRoomService.end(id);
+      }),
     onSuccess: (_data, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
         current
@@ -403,7 +445,11 @@ export function useCancelTranslationRoom() {
   });
 }
 
-export function useTranslationRoomParticipants(roomId: string, enabled = true) {
+export function useTranslationRoomParticipants(
+  roomId: string,
+  options: boolean | TranslationRoomPollOptions = true,
+) {
+  const { enabled, poll } = resolvePollOptions(options);
   return useQuery({
     queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
@@ -411,7 +457,7 @@ export function useTranslationRoomParticipants(roomId: string, enabled = true) {
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: 3000,
+    refetchInterval: poll ? 3000 : false,
   });
 }
 

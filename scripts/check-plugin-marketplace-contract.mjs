@@ -10,8 +10,12 @@ const personalRoute = readFileSync(
   join(root, "src/app/(app)/settings/plugins/page.tsx"),
   "utf8",
 );
-const legacyWorkspaceRoute = readFileSync(
+const workspaceRoute = readFileSync(
   join(root, "src/app/(app)/[workspaceSlug]/settings/plugins/page.tsx"),
+  "utf8",
+);
+const workspacePage = readFileSync(
+  join(root, "src/components/assistant/plugins/workspace-plugins-page.tsx"),
   "utf8",
 );
 
@@ -55,12 +59,56 @@ for (const [label, handler] of [
 // Its wording is part of the contract now: the box is a client-side filter over the catalog the
 // page already fetched, and copy that reads as "we searched and found nothing" claims a
 // marketplace search that does not exist behind it.
-if (!page.includes("No plugin in this catalog matches")) {
+const pluginsMessagesEn = JSON.parse(
+  readFileSync(join(root, "messages/en/pluginsPage.json"), "utf8"),
+);
+const workspaceMessagesEn = JSON.parse(
+  readFileSync(join(root, "messages/en/workspacePlugins.json"), "utf8"),
+);
+
+/** Reads "a.b.c" out of a message catalog. */
+function messageAt(tree, path) {
+  return path.split(".").reduce((node, part) => (node == null ? node : node[part]), tree);
+}
+
+/**
+ * Both halves of a copy contract, after the next-intl migration (WT-607).
+ *
+ * A literal-text assertion against the component source stopped being able to fail once the copy
+ * moved into `messages/en/*.json` — the wording really is gone from the source. So each of these
+ * asserts that the component still calls the expected key AND that the English catalog still
+ * carries the original wording at it. See `.agents/page-docs/i18n-localization.md`.
+ */
+function assertCopyContract(source, tree, key, expected, what) {
+  // The key as written in the source: `t("a.b")`, `t("a.b", {…})`, or handed to a child as
+  // `titleKey: "a.b"` the way the auth-mode choices are.
+  if (!source.includes(`"${key}"`)) {
+    throw new Error(`${what} must render the translation key '${key}'.`);
+  }
+  if (messageAt(tree, key) !== expected) {
+    throw new Error(`The English copy for '${key}' must read '${expected}'.`);
+  }
+}
+
+if (!page.includes('t("empty.withQuery"')) {
   throw new Error("Plugins page must render an empty state when the filter matches nothing.");
 }
-if (!page.includes("It does not search a wider marketplace.")) {
+if (pluginsMessagesEn.empty.withQuery !== 'No plugin in this catalog matches "{query}".') {
+  throw new Error(
+    "The empty state's English copy must say no plugin in the catalog matches the query.",
+  );
+}
+if (!page.includes('t("empty.filterNote"')) {
   throw new Error(
     "The empty state must say the box only filters the fetched catalog. There is no marketplace search behind it, and the copy must not imply one.",
+  );
+}
+if (
+  pluginsMessagesEn.empty.filterNote !==
+  "This filters the plugins WarpTalk offers today. It does not search a wider marketplace."
+) {
+  throw new Error(
+    "The empty state's filter-note English copy must say it does not search a wider marketplace.",
   );
 }
 for (const token of ['placeholder="Search plugins"', "Clear search"]) {
@@ -93,29 +141,35 @@ if (!page.includes("withEffectiveConnectionStatus")) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// SILENT DATA LOSS: one disconnect ends the grant behind several plugins
+// ONE GRANT, BUT EACH PLUGIN IS CONNECTED ON ITS OWN
 //
-// A connection is keyed by provider, not by plugin key, so DisconnectAsync ends the Google grant
-// and Drive, Calendar and Meet all go with it. A user disconnecting Drive to tidy up used to lose
-// the other two without ever being told. This block is a guard against that warning being
-// refactored away in a tidy-up of its own — the dialog looks perfectly reasonable without it.
+// A grant is keyed by provider, so one Google sign-in backs Drive, Calendar and Meet. Reading
+// "connected" off that grant switched every sibling on the moment one was connected. The server
+// now records the connection per installation and answers POST /connect with `connected: true`
+// when the grant already covers the plugin, so the page must handle that answer rather than
+// opening a consent window for a URL that is not there.
 // ---------------------------------------------------------------------------------------------
-for (const token of ["pluginsSharingConnection", "sharedConnectionWarning"]) {
-  if (!page.includes(token)) {
-    throw new Error(
-      `Plugins page must call '${token}': disconnecting one plugin ends the shared OAuth grant, and the other plugins behind it have to be named before the user confirms, not discovered afterwards.`,
-    );
-  }
+if (!page.includes("pluginsSharingConnection")) {
+  throw new Error(
+    "Plugins page must derive the plugins that share a sign-in from the catalog (pluginsSharingConnection).",
+  );
 }
 if (!page.includes("sharedConnectionPlugins={sharedConnectionPlugins}")) {
+  throw new Error("The dialog must be handed the sibling list it describes.");
+}
+if (!page.includes("result.connected")) {
   throw new Error(
-    "The disconnect dialog must be handed the sibling list; computing it and not passing it warns nobody.",
+    "Connect must handle `connected: true`: the server linked the plugin with the grant it already had, and there is no consent page to open.",
   );
 }
-if (!page.includes('data-testid="shared-connection-warning"')) {
-  throw new Error(
-    "The disconnect/remove confirmation must render the shared-connection warning, not merely compute it.",
-  );
+// Disconnecting one plugin no longer takes its siblings down, so warning that it does would be
+// the page telling the user something false and scaring them off a harmless action.
+for (const token of ["sharedConnectionWarning", 'data-testid="shared-connection-warning"', "disconnected too"]) {
+  if (page.includes(token)) {
+    throw new Error(
+      `Plugins page must not say disconnecting one plugin disconnects its siblings ('${token}'). Each plugin is disconnected on its own.`,
+    );
+  }
 }
 // The grouping is catalog data. A key or a provider name spelled out here is the frontend
 // re-deciding something the catalog already knows, and it is wrong the day a second multi-product
@@ -307,8 +361,205 @@ if (!personalRoute.includes("@/components/assistant/plugins/plugins-page")) {
   throw new Error("Personal /settings/plugins route must render the plugins page component.");
 }
 
-if (!legacyWorkspaceRoute.includes('redirect("/settings/plugins")')) {
-  throw new Error("Workspace-shaped plugins route must redirect to the personal plugins route.");
+// ---------------------------------------------------------------------------------------------
+// THE PLUGIN MARKETPLACE (owner decision, 2026-09-17)
+//
+// The [workspaceSlug] route used to redirect here, when the catalog was purely personal. A workspace
+// now has its own plugin list, chosen by its Owner, and that route is where it lives. The personal
+// page stays at /settings/plugins and gains one action: asking the Owner for a plugin the workspace
+// has not added.
+// ---------------------------------------------------------------------------------------------
+if (workspaceRoute.includes("redirect(")) {
+  throw new Error(
+    "/[workspaceSlug]/settings/plugins must render the workspace's plugin list, not redirect to the personal page.",
+  );
+}
+if (!workspaceRoute.includes("@/components/assistant/plugins/workspace-plugins-page")) {
+  throw new Error("The workspace plugins route must render WorkspacePluginsPage.");
+}
+// The approved mock's vocabulary, asserted through the catalog since WT-607 moved it there.
+for (const [key, expected] of [
+  ["addMenu.trigger", "Add plugin"],
+  ["addMenu.fromMarketplace", "From marketplace"],
+  ["addMenu.withMcp", "With MCP"],
+  ["requests.title", "Requests"],
+  ["inWorkspace.title", "In this workspace"],
+  ["marketplace.title", "Marketplace"],
+  ["empty.title", "Add a plugin to this workspace"],
+  ["manageDialog.removeFromWorkspace", "Remove from workspace"],
+]) {
+  assertCopyContract(
+    workspacePage,
+    workspaceMessagesEn,
+    key,
+    expected,
+    "The workspace plugins page, as the approved mock does,",
+  );
+}
+if (/Skills only/i.test(workspacePage) || /Skills only/i.test(page)) {
+  throw new Error("Plugins are MCP only (owner decision 2026-09-17): no page may offer a skills-only option.");
+}
+
+// The member's half. The action is decided in plugin-availability.ts, where it has node tests; the
+// page must go through it rather than branch on the availability string itself.
+if (!page.includes("memberPluginAction(plugin, workspaceName,")) {
+  throw new Error("The plugins page must decide Request/Requested/Connect through memberPluginAction.");
+}
+for (const token of [
+  't("actionLabels.request")',
+  't("actionLabels.requested")',
+  't("requestDialog.sendRequest")',
+  "RequestPluginDialog",
+  "useRequestPlugin",
+]) {
+  if (!page.includes(token)) {
+    throw new Error(`The plugins page must offer the request flow ('${token}').`);
+  }
+}
+for (const [key, expected] of [
+  ["actionLabels.request", "Request"],
+  ["actionLabels.requested", "Requested"],
+  ["requestDialog.sendRequest", "Send request"],
+]) {
+  const [group, prop] = key.split(".");
+  if (pluginsMessagesEn[group][prop] !== expected) {
+    throw new Error(`The plugins page's English copy for '${key}' must read '${expected}'.`);
+  }
+}
+// A server that sends the new availability replaces the old block notice on the row; a server that
+// does not still gets the notice. Either way the dialog keeps Disconnect and Remove (see above).
+if (!page.includes("workspaceBlock && !hasAvailability ?")) {
+  throw new Error(
+    "The row-level block notice must give way to the availability caption when the server sends one, and survive when it does not.",
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// THE OWNER FLOW, AND THE GAPS THE AUDIT FOUND IN IT (2026-09-18)
+// ---------------------------------------------------------------------------------------------
+const sidebar = readFileSync(join(root, "src/components/layout/linear-sidebar.tsx"), "utf8");
+const widget = readFileSync(join(root, "src/components/layout/global-chatbot.tsx"), "utf8");
+
+// The header line was removed on request. It must not drift back in.
+if (/decides which (ones|plugins) you can connect/.test(page)) {
+  throw new Error(
+    "The member page must not say the workspace 'decides which ones you can connect' — that line was removed on request.",
+  );
+}
+
+// "With MCP": the approved fields, plus how members connect. authMode goes out through the helper,
+// which is where "only send it on edit when it changed" is tested.
+for (const [key, expected] of [
+  ["form.urlPlaceholder", "https://mcp.example.com/mcp"],
+  ["authMode.legend", "How members connect"],
+  ["authMode.apiKeyTitle", "Each member pastes an API key"],
+]) {
+  assertCopyContract(workspacePage, workspaceMessagesEn, key, expected, "The owner page's MCP form");
+}
+for (const token of ["createPrivatePluginRequest(draft)", "privatePluginUpdateRequest(plugin, draft)"]) {
+  if (!workspacePage.includes(token)) {
+    throw new Error(`The owner page's MCP form must include '${token}'.`);
+  }
+}
+
+// Usage, never connections: a connection is personal, and the server has no per-workspace count.
+if (/members connected|of \$\{[^}]*\} members/.test(workspacePage)) {
+  throw new Error(
+    "The owner page must not claim a connected-member count; the server only knows how many members USED a plugin here (membersUsedCount).",
+  );
+}
+// Matched without pinning the trailing translator argument, which WT-607 added.
+if (!/workspacePluginFacts\(plugin, addedByName[,)]/.test(workspacePage)) {
+  throw new Error("The Manage dialog's facts line must come from workspacePluginFacts (usage + added by).");
+}
+
+// Gap 12a — the transition note is decided from the rows, not asserted. "Every marketplace plugin is
+// available" is false for a workspace whose old switch was off.
+if (!/workspacePluginsTransitionNote\(overview[,)]/.test(workspacePage)) {
+  throw new Error("The owner page must word its transition note through workspacePluginsTransitionNote.");
+}
+if (workspacePage.includes("Every marketplace plugin is available")) {
+  throw new Error(
+    "The owner page must not hardcode 'Every marketplace plugin is available'; which note is true depends on the old switch.",
+  );
+}
+// 2026-09-24 (owner report: "the plugins shown are fake"). An uncurated workspace no longer has
+// every marketplace plugin: the server carries over only what its members already use, and the note
+// says how many. No catalog may claim the whole marketplace again.
+for (const locale of ["en", "vi", "ja"]) {
+  const transition = JSON.parse(
+    readFileSync(join(root, `messages/${locale}/workspacePlugins.json`), "utf8"),
+  ).transition;
+  if (!transition?.carriedOver || "allAvailable" in transition || "noneAvailable" in transition) {
+    throw new Error(`${locale}: the transition note is carriedOver only; the "every plugin" copy is gone.`);
+  }
+}
+if (/Every marketplace plugin is available/.test(JSON.stringify(workspaceMessagesEn))) {
+  throw new Error("No workspace plugin copy may claim every marketplace plugin is available.");
+}
+
+// Gap 12b — the empty state keeps the Marketplace section under it.
+{
+  const start = workspacePage.indexOf('data-testid="workspace-plugins-empty"');
+  const end = workspacePage.indexOf("} else {", start);
+  if (start < 0 || end < 0 || !workspacePage.slice(start, end).includes("{marketplaceSection}")) {
+    throw new Error("The empty owner page must still render the Marketplace section below the empty state.");
+  }
+}
+
+// Gap 12c — names resolve past the first page of members.
+if (/useWorkspaceMembers\(/.test(workspacePage)) {
+  throw new Error(
+    "The owner page must not name requesters from useWorkspaceMembers(…, 1, 100) — that is the first hundred members. Use useWorkspaceMemberNames.",
+  );
+}
+if (!workspacePage.includes("useWorkspaceMemberNames(")) {
+  throw new Error("The owner page must resolve requester and adder names through useWorkspaceMemberNames.");
+}
+
+// Gap 12d — an Admin views, the Owner acts. One helper decides it for the page and the badge.
+if (!workspacePage.includes("canManageWorkspacePlugins(overview, role)")) {
+  throw new Error("The owner page must decide who may act through canManageWorkspacePlugins.");
+}
+if (/canManage\s*\?\?\s*(true|false)/.test(workspacePage)) {
+  throw new Error("The owner page must not default canManage by itself; canManageWorkspacePlugins falls back to the role.");
+}
+if (!/pendingRequestBadge\(\s*workspacePluginsOverview,\s*canManageWorkspacePlugins\(/.test(sidebar)) {
+  throw new Error(
+    "The sidebar's request count must be gated on canManageWorkspacePlugins: an Admin cannot answer requests, so a count on their sidebar never clears.",
+  );
+}
+
+// Gap 8 — a failed request shows what the server said, JSON or plain text, on both pages.
+if (!page.includes('pluginErrorMessage(error, t("toasts.couldNotAsk"')) {
+  throw new Error("A failed plugin request must show the server's message (pluginErrorMessage), not a fixed sentence.");
+}
+if (pluginsMessagesEn.toasts.couldNotAsk !== "Could not ask for {label}.") {
+  throw new Error("The failed-request fallback's English copy must still name the plugin.");
+}
+if (/getErrorMessage\(/.test(workspacePage) || !workspacePage.includes("pluginErrorMessage(")) {
+  throw new Error("The owner page must report failures through pluginErrorMessage, which also reads plain-text bodies.");
+}
+
+// Gap 9 — the Owner adds instead of asking themselves.
+if (!page.includes('action.kind === "add"') || !page.includes("addToWorkspace(plugin)")) {
+  throw new Error("An Owner's not-added row on the member page must offer Add (memberPluginAction kind 'add').");
+}
+// The Owner's add says which plugin landed where, and its failure says which one did not. Named,
+// because "Added" alone on a catalog of rows that all look alike says nothing.
+for (const [key, expected] of [
+  ["actionLabels.add", "Add"],
+  ["toasts.added", "{label} added to this workspace"],
+  ["toasts.couldNotAdd", "Could not add {label}."],
+]) {
+  assertCopyContract(page, pluginsMessagesEn, key, expected, "The member page's Owner add");
+}
+
+// Gap 11 — chat offers only what the workspace has.
+if (!widget.includes("isOfferedInWorkspaceChat(plugin)")) {
+  throw new Error(
+    "WarpBot's plugin menu and @mention list must leave out plugins the workspace has not added (isOfferedInWorkspaceChat).",
+  );
 }
 
 console.log("Plugin marketplace contract passed.");

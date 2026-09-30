@@ -96,8 +96,19 @@ const DAY_NAME = new Intl.DateTimeFormat(AGENDA_CALENDAR_LOCALE, {
  * state to announce. The count is always spoken, "no meetings" included: the dot's ABSENCE is
  * information to a sighted user, and a name that went silent on empty days would make a screen
  * reader user tab into each one to find out.
+ *
+ * `t` is optional so every caller — and the `node:test` pinning the English sentence — keeps
+ * working unchanged. A translated navigator passes its own composer, built from
+ * `useTranslations("schedules")` and a locale-aware day-name formatter, instead of the English
+ * sentence hard-coded below.
  */
-export function dayButtonLabel(day: Date, count: number, options: { isToday?: boolean } = {}): string {
+export function dayButtonLabel(
+  day: Date,
+  count: number,
+  options: { isToday?: boolean } = {},
+  t?: (day: Date, count: number, isToday: boolean) => string,
+): string {
+  if (t) return t(day, count, options.isToday ?? false);
   const meetings = count === 0 ? "no meetings" : count === 1 ? "1 meeting" : `${count} meetings`;
   return `Go to ${options.isToday ? "today, " : ""}${DAY_NAME.format(day)}, ${meetings}`;
 }

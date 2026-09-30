@@ -8,8 +8,18 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
-  PluginConnectUrlDto,
+  CreateAssistantConversationOptions,
+  CreatePrivatePluginRequest,
+  PluginConnectResultDto,
+  PluginToolPolicy,
   SendAssistantMessageResponse,
+  UpdatePrivatePluginRequest,
+  WorkspacePluginItemDto,
+  WorkspacePluginMemberDto,
+  WorkspacePluginRequestDto,
+  WorkspacePluginsOverviewDto,
+  WorkspacePluginToolAuditDto,
+  WorkspacePluginToolAuditQuery,
 } from "@/types/assistant";
 
 export const assistantService = {
@@ -23,8 +33,12 @@ export const assistantService = {
     return apiClient.get<AssistantConversationDetailDto>(API.assistant.conversation(id));
   },
 
-  createConversation(workspaceId: string) {
-    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, { workspaceId });
+  createConversation(workspaceId: string, options?: CreateAssistantConversationOptions) {
+    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, {
+      workspaceId,
+      ...(options?.title ? { title: options.title } : {}),
+      ...(options?.seedMessages?.length ? { seedMessages: options.seedMessages } : {}),
+    });
   },
 
   sendMessage(
@@ -41,7 +55,12 @@ export const assistantService = {
      *
      * `size` is dropped on the way out: it is only there for the chip's label.
      */
-    attachments?: ChatAttachment[]
+    attachments?: ChatAttachment[],
+    /**
+     * WT-687 — plugins switched off for this conversation. WarpBot is not offered their tools this
+     * turn. Omitted when every plugin is on, which is what an older client sends.
+     */
+    disabledPluginKeys?: string[]
   ) {
     return apiClient.post<SendAssistantMessageResponse>(API.assistant.sendMessage(conversationId), {
       content,
@@ -50,11 +69,38 @@ export const assistantService = {
       attachments: attachments?.length
         ? attachments.map(({ dataUrl, name, mimeType }) => ({ dataUrl, name, mimeType }))
         : undefined,
+      disabledPluginKeys: disabledPluginKeys?.length ? disabledPluginKeys : undefined,
     });
   },
 
   archiveConversation(id: string) {
     return apiClient.delete<void>(API.assistant.conversation(id));
+  },
+
+  /**
+   * Platform-scope WarpBot — a system admin in the admin portal. Its own endpoints and store: no
+   * workspace id, and a send carries text only (no page context, mentions, attachments or plugin
+   * switches, each of which names workspace content). The server enforces the admin role.
+   */
+  platform: {
+    listConversations() {
+      return apiClient.get<AssistantConversationDto[]>(API.assistant.platform.conversations);
+    },
+    getConversation(id: string) {
+      return apiClient.get<AssistantConversationDetailDto>(API.assistant.platform.conversation(id));
+    },
+    createConversation() {
+      return apiClient.post<AssistantConversationDto>(API.assistant.platform.conversations, {});
+    },
+    sendMessage(conversationId: string, content: string) {
+      return apiClient.post<SendAssistantMessageResponse>(
+        API.assistant.platform.sendMessage(conversationId),
+        { content },
+      );
+    },
+    archiveConversation(id: string) {
+      return apiClient.delete<void>(API.assistant.platform.conversation(id));
+    },
   },
 
   getSkills() {
@@ -90,10 +136,23 @@ export const assistantService = {
     );
   },
 
-  getPluginConnectUrl(pluginKey: string, client?: string, workspaceId?: string | null) {
-    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey, client), {
+  /**
+   * Connects a plugin. When the provider's grant already covers it the server connects it on the
+   * spot and answers `connected: true` without a URL; otherwise it answers with the consent URL.
+   */
+  connectPlugin(pluginKey: string, client?: string, workspaceId?: string | null) {
+    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
       params: workspaceId ? { workspaceId } : undefined,
     });
+  },
+
+  /** Answers with the catalog row. The key is checked against the MCP server and never sent back. */
+  connectPluginWithApiKey(pluginKey: string, apiKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.pluginApiKey(pluginKey),
+      { apiKey },
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
   },
 
   disconnectPlugin(pluginKey: string) {
@@ -102,5 +161,84 @@ export const assistantService = {
 
   disablePlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
+
+  /**
+   * WT-687 — what WarpBot may do with each named tool, for this user. Tools left out keep their
+   * choice. Answers with the catalog row, whose tools carry the resolved `policy`.
+   */
+  // ---- workspace plugin marketplace (2026-09-17) ------------------------------------------------
+
+  getWorkspacePlugins(workspaceId: string) {
+    return apiClient.get<WorkspacePluginsOverviewDto>(API.assistant.workspacePlugins.base(workspaceId));
+  },
+
+  addWorkspacePlugin(workspaceId: string, pluginKey: string) {
+    return apiClient.post<WorkspacePluginItemDto>(API.assistant.workspacePlugins.marketplace(workspaceId, pluginKey));
+  },
+
+  /** Removes a marketplace plugin from the workspace; a private plugin is retired. */
+  removeWorkspacePlugin(workspaceId: string, pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.workspacePlugins.plugin(workspaceId, pluginKey));
+  },
+
+  /** Members who connected the plugin, most recently used first. Owner or Admin. */
+  listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
+  },
+
+  createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {
+    return apiClient.post<WorkspacePluginItemDto>(API.assistant.workspacePlugins.private(workspaceId), request);
+  },
+
+  updatePrivatePlugin(workspaceId: string, pluginKey: string, request: UpdatePrivatePluginRequest) {
+    return apiClient.patch<WorkspacePluginItemDto>(
+      API.assistant.workspacePlugins.privatePlugin(workspaceId, pluginKey),
+      request,
+    );
+  },
+
+  listPendingPluginRequests(workspaceId: string) {
+    return apiClient.get<WorkspacePluginRequestDto[]>(API.assistant.workspacePlugins.requests(workspaceId));
+  },
+
+  requestPlugin(workspaceId: string, pluginKey: string, reason?: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(API.assistant.workspacePlugins.requests(workspaceId), {
+      pluginKey,
+      reason: reason?.trim() ? reason.trim() : undefined,
+    });
+  },
+
+  approvePluginRequest(workspaceId: string, requestId: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(
+      API.assistant.workspacePlugins.approveRequest(workspaceId, requestId),
+    );
+  },
+
+  declinePluginRequest(workspaceId: string, requestId: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(
+      API.assistant.workspacePlugins.declineRequest(workspaceId, requestId),
+    );
+  },
+
+  updatePluginToolPolicy(pluginKey: string, tools: Record<string, PluginToolPolicy>) {
+    return apiClient.put<AssistantPluginCatalogItemDto>(API.assistant.pluginToolPolicy(pluginKey), { tools });
+  },
+
+  /**
+   * The workspace's plugin activity log. A plain array, not a paged envelope: the server returns
+   * no total, so a caller learns there is another page only by getting a full one back.
+   * Absent filters are left off the query string rather than sent empty.
+   */
+  listWorkspacePluginToolAudits(query: WorkspacePluginToolAuditQuery) {
+    return apiClient.get<WorkspacePluginToolAuditDto[]>(API.assistant.workspacePluginToolAudits, {
+      params: {
+        workspaceId: query.workspaceId,
+        skip: query.skip,
+        take: query.take,
+        ...(query.pluginKey ? { pluginKey: query.pluginKey } : {}),
+        ...(query.userId ? { userId: query.userId } : {}),
+      },
+    });
   },
 };

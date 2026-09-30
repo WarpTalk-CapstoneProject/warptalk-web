@@ -72,12 +72,30 @@ if (!/onToggleNoiseSuppression/.test(bar)) {
 }
 
 // Both must be visible in the menu, and worded so they cannot be read as the same setting twice.
-if (!/label="Mic noise filter"/.test(bar)) {
+// The label moved into i18n (t("settingsMenu.micNoiseFilter.row")) — assert the component still
+// calls that key, and the English catalog still carries wording distinct from "Noise suppression".
+if (!/label=\{t\("settingsMenu\.micNoiseFilter\.row"\)\}/.test(bar)) {
   failures.push(
-    `${BAR}: the mic noise filter row was renamed. It has to stay distinguishable from the ` +
+    `${BAR}: the mic noise filter row's label no longer reads through ` +
+      't("settingsMenu.micNoiseFilter.row"). It has to stay distinguishable from the ' +
       '"Noise suppression" row beside it — that is the only thing keeping them from being ' +
       "mistaken for a duplicate and merged.",
   );
+} else {
+  const controlBarEn = JSON.parse(
+    readFileSync(join(root, "messages/en/meetingControlBar.json"), "utf8"),
+  );
+  const micNoiseFilterLabel = controlBarEn.settingsMenu?.micNoiseFilter?.row;
+  const noiseSuppressionLabel = controlBarEn.settingsMenu?.noiseSuppression?.label;
+  if (
+    typeof micNoiseFilterLabel !== "string" ||
+    micNoiseFilterLabel === noiseSuppressionLabel
+  ) {
+    failures.push(
+      "messages/en/meetingControlBar.json: settingsMenu.micNoiseFilter.row must have its own " +
+        "wording, distinct from settingsMenu.noiseSuppression.label.",
+    );
+  }
 }
 
 if (failures.length > 0) {

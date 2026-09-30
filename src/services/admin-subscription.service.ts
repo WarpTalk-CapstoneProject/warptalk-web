@@ -62,12 +62,17 @@ export const adminSubscriptionService = {
     });
   },
 
-  /** Undo a cancellation that has not taken effect yet. */
-  resume: async (
-    workspaceId: string,
-    request: AdminSubscriptionLifecycleRequest,
-  ): Promise<void> => {
-    await apiClient.post(API.adminSubscriptions.resume(workspaceId), request);
+  /**
+   * Undo a cancellation that has not taken effect yet: renewal goes back on for a period that is
+   * already paid for. No charge, and Stripe is not called — the server refuses once the period
+   * has ended, because that is a new checkout.
+   *
+   * `/reactivate`, not `/resume`: resume lifts an AI-service suspension and answers "not
+   * suspended" for every cancelled-but-healthy subscription. The endpoint takes no body, so there
+   * is no reason to send.
+   */
+  reactivate: async (workspaceId: string): Promise<void> => {
+    await apiClient.post(API.adminSubscriptions.reactivate(workspaceId));
   },
 
   /** Move the workspace's live subscription onto another plan. Refuses deactivated targets. */

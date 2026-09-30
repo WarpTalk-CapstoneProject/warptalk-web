@@ -15,6 +15,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The host app shell now uses the same light monochrome frosted-glass direction as the dashboard: bright full-screen motion video background, floating white sidebar, acrylic topbar, and scoped frosted styling for shadcn cards, inputs, tabs, and tables.
 - Shared host pages now use the same three-layer shell as `/dashboard`: background video, large transparent rounded glass frame, then inner frosted sidebar/topbar/content surfaces.
 - The topbar shows a glass sidebar trigger, separator, pathname breadcrumbs, command search (`Ctrl+K`), quick action icons for help, notifications, and theme, plus a compact Host profile control.
+- The authenticated topbar also shows a circular globe language control. It opens the existing English/Vietnamese/Japanese selector and refreshes the current route after the locale cookie changes, so the choice applies across dashboard and workspace pages.
 - `/dashboard` now uses the shared host sidebar/topbar shell instead of bypassing the app layout, so navigation state and active-pill motion stay mounted while switching between dashboard pages.
 - Role sidebars use the WarpTalk primary logo when expanded and a compact `W` badge when collapsed.
 - The host sidebar is a fixed-width light frosted navigation surface with Workspace, AI, and Configuration groups, a black active pill, and sign out.
@@ -56,8 +57,10 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `src/components/layout/admin-sidebar.tsx`
 - `src/components/layout/workspace-sidebar.tsx`
 - `src/components/layout/participant-sidebar.tsx`
+- `src/components/layout/language-switcher.tsx`
 - `src/components/layout/global-chatbot.tsx`
 - `.agents/page-docs/dashboard-inner-pages.md`
+- `src/app/(app)/admin/billing/page.tsx`; `src/app/(app)/admin/billing/{plans,workspace/[id]}/page.tsx` (new, thin re-exports); `src/app/(internal)/billing/{page,plans/page,workspace/[id]/page}.tsx`; `scripts/check-admin-surface-contract.mjs` (nav-exemption list extended for the two new nested routes)
 
 ## Important UI Notes
 
@@ -70,6 +73,8 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
 - Removing the Ask WarpBot page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
+- **2026-09-04 (WT-607):** the primary workspace navigation in `src/components/layout/linear-sidebar.tsx` — `mainNav` (Home/Meetings/Schedules/History/Voice Profiles, plus the "Join by code"/"Create Meeting" action tooltips) and `workspaceNav` (Dashboard/Members/Documents/Glossary/My tasks/Knowledge/Settings) — now reads labels from `useTranslations("common.sidebar")` against `messages/{en,vi,ja}/common.json`, and the "Switched to workspace"/"Failed to switch workspace" toasts are translated too. The **admin console nav** (`adminSections`) and the **settings-page collapsed nav** (`settingsItems`) inside the same file were deliberately left as English literals for this pass — see `.agents/page-docs/i18n-localization.md` for the Phase A/B split and why.
+- **2026-09-24: the platform billing pages exist under two route groups, and clicking between them used to swap the sidebar.** `src/app/(app)/admin/billing/page.tsx` re-exports the same component as the legacy `src/app/(internal)/billing/page.tsx` — the file lives once, under `(internal)`, but is mounted at both `/admin/billing` (inside `src/app/(app)/admin/layout.tsx`, the real system-admin sidebar from `linear-sidebar.tsx`'s `isAdminPage` branch) and the older `/billing` (inside `src/app/(internal)/layout.tsx`, its own separate `<LinearSidebar />` render with a plain "Admin Panel" breadcrumb bar, no admin nav sections). That shared component's internal links ("Manage Plans", a ledger row's workspace link, the plans/workspace-detail screens' back arrow) were hardcoded to `/billing/...`, so navigating from `/admin/billing` always escaped into the `(internal)` layout's sidebar. Fixed by computing the link base from `usePathname()` in the three shared pages (`(internal)/billing/{page,plans/page,workspace/[id]/page}.tsx`) — `/admin/...` in, `/admin/...` out; `/billing/...` in, `/billing/...` out — and adding `src/app/(app)/admin/billing/{plans,workspace/[id]}/page.tsx` as thin re-exports so the `/admin/...` base actually resolves. **If another link is ever added to these shared components, it needs the same `basePath`-relative treatment or the sidebar-swap bug comes back.**
 
 ## Known Limitations
 
@@ -85,3 +90,4 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
 - Open Ask WarpBot twice and confirm each main-trigger click starts a blank conversation; use the minimized chip to confirm explicit resume still works.
 - Run `npm run test:2807-hotfix`.
+- **2026-09-25 (admin command palette):** on `/admin/*` the header search is `AdminHeaderSearch` and ⌘K opens `AdminCommandPalette` (admin pages by name/synonym in en/vi/ja, platform records, quick actions, recents) instead of the workspace room-code palette; the shell mounts exactly one of the two palettes. The workspace app's "Search, or paste a room code" box is unchanged. See `.agents/page-docs/admin-list-toolkit.md` and `scripts/check-admin-command-palette-contract.mjs`.

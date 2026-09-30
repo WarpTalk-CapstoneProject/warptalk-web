@@ -89,6 +89,29 @@ export type PaywallDecision =
   /** Positively unpaid. */
   | { kind: "blocked" };
 
+/**
+ * The workspace service's entitlement snapshot, as far as the paywall needs it
+ * (GET /workspaces/{id}/entitlements — readable by every member).
+ *
+ * WHY THE PAYWALL NEEDS A SECOND SOURCE
+ *   The subscription endpoint is owner/admin-only, so for a MEMBER it always fails with a 403 —
+ *   which, correctly, is "unknown", and so the gate stood aside. Every member of an unpaid or
+ *   EXPIRED workspace walked straight into the portal, where the server then refused every
+ *   meeting. The snapshot is what the server's own gate reads (WorkspaceDirectoryService, the
+ *   WT-515 IsKnown rule), and billing republishes it when a plan expires, so it is the one
+ *   answer a member can get that means the same thing the server means.
+ *
+ * It is consulted ONLY when the subscription answer is missing. When the subscription endpoint
+ * answers, it is the fresher of the two — the snapshot lags a payment by the time the
+ * entitlements event takes to land, and preferring it then would bounce a buyer who has just
+ * paid between the landing (which sees the plan) and the gate (which would not).
+ */
+export interface EntitlementStanding {
+  /** False until the workspace's first snapshot arrives; an unknown snapshot never denies. */
+  isKnown: boolean;
+  hasActiveSubscription: boolean;
+}
+
 export function decidePaywall(input: {
   pathname: string;
   workspaceSlug: string;
@@ -99,16 +122,28 @@ export function decidePaywall(input: {
    * NO_SUBSCRIPTION_CODE, which is the only value that means "unpaid" rather than "unknown".
    */
   error?: { code?: string | null } | null;
+  /**
+   * The entitlement snapshot, fetched only once the subscription request has failed without an
+   * answer. `undefined` while it is still being asked for; `null` when it could not be read.
+   */
+  standing?: EntitlementStanding | null;
   now?: number;
 }): PaywallDecision {
   if (isPaywallExemptPath(input.pathname, input.workspaceSlug)) return { kind: "open" };
   if (input.isLoading) return { kind: "checking" };
 
   if (input.error) {
-    // The ONLY error that is an answer. Everything else — a 500, a timeout, an expired token, a
-    // billing service that is redeploying — is the absence of one, and must not lock a paying
-    // workspace out of its own product.
-    return input.error.code === NO_SUBSCRIPTION_CODE ? { kind: "blocked" } : { kind: "open" };
+    // The ONLY subscription error that is an answer.
+    if (input.error.code === NO_SUBSCRIPTION_CODE) return { kind: "blocked" };
+
+    // Everything else — a member's 403, a 500, a timeout, a billing service that is redeploying —
+    // is the absence of one. Ask the snapshot, and deny only on a POSITIVE "no live
+    // subscription", the same rule the server applies. A snapshot that is unknown or unreadable
+    // must not lock a paying workspace out of its own product.
+    if (input.standing === undefined) return { kind: "checking" };
+    return input.standing?.isKnown && !input.standing.hasActiveSubscription
+      ? { kind: "blocked" }
+      : { kind: "open" };
   }
 
   // No row at all reads the same as the error above: the workspace has never bought anything.

@@ -44,6 +44,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
 import { checkoutTotal, checkoutCurrency, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
+import { buildFeatureList, describePlan } from "@/lib/billing/plan-copy";
 
 // We fetch plans dynamically now.
 
@@ -328,7 +329,7 @@ export default function WorkspacePlansPage() {
 
   if (!isRoleLoaded) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-canvas">
+      <div className="flex h-screen w-full items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -359,7 +360,7 @@ export default function WorkspacePlansPage() {
        website's /pricing, rendered inside a workspace the user has already signed into and paid
        attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
        every other workspace page has, with the one real choice (monthly or yearly) in it. */
-    <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
+    <div className="flex h-full min-h-0 flex-col bg-panel text-ink">
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
           <Link
@@ -432,15 +433,10 @@ export default function WorkspacePlansPage() {
             const displayPrice = monthlyDisplayPrice(plan, billingInterval);
             const displayTotal = checkoutTotal(plan, billingInterval);
 
-            let parsedFeatures: string[] = [];
-            try {
-              parsedFeatures = JSON.parse(plan.features || "[]");
-              if (!Array.isArray(parsedFeatures)) {
-                parsedFeatures = [];
-              }
-            } catch {
-              parsedFeatures = [];
-            }
+            // WT-853: the same benefit list the Pricing section and the activation page show, from
+            // the same function. This page used to build its own list (voice cloning, "web access"
+            // for N members), so Enterprise promised different things here than there.
+            const features = buildFeatureList(plan);
 
             return (
               /* Palette tokens, not #7F1DFF and text-gray-900. The hardcoded pair meant the card
@@ -477,7 +473,7 @@ export default function WorkspacePlansPage() {
                   </div>
 
                   <p className="min-h-[34px] text-[12px] leading-relaxed text-ink-muted">
-                    {plan.description}
+                    {describePlan(plan)}
                   </p>
 
                   <div className="mt-4 flex w-full flex-col items-start">
@@ -537,7 +533,7 @@ export default function WorkspacePlansPage() {
                   </div>
 
                   <ul className="space-y-3">
-                    {parsedFeatures.map((feature: string, i: number) => (
+                    {features.map((feature, i) => (
                       <li
                         key={i}
                         className="flex items-start gap-2.5 text-[13px]"
@@ -550,37 +546,6 @@ export default function WorkspacePlansPage() {
                         </span>
                       </li>
                     ))}
-                    {!parsedFeatures.length && (
-                      <>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            {plan.creditsPerCycle?.toLocaleString()} credits per
-                            cycle
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            {plan.voiceCloneEnabled
-                              ? "Voice Cloning Enabled"
-                              : "No Voice Cloning"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            Web access for up to {plan.maxParticipants} members
-                          </span>
-                        </li>
-                      </>
-                    )}
                   </ul>
                 </CardContent>
 

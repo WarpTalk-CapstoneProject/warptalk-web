@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * The two WarpBot surfaces must look like one agent.
+ * The WarpBot surfaces must look like one agent.
  *
  * The global widget and the in-meeting chat run the SAME worker over the same stream, and they
  * had drifted into showing its work two different ways: the meeting chat answered in bold violet
  * where the widget answered in ordinary ink, and it kept one live trail pinned to the bottom of
  * the panel where the widget folds a trail under every reply. Same agent, two voices.
  *
+ * WT-525 t5 added a third: the WarpBot tab of the widget that floats over Google Meet. It is a
+ * private 1-to-1 assistant on the global widget's path, so it is held to the widget here — and to
+ * the two things that make it private, which a screenshot cannot show.
+ *
  * Drift like that is invisible to a unit test of either side — each is internally consistent.
- * What catches it is asserting the two files against each other, which is what this does.
+ * What catches it is asserting the files against each other, which is what this does.
  */
 
 import assert from "node:assert/strict";
@@ -20,17 +24,28 @@ const widget = read("src/components/layout/global-chatbot.tsx");
 const chatPanel = read("src/components/rooms/live/chat-panel.tsx");
 const store = read("src/stores/translationRoom-store.ts");
 const session = read("src/components/rooms/live/persistent-meeting-session.tsx");
+const popupPane = read("src/components/rooms/bridge/widget/warpbot-pane.tsx");
+const popupThread = read("src/components/rooms/bridge/widget/warpbot/use-private-warpbot-thread.ts");
+const popupShell = read("src/components/rooms/bridge/widget/widget-shell.tsx");
 
 // ── the same three pieces under every answer ─────────────────────────────────
 
 for (const [surface, source] of [
   ["the widget", widget],
   ["the in-meeting chat", chatPanel],
+  ["the Meet popup's WarpBot tab", popupPane],
 ]) {
   assert.match(
     source,
-    /<AssistantMarkdown>/,
+    /<AssistantMarkdown\b/,
     `${surface} must render WarpBot's markdown, not the source of it.`,
+  );
+  // A meeting WarpBot created is a card with its link and code on every surface, labelled as a
+  // Google Meet meeting or a WarpTalk room - not a bare link on one and a card on another.
+  assert.match(
+    source,
+    /<AssistantMarkdown[^>]*\bwithMeetingCards\b/,
+    `${surface} must draw meeting cards under an answer that created a meeting.`,
   );
   assert.match(
     source,
@@ -43,6 +58,15 @@ for (const [surface, source] of [
     `${surface} must show the work trail.`,
   );
 }
+
+// The marker a card is built from is machinery, and react-markdown PRINTS an HTML comment rather
+// than dropping it — the JSON showed up under the answer in full. It comes out of the prose in
+// one place, so every surface is covered at once.
+assert.match(
+  read("src/components/assistant/assistant-markdown.tsx"),
+  /stripMeetingMarkers\(children\)/,
+  "AssistantMarkdown must strip meeting markers before rendering the answer.",
+);
 
 // ── the same colour ──────────────────────────────────────────────────────────
 
@@ -185,6 +209,312 @@ assert.match(
   "A finished tool call must FILL a missing target rather than overwrite one already reported for the same call.",
 );
 
+// ── the third surface: the Meet popup's WarpBot tab (WT-525 t5, WT-620) ────────
+
+// Comments stripped, for the reason given above chatPanelCode: both files explain in prose what
+// they deliberately do NOT do, and a check that reads the prose as code fails on correct files.
+// JSX comments go first, so their braces do not survive the block-comment pass.
+const stripComments = (source) =>
+  source
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+const popupPaneCode = stripComments(popupPane);
+const popupThreadCode = stripComments(popupThread);
+
+// Ink, like the widget. The meeting chat's violet was the bug this file was written for; a new
+// surface is the likeliest place for it to come back.
+assert.doesNotMatch(
+  popupPaneCode,
+  /text-primary/,
+  "WarpBot's answer in the popup must be ink, as in the widget — one agent cannot have two voices.",
+);
+
+// A trail folded under EVERY answer, read off the message it belongs to — not one trail for the
+// pane, which would belong to whatever was asked last.
+assert.match(
+  popupPaneCode,
+  /<AssistantWorkTrail\s+steps=\{message\.steps \?\? \[\]\}\s+running=\{false\}/,
+  "The popup must draw each answer's own folded trail under it, as the widget does.",
+);
+
+// Streams: the answer is rendered from the message the chunks append to, not only once persisted.
+assert.match(
+  popupPaneCode,
+  /<AssistantMarkdown\b[^>]*>\s*\{message\.content\}\s*<\/AssistantMarkdown>/,
+  "The popup must render the answer as it is written.",
+);
+assert.match(
+  popupThreadCode,
+  /"AssistantMessageChunk"[\s\S]{0,1200}?payload\.delta/,
+  "The popup must append streamed chunks to the answer.",
+);
+
+// Same lifecycle steps, and the turn opens on one: the popup seeds "reading your question" at the
+// send, as the meeting chat's beginAssistantTurn does, rather than waiting on a bare spinner.
+for (const step of ["THINKING_STEP", "WRITING_STEP"]) {
+  assert.match(
+    popupThreadCode,
+    new RegExp(step),
+    `The popup's trail must name the ${step} lifecycle step too — the surfaces show one agent.`,
+  );
+}
+assert.match(
+  popupThreadCode,
+  /const dispatch = async[\s\S]{0,1200}?updateSteps\(\(\) => \[THINKING\]\)/,
+  "The popup must OPEN its turn on the thinking step when the question is sent.",
+);
+
+// The folded trail is read from a ref. The widget reads `steps` in its completed handler from the
+// closure of the effect that registered it — the render in which the conversation id arrived,
+// with an empty trail — so there is nothing to fold. The popup must not inherit that.
+assert.match(
+  popupThreadCode,
+  /"AssistantMessageCompleted"[\s\S]{0,800}?const finishedSteps = stepsRef\.current/,
+  "The popup must fold the trail from stepsRef — the closure's `steps` is an earlier render's empty trail.",
+);
+
+// The same agent: the global widget's hub and its hooks, not a copy of the endpoint.
+for (const [what, pattern] of [
+  ["the assistant hub", /createHubConnection\("\/api\/v1\/assistant\/chat-hub"\)/],
+  ["useCreateAssistantConversation", /useCreateAssistantConversation\(\)/],
+  ["useSendAssistantMessage", /useSendAssistantMessage\(\)/],
+]) {
+  assert.match(widget, pattern, `The widget must use ${what} (the popup is held to it).`);
+  assert.match(popupThreadCode, pattern, `The popup must use ${what}, as the widget does.`);
+}
+
+// PRIVATE. Nothing the popup asks may reach the room: not the meeting chat's send, not its hub.
+// An @WarpBot through the meeting chat would put the question in front of every participant.
+assert.doesNotMatch(
+  `${popupPaneCode}\n${popupThreadCode}`,
+  /useSendMeetingChat|\/api\/v1\/meetings\/chat-hub|"ChatAssistant/,
+  "The popup's WarpBot is private: it must not send through, or listen on, the meeting chat.",
+);
+assert.match(
+  popupPane,
+  /Only you see this conversation\. Nothing is posted to the Google Meet chat\./,
+  "The popup must say, at the top, that the conversation is private and nothing goes to Meet's chat.",
+);
+
+// Exactly two tabs, Transcript and WarpBot. Meet has the call's chat; a participant chat tab here
+// would be a second one, and the one people would mistake this private box for.
+const tabsBlock = popupShell.match(/const TABS[\s\S]*?\];/)?.[0] ?? "";
+assert.deepEqual(
+  [...tabsBlock.matchAll(/id: "(\w+)"/g)].map((match) => match[1]),
+  ["transcript", "warpbot"],
+  "The Meet widget has exactly two tabs, Transcript and WarpBot — no participant chat.",
+);
+
+// The widget's composer: its placeholder, Enter sends, Shift+Enter is a new line.
+//
+// The widget's placeholder is now translated (t("askPlaceholder")) rather than a literal string;
+// the Meet popup's WarpBot tab is a separate, untranslated bundle and still carries the literal.
+const commonEn = JSON.parse(read("messages/en/common.json"));
+assert.match(
+  widget,
+  /t\("askPlaceholder"\)/,
+  'the widget must use the askPlaceholder translation for its "Ask WarpBot..." placeholder.',
+);
+assert.equal(
+  commonEn.chatbot?.askPlaceholder,
+  "Ask WarpBot...",
+  "the widget's placeholder must still read 'Ask WarpBot...' in English.",
+);
+assert.match(
+  popupPane,
+  /"Ask WarpBot\.\.\."/,
+  'the Meet popup\'s WarpBot tab must use the "Ask WarpBot..." placeholder.',
+);
+assert.match(
+  popupPaneCode,
+  /event\.key !== "Enter" \|\| event\.shiftKey\) return;/,
+  "In the popup, Enter must send and Shift+Enter must fall through to a new line.",
+);
+
+// WT-580's queue, as the code defines it — imported, never a second literal. The assistant service
+// builds history from completed rows, so a question sent mid-answer is answered against two user
+// turns in a row; the popup holds it exactly as the meeting chat does.
+assert.match(
+  popupThreadCode,
+  /decideAgentSend\(\{\s*asksTheAgent: true,/,
+  "The popup must hold a question asked mid-answer, through decideAgentSend.",
+);
+assert.match(
+  popupPaneCode,
+  /\{MAX_QUEUED_AGENT_ASKS\}/,
+  "The popup must name the queue limit from lib/meeting/assistant-queue, not a copy of it.",
+);
+assert.doesNotMatch(
+  `${popupPaneCode}\n${popupThreadCode}`,
+  /MAX_QUEUED_AGENT_ASKS\s*=/,
+  "The queue limit is defined once, in lib/meeting/assistant-queue.",
+);
+
+
+// ── the widget's folded trail is read from a REF, not from the closure ──────
+//
+// WT-620. The widget registers its hub handlers in an effect keyed on the conversation id only —
+// on purpose: re-subscribing on every step would drop and re-add the handlers mid-turn. So the
+// handlers see the `steps` state of the render that ran the effect, which is the empty trail
+// before the question was asked. The completed handler folded THAT onto the answer, and every
+// finished answer in the widget carried an empty AssistantWorkTrail while the meeting chat,
+// which reads through a ref, carried the real one. The failed handler had the same bug, on the
+// turn where the trail matters most.
+//
+// Invisible to a type check and to eslint (the effect's deps are deliberately incomplete), and
+// the live trail looks right while the turn runs — it only goes missing at the end. Hence here.
+//
+// Comments stripped first, for the reason given above chatPanelCode: the prose around these
+// handlers talks about `steps` and would be read as code.
+const widgetCode = widget
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
+/** One hub handler's body: from its event name to the next `connection.on(`. */
+const hubHandler = (event) => {
+  const start = widgetCode.indexOf(`"${event}"`);
+  assert.notEqual(start, -1, `The widget must subscribe to ${event}.`);
+  const end = widgetCode.indexOf("connection.on(", start);
+  return widgetCode.slice(start, end === -1 ? undefined : end);
+};
+
+for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
+  const handler = hubHandler(event);
+  // `steps` read as a value — `steps.map`, `...steps`, `{ steps }` — but not `stepsRef`, not
+  // `msg.steps`, and not the `steps:` key of the message being written.
+  assert.doesNotMatch(
+    handler,
+    /(?<![\w$.])steps\b(?!:)/,
+    `The widget's ${event} handler must not read the \`steps\` state: the effect captured it before the turn began, so the folded trail comes out empty.`,
+  );
+  assert.match(
+    handler,
+    /stepsRef\.current/,
+    `The widget's ${event} handler must read the trail from stepsRef.current.`,
+  );
+}
+// A ref only helps if every write reaches it. One raw setSteps outside the helper and the ref
+// holds a trail the screen no longer shows — New chat would fold the previous conversation's
+// steps onto the next answer.
+assert.equal(
+  (widgetCode.match(/\bsetSteps\(/g) ?? []).length,
+  1,
+  "The widget must write the trail only through updateSteps, so stepsRef never drifts from what is on screen.",
+);
+
+// ── an IME's Enter confirms a word, it does not send ────────────────────────
+//
+// Vietnamese Telex (and Japanese, Chinese…) confirm the candidate with Enter. The widget sent on
+// that keystroke: half a word went out and the rest stayed in the box. The Meet-popup pane already
+// checks isComposing; the widget must too.
+const keydownCode = widgetCode.slice(
+  widgetCode.indexOf("const handleKeyDown"),
+  widgetCode.indexOf("const filteredOptions"),
+);
+const composingGuard = keydownCode.indexOf("if (e.nativeEvent.isComposing) return;");
+assert.notEqual(
+  composingGuard,
+  -1,
+  "The widget's composer must ignore keys while an IME is composing.",
+);
+// First, not merely present: the menu branches handle Enter too, and a guard placed after them
+// lets the IME's Enter pick a mention or a slash command.
+assert.ok(
+  composingGuard < keydownCode.indexOf('e.key === "Enter"'),
+  "The isComposing guard must come before every Enter branch in handleKeyDown, the menu ones included.",
+);
+
+// ── one permission form, the same on all three surfaces ─────────────────────
+//
+// The form above the composer is shared code, so it cannot drift in its own right — but what each
+// surface HANDS it can, and did: the widget passed the plugin catalog and the other two passed
+// `plugins={[]}`, so the same ask carried Google Meet's mark in one place and a bare line of mono
+// in the other two. A screenshot of any one of them looks correct.
+//
+// The Meet popup is deliberately not here: it carves itself out of the Connect flow altogether
+// (see check-plugin-connection-action-contract.mjs).
+
+const aiChat = read("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx");
+
+for (const [surface, source] of [
+  ["the widget", widget],
+  ["/ai-chat", aiChat],
+  ["the in-meeting chat", chatPanel],
+]) {
+  assert.match(
+    source,
+    /<AssistantPermissionPrompt\b/,
+    `${surface} must draw WarpBot's permission form.`,
+  );
+  const element = source.match(/<AssistantPermissionPrompt[\s\S]*?\/>/)?.[0] ?? "";
+  assert.doesNotMatch(
+    element,
+    /plugins=\{\[\]\}/,
+    `${surface} must hand the permission form the real plugin catalog, not an empty list: the form draws the plugin's own mark from it, and an empty list is the same ask looking like a different product.`,
+  );
+  assert.match(
+    element,
+    /plugins=\{\w+\}/,
+    `${surface} must pass a plugin catalog to the permission form.`,
+  );
+  assert.match(
+    source,
+    /useAssistantPlugins\(/,
+    `${surface} must read the plugin catalog through useAssistantPlugins, scoped to the workspace, rather than assembling one of its own.`,
+  );
+  assert.match(
+    element,
+    /turnEndedAt=/,
+    `${surface} must tell the permission form when the turn ended — the form's "Running…" has no other way to end.`,
+  );
+}
+
+// The buttons say the short word; the sentence is the accessible name, not only a tooltip. Both are
+// in the shared component, and both have been "simplified" away before: the labels were the
+// worker's full sentences, which wrapped and pushed the keyboard hint off the row.
+const promptForm = read("src/components/assistant/permission-prompt.tsx");
+for (const [role, label, meaning] of [
+  ["allow-once", "Yes", "Run this action once"],
+  ["always-allow", "Always allow", "Run it now and stop asking for this tool"],
+  ["decline", "No", "Don't run it — tell WarpBot what to do instead"],
+]) {
+  assert.ok(
+    promptForm.includes(`label: "${label}"`),
+    `The permission form must offer the short label "${label}" for the ${role} answer.`,
+  );
+  assert.ok(
+    promptForm.includes(meaning),
+    `The permission form must keep the full meaning of the ${role} answer ("${meaning}") for the tooltip and the accessible name.`,
+  );
+}
+for (const attribute of [/title=\{answer\.meaning\}/, /aria-label=\{answer\.meaning\}/]) {
+  assert.match(
+    promptForm,
+    attribute,
+    "A button reading 'No' beside a write must carry the long form in both title and aria-label: the tooltip is for the mouse, the accessible name for everyone else.",
+  );
+}
+// Keyboard-reachable, at the app's own ring. The form gates a write; it cannot be a control only a
+// mouse can find.
+assert.match(
+  promptForm,
+  /focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/,
+  "The permission form's answers must show the app's focus ring.",
+);
+// Narrow composer: the hint hides rather than shoving the answers onto a second row. A container
+// query, because the widget is 460px wide on a 4K screen and the meeting panel is narrower still.
+assert.match(
+  promptForm,
+  /@container/,
+  "The permission form must measure its own composer, not the window: a viewport breakpoint says nothing about a 460px widget.",
+);
+assert.match(
+  promptForm,
+  /@max-\[360px\]:hidden/,
+  "In a narrow composer the keyboard hint must hide instead of pushing the answers around.",
+);
+
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter; permission form: catalog, turn end, short labels, focus ring, narrow composer; Meet popup: private, two tabs, composer, queue)",
 );

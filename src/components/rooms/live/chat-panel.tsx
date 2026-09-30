@@ -16,9 +16,11 @@ import {
   parseAssistantQuestions,
 } from "@/components/layout/assistant-question-card";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+} from "@/components/assistant/permission-prompt";
+import { isDesktopApp } from "@/lib/desktop/bridge";
+import { toast } from "sonner";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
@@ -37,9 +39,14 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
+import { stripMeetingMarkers } from "@/lib/assistant/meeting-links";
+import { continueMeetingChatInWidget } from "@/lib/assistant/continue-in-widget";
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -56,12 +63,14 @@ import {
   FileImage,
   FileArchive,
   Download,
+  ArrowUpRight,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
-import { usePluginConnectUrl } from "@/hooks/use-assistant";
+import { useAssistantPlugins, usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 interface MessageTranslationState {
   text?: string;
@@ -84,6 +93,17 @@ const STICK_TO_BOTTOM_PX = 80;
  * Same treatment TranscriptPanel already got for the same report — see the note there.
  */
 const chatScrollOffsets = new Map<string, { offset: number; atBottom: boolean }>();
+
+/**
+ * The permission prompt this room last answered, kept outside the component for the same reason
+ * the scroll offsets are: MeetingSidePanel unmounts ChatPanel on a tab switch, and a remount in the
+ * seconds a write takes would otherwise draw the question again, with its buttons, over a write
+ * already running — one Transcript round trip away from confirming it twice.
+ *
+ * Matched by payload, so a genuinely new ask (its confirmation token differs) is not mistaken for
+ * this one. Never cleared: an entry no live payload matches has no effect.
+ */
+const answeredPermissions = new Map<string, string>();
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -141,12 +161,21 @@ export function ChatPanel({
    */
   active?: boolean;
 }) {
+  const t = useTranslations("meetingChat");
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // "Continue in widget" hangs off WarpBot's LATEST answer only: one door, where the thread ends,
+  // rather than a button under every reply offering to move the same conversation.
+  const latestAssistantMessageId = [...messages].reverse().find(isAssistantMessage)?.id ?? null;
+  const handoffInFlight = useAssistantWidgetStore((state) => state.handoffInFlight);
+  const { data: roomForHandoff } = useTranslationRoom(roomId);
   // Only so a document chip under a WarpBot answer can link to that document; a room whose
   // workspace is not in the store simply renders the chip as a label.
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  // Scopes the Connect card's request. Unscoped, the API has no workspace policy to apply, so a
+  // workspace that had turned plugins off would still have them connected from inside a meeting.
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   /**
@@ -165,6 +194,13 @@ export function ChatPanel({
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
   const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
   const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
+  // What WarpBot is waiting on before it may act — one slot, one form above the composer.
+  const assistantPermissionJson = useTranslationRoomStore(
+    (state) => state.assistantPermissionJson,
+  );
+  const setAssistantPermissionJson = useTranslationRoomStore(
+    (state) => state.setAssistantPermissionJson,
+  );
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
@@ -172,6 +208,16 @@ export function ChatPanel({
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const beginAssistantTurn = useTranslationRoomStore((state) => state.beginAssistantTurn);
   const answersWhenAskedRef = useRef(0);
+  /**
+   * The permission prompt an answer on its way out belongs to, held across the turn it opens.
+   *
+   * beginAssistantTurn ends the PREVIOUS turn's cards, which is right for a question nobody
+   * pressed — but the prompt this answer came from is no longer waiting to be pressed, it is the
+   * only thing on screen saying the write is running, and creating a meeting takes seconds. So it
+   * is put straight back. A ref rather than an argument because the answer may be held behind the
+   * turn WarpBot is still finishing (WT-580) and dispatched later, from the queue.
+   */
+  const answeredPermissionRef = useRef<string | null>(null);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -182,6 +228,10 @@ export function ChatPanel({
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
   const connectPlugin = usePluginConnectUrl();
+  // The catalog the permission form draws a plugin's logo from, scoped to the workspace exactly as
+  // the widget reads it. This panel passed an empty list, so the same form carried the logo in the
+  // widget and nothing here.
+  const { data: assistantPlugins = [] } = useAssistantPlugins(activeWorkspaceId ?? undefined);
   const { mutate: sendFileAPI, isPending: isUploadingFile } =
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
@@ -242,7 +292,7 @@ export function ChatPanel({
             [messageId]: {
               loading: false,
               visible: true,
-              error: "Could not translate message.",
+              error: t("errors.translateFailed"),
             },
           }));
         },
@@ -327,7 +377,12 @@ export function ChatPanel({
       // setAssistantState("thinking"), which moved the state without starting a trail — and
       // because every later signal then saw a non-idle state, nothing ever seeded one. The
       // whole stretch before the first tool call showed a bare spinner instead of a step.
+      const answeredPermission = answeredPermissionRef.current;
+      answeredPermissionRef.current = null;
       beginAssistantTurn();
+      // See answeredPermissionRef: the form this answer came from outlives the turn it opens,
+      // because it is what says the write is running. It takes itself off the screen.
+      if (answeredPermission) setAssistantPermissionJson(answeredPermission);
     }
 
     sendMessageAPI(
@@ -351,7 +406,7 @@ export function ChatPanel({
           // participant — and retrying refuses it again, forever. The backend now sends its
           // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
           // the generic line stays for the faults where trying again genuinely is the answer.
-          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
+          setSendError(getErrorMessage(error, t("errors.sendFailed")));
           // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
           // seconds and then blame WarpBot for a message that never reached it.
           if (asksTheAgent) {
@@ -482,7 +537,7 @@ export function ChatPanel({
         // Short on purpose. This panel is a narrow column, and "Type a message or @agent for
         // AI help..." wrapped onto a second line inside a one-line box. The @ hint does not
         // need to live here: typing "@" opens the agent menu, which names WarpBot itself.
-        placeholder: "Type a message…",
+        placeholder: t("composer.placeholder"),
       }),
       // Stops the typing at the cap rather than letting the message be composed and then
       // rejected by the API (WT-237).
@@ -580,7 +635,10 @@ export function ChatPanel({
     // the text actually sent can be longer than what was typed.
     if (trimmedText.length > MAX_CHAT_MESSAGE_LENGTH) {
       setSendError(
-        `Message is too long (${trimmedText.length}/${MAX_CHAT_MESSAGE_LENGTH} characters).`,
+        t("composer.messageTooLong", {
+          current: trimmedText.length,
+          max: MAX_CHAT_MESSAGE_LENGTH,
+        }),
       );
       return;
     }
@@ -602,7 +660,7 @@ export function ChatPanel({
 
     if (decision === "refuse") {
       setSendError(
-        `WarpBot already has ${MAX_QUEUED_AGENT_ASKS} questions waiting. Let it catch up before asking another.`,
+        t("queue.full", { max: MAX_QUEUED_AGENT_ASKS }),
       );
       return;
     }
@@ -640,7 +698,9 @@ export function ChatPanel({
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError("File exceeds the 25 MB limit.");
+      setFileError(
+        t("errors.fileTooLarge", { maxMb: MAX_FILE_SIZE_BYTES / (1024 * 1024) }),
+      );
       return;
     }
 
@@ -654,7 +714,7 @@ export function ChatPanel({
           setUploadProgress(null);
         },
         onError: () => {
-          setFileError("File could not be uploaded. Try again.");
+          setFileError(t("errors.fileUploadFailed"));
           setUploadProgress(null);
         },
       },
@@ -669,28 +729,49 @@ export function ChatPanel({
         file.fileName || file.originalText || "download",
       );
     } catch {
-      setFileError("File could not be downloaded. Try again.");
+      setFileError(t("errors.fileDownloadFailed"));
     }
   }
 
   const pendingAssistantQuestions = assistantQuestionsJson
     ? parseAssistantQuestions(assistantQuestionsJson)
     : [];
-  const pendingPluginConnection = assistantQuestionsJson
-    ? parsePluginConnectionAction(assistantQuestionsJson)
+  const pendingPermission = assistantPermissionJson
+    ? parsePermissionPrompt(assistantPermissionJson)
     : null;
+  // See answeredPermissions: survives the tab switch that unmounts this panel.
+  const permissionAnswered =
+    assistantPermissionJson !== null &&
+    answeredPermissions.get(roomId) === assistantPermissionJson;
 
   async function handlePluginConnectionAction(pluginKey: string) {
     try {
       setSendError(null);
-      const result = await connectPlugin.mutateAsync({ pluginKey });
+      // Scoped and client-tagged the way the WarpBot widget sends it: the workspace so its plugin
+      // policy applies, the client so the server picks the redirect for the surface that asked.
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: activeWorkspaceId ?? undefined,
+      });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
+      // Connected on the server already: the provider's grant covered it, nothing to open. Said
+      // out loud, because this is the common case for a second Google plugin — and returning
+      // silently left the button flipping back to "Connect", which reads as a click that failed.
+      if (result.connected || !result.url) {
+        toast.success(t("plugin.connected"));
+        return;
+      }
       if (!openProviderConsent(result.url)) {
         // Blocked popup, most likely: the user gesture is gone by the time the mutation
         // resolves. Saying nothing leaves them waiting on a window that never opened.
-        setSendError("Your browser blocked the consent window. Allow pop-ups and try again.");
+        setSendError(t("errors.popupBlocked"));
       }
     } catch {
-      setSendError("Could not open the plugin connection flow. Try again.");
+      setSendError(t("errors.pluginFlowFailed"));
     }
   }
 
@@ -705,20 +786,20 @@ export function ChatPanel({
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
             <LumidotSpinner />
-            <span className="ml-2">Loading messages</span>
+            <span className="ml-2">{t("history.loading")}</span>
           </div>
         ) : null}
         {historyQuery.isError && messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-[13px] font-medium text-ink">
-              Could not load chat history
+              {t("history.loadError")}
             </p>
             <button
               type="button"
               onClick={() => void historyQuery.refetch()}
               className="text-[12px] font-medium text-primary hover:underline"
             >
-              Retry
+              {t("history.retry")}
             </button>
           </div>
         ) : null}
@@ -726,7 +807,7 @@ export function ChatPanel({
         !historyQuery.isError &&
         messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            No messages yet
+            {t("history.empty")}
           </div>
         ) : null}
         <AnimatePresence initial={false}>
@@ -775,8 +856,12 @@ export function ChatPanel({
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
-                        aria-label={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
-                        title={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        aria-label={t("message.translateInto", {
+                          language: getLanguageName(suggestedTargetLanguage),
+                        })}
+                        title={t("message.translateInto", {
+                          language: getLanguageName(suggestedTargetLanguage),
+                        })}
                         aria-pressed={Boolean(translations[message.id]?.visible)}
                         // Always visible, not revealed on hover. The header dropdown is gone,
                         // so this is now the only way to translate anything — and a control
@@ -840,7 +925,11 @@ export function ChatPanel({
                     <div
                       className={`mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink`}
                     >
-                      <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                      {/* Rooms open in a new tab from here: navigating in place would take the
+                          user out of the meeting they are sitting in. */}
+                      <AssistantMarkdown withMeetingCards meetingCardsOpenRoomsOutside>
+                        {message.originalText}
+                      </AssistantMarkdown>
                       {/* Under the answer, inside the same left-aligned block: the chips
                           belong to what WarpBot just said, and a row hung off the message
                           container would sit under whoever spoke next. */}
@@ -859,12 +948,37 @@ export function ChatPanel({
                           durationMs={assistantTrails[message.id].durationMs}
                         />
                       ) : null}
+                      {/* The explicit door to the same handover WarpBot's continue_in_widget tool
+                          performs: the thread moves to THIS viewer's private widget and the call
+                          carries on beside it. Visible to everyone — each person continues in
+                          their own widget; nothing is moved for anyone else. */}
+                      {message.id === latestAssistantMessageId ? (
+                        <button
+                          type="button"
+                          data-testid="continue-in-widget"
+                          disabled={handoffInFlight}
+                          onClick={() =>
+                            void continueMeetingChatInWidget({
+                              roomId,
+                              roomTitle: roomForHandoff?.title ?? null,
+                            })
+                          }
+                          className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                        >
+                          {handoffInFlight ? (
+                            <LoaderCircle className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ArrowUpRight className="h-3 w-3" />
+                          )}
+                          {t("message.continueInWidget")}
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     <p
                       className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink-muted ${isMine ? "text-right" : "text-left"}`}
                     >
-                      {message.originalText}
+                      {userMessageDisplayText(message.originalText)}
                     </p>
                   )}
                   {translations[message.id]?.visible &&
@@ -872,7 +986,12 @@ export function ChatPanel({
                     <p
                       className={`mt-1 max-w-full rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink ${isMine ? "text-right" : "text-left"}`}
                     >
-                      {translations[message.id]!.text}
+                      {/* A translation is plain text: it carries the confirmation token of an
+                          answer to a card, and the meeting marker of one of WarpBot's own
+                          answers, neither of which is for reading. */}
+                      {stripMeetingMarkers(
+                        userMessageDisplayText(translations[message.id]?.text ?? ""),
+                      )}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
                         {getLanguageName(translations[message.id]?.targetLanguage || suggestedTargetLanguage)}
                       </span>
@@ -901,15 +1020,13 @@ export function ChatPanel({
             <LumidotSpinner />
             <span>
               {assistantState === "slow"
-                ? "WarpBot is still working — this one is taking a while."
-                : "WarpBot is thinking…"}
+                ? t("assistant.stillWorking")
+                : t("assistant.thinking")}
               {/* WT-580 — say that the next question was kept, not lost. Without this the
                   composer clears and nothing happens for several seconds, which is
                   indistinguishable from the message having failed to send. */}
               {queuedAsks.length > 0
-                ? queuedAsks.length === 1
-                  ? " Your next question is queued."
-                  : ` ${queuedAsks.length} more questions are queued.`
+                ? ` ${t("assistant.queued", { count: queuedAsks.length })}`
                 : null}
             </span>
           </div>
@@ -963,22 +1080,38 @@ export function ChatPanel({
             />
           </div>
         ) : null}
-        {pendingPluginConnection ? (
-          <div className="pl-10">
-            <PluginConnectionActionCard
-              action={pendingPluginConnection}
-              disabled={connectPlugin.isPending}
-              onDismiss={() => setAssistantQuestionsJson(null)}
-              onConnect={handlePluginConnectionAction}
-            />
-          </div>
-        ) : null}
       </div>
       {/* Reading back through a meeting's chat stops the panel following, which is right — and
           left the newest message somewhere below with nothing on screen saying so. */}
       <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
       </div>
       <div className="p-3 bg-transparent">
+        {/* Above the composer, where the meeting's hands are. In the thread it scrolled away
+            behind whatever was said next, and a live meeting scrolls fast. */}
+        {pendingPermission ? (
+          <AssistantPermissionPrompt
+            prompt={pendingPermission}
+            plugins={assistantPlugins}
+            busy={connectPlugin.isPending}
+            // Stamped when the turn goes idle — the answer landing, or the send failing — and
+            // nulled by beginAssistantTurn while one is open. An answer still waiting behind
+            // WarpBot's current turn (WT-580) has not run yet, whatever the last turn did.
+            turnEndedAt={queuedAsks.length > 0 ? null : assistantFinishedAt}
+            answered={permissionAnswered}
+            onAnswer={(answer) => {
+              // Handed to the dispatch rather than cleared: the form stays, showing the write
+              // running. See answeredPermissionRef and answeredPermissions.
+              answeredPermissionRef.current = assistantPermissionJson;
+              if (assistantPermissionJson) {
+                answeredPermissions.set(roomId, assistantPermissionJson);
+              }
+              sendMessage(answer);
+            }}
+            onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+            onDismiss={() => setAssistantPermissionJson(null)}
+            className="mb-2 rounded-lg border border-border"
+          />
+        ) : null}
         {sendError ? (
           <p className="mb-2 text-[12px] text-red-600">{sendError}</p>
         ) : null}
@@ -987,7 +1120,7 @@ export function ChatPanel({
         ) : null}
         {uploadProgress != null ? (
           <p className="mb-2 text-[12px] text-ink-subtle">
-            Uploading file… {uploadProgress}%
+            {t("composer.uploadingFile", { progress: uploadProgress })}
           </p>
         ) : null}
         <input
@@ -1005,8 +1138,8 @@ export function ChatPanel({
             type="button"
             onClick={handleFileButtonClick}
             disabled={isUploadingFile}
-            aria-label="Attach file"
-            title="Attach file"
+            aria-label={t("composer.attachFile")}
+            title={t("composer.attachFile")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isUploadingFile ? (
@@ -1020,8 +1153,8 @@ export function ChatPanel({
             type="button"
             onClick={() => sendMessage()}
             disabled={isPending}
-            aria-label="Send message"
-            title="Send message"
+            aria-label={t("composer.sendMessage")}
+            title={t("composer.sendMessage")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? (

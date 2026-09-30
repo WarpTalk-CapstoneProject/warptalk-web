@@ -74,6 +74,37 @@ export interface TranscriptSegmentDto {
    * loaded from the saved transcript, which is why every reader must fall back.
    */
   receivedAt?: number;
+  /**
+   * WT-716: the cleaned wording — fillers and stutters removed, profanity-masked. `null`/absent
+   * means "not cleaned, read originalText"; `""` means the line was nothing but filler. See the
+   * saved DTO in types/transcript.ts for the full contract; the wire meaning is the same.
+   */
+  cleanText?: string | null;
+  /** WT-716: what cleaning did (`filler_only`, `fillers_removed`, `stutter_removed`, `escalate`). */
+  cleanFlags?: string[];
+  /**
+   * Only on lines backfilled from the SAVED transcript (toLiveSegment) — the realtime event does
+   * not carry them. Read by the Clean view to notice a merged sentence that a correction has made
+   * stale (see isCleanSentenceStale).
+   */
+  isCorrected?: boolean;
+  updatedAt?: string | null;
+}
+
+/**
+ * WT-716: `TranscriptCleanSentenceReceived`, broadcast to translationRoom:{roomId}. The REST
+ * shape (TranscriptCleanSentenceDto) without `updatedAt`. Revisions of one sentence arrive under
+ * the same `id`; keep the highest.
+ */
+export interface TranscriptCleanSentenceEventDto {
+  id: string;
+  speakerId: string | null;
+  segmentIds: string[];
+  cleanText: string;
+  language: string;
+  flags: string[];
+  source: "llm" | "prepass" | "unknown";
+  revision: number;
 }
 
 export interface TranslationTextDto {

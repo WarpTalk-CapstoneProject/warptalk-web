@@ -35,13 +35,28 @@ export interface PagedResultDto<T> {
   totalCount: number;
 }
 
+/**
+ * Orders the admin listing accepts; anything else is a 400. `priority_desc` is the default and is
+ * the order the listing always had. Each runs one way only — there is no `priority_asc`.
+ */
+export type GlobalGlossaryTermSort =
+  | "priority_desc"
+  | "updated_desc"
+  | "created_desc"
+  | "term_asc"
+  | "term_desc";
+
 export interface GlobalGlossaryTermQuery {
   page?: number;
   pageSize?: number;
   status?: string;
+  /** Exact match. */
   businessDomain?: string;
+  /** Matches a term whose source OR target language is this code. */
   language?: string;
+  /** Term or translation. Case-sensitive on the server today. */
   search?: string;
+  sort?: GlobalGlossaryTermSort;
 }
 
 export interface CreateGlobalGlossaryTermRequest {

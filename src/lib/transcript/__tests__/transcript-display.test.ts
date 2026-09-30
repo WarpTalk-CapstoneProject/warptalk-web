@@ -988,7 +988,7 @@ test("splitSegmentsAroundPauseGaps merges consecutive gaps with no speech betwee
 // out here rather than hidden behind a fixture: if that shaping ever changes, it has to change in
 // three places that are all looking at each other.
 const startTimesOf = (blocks: readonly { segments: readonly { startTimeMs: number }[] }[]) =>
-  blocks.map((block) => block.segments.map((segment) => segment.startTimeMs));
+  blocks.map((block) => block.segments.map(({ startTimeMs }) => ({ startTimeMs })));
 
 test("distributePauseGapsAcrossBlocks gives each gap to exactly one block", () => {
   const blocks = [
@@ -1268,6 +1268,54 @@ test("segments after a pause that was lifted are part of the record again", () =
   const blocks = splitSegmentsAroundPauseGaps(kept.segments, gaps);
 
   assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
+});
+
+// ── The divider pinned to the bottom after Resume ─────────────────────────────
+
+/**
+ * Reported 2026-09-16: paused at 15:25, resumed at 15:27, and "Transcript paused at 15:25 and
+ * resumed at 15:27" sat UNDER lines stamped 15:28. A live line's `startTimeMs` counts from when the
+ * ingress track started (later than the room, and reset on reconnect), while the gap's `endMs`
+ * counts from `baseTime` — so every post-resume line compared as earlier than the resume and the
+ * trailing pass drew the divider last.
+ */
+test("a live line said after Resume sits BELOW the divider even when its ingress offset is small", () => {
+  const base = new Date(BASE_TIME).getTime();
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+  const segments = [
+    { startTimeMs: 5_000, id: "before", receivedAt: base + 30_000 },
+    // Ingress started two minutes into the room: the offset says 40s, the wall clock says 3:00.
+    { startTimeMs: 40_000, id: "after", receivedAt: base + 180_000 },
+  ];
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["before"], ["after"]]);
+  assert.equal(blocks[1].gapsBefore[0]?.window.id, "w1");
+
+  const perBlock = distributePauseGapsAcrossBlocks(
+    [[{ startTimeMs: 5_000, receivedAt: base + 30_000 }], [{ startTimeMs: 40_000, receivedAt: base + 180_000 }]],
+    gaps,
+  );
+  assert.deepEqual(perBlock.map((entry) => entry.map((gap) => gap.window.id)), [[], ["w1"]]);
+});
+
+test("Resume does not bring back the lines that were withheld during the pause", () => {
+  const base = new Date(BASE_TIME).getTime();
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+  const segments = [
+    { startTimeMs: 5_000, id: "before", receivedAt: base + 30_000 },
+    { startTimeMs: 20_000, id: "during", receivedAt: base + 90_000 },
+    { startTimeMs: 40_000, id: "after", receivedAt: base + 180_000 },
+    // From the saved transcript: no arrival stamp, so it was recorded and must stay.
+    { startTimeMs: 90_000, id: "saved" },
+  ];
+
+  const kept = withoutSegmentsInOpenPauseGaps(segments, gaps);
+
+  assert.deepEqual(kept.segments.map((s) => s.id), ["before", "after", "saved"]);
+  // "Paused — new lines are not being recorded" is no longer true once resumed.
+  assert.equal(kept.hiddenCount, 0);
 });
 
 /**

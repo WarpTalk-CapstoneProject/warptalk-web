@@ -1,0 +1,36 @@
+{
+  "subheading": "Devices and browsers currently signed in to your account.",
+  "signOutAllOthers": "Sign out of all other sessions",
+  "loadFailed": "Could not load your sessions.",
+  "retry": "Retry",
+  "noActiveSessions": "No active sessions.",
+  "couldNotMatchDevice": "This device could not be matched to a session. Sign out and sign in again to manage other sessions from here.",
+  "signOut": "Sign out",
+  "revoke": "Revoke",
+  "cancel": "Cancel",
+  "deviceLabel": {
+    "unknownDevice": "Unknown device",
+    "browserOnSystem": "{browser} on {system}"
+  },
+  "dialog": {
+    "revokeTitle": "Revoke this session?",
+    "revokeDescription": "{device}{ip} will be signed out and will need to sign in again.",
+    "signOutOthersTitle": "Sign out of all other sessions?",
+    "signOutOthersDescription": "{count, plural, one {# other session} other {# other sessions}} will be signed out. This device stays signed in.",
+    "signOutDeviceTitle": "Sign out of this device?",
+    "signOutDeviceDescription": "You will be signed out here and returned to the sign-in page."
+  },
+  "toasts": {
+    "sessionSignedOut": "Session signed out.",
+    "othersSignedOut": "Signed out of all other sessions.",
+    "signOutFailed": "Could not sign out that session."
+  },
+  "row": {
+    "thisDevice": "This device",
+    "unknownIp": "Unknown IP",
+    "lastActive": "Last active {when}",
+    "signedIn": "Signed in {when}",
+    "expires": "Expires {when}",
+    "unknown": "unknown"
+  }
+}

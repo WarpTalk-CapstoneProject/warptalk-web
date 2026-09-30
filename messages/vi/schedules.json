@@ -1,0 +1,136 @@
+{
+  "views": {
+    "agenda": "Lịch trình",
+    "month": "Tháng",
+    "week": "Tuần"
+  },
+  "filters": {
+    "all": "Tất cả",
+    "upcoming": "Sắp diễn ra",
+    "joined": "Đã tham gia"
+  },
+  "ariaLabels": {
+    "calendarView": "Chế độ xem lịch",
+    "timelineFilters": "Bộ lọc dòng thời gian",
+    "chipLegend": "Chú giải nhãn",
+    "previousWeek": "Tuần trước",
+    "previousMonth": "Tháng trước",
+    "nextWeek": "Tuần sau",
+    "nextMonth": "Tháng sau",
+    "showAllMeetings": "{count, plural, other {Hiện tất cả # cuộc họp vào {day}}}",
+    "closeDayDetails": "Đóng chi tiết ngày",
+    "meetingsOnDay": "Các cuộc họp vào {day}",
+    "currentTime": "Giờ hiện tại, {time}",
+    "agendaNavigator": "Điều hướng lịch trình"
+  },
+  "search": {
+    "placeholder": "Tìm tiêu đề, mã hoặc mô tả"
+  },
+  "legend": {
+    "youHost": "Bạn chủ trì",
+    "youAreInvited": "Bạn được mời"
+  },
+  "relation": {
+    "youHost": "Bạn chủ trì",
+    "invited": "Được mời",
+    "invitedBy": "Được mời bởi {name}",
+    "invitedByLabel": "Được mời bởi"
+  },
+  "monthView": {
+    "noMeetingsMatchSearch": "Không có cuộc họp nào khớp với tìm kiếm này.",
+    "nothingThisMonth": "Không có gì trên dòng thời gian của bạn trong tháng này. Lời mời sắp tới và các cuộc họp bạn đã tham gia sẽ hiện ở đây.",
+    "moreCount": "{count, plural, other {+# nữa}}"
+  },
+  "weekView": {
+    "nothingThisWeek": "Không có gì trên dòng thời gian của bạn trong tuần này."
+  },
+  "agendaView": {
+    "thisWeek": "Tuần này",
+    "weekOf": "Tuần của {label}",
+    "endOfMonth": "Hết tháng {month}",
+    "noMeetingsMatchFilter": "Không có gì trong ngày này khớp với bộ lọc",
+    "noMeetings": "Không có cuộc họp",
+    "now": "Bây giờ {time}"
+  },
+  "navigator": {
+    "toggleWeek": "Tuần",
+    "toggleMonth": "Tháng",
+    "weekGroup": "Tuần",
+    "previousMonth": "Tháng trước",
+    "previousWeek": "Tuần trước",
+    "nextMonth": "Tháng sau",
+    "nextWeek": "Tuần sau",
+    "todayPrefix": "hôm nay, ",
+    "dayButtonLabel": "{count, plural, =0 {Đi tới {today}{day}, không có cuộc họp} other {Đi tới {today}{day}, # cuộc họp}}"
+  },
+  "dayPanel": {
+    "nothingMatches": "Không có gì trong ngày này khớp",
+    "nothingOnDay": "Không có gì trong ngày này",
+    "clearSearchHint": "Xóa tìm kiếm hoặc chuyển lại về Tất cả để xem mọi thứ đã đặt ở đây.",
+    "meetingsShowUpHere": "Các cuộc họp bạn chủ trì hoặc được mời sẽ hiện ở đây."
+  },
+  "counts": {
+    "meetings": "{count, plural, =0 {không có cuộc họp} other {# cuộc họp}}",
+    "people": "{count, plural, other {# người}}"
+  },
+  "toasts": {
+    "downloadNotReady": "Nội dung này chưa sẵn sàng để tải xuống.",
+    "downloadFailed": "Không thể tải xuống nội dung này."
+  },
+  "notices": {
+    "partialWeek": "Tuần này trải qua hai tháng và một trong số đó tải không thành công, nên có thể thiếu một số cuộc họp.",
+    "truncated": "{total, plural, other {Đang hiển thị {shown} trong số # cuộc họp trong {scope}. Thu hẹp tìm kiếm để xem phần còn lại.}}",
+    "scopeWeek": "các tháng của những tuần này",
+    "scopeMonth": "tháng này"
+  },
+  "loading": {
+    "meetings": "Đang tải các cuộc họp của bạn"
+  },
+  "error": {
+    "title": "Không thể tải các cuộc họp của bạn",
+    "description": "Kiểm tra dịch vụ phòng dịch và thử lại.",
+    "retry": "Thử lại"
+  },
+  "chip": {
+    "googleMeet": "Google Meet",
+    "join": "Tham gia",
+    "cancelled": "Đã hủy",
+    "onGoogleMeetSuffix": ", qua Google Meet"
+  },
+  "dialog": {
+    "pastMeeting": "Cuộc họp đã qua",
+    "noDescription": "Truy cập nhanh vào tóm tắt phòng họp và các nội dung được lưu giữ.",
+    "when": "Thời gian",
+    "duration": "Thời lượng",
+    "participants": "Người tham gia",
+    "route": "Tuyến ngôn ngữ",
+    "hostedBy": "Chủ trì bởi",
+    "artifacts": "Nội dung lưu trữ",
+    "noOutputs": "Không có nội dung nào được lưu giữ cho cuộc họp này.",
+    "openMeeting": "Mở cuộc họp",
+    "unknownTime": "Không rõ thời gian"
+  },
+  "states": {
+    "live": "Đang diễn ra",
+    "upcoming": "Sắp diễn ra",
+    "joined": "Đã tham gia",
+    "missed": "Đã bỏ lỡ",
+    "cancelled": "Đã hủy"
+  },
+  "artifactLabels": {
+    "transcript_export": "Bản ghi",
+    "summary_export": "Tóm tắt AI",
+    "recording": "Bản ghi hình",
+    "debug_log": "Nhật ký gỡ lỗi",
+    "audio_sample": "Mẫu âm thanh"
+  },
+  "artifactStatus": {
+    "consentRequired": "Cần sự đồng ý",
+    "ready": "Sẵn sàng",
+    "processing": "Đang xử lý",
+    "expired": "Đã hết hạn",
+    "missing": "Bị thiếu",
+    "failed": "Thất bại",
+    "deleted": "Đã xóa"
+  }
+}

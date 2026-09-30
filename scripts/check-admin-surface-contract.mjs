@@ -9,9 +9,15 @@
 //     a workspace, and a switcher there invites acting on one tenant while reading about all.
 //
 //  2. AdminPage painted `bg-canvas`. Its own file comment says it exists to match the workspace
-//     pages — and `WorkspacePage`, the frame those pages use, paints `bg-surface-1`. `canvas` is
-//     the darker ground the app reserves for the chrome AROUND a page, so the entire admin portal
-//     rendered its content in the sidebar's colour and read as permanently greyed out.
+//     pages — and `canvas` is the darkest ground the app has, the one reserved for the chrome
+//     AROUND a page, so the entire admin portal rendered its content in the sidebar's colour and
+//     read as permanently greyed out.
+//
+//     The ground both frames share is now `bg-panel` (owner's call, 2026-09-16). It was
+//     `bg-surface-1`, white, until cards on a white page turned out to have nothing but a hairline
+//     holding them apart; the ladder is canvas (chrome) → panel (page) → surface-1 (cards). What
+//     this check has always been about is unchanged: the two frames name the SAME ground, and
+//     neither of them is the chrome's.
 //
 //  3. The nav is going to grow one row per release as Users, Subscriptions, Plans, Meetings,
 //     Health, Audit and Announcements land. A row added before its page exists is a link to a
@@ -32,6 +38,10 @@ const ADMIN_ROOT = "src/app/(app)/admin";
 
 const sidebar = await read("src/components/layout/linear-sidebar.tsx");
 const chrome = await read("src/components/admin/admin-page-chrome.tsx");
+// i18n: the Insights label and "Back to app" now render through t("adminNav.items.insights") /
+// t("adminNav.backToApp") rather than as literal source text — see common.json for the English
+// wording the checks below still pin.
+const commonEn = JSON.parse(await read("messages/en/common.json"));
 
 const checks = [];
 
@@ -56,31 +66,42 @@ checks.push([
 ]);
 checks.push([
   // NavLink treats a non-exact item as active for anything beneath its href, and every admin
-  // page is beneath /admin — so Overview would stay lit on every other admin screen.
-  "the Overview row matches /admin exactly",
-  /label: "Overview", href: "\/admin", exact: true/.test(sidebar),
+  // page is beneath /admin — so Insights would stay lit on every other admin screen. The row was
+  // "Overview" until the landing page became Insights (2026-09-17); the route never moved.
+  "the Insights row matches /admin exactly",
+  /label: t\("adminNav\.items\.insights"\), href: "\/admin", exact: true/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.items?.insights === "Insights",
 ]);
 checks.push([
   "the admin sidebar offers a way back to the app",
-  /isAdminPage && isSystemAdmin[\s\S]{0,4000}?Back to app/.test(sidebar),
+  // The window spans the whole admin nav block, so it grows with each row added (9000 since
+  // /admin/packages, G11); what it pins is that the link lives in that block, not its offset.
+  /isAdminPage && isSystemAdmin[\s\S]{0,9000}?t\("adminNav\.backToApp"\)/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.backToApp === "Back to app",
 ]);
 
 // ── 2 · The ground is the page ground, not the chrome ground ─────────────────
 checks.push([
   "AdminPage paints the same ground as WorkspacePage",
-  /export function AdminPage\(\{[\s\S]{0,400}?bg-surface-1/.test(chrome),
+  /export function AdminPage\(\{[\s\S]{0,400}?bg-panel/.test(chrome),
 ]);
 checks.push([
   "AdminPage does not paint the chrome's grey",
   !/export function AdminPage\(\{[\s\S]{0,400}?bg-canvas/.test(chrome),
 ]);
+checks.push([
+  // The other half of the ladder: a page painted surface-1 is painted the CARD colour, which is
+  // what made every card on it disappear.
+  "AdminPage is not painted the card colour either",
+  !/export function AdminPage\(\{[\s\S]{0,400}?bg-surface-1/.test(chrome),
+]);
 
 const workspacePageChrome = await read("src/components/workspace/page-chrome.tsx");
 checks.push([
-  // If WorkspacePage ever moves off surface-1, this pair stops agreeing and someone has to
+  // If WorkspacePage ever moves off panel, this pair stops agreeing and someone has to
   // decide again rather than discovering the drift on screen.
   "WorkspacePage still uses the ground AdminPage is matching",
-  /export function WorkspacePage\(\{[\s\S]{0,400}?bg-surface-1/.test(workspacePageChrome),
+  /export function WorkspacePage\(\{[\s\S]{0,400}?bg-panel/.test(workspacePageChrome),
 ]);
 
 // ── 3 · No admin page repaints the grey itself ───────────────────────────────
@@ -164,6 +185,28 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/plugins, one row at a time. A nav row per catalog entry would be a nav
   // that changes shape whenever someone adds a plugin.
   `${ADMIN_ROOT}/plugins/[pluginKey]/page.tsx`,
+  // Reached by clicking a name in /admin/users. Same reasoning as the two above: a nav row per
+  // account is not a nav. Exempt from the nav check, NOT from being reachable — the directory row
+  // links to it, which is the whole point of the page existing.
+  `${ADMIN_ROOT}/users/[userId]/page.tsx`,
+  // Reached from /admin/announcements by clicking a row. One notice's full record, not a
+  // destination of its own.
+  `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
+  // Reached from /admin/billing's "Manage Plans" button / a ledger row's workspace link, not
+  // from the nav. Both re-export the same component the legacy /billing/plans and
+  // /billing/workspace/[id] routes render, kept under /admin so that navigating from
+  // /admin/billing stays inside the system-admin portal's own sidebar instead of dropping into
+  // the older (internal) layout's — see the basePath note in src/app/(internal)/billing/page.tsx.
+  `${ADMIN_ROOT}/billing/plans/page.tsx`,
+  `${ADMIN_ROOT}/billing/workspace/[id]/page.tsx`,
+  // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
+  // /admin/announcements.
+  `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,
+  // One email layout or block, reached from the Layouts / Blocks sections of
+  // /admin/email-templates. Same reasoning as the posts editor above.
+  `${ADMIN_ROOT}/email-templates/blocks/[blockId]/page.tsx`,
+  // One email's editor, reached from its card on /admin/email-templates.
+  `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;

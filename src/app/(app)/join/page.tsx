@@ -785,7 +785,7 @@ function DeviceSelect({
         value={validValue}
         onValueChange={(val) => onChange(val === "default" ? "" : (val ?? ""))}
       >
-        <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full truncate focus:ring-2 focus:ring-ring/50 focus:border-ring">
+        <SelectTrigger className="h-[32px] bg-surface-2 border border-border text-ink text-[13px] rounded-[6px] w-full truncate focus:ring-2 focus:ring-ring/50 focus:border-ring">
           {displayValue}
         </SelectTrigger>
         <SelectContent className="bg-surface-1 border-border text-ink rounded-[6px]">

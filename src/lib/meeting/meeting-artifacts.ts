@@ -17,18 +17,40 @@ const ARTIFACT_LABELS = {
   audio_sample: "Audio sample",
 } as const;
 
-export function artifactLabel(type: RoomHistoryArtifact["type"]): string {
-  return ARTIFACT_LABELS[type];
+/**
+ * `t` is optional so every existing caller — and every `node:test` pinning the English string —
+ * keeps working unchanged. A translated page passes its own `useTranslations("schedules")`
+ * lookup (e.g. `(type) => t(`artifactLabels.${type}`)`) instead of hard-coding English here.
+ */
+export function artifactLabel(
+  type: RoomHistoryArtifact["type"],
+  t?: (type: RoomHistoryArtifact["type"]) => string,
+): string {
+  return t ? t(type) : ARTIFACT_LABELS[type];
 }
 
 /**
- * Consent outranks status. A file that is technically ready but still needs consent must not
- * read as "Ready" — the download will stop and ask, and saying "Ready" first makes that look
- * like a failure rather than the policy working.
+ * Consent outranks "Ready", and only "Ready". A file that is technically ready but still needs
+ * consent must not read as "Ready" — the download will stop and ask, and saying "Ready" first
+ * makes that look like a failure rather than the policy working.
+ *
+ * WT-824: but a file that is NOT ready has nothing behind the consent hold, and every recording
+ * row is written consent-required from the moment recording starts. Consent-first labelled a
+ * recording still being written, or one that failed, "Consent required" — and then the download
+ * said "not ready". The row sent people to the host about a permission when the real answer was
+ * "wait" or "this recording failed". So a non-ready status speaks for itself.
+ *
+ * `t` is optional for the same reason as `artifactLabel` above — see there.
  */
-export function artifactStatusLabel(artifact: RoomHistoryArtifact): string {
-  if (artifact.consentRequired) return "Consent required";
+export function artifactStatusLabel(
+  artifact: RoomHistoryArtifact,
+  t?: (key: "consentRequired" | RoomHistoryArtifact["status"]) => string,
+): string {
+  if (artifact.consentRequired && canDownloadArtifact(artifact)) {
+    return t ? t("consentRequired") : "Consent required";
+  }
   const status = artifact.status ?? "";
+  if (t) return t(status);
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -51,11 +73,42 @@ export function canDownloadArtifact(artifact: RoomHistoryArtifact): boolean {
 export function findPlayableRecording(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): RoomHistoryArtifact | null {
-  return (
-    artifacts?.find(
-      (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
-    ) ?? null
+  return playableRecordings(artifacts)[0] ?? null;
+}
+
+/**
+ * Every recording of this meeting that has a file behind it, in the order the record lists them.
+ *
+ * One answer, three callers: the player picks the first, the seek guard counts them, and the
+ * "more than one recording" notice offers all of them for download — which is the only route to
+ * those files now that the Artifacts tab is gone. Three copies of "a recording that can be
+ * fetched" is three places for the definition to drift, and a drift here reads as a recording
+ * that exists in one part of the page and not in another.
+ */
+export function playableRecordings(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): RoomHistoryArtifact[] {
+  return (artifacts ?? []).filter(
+    (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
   );
+}
+
+/**
+ * WT-824 — "Recording failed: <why>", for a failed recording whose reason the backend stored.
+ *
+ * Production's only two recordings both failed, and each row said "Failed" and nothing more —
+ * LiveKit's egress runs in LiveKit Cloud, so the reason it gave existed in one log line that the
+ * next deploy deleted. The backend now keeps it on the row (host-facing sentence plus LiveKit's
+ * status and error, URLs redacted); this is where a reader sees it.
+ *
+ * Null when there is nothing to add: not a recording, not failed, or failed before the column
+ * existed. The bare status label still covers those.
+ */
+export function recordingFailureText(artifact: RoomHistoryArtifact): string | null {
+  if (artifact.type !== "recording") return null;
+  if (artifact.status !== "failed" && artifact.status !== "missing") return null;
+  const reason = artifact.failureReason?.trim();
+  return reason ? `Recording failed: ${reason}` : null;
 }
 
 /** A recording artifact, whatever state it is in. The one predicate both counters below share. */
@@ -82,51 +135,55 @@ function isRecording(artifact: RoomHistoryArtifact): boolean {
 export function countPlayableRecordings(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): number {
-  return (
-    artifacts?.filter((artifact) => isRecording(artifact) && canDownloadArtifact(artifact))
-      .length ?? 0
-  );
+  return playableRecordings(artifacts).length;
 }
 
-/**
- * Whether a recording of this meeting exists but has nothing behind it yet.
- *
- * The difference between "not recorded" and "recorded, still being written" — which
- * `findPlayableRecording` collapses into the same null, because for its purpose they are the same:
- * neither one can be played. They are not the same thing to tell the reader. A meeting nobody
- * recorded gets no notice at all; a meeting whose file is still processing is worth one, because
- * the answer changes on its own in a minute.
- *
- * Any non-ready status counts, not only `processing` — `failed` and `missing` are equally
- * "there was a recording and you cannot watch it", and neither is served by claiming the meeting
- * was never recorded.
- */
-export function hasPendingRecording(
-  artifacts: RoomHistoryArtifact[] | undefined | null,
-): boolean {
-  return Boolean(
-    artifacts?.some((artifact) => isRecording(artifact) && !canDownloadArtifact(artifact)),
-  );
-}
+export type UnplayableRecordingState = "processing" | "failed";
 
-/**
- * The format the reader will actually receive — not the one the row is stored as.
- *
- * `artifact.format` is `TranslationRoomArtifact.FileFormat`, which describes the STORED bytes:
- * markdown for the transcript, json for the summary. Both of those are correct for the code that
- * reads them (the summary is parsed into prose by parseMeetingSummaryContent) and both were wrong
- * on screen, because the server serves those two as plain text — so a row that said JSON handed
- * over a .txt when clicked.
- *
- * Kept in step with the backend's ArtifactPlainText.IsTextExport, which decides the same thing for
- * the download itself. If a third text-bearing artifact type is added, both need the entry.
- */
-const TEXT_EXPORT_TYPES: ReadonlySet<RoomHistoryArtifact["type"]> = new Set([
-  "transcript_export",
-  "summary_export",
+/** A recording row with no file behind it that will never get one. See unplayableRecordingState. */
+const FAILED_RECORDING_STATUSES: ReadonlySet<RoomHistoryArtifact["status"]> = new Set([
+  "failed",
+  "missing",
 ]);
 
-export function artifactDownloadFormat(artifact: RoomHistoryArtifact): string {
-  if (TEXT_EXPORT_TYPES.has(artifact.type)) return "TXT";
-  return artifact.format?.toUpperCase() || "—";
+/**
+ * What became of this meeting's recordings that cannot be played — `"processing"`, `"failed"`,
+ * or null when there is nothing to say.
+ *
+ * The difference between "not recorded" and "recorded, but not watchable" — which
+ * `findPlayableRecording` collapses into the same null, because for its purpose they are the same:
+ * neither one can be played. They are not the same thing to tell the reader. A meeting nobody
+ * recorded gets no notice at all; a recording still being written is worth one, because the answer
+ * changes on its own in a minute; and a recording that failed is worth a DIFFERENT one, because it
+ * never will.
+ *
+ * WHY FAILED IS NO LONGER "PROCESSING" (rec-loss)
+ *   This used to be a boolean that counted every non-ready status, and the page read it as
+ *   "processing". Harmless while a recording row only appeared once its file had landed. Since
+ *   rec-loss the row exists from the moment recording starts and turns `failed` when LiveKit
+ *   produced nothing — so the boolean put a spinner and "this page updates on its own" over a
+ *   video that does not exist, forever. That is the silent loss rec-loss is about, with a spinner
+ *   on top.
+ *
+ * WHICH STATUSES COUNT AS FAILED
+ *   `failed` and `missing`: both are "a recording was made and there is no file", and neither
+ *   resolves itself. `expired` and `deleted` are NOT failures — retention ran out, or someone
+ *   removed the file on purpose; the recording worked. Calling them failed would send a host
+ *   looking for a fault that is really the policy working, so they return null here and the
+ *   workspace's Artifacts library, which lists every retained file with its status, is where they
+ *   are named.
+ *
+ * Processing outranks failed: with a restart in the meeting, one run can have failed while the
+ * next is still being written, and "wait a minute" is the answer that is about to change.
+ */
+export function unplayableRecordingState(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): UnplayableRecordingState | null {
+  const recordings = (artifacts ?? []).filter(isRecording);
+  if (recordings.some((artifact) => artifact.status === "processing")) return "processing";
+  if (recordings.some((artifact) => FAILED_RECORDING_STATUSES.has(artifact.status))) {
+    return "failed";
+  }
+  return null;
 }
+

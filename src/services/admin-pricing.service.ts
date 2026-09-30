@@ -1,10 +1,12 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { PlanDto } from "@/types/billing";
+import type { RateCardPreviewDto, RateCardPreviewRequest } from "@/types/admin-contract-billing";
 import type {
   BillingPolicyDto,
   PlanRequest,
   PricingConfigDto,
+  SetRateCardProviderCostRequest,
   UpdatePricingConfigRequest,
   UpsertUsageRateCardRequest,
   UsageRateCardDto,
@@ -81,6 +83,41 @@ export const adminPricingService = {
    */
   upsertRateCard: async (request: UpsertUsageRateCardRequest): Promise<UsageRateCardDto> => {
     const { data } = await apiClient.put<UsageRateCardDto>(API.adminPricing.rateCard, request);
+    return data;
+  },
+
+  /**
+   * Retire one rate card. Not a delete: settled transactions point at the row. It leaves the
+   * active list and cannot be brought back from this screen — see RateCardDeactivateDialog.
+   */
+  deactivateRateCard: async (id: string): Promise<UsageRateCardDto> => {
+    const { data } = await apiClient.post<UsageRateCardDto>(
+      API.adminPricing.rateCardDeactivate(id),
+    );
+    return data;
+  },
+
+  /**
+   * Record what the provider charges per unit on a credit-unit (CRD) card. Returns the card now in
+   * effect: the same row when it had no cost yet, a new version when it had a different one.
+   */
+  setRateCardProviderCost: async (
+    id: string,
+    request: SetRateCardProviderCostRequest,
+  ): Promise<UsageRateCardDto> => {
+    const { data } = await apiClient.put<UsageRateCardDto>(
+      API.adminPricing.rateCardProviderCost(id),
+      request,
+    );
+    return data;
+  },
+
+  /** Price a proposed cost and markup against the stored FX rate and credit value. Writes nothing. */
+  previewRateCard: async (request: RateCardPreviewRequest): Promise<RateCardPreviewDto> => {
+    const { data } = await apiClient.post<RateCardPreviewDto>(
+      API.adminPricing.rateCardPreview,
+      { quantity: 1, ...request },
+    );
     return data;
   },
 

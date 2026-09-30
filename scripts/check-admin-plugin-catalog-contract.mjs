@@ -56,6 +56,9 @@ const ENDPOINTS = "src/lib/api/endpoints.ts";
 const [listPage, detailPage, types, service, helpers, hooks, endpoints] = await Promise.all(
   [LIST_PAGE, DETAIL_PAGE, TYPES, SERVICE, HELPERS, HOOKS, ENDPOINTS].map(read),
 );
+// i18n: the row-level warning now renders through t("noClientIdBadge") rather than as literal
+// source text — see adminPlugins.json for the English wording this still asserts.
+const adminPluginsEn = JSON.parse(await read("messages/en/adminPlugins.json"));
 
 // ── 1 · No secret can be read back, so none can be rendered ──────────────────
 
@@ -145,8 +148,13 @@ assert.match(
 );
 assert.match(
   listPage,
-  /no client id/,
+  /t\("noClientIdBadge"\)/,
   "the warning must be legible on the row itself, not only in a banner",
+);
+assert.equal(
+  adminPluginsEn.list?.noClientIdBadge,
+  "no client id",
+  "the row-level warning must read 'no client id' in English",
 );
 assert.match(
   listPage,
@@ -231,8 +239,38 @@ assert.match(
   "a create hook must exist, and must not be a useCatalogWrite: the create endpoint answers with the user-facing catalog item, so there is no detail row to seed the cache with",
 );
 assert.ok(
-  /Add MCP app/.test(listPage) && /NewPluginDialog/.test(listPage),
-  "the listing must offer the create action — an admin screen that can edit, re-credential and retire a row it cannot create sends the operator back to psql for the one step that started it all",
+  /t\("createPlugin"\)/.test(listPage) &&
+    /t\("withMcp"\)/.test(listPage) &&
+    /NewPluginDialog/.test(listPage),
+  "the listing must offer the create action — Create plugin → With MCP, opening NewPluginDialog. An admin screen that can edit, re-credential and retire a row it cannot create sends the operator back to psql for the one step that started it all",
+);
+assert.equal(
+  adminPluginsEn.list?.createPlugin,
+  "Create plugin",
+  "the create action must read 'Create plugin' in English",
+);
+assert.equal(
+  adminPluginsEn.list?.withMcp,
+  "With MCP",
+  "the create menu item must read 'With MCP' in English",
+);
+// Owner decision 2026-09-17: plugins are MCP only. There is no skills-only plugin kind, so no
+// surface may offer to create one.
+assert.ok(
+  !/Skills only/i.test(listPage),
+  "the create menu must not offer 'Skills only' — the marketplace is MCP plugins only",
+);
+// The marketplace's one new fact per row: how many workspaces have added it. Now rendered
+// through next-intl's ICU plural (t("workspaceCount", { count })) rather than the standalone
+// formatWorkspaceCount helper, so the count pluralizes per locale.
+assert.ok(
+  /t\("workspaceCount", \{ count: row\.workspaceCount \}\)/.test(listPage),
+  "each catalog row must show how many workspaces have added it",
+);
+assert.equal(
+  adminPluginsEn.list?.workspaceCount,
+  "{count, plural, =0 {no workspaces} one {# workspace} other {# workspaces}}",
+  "the workspace count must still pluralize 0/1/n in English",
 );
 assert.match(
   helpers,
@@ -290,6 +328,26 @@ assert.match(
   helpers,
   /MANIFEST_KEYS_NOT_AUTHORED[\s\S]{0,200}?"resourceKey"/,
   "the manifest editor must strip the dead resource keys as it strips pluginKey: the wire still carries them as nulls, and showing an operator three meaningless fields invites one of them to be filled in",
+);
+
+// ── 10 · A tool call's outcome is read from what the recorder writes ─────────
+//
+// McpToolOrchestrator records "success" or an error code. The audit row compared against "ok",
+// which nothing has ever written, so every successful call rendered as a failure. The outcome is
+// described in one place, and the page has to go through it.
+
+assert.match(
+  helpers,
+  /PLUGIN_TOOL_SUCCESS_STATUS = "success"/,
+  "the success status must be \"success\" — that is what McpToolOrchestrator writes into plugin_tool_audits.result_status",
+);
+assert.ok(
+  /describePluginToolOutcome\(entry\.resultStatus\)/.test(detailPage),
+  "the audit row must describe its status through describePluginToolOutcome rather than comparing strings itself",
+);
+assert.ok(
+  !/["']ok["']/.test(detailPage.slice(detailPage.indexOf("function AuditRow"))),
+  "the audit row must not treat \"ok\" as a status: the assistant service never writes it",
 );
 
 console.log("Admin plugin catalog contract passed.");

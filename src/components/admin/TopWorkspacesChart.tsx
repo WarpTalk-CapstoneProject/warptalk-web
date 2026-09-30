@@ -6,13 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Link from "next/link";
+import { BarList } from "@/components/admin/charts/bar-list";
 
-const RANK_STYLES = [
-  { badge: "bg-amber-400 text-amber-900",   bar: "bg-amber-400" },
-  { badge: "bg-slate-300 text-slate-800",   bar: "bg-slate-300" },
-  { badge: "bg-orange-400 text-orange-900", bar: "bg-orange-400" },
-];
+const workspaceName = (name: string | null | undefined, id: string) =>
+  name && !name.startsWith("Workspace ") ? name : `WS-${id.substring(0, 8).toUpperCase()}`;
 
 interface TopWorkspacesChartProps {
   className?: string;
@@ -27,7 +24,6 @@ export function TopWorkspacesChart({ className }: TopWorkspacesChartProps) {
   });
 
   const hasData = data && data.length > 0;
-  const max = hasData ? Math.max(...data.map((w) => w.totalCreditsConsumed ?? 0)) : 1;
 
   return (
     <Card className={`bg-surface-1 border-hairline shadow-linear ${className || ""}`}>
@@ -59,44 +55,19 @@ export function TopWorkspacesChart({ className }: TopWorkspacesChartProps) {
             No consumption recorded for this period
           </div>
         ) : (
-          <div className="flex flex-col gap-2 mt-1">
-            {data.map((ws, idx) => {
-              const rank = RANK_STYLES[idx] ?? { badge: "bg-surface-3 text-muted-foreground", bar: "bg-primary/60" };
-              const pct = Math.round(((ws.totalCreditsConsumed ?? 0) / max) * 100);
-              return (
-                <Link
-                  key={ws.workspaceId}
-                  href={`/billing/workspace/${ws.workspaceId}`}
-                  className="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2 transition-colors"
-                >
-                  {/* Rank badge */}
-                  <span className={`flex-none w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rank.badge}`}>
-                    {idx + 1}
-                  </span>
-
-                  {/* Name + progress bar */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                      {ws.workspaceName && !ws.workspaceName.startsWith("Workspace ")
-                        ? ws.workspaceName
-                        : `WS-${ws.workspaceId.substring(0, 8).toUpperCase()}`}
-                    </p>
-                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-surface-3 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${rank.bar}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Credits count */}
-                  <span className="flex-none text-sm font-semibold tabular-nums text-ink">
-                    {(ws.totalCreditsConsumed ?? 0).toLocaleString()}
-                    <span className="text-xs font-normal text-muted-foreground ml-1">cr</span>
-                  </span>
-                </Link>
-              );
-            })}
+          // Ranked bars in the admin chart style. The gold/silver/bronze badges were three more
+          // hardcoded palettes, and a medal says nothing a rank number and a bar length do not.
+          <div className="mt-1">
+            <BarList
+              ariaLabel="Top workspaces by credit consumption"
+              formatValue={(value) => `${value.toLocaleString("en-US")} cr`}
+              rows={data.map((ws, index) => ({
+                key: ws.workspaceId,
+                label: `${index + 1}. ${workspaceName(ws.workspaceName, ws.workspaceId)}`,
+                href: `/billing/workspace/${ws.workspaceId}`,
+                segments: [{ key: "credits", label: "Credits", value: ws.totalCreditsConsumed ?? 0 }],
+              }))}
+            />
           </div>
         )}
       </CardContent>

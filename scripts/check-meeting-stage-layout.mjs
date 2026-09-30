@@ -85,6 +85,45 @@ assert.match(
   /layoutMode === "auto" && visibleTracks\.length > AUTO_FEATURED_MIN_PARTICIPANTS[\s\S]*pinnedUserId \|\|[\s\S]*activeSpeakerIdentity \|\|[\s\S]*firstRemoteIdentity \|\|[\s\S]*firstVisibleIdentity/,
   "auto layout must create a featured stage once a meeting outgrows an even grid",
 );
+// WT-825: the Google Meet layout. The people you are talking to are large; you are the small
+// self-view. It was inverted three ways: a one-to-one call split the stage evenly, Spotlight and
+// Sidebar fell back to the FIRST track (LiveKit lists the local one first), and the viewer's own
+// voice made them the sticky active speaker, swapping their own face onto the stage.
+assert.match(
+  meetingStage,
+  /const speakingNow = \[[\s\S]{0,400}trackRef\.participant\.identity !== localIdentity/,
+  "the viewer's own voice must never make them the featured speaker",
+);
+assert.match(
+  meetingStage,
+  /const isOneToOne = localIsVisible && remoteIdentities\.length === 1;/,
+  "a one-to-one call must be recognised by people, not by track count",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "auto" && isOneToOne\s*\?\s*pinnedUserId \|\| firstRemoteIdentity/,
+  "Auto must feature the other person in a one-to-one call",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "spotlight"\s*\?\s*pinnedUserId \|\| activeSpeakerIdentity \|\| firstRemoteIdentity/,
+  "Spotlight must fall back to a remote participant, never to the first (local) track",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "sidebar"\s*\?\s*pinnedUserId \|\| firstRemoteIdentity/,
+  "Sidebar must fall back to a remote participant, never to the first (local) track",
+);
+assert.match(
+  meetingStage,
+  /if \(selfViewDocked\) \{[\s\S]{0,1400}selfTracks\.map\(\(trackRef\) => renderThumbnail\(trackRef\)\)/,
+  "Auto's even grid must dock the viewer as a thumbnail rather than give them a full tile",
+);
+assert.match(
+  meetingStage,
+  /visibleTracks\.length === 1[\s\S]{0,200}const onlyTrack = visibleTracks\[0\]/,
+  "alone in the call, the local participant still fills the stage",
+);
 assert.match(
   meetingStage,
   /const AUTO_FEATURED_MIN_PARTICIPANTS = 5/,
@@ -126,6 +165,36 @@ assert.match(
   roomPage,
   /<\/section>[\s\S]*subtitlesEnabled[\s\S]*data-meeting-subtitle-lane[\s\S]*<LiveSubtitleOverlay[\s\S]*data-meeting-bottom-dock/,
   "enabled subtitles must render in a reserved lane between camera and controls",
+);
+// WT-873 — the caption lane shows the current caption only. It used to open an "Earlier
+// captions" history panel that grew UPWARD over the camera view when the reader scrolled up in
+// it, covering the people speaking and duplicating the Transcript side panel. Pinned three ways:
+// the lane container clips, the overlay renders a bounded window of the newest lines (never a
+// history), and nothing in it scrolls or measures an expanded height.
+assert.match(
+  roomPage,
+  /data-meeting-subtitle-lane[\s\S]{0,400}?className="[^"]*overflow-hidden[^"]*"\s*>\s*<LiveSubtitleOverlay/,
+  "the caption lane's container must clip — nothing in it may grow over the camera view",
+);
+assert.match(
+  liveSubtitle,
+  /liveCaptionLines\(/,
+  "the caption lane must render only the newest lines (liveCaptionLines), not a scrollable history",
+);
+assert.doesNotMatch(
+  liveSubtitle,
+  /caption-scrollback|windowCaptionLines|measureExpandedHeight|earlierCaptions|overflow-y-auto|onScroll=/,
+  "the caption lane must not scroll back through history or expand over the video (WT-873)",
+);
+assert.match(
+  liveSubtitle,
+  /data-caption-lane[\s\S]{0,1500}?role="region"[\s\S]{0,200}?text-center/,
+  "live captions must be centred like subtitles, not left-aligned like a chat thread",
+);
+assert.match(
+  roomPage,
+  /<LiveSubtitleOverlay[\s\S]{0,2500}?onOpenTranscript=\{/,
+  "the caption lane must offer a way into the full transcript panel",
 );
 assert.doesNotMatch(
   roomPage,

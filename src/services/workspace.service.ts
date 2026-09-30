@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { WorkspaceEntitlementsDto } from "@/types/workspace-entitlements";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type { DuplicateStrategy } from "@/lib/documents/document-review";
 import type {
@@ -57,6 +58,12 @@ export const WorkspaceService = {
 
   async getSettings(id: string): Promise<WorkspaceSettingsDto> {
     const { data } = await apiClient.get<WorkspaceSettingsDto>(API.workspaces.settings(id));
+    return data;
+  },
+
+  /** Resolved entitlements (read-only snapshot from billing), with provenance. */
+  async getEntitlements(id: string): Promise<WorkspaceEntitlementsDto> {
+    const { data } = await apiClient.get<WorkspaceEntitlementsDto>(API.workspaces.entitlements(id));
     return data;
   },
 
@@ -428,6 +435,24 @@ export const WorkspaceService = {
    */
   async approveDocument(workspaceId: string, docId: string, approve: boolean, reason?: string): Promise<void> {
     await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve, reason });
+  },
+
+  /**
+   * public → private. The server cuts reads for everyone not named, and deletes the document's
+   * chunks from the assistant's index. Returns the updated document.
+   */
+  async unpublishDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(API.workspaces.documentUnpublish(workspaceId, docId));
+    return data;
+  },
+
+  /**
+   * private → public for an owner/admin; private → pending_approval for the uploader alone.
+   * Returns the updated document, so the caller reads which of the two happened from `status`.
+   */
+  async publishDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(API.workspaces.documentPublish(workspaceId, docId));
+    return data;
   },
 
   async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {

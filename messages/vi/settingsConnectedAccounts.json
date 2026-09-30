@@ -1,0 +1,48 @@
+{
+  "header": {
+    "title": "Tài khoản đã liên kết",
+    "subtitle": "Các cách bạn có thể đăng nhập vào WarpTalk với tư cách {email}."
+  },
+  "error": {
+    "title": "Không thể tải phương thức đăng nhập của bạn",
+    "hint": "Hãy thử lại, và nếu vẫn thất bại, kiểm tra xem dịch vụ xác thực có hoạt động không.",
+    "retry": "Thử lại",
+    "retrying": "Đang thử lại…"
+  },
+  "toasts": {
+    "linked": "Đã liên kết tài khoản Google.",
+    "linkFailed": "Không thể liên kết tài khoản Google của bạn.",
+    "authFailed": "Xác thực Google thất bại hoặc cửa sổ bật lên đã bị đóng.",
+    "unlinked": "Đã hủy liên kết tài khoản Google.",
+    "unlinkFailed": "Không thể hủy liên kết tài khoản Google của bạn."
+  },
+  "signInMethods": {
+    "sectionTitle": "Phương thức đăng nhập"
+  },
+  "google": {
+    "title": "Google",
+    "connected": "Đã kết nối",
+    "notConnected": "Chưa kết nối",
+    "linkButton": "Liên kết Google",
+    "unlinkButton": "Hủy liên kết",
+    "notConfiguredTitle": "Đăng nhập Google chưa được cấu hình cho triển khai này.",
+    "hintUnknown": "Trạng thái liên kết hiện chưa có sẵn từ máy chủ.",
+    "hintNotLinked": "Đăng nhập bằng tài khoản Google của {email}. Email của tài khoản đó phải khớp với tài khoản này.",
+    "hintLinked": "Đăng nhập bằng Google với tư cách {email}.",
+    "unlinkNeedsPasswordReason": "Google là cách duy nhất bạn đăng nhập. Hãy đặt mật khẩu trước (dùng Quên mật khẩu trên trang đăng nhập), sau đó bạn có thể hủy liên kết Google."
+  },
+  "password": {
+    "title": "Mật khẩu",
+    "set": "Đã đặt",
+    "notSet": "Chưa đặt",
+    "hintUnknown": "Trạng thái mật khẩu hiện chưa có sẵn từ máy chủ.",
+    "hintSet": "Đăng nhập bằng email và mật khẩu của bạn.",
+    "hintNotSet": "Chưa có mật khẩu. Dùng Quên mật khẩu trên trang đăng nhập để đặt một mật khẩu."
+  },
+  "unlinkDialog": {
+    "title": "Hủy liên kết Google?",
+    "description": "Bạn sẽ không thể đăng nhập bằng Google nữa. Bạn vẫn có thể đăng nhập bằng email và mật khẩu, và có thể liên kết lại Google sau.",
+    "cancel": "Hủy",
+    "confirm": "Hủy liên kết Google"
+  }
+}

@@ -13,6 +13,9 @@ const meetingEndpoints = await readFile(
   path.join(root, "src/lib/api/endpoints.ts"),
   "utf8",
 );
+const meetingRoomPageEn = JSON.parse(
+  await readFile(path.join(root, "messages/en/meetingRoomPage.json"), "utf8"),
+);
 
 // The transcript panel's own props, so a host gate cannot be added to it without failing a check.
 const transcriptPanelStart = sidePanel.indexOf("<TranscriptPanel");
@@ -25,14 +28,19 @@ const checks = [
   // the old `UserChip` name asserted a shape rather than the behaviour this line is named for.
   // What must stay true is that a person's chip opens a popover — check that, not the symbol.
   ["user chips open a popover profile dropdown", page.includes("function PersonPopover(") && page.includes("<PopoverTrigger") && page.includes("<PopoverContent")],
-  ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
+  // "Room notes" moved into i18n (t("notes.heading")) — check the page still calls that key,
+  // and the English catalog still carries the wording.
+  ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes('t("notes.heading")') && page.includes("useEditor(") && meetingRoomPageEn.notes?.heading === "Room notes"],
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
   // WT-197 moved this button into a shared `RoomEntryButton` so the promoted header copy and
   // the "Meeting access" copy cannot drift. The styling it must keep is the same as before;
   // only the place it is written down changed.
   ["join meeting button keeps white text on purple primary", page.includes("function RoomEntryButton(") && page.includes("\"rounded-md text-[13px] !text-white [&_svg]:!text-white\"")],
-  ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
+  // The page ground, which moved from surface-1 to panel on 2026-09-16: surface-1 is the card
+  // colour now, and this page is mostly cards. What the line guards is unchanged — a THEMED
+  // ground rather than a hardcoded white.
+  ["room detail uses a themed panel background", page.includes("bg-panel text-ink")],
   // VISIBLE label, which is what the ticket removed and what this line is named for. Banning the
   // string outright also banned `role: "Host"` -- the role as DATA, which the row now carries as
   // a badge -- and even the comment explaining why the fallback must not return it. The defect

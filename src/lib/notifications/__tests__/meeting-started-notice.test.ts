@@ -163,3 +163,64 @@ test("an off-origin action_url still falls back to the room id", () => {
 
   assert.equal(notice?.joinHref, "/room/real-room");
 });
+
+// ── WT-612 / WT-621: MEETING_OPENED ─────────────────────────────────────────
+
+test("an opened meeting is read, and says which kind it is", () => {
+  const notice = readMeetingStartedNotice({
+    type: "MEETING_OPENED",
+    title: '"Weekly sync" is open',
+    payload_json: payload({ room_id: "abc-123", room_title: "Weekly sync" }),
+  }, APP);
+
+  assert.equal(notice?.kind, "opened");
+  assert.equal(notice?.title, "Weekly sync");
+});
+
+test("a started meeting still reports itself as started", () => {
+  const notice = readMeetingStartedNotice({
+    type: "MEETING_STARTED",
+    payload_json: payload({ room_id: "abc-123" }),
+  }, APP);
+
+  assert.equal(notice?.kind, "started");
+});
+
+// THE POINT OF THE WHOLE BRANCH. `/room/{id}` forwards into /live, which skips device setup —
+// correct for a call already running, wrong for a room the clock opened with nobody in it. The
+// plural `/rooms/{id}` is the room page, where Join opens the setup modal.
+test("an opened meeting goes to the room page, never through the live door", () => {
+  const notice = readMeetingStartedNotice({
+    type: "MEETING_OPENED",
+    payload_json: payload({ room_id: "abc-123" }),
+  }, APP);
+
+  assert.equal(notice?.joinHref, "/rooms/abc-123");
+});
+
+test("an opened meeting ignores the server's action_url", () => {
+  // The server mints one link per notification and emails it too, so it is the live door by
+  // construction. Honouring it here would put the reader back in /live with no setup.
+  const notice = readMeetingStartedNotice({
+    type: "MEETING_OPENED",
+    action_url: "https://app.warptalk.io.vn/room/abc-123",
+    payload_json: payload({ room_id: "abc-123" }),
+  }, APP);
+
+  assert.equal(notice?.joinHref, "/rooms/abc-123");
+});
+
+test("an opened meeting with no room id informs without a dead button", () => {
+  const notice = readMeetingStartedNotice({
+    type: "MEETING_OPENED",
+    title: "A meeting is open",
+    action_url: "https://app.warptalk.io.vn/room/abc-123",
+  }, APP);
+
+  assert.equal(notice?.title, "A meeting is open");
+  assert.equal(notice?.joinHref, null);
+});
+
+test("MEETING_OPENED is not an invitation either", () => {
+  assert.equal(readMeetingInviteNotice({ type: "MEETING_OPENED", title: "x" }), null);
+});

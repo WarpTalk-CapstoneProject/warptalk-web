@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -9,6 +10,7 @@ import { hasRememberedAccessToken } from "@/lib/auth/landing-redirect";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function DownloadNavbar() {
+  const t = useTranslations("download.navbar");
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
@@ -34,7 +36,7 @@ export function DownloadNavbar() {
         <Link
           href="/"
           className="flex items-center rounded-full border border-black bg-black px-4 py-2 transition-colors hover:bg-black"
-          aria-label="WarpTalk home"
+          aria-label={t("homeAria")}
         >
           <Image
             src="/assets/logos/warptalk-logo-darkmode.jpg"
@@ -51,7 +53,7 @@ export function DownloadNavbar() {
             href="/"
             className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
           >
-            Home
+            {t("home")}
           </Link>
           {!signedIn ? (
             <>
@@ -59,13 +61,13 @@ export function DownloadNavbar() {
                 href="/login"
                 className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
               >
-                Login
+                {t("login")}
               </Link>
               <Link
                 href="/register"
                 className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
               >
-                Register
+                {t("register")}
               </Link>
             </>
           ) : null}
@@ -77,14 +79,14 @@ export function DownloadNavbar() {
             onClick={handleBack}
             className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
           >
-            Back
+            {t("back")}
           </button>
         ) : (
           <Link
             href="/login"
             className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white md:hidden"
           >
-            Login
+            {t("login")}
           </Link>
         )}
       </nav>

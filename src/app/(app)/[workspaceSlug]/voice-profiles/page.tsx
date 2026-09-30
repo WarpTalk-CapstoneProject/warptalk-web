@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus } from "@phosphor-icons/react";
 
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
@@ -24,7 +25,11 @@ import {
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { resolveLibraryLanguage, voiceLibraryLanguages } from "@/lib/voice/library-languages";
+import {
+  resolveLibraryLanguage,
+  voiceLibraryLanguages,
+  voiceProfileLanguages,
+} from "@/lib/voice/library-languages";
 import { getLanguageLocale } from "@/lib/language/languages";
 import { ownVoiceProfiles } from "@/lib/voice/profile-status";
 
@@ -57,6 +62,7 @@ type VoiceView = "all" | "mine" | "library" | "attention";
  *     different answers.
  */
 export default function VoiceProfilesPage() {
+  const t = useTranslations("voiceProfiles");
   const { data, isLoading } = useVoiceProfiles();
 
   const [view, setView] = useState<VoiceView>("all");
@@ -75,6 +81,13 @@ export default function VoiceProfilesPage() {
   const policyReady = settingsQuery.isFetched;
   const libraryLanguages = useMemo(
     () => voiceLibraryLanguages(settingsQuery.data?.allowedTargetLanguages),
+    [settingsQuery.data?.allowedTargetLanguages],
+  );
+  // The Create dialog reads the same policy. It used to offer every profile language, so a
+  // workspace that allows only Vietnamese and English offered Japanese there beside a library
+  // picker that did not.
+  const profileLanguages = useMemo(
+    () => voiceProfileLanguages(settingsQuery.data?.allowedTargetLanguages),
     [settingsQuery.data?.allowedTargetLanguages],
   );
   // The default is Vietnamese, which a workspace may not allow. Snapped to a permitted language
@@ -103,23 +116,23 @@ export default function VoiceProfilesPage() {
         filters={
           <>
             <WorkspaceFilterPill
-              label="All voices"
+              label={t("filters.allVoices")}
               selected={view === "all"}
               onClick={() => setView("all")}
             />
             <WorkspaceFilterPill
-              label="Mine"
+              label={t("filters.mine")}
               count={ownProfiles.length}
               selected={view === "mine"}
               onClick={() => setView("mine")}
             />
             <WorkspaceFilterPill
-              label="Library"
+              label={t("filters.library")}
               selected={view === "library"}
               onClick={() => setView("library")}
             />
             <WorkspaceFilterPill
-              label="Needs attention"
+              label={t("filters.needsAttention")}
               count={needingAttention}
               selected={view === "attention"}
               onClick={() => setView("attention")}
@@ -131,8 +144,8 @@ export default function VoiceProfilesPage() {
             <ExpandingSearchDock
               value={search}
               onValueChange={setSearch}
-              placeholder="Search voices..."
-              ariaLabel="Search voices"
+              placeholder={t("search.placeholder")}
+              ariaLabel={t("search.ariaLabel")}
               collapsedWidth={28}
               expandedWidth={220}
               className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -145,7 +158,7 @@ export default function VoiceProfilesPage() {
               onClick={() => setIsCreateOpen(true)}
               icon={<Plus size={13} weight="bold" />}
             >
-              Create profile
+              {t("createProfile")}
             </WorkspacePrimaryButton>
           </>
         }
@@ -191,6 +204,7 @@ export default function VoiceProfilesPage() {
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         defaultLanguage={getLanguageLocale(language) ?? "vi-VN"}
+        languages={profileLanguages}
       />
     </WorkspacePage>
   );

@@ -235,7 +235,11 @@ export function useBridgeTrigger({
   //
   // The state is passed alongside only for the one case the target cannot express: a popup the
   // user CLOSED comes back when the meeting moves forward. The rule is `nextBridgeWindow`.
-  const windowTarget = trigger.state === "idle" ? null : targetFor(trigger.roomId);
+  // `offer` opens nothing any more. It used to raise a separate "Translate this call?" window;
+  // the room is now created straight away (use-bridge-auto-room.ts) and the meeting session opens
+  // the transcript popup on it, so the next thing on screen is the popup the user actually wants.
+  const windowTarget =
+    trigger.state === "idle" || trigger.state === "offer" ? null : targetFor(trigger.roomId);
   const windowLedger = useRef<BridgeWindowLedger>(EMPTY_BRIDGE_WINDOW);
   // Read by the desktop's window events, which arrive long after the render that set them up.
   const windowTargetRef = useRef<string | null>(null);

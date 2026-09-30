@@ -19,7 +19,7 @@
  * from the provider having refused, which is the exact confusion this feature exists to end.
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -194,6 +194,36 @@ if (!dialog) {
         `CLONE, which does not exist until the profile is saved — so it can only ever time out ` +
         `here. Play the local file instead.`,
     );
+  }
+}
+
+// WT-712: one clip at a time on Voice Profiles. Every surface that makes a sound on this page —
+// library voices, "Your voices", the dub-voice picker, the create dialog's take — must take the
+// page's single playback slot (lib/audio/exclusive-playback) before it plays, directly or through
+// useAudioPlayback. A new play button that owns a bare Audio element would stack over the others
+// again, which is the bug the ticket reported.
+{
+  const voiceDir = join(root, "src/components/voice");
+  const pageFile = "src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx";
+  const candidates = [
+    ...readdirSync(voiceDir).map((name) => `src/components/voice/${name}`),
+    pageFile,
+    "src/hooks/use-audio-playback.ts",
+  ];
+  for (const rel of candidates) {
+    const source = readFileSync(join(root, rel), "utf8");
+    const playsAudio = /new Audio\(|\.play\(\)|<audio\b/.test(source);
+    if (playsAudio && !/claimPlayback\(/.test(source)) {
+      failures.push(
+        `${rel} plays audio without claiming the page's playback slot (claimPlayback / ` +
+          `useAudioPlayback). Two clips would play at once again (WT-712).`,
+      );
+    }
+  }
+  for (const rel of ["src/components/voice/voice-preview-button.tsx", "src/components/voice/voice-sample-button.tsx"]) {
+    if (!readFileSync(join(root, rel), "utf8").includes("useAudioPlayback(")) {
+      failures.push(`${rel} must play through useAudioPlayback, which owns the single-slot rule (WT-712).`);
+    }
   }
 }
 

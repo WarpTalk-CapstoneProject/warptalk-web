@@ -31,6 +31,7 @@ import type { CreditBalanceDto } from "@/types/billing";
 // records what a second copy cost last time: a duplicated credit price that overcharged by
 // 2–2.5× because the server, not the client, sets the amount. One modal, one set of caveats.
 import { TopUpModal } from "@/app/(app)/[workspaceSlug]/settings/billing/components/top-up-modal";
+import { balanceAllowsExtraCredits } from "@/lib/billing/extra-credits";
 
 /**
  * How often the balance is re-read while somebody is working.
@@ -101,6 +102,9 @@ export function UsageWarningBanner({ workspaceSlug }: { workspaceSlug: string })
   });
 
   const warning = useMemo(() => decideUsageWarning(balance), [balance]);
+  // backend#467: a top-up needs a live plan under it. The balance endpoint serves the active row,
+  // so its status and period answer the server's question without another request.
+  const canAddCredits = canBuy && balanceAllowsExtraCredits(balance);
 
   // Computed before any early return, because it feeds a hook. Null whenever there is nothing to
   // dismiss, which the store reads as "not dismissed".
@@ -123,12 +127,12 @@ export function UsageWarningBanner({ workspaceSlug }: { workspaceSlug: string })
       <UsageWarningCard
         warning={warning}
         canBuy={canBuy}
-        onAddCredits={() => setTopUpOpen(true)}
+        onAddCredits={canAddCredits ? () => setTopUpOpen(true) : null}
         onUpgrade={() => router.push(`/${workspaceSlug}/settings/billing`)}
         onDismiss={dismiss}
       />
 
-      {canBuy ? (
+      {canAddCredits ? (
         <TopUpModal open={topUpOpen} onOpenChange={setTopUpOpen} workspaceId={workspaceId} />
       ) : null}
     </>

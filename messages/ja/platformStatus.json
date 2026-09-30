@@ -1,0 +1,5 @@
+{
+  "maintenanceTitle": "定期メンテナンス",
+  "defaultMessage": "WarpTalk はメンテナンス中です。しばらくしてからもう一度お試しください。",
+  "contact": "お問い合わせ: <link>{email}</link>"
+}

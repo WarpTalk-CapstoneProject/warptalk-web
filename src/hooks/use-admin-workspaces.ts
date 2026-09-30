@@ -20,12 +20,13 @@ export const ADMIN_WORKSPACE_KEYS = {
 
 export function useAdminWorkspaceDirectory(
   query: AdminWorkspaceDirectoryQuery,
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; refetchInterval?: number } = {},
 ) {
   return useQuery({
     queryKey: ADMIN_WORKSPACE_KEYS.directory(query),
     queryFn: () => adminWorkspaceService.getDirectory(query),
     enabled: options.enabled ?? true,
+    refetchInterval: options.refetchInterval,
     // The directory is a management surface, not a live dashboard: keep it bounded so
     // paging through it does not hammer the aggregation query.
     staleTime: 30_000,

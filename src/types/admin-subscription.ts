@@ -19,7 +19,8 @@ export type AdminSubscriptionSort =
   | "period_end_desc"
   | "created_desc"
   | "created_asc"
-  | "credits_asc";
+  | "credits_asc"
+  | "credits_desc";
 
 /**
  * An amount that always states its currency.
@@ -90,10 +91,21 @@ export interface AdminSubscriptionLifecycleRequest {
   reason: string;
 }
 
+/** The billing service's own states for a subscription's SERVICE (not its status). */
+export type AdminSubscriptionServiceState = "healthy" | "low_balance" | "in_overage" | "suspended";
+
 export interface AdminSubscriptionDirectoryQuery {
   page?: number;
   pageSize?: number;
   status?: AdminSubscriptionStatusFilter;
   planSlug?: string;
+  serviceState?: AdminSubscriptionServiceState;
+  /** The PLAN's cycle: `monthly` | `yearly` (Stripe's month/year spellings are refused). */
+  billingCycle?: "monthly" | "yearly";
+  autoRenew?: boolean;
+  workspaceId?: string;
+  /** current_period_end bounds: `periodEndFrom` inclusive, `periodEndTo` exclusive. */
+  periodEndFrom?: string;
+  periodEndTo?: string;
   sort?: AdminSubscriptionSort;
 }

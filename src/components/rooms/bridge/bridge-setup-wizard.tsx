@@ -36,9 +36,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { getDesktopBridge } from "@/lib/desktop/bridge";
 import {
   checkVirtualBridge,
   currentBridgeDeviceLabels,
+  WINDOWS_CABLES_DOWNLOAD_PAGE,
   type BridgeCheckResult,
   type BridgeDeviceLabels,
   type DeviceProbe,
@@ -91,7 +93,7 @@ function ProbeRow({ probe }: { probe: DeviceProbe }) {
       : "carries the meeting's audio back to you";
 
   const verdict = !probe.present
-    ? { tone: "text-ink-subtle", text: "Not installed" }
+    ? { tone: "text-ink-subtle", text: probe.optional ? "Not installed (optional)" : "Not installed" }
     : probe.error
       ? { tone: "text-amber-600 dark:text-amber-400", text: probe.error }
       : probe.carriesSignal
@@ -142,21 +144,41 @@ export function BridgeSetupWizard({
    * the user is meant to copy exactly. Null until mount, and the instructions wait for it.
    */
   const [labels, setLabels] = useState<BridgeDeviceLabels | null>(null);
+  /** Only the desktop app can install drivers; a browser tab has no bridge to ask. */
+  const [canInstall, setCanInstall] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   useEffect(() => {
     setLabels(currentBridgeDeviceLabels());
+    setCanInstall(Boolean(getDesktopBridge()?.installVirtualAudio));
   }, []);
 
   const check = useCallback(async () => {
     setChecking(true);
     try {
-      setResult(await runCheck());
+      const outcome = await runCheck();
+      setResult(outcome);
+      // The check knows which pair this machine really has — BlackHole on a Mac set up before the
+      // rename — so the instructions follow it rather than the platform default.
+      if (outcome.labels) setLabels(outcome.labels);
     } catch {
       setResult({ probes: [], ready: false, needsPermission: true });
     } finally {
       setChecking(false);
     }
   }, [runCheck]);
+
+  const install = useCallback(async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge?.installVirtualAudio) return;
+    setInstalling(true);
+    try {
+      const outcome = await bridge.installVirtualAudio();
+      if (outcome.started) await check();
+    } finally {
+      setInstalling(false);
+    }
+  }, [check]);
 
   // Run once on open so the common case — everything already installed — needs no clicks.
   useEffect(() => {
@@ -165,6 +187,12 @@ export function BridgeSetupWizard({
 
   const devicesReady = result?.ready === true;
   const ready = devicesReady && meetConfirmed;
+  const isWindows = labels?.platform === "windows";
+  // Whether the far side arrives on its own cable. On Windows without Hi-Fi Cable it does not, and
+  // telling the user to point Meet's speaker at a device that is not there would silence the call.
+  const inboundViaDevice = Boolean(result?.probes.find((probe) => probe.leg === "inbound")?.present);
+  const speakerToSet =
+    labels?.meetSpeaker && (!labels.inboundOptional || inboundViaDevice) ? labels.meetSpeaker : null;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
@@ -181,13 +209,56 @@ export function BridgeSetupWizard({
         title="Install the two audio devices"
         state={devicesReady ? "done" : "active"}
       >
-        {devicesReady ? (
+        {devicesReady && (!isWindows || inboundViaDevice) ? (
           <p>Both devices are installed and working.</p>
+        ) : devicesReady ? (
+          <p>
+            VB-CABLE is installed and working. Hi-Fi Cable is not, so WarpTalk will listen to your whole
+            browser instead and other tabs may be translated too. Install Hi-Fi Cable from the{" "}
+            <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
+              VB-Audio download page
+            </a>{" "}
+            to hear only Google Meet.
+          </p>
+        ) : isWindows ? (
+          <>
+            <p className="mb-3">
+              WarpTalk uses two free drivers from VB-Audio, both on the same page:{" "}
+              <span className="font-medium text-ink">VB-CABLE</span> carries your translated voice into
+              the meeting, and <span className="font-medium text-ink">Hi-Fi Cable</span> carries the
+              meeting back to WarpTalk.
+            </p>
+            <p className="mb-2 text-xs text-ink-subtle">
+              <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
+                Open the VB-Audio download page
+              </a>
+              , install both, and restart if an installer asks. Then open Windows Sound settings and set
+              Hi-Fi Cable Input and Hi-Fi Cable Output to the same format, 48000 Hz — Hi-Fi Cable passes
+              no sound when its two sides differ.
+            </p>
+            <p className="text-xs text-ink-subtle">
+              Hi-Fi Cable is optional. Without it WarpTalk listens to your whole browser, so sound from
+              other tabs gets translated too.
+            </p>
+          </>
         ) : (
           <>
             <p className="mb-3">
-              WarpTalk needs two virtual audio devices to pass sound to and from Meet. It uses
-              BlackHole, which is free and open source.
+              WarpTalk needs two virtual audio devices to pass sound to and from Meet:{" "}
+              <span className="font-medium text-ink">WarpTalk Microphone</span> and{" "}
+              <span className="font-medium text-ink">WarpTalk Speaker</span>. The WarpTalk desktop app
+              installs both, and macOS asks for your password once.
+            </p>
+            {canInstall && (
+              <div className="mb-3">
+                <Button type="button" size="sm" onClick={() => void install()} disabled={installing}>
+                  {installing ? "Installing…" : "Install audio devices"}
+                </Button>
+              </div>
+            )}
+            <p className="mb-2 text-xs text-ink-subtle">
+              Already using BlackHole? It still works: WarpTalk uses BlackHole 2ch and BlackHole 16ch
+              when its own devices are not installed. To set BlackHole up instead:
             </p>
             <div className="mb-3 flex items-center gap-2">
               <code className="flex-1 overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs text-ink">
@@ -225,20 +296,21 @@ export function BridgeSetupWizard({
       >
         <p className="mb-3">
           In your Meet tab, open Settings → Audio and set
-          {labels?.meetSpeaker ? " both:" : ":"}
+          {speakerToSet ? " both:" : ":"}
         </p>
         <ul className="mb-3 space-y-1">
           <li>
             Microphone → <span className="font-medium text-ink">{labels?.meetMicrophone ?? "…"}</span>
           </li>
           {/*
-            Only where a second virtual device carries the far side. On Windows process loopback
-            reads the browser's own output instead, so there is nothing to change here — and
-            pointing Meet's speaker at a virtual device would only make the call inaudible.
+            Only where a second virtual device carries the far side. On Windows without Hi-Fi Cable,
+            process loopback reads the browser's own output instead, so there is nothing to change
+            here — and pointing Meet's speaker at a missing device would only make the call inaudible.
           */}
-          {labels?.meetSpeaker ? (
+          {speakerToSet ? (
             <li>
-              Speakers → <span className="font-medium text-ink">{labels.meetSpeaker}</span>
+              Speakers → <span className="font-medium text-ink">{speakerToSet}</span>. You will hear
+              the call through WarpTalk instead, a little quieter while a translation is playing.
             </li>
           ) : (
             <li>

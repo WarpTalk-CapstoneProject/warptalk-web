@@ -88,5 +88,16 @@ export interface AdminUserDirectoryQuery {
   search?: string;
   status?: AdminUserStatusFilter;
   role?: string;
+  /** created_at bounds: `createdFrom` inclusive, `createdTo` exclusive (ISO instants). */
+  createdFrom?: string;
+  createdTo?: string;
+  /** last_login_at bounds. An account that never signed in never matches either. */
+  lastLoginFrom?: string;
+  lastLoginTo?: string;
+  /**
+   * true: never signed in; false: signed in at least once. The server refuses `true` together
+   * with a last-login bound, so the page drops those bounds while this is true.
+   */
+  neverSignedIn?: boolean;
   sort?: AdminUserSort;
 }

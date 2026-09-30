@@ -28,6 +28,11 @@ import { captureFarSideAudio } from "./bridge-audio-legs";
 export interface BridgeInboundHandles {
   /** The second connection, already publishing. Exposed for status, not for callers to drive. */
   room: Room;
+  /**
+   * The far side's audio as it is being published. Exposed so the host can listen to it locally
+   * (see bridge-far-side-monitor); never stop it — `stop` below decides whether this module owns it.
+   */
+  track: MediaStreamTrack;
   /** Stops capture and disconnects. Safe to call more than once. */
   stop: () => Promise<void>;
 }
@@ -112,5 +117,5 @@ export async function openBridgeInbound(options: {
     throw error;
   }
 
-  return { room, stop };
+  return { room, track: mediaTrack, stop };
 }

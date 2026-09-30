@@ -15,6 +15,7 @@ export const WORKSPACE_KEYS = {
   list: (page: number, pageSize: number, search: string) => ["workspaces", "list", { page, pageSize, search }] as const,
   detail: (id: string) => ["workspaces", "detail", id] as const,
   settings: (id: string) => ["workspaces", "settings", id] as const,
+  entitlements: (id: string) => ["workspaces", "entitlements", id] as const,
   verifiedDomains: (id: string) => ["workspaces", "verified-domains", id] as const,
   members: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
@@ -78,6 +79,19 @@ export function useWorkspaceSettings(id: string) {
   return useQuery({
     queryKey: WORKSPACE_KEYS.settings(id),
     queryFn: () => WorkspaceService.getSettings(id),
+    enabled: !!id,
+    staleTime: 60000,
+  });
+}
+
+/**
+ * The workspace's resolved entitlements. Read-only; changes arrive through billing, so a minute of
+ * staleness costs nothing a reader would notice.
+ */
+export function useWorkspaceEntitlements(id: string) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.entitlements(id),
+    queryFn: () => WorkspaceService.getEntitlements(id),
     enabled: !!id,
     staleTime: 60000,
   });
@@ -530,6 +544,47 @@ export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: st
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
+    },
+  });
+}
+
+/**
+ * Makes a document private again, or shares a private one with the workspace.
+ *
+ * The detail page shows the new state from the server's own answer the moment it lands — the
+ * status badge, the Visibility section and the Access controls all read `status`, and waiting for
+ * a refetch would leave "Public" on screen after the confirm dialog closed. Only the fields the
+ * transition changes are copied in: the detail route adds `approvedBy` and `rejectionReason`,
+ * which this response does not carry, so replacing the whole object would blank them.
+ *
+ * Knowledge is invalidated too, because making a document private deletes its chunks from the
+ * index that page lists.
+ */
+export function useSetWorkspaceDocumentVisibility(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (visibility: "private" | "public") =>
+      visibility === "private"
+        ? WorkspaceService.unpublishDocument(workspaceId, docId)
+        : WorkspaceService.publishDocument(workspaceId, docId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        WORKSPACE_KEYS.documentDetail(workspaceId, docId),
+        (previous: Record<string, unknown> | undefined) =>
+          previous
+            ? {
+                ...previous,
+                status: updated.status,
+                ingestionStatus: updated.ingestionStatus,
+                aiEligible: updated.aiEligible,
+                updatedAt: updated.updatedAt,
+              }
+            : previous,
+      );
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentHistory(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "knowledge", workspaceId] });
     },
   });
 }

@@ -1,0 +1,150 @@
+{
+  "filters": {
+    "allVoices": "All voices",
+    "mine": "Mine",
+    "library": "Library",
+    "needsAttention": "Needs attention"
+  },
+  "search": { "placeholder": "Search voices...", "ariaLabel": "Search voices" },
+  "createProfile": "Create profile",
+  "consent": {
+    "title": "Cloning you in a meeting",
+    "allowed": "Allowed",
+    "descriptionGranted": "A meeting may build a voice model from the first seconds of your speech and dub you in it. That model is biometric data, is used only to dub what you say, and stops being used the moment you withdraw this.",
+    "descriptionOff": "Off. A meeting will not build a voice from your live speech — your translated words are read in a library voice instead. Uploading a voice below is a separate permission and works without this.",
+    "loading": "Loading…",
+    "granted": "Granted",
+    "termsVersion": "· terms {version}",
+    "withdraw": "Withdraw",
+    "allowIt": "Allow it",
+    "toasts": {
+      "withdrawn": "Withdrawn. Meetings will not clone your voice.",
+      "withdrawFailed": "Could not withdraw your consent. Try again.",
+      "granted": "Meetings may now clone your voice.",
+      "grantFailed": "Could not record your consent. Try again."
+    }
+  },
+  "dubPicker": {
+    "title": "You are dubbed in",
+    "description": "How you sound to people listening in another language.",
+    "cloneLiveOption": "Clone my voice live in the meeting",
+    "myVoice": "My voice",
+    "voiceYouPicked": "A voice you picked",
+    "yourVoicesGroup": "Your voices",
+    "libraryVoicesGroup": "Library voices · {language}",
+    "ariaLabel": "The voice you are dubbed in",
+    "cloneMeLiveInstead": "Clone me live instead",
+    "toasts": {
+      "savedDubbed": "Saved. You will be dubbed in this voice.",
+      "backToLiveClone": "Back to cloning your voice live.",
+      "saveFailed": "Could not save the voice you are dubbed in."
+    },
+    "retryToasts": {
+      "queued": "Sent for cloning again.",
+      "failed": "Could not send the recording for cloning."
+    }
+  },
+  "library": {
+    "title": "Library voices",
+    "languageAriaLabel": "Language for the voice library",
+    "loading": "Loading voices…",
+    "noVoicesTitle": "No library voices for {language}",
+    "noVoicesDescription": "Cartesia publishes no voices in this language, or the library is still loading after a restart.",
+    "noMatch": "No library voice matches that search.",
+    "youHearThis": "Stand-in",
+    "yourDefault": "Your stand-in",
+    "clear": "Clear",
+    "use": "Use",
+    "toasts": {
+      "setAsHeard": "Saved — used for speakers in this language who have no voice of their own.",
+      "clearedAutomatic": "Cleared — back to the automatic voice.",
+      "saveFailed": "Could not save the stand-in voice."
+    }
+  },
+  "listeningSummary": {
+    "title": "Stand-in voice",
+    "description": "Used for a speaker in {language} who has not picked a voice of their own. Anyone who has, you hear as themselves.",
+    "automatic": "Automatic",
+    "loading": "Loading…",
+    "savedVoice": "Saved voice",
+    "unavailable": "Not offered for {language} right now, so the automatic voice is used until it is. The catalogue fills after the first translation into this language.",
+    "clear": "Clear",
+    "previewLabel": "the stand-in voice",
+    "hint": "Press Use on a library voice to pick one for this language.",
+    "toasts": {
+      "cleared": "Cleared — back to the automatic voice.",
+      "clearFailed": "Could not clear the stand-in voice."
+    }
+  },
+  "yourVoices": {
+    "title": "Your voices",
+    "loading": "Loading your voices…",
+    "emptyTitle": "No voices of your own yet",
+    "emptyDescription": "Record one clear sample and WarpTalk can speak your translations in your own voice. Until then a library voice is used.",
+    "noMatch": "None of your voices match this filter.",
+    "untitledProfile": "Untitled profile",
+    "thisVoiceProfile": "this voice profile",
+    "dubbingYou": "Dubbing you",
+    "noLanguage": "No language",
+    "ready": "Ready",
+    "couldNotClone": "Couldn't clone",
+    "cloning": "Cloning",
+    "cloningDetail": "usually under a minute",
+    "reRecord": "Re-record",
+    "tryAgain": "Try again",
+    "cloneFailure": {
+      "planRequired": "The voice service's plan doesn't include cloning. Your recording is fine — try again once an admin upgrades the plan.",
+      "outOfCredits": "The voice service is out of credits. Your recording is fine — try again once an admin tops it up.",
+      "providerRejected": "The voice service refused our credentials. Your recording is fine — try again later.",
+      "providerUnavailable": "The voice service was unavailable. Your recording is fine — try again.",
+      "sampleRejected": "The voice service couldn't use this recording. Record a clearer, longer take.",
+      "sampleExpired": "The recording wasn't picked up in time. Try again.",
+      "unknown": "The voice service returned an unexpected error. Try again, or re-record.",
+      "notRecorded": "The reason wasn't recorded. Try again, or re-record.",
+      "detail": "Details: {detail}"
+    },
+    "actionsFor": "Actions for {name}",
+    "stopBeingDubbed": "Stop being dubbed in this",
+    "beDubbedIn": "Be dubbed in this voice",
+    "deleteProfile": "Delete profile",
+    "profileCount": "{count, plural, one {# profile} other {# profiles}}",
+    "usableToday": ", {count} usable today",
+    "tally": { "ready": "ready", "cloning": "cloning", "failed": "failed" },
+    "toasts": {
+      "deleted": "Voice profile deleted",
+      "deleteFailed": "Failed to delete voice profile",
+      "savedDubbed": "Saved. You will be dubbed in this voice.",
+      "backToLiveClone": "Back to cloning your voice live.",
+      "saveFailed": "Could not save the voice you are dubbed in."
+    }
+  },
+  "createDialog": {
+    "title": "Create voice profile",
+    "description": "Name it, pick the language it speaks, and give one clear sample of you talking.",
+    "nameLabel": "Name",
+    "namePlaceholder": "My presenting voice",
+    "languageLabel": "Language",
+    "selectLanguage": "Select language…",
+    "sampleLabel": "Sample",
+    "record": "Record",
+    "stop": "Stop",
+    "uploadFile": "Upload a file",
+    "sampleInstructions": "Read this in your normal voice: “WarpTalk helps my team understand every conversation clearly.” One speaker, quiet room, 5–120 seconds, up to 20 MB.",
+    "consentIntro": "Consent for this recording. Separate from allowing a meeting to clone you live, which stays off unless you switch it on yourself.",
+    "allFiveConfirmed": "All five confirmed.",
+    "leftToConfirm": "{count} of 5 left to confirm.",
+    "saving": "Saving…",
+    "agreeAndSave": "Agree & save",
+    "recordingHint": "Recording… read the sentence below in a quiet room.",
+    "toasts": {
+      "sampleTooLarge": "Audio sample must be under 20 MB.",
+      "recordingUnsupported": "This browser does not support direct audio recording.",
+      "micDenied": "Microphone access was denied or unavailable.",
+      "nameRequired": "Give the profile a name.",
+      "sampleRequired": "Record or upload a clear voice sample first.",
+      "consentRequired": "Confirm all five statements to continue.",
+      "created": "Voice profile saved. Cloning it now — usually under a minute.",
+      "createFailed": "Failed to create voice profile"
+    }
+  }
+}

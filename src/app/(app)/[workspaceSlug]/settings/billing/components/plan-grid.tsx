@@ -13,10 +13,16 @@
  * "Everything in X, plus" line is doing real work — without it every column has to repeat the
  * previous column's list, and the differences stop being visible.
  *
+ * NOT A BOX. The ladder is the last row of the Billing page's ruled grid, so it draws no border or
+ * radius of its own: its columns are split by the same 1px hairlines that split the page's rows.
+ * Column count follows the plan count and caps at 1 / 2 / 4 (phone / sm / xl), so a ladder of one
+ * — production today, Enterprise only — spans the width instead of leaving three empty columns.
+ *
  * No shadows: see billing-primitives.
  */
 
 import { Check } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
 
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { cn } from "@/lib/utils";
@@ -24,16 +30,18 @@ import type { PlanDto } from "@/types/billing";
 
 import { BillingButton, Pill } from "./billing-primitives";
 
+type BillingT = ReturnType<typeof useTranslations>;
+
 /** The capabilities a tier can add. Order is fixed so columns line up down the grid. */
-const CAPABILITIES: { key: keyof PlanDto; label: string }[] = [
-  { key: "voiceCloneEnabled", label: "Voice cloning" },
-  { key: "aiAssistantEnabled", label: "AI assistant" },
-  { key: "glossaryEnabled", label: "Custom glossary" },
-  { key: "dedicatedGpu", label: "Dedicated GPU" },
+const CAPABILITY_KEYS: { key: keyof PlanDto; labelKey: string }[] = [
+  { key: "voiceCloneEnabled", labelKey: "capabilities.voiceCloning" },
+  { key: "aiAssistantEnabled", labelKey: "capabilities.aiAssistant" },
+  { key: "glossaryEnabled", labelKey: "capabilities.customGlossary" },
+  { key: "dedicatedGpu", labelKey: "capabilities.dedicatedGpu" },
 ];
 
-function capabilitiesOf(plan: PlanDto): string[] {
-  return CAPABILITIES.filter(({ key }) => plan[key] === true).map(({ label }) => label);
+function capabilitiesOf(plan: PlanDto, t: BillingT): string[] {
+  return CAPABILITY_KEYS.filter(({ key }) => plan[key] === true).map(({ labelKey }) => t(labelKey));
 }
 
 /** Per-cycle price rendered the way a price is read: amount large, unit small. */
@@ -68,6 +76,7 @@ export function PlanGrid({
   currentPlanId: string | null;
   onSelect: (plan: PlanDto) => void;
 }) {
+  const t = useTranslations("settingsBilling");
   const currentIndex = plans.findIndex((plan) => plan.id === currentPlanId);
 
   // The most expensive plan carries the badge. Not a hardcoded slug: the ladder is administered
@@ -75,62 +84,81 @@ export function PlanGrid({
   // renamed or withdrawn.
   const highlightedId = plans.length > 0 ? plans[plans.length - 1].id : null;
 
+  // Columns per breakpoint, never more than there are plans. Each cell rules its own left edge
+  // when it is not first in its line, and its top edge when it is not in the first line — so a
+  // wrapped ladder stays ruled without doubling any hairline.
+  const smCols = Math.min(plans.length, 2);
+  const xlCols = Math.min(plans.length, 4);
+
   return (
-    <div className="grid gap-0 overflow-clip rounded-[12px] border border-border bg-surface-1 shadow-none sm:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={cn(
+        "grid min-w-0 grid-cols-1",
+        plans.length >= 2 && "sm:grid-cols-2",
+        plans.length === 3 && "xl:grid-cols-3",
+        plans.length >= 4 && "xl:grid-cols-4",
+      )}
+    >
       {plans.map((plan, index) => {
         const isCurrent = plan.id === currentPlanId;
         // "Covered by current plan" — a tier at or below the one being paid for. Distinct from
         // the current plan itself, and from an upgrade, because all three want different words.
         const isCovered = currentIndex >= 0 && index < currentIndex;
         const previous = index > 0 ? plans[index - 1] : null;
-        const added = capabilitiesOf(plan).filter(
-          (capability) => !previous || !capabilitiesOf(previous).includes(capability),
+        const added = capabilitiesOf(plan, t).filter(
+          (capability) => !previous || !capabilitiesOf(previous, t).includes(capability),
         );
 
         return (
           <div
             key={plan.id}
             className={cn(
-              "flex min-w-0 flex-col gap-3.5 border-hairline p-4",
-              // Rules between columns, never around them: the grid is one object.
-              index > 0 && "sm:border-l",
-              index >= 2 && "xl:border-l",
-              index >= 2 && "sm:border-t xl:border-t-0",
-              index === 1 && "sm:border-t-0",
+              "flex min-w-0 flex-col gap-3.5 border-hairline px-4 py-5 sm:px-6",
+              // Rules between columns, never around them: the page grid is the one object.
+              index > 0 && "border-t",
+              index % smCols !== 0 ? "sm:border-l" : "sm:border-l-0",
+              index >= smCols ? "sm:border-t" : "sm:border-t-0",
+              index % xlCols !== 0 ? "xl:border-l" : "xl:border-l-0",
+              index >= xlCols ? "xl:border-t" : "xl:border-t-0",
             )}
           >
             <div className="flex items-center gap-2">
               <h3 className="text-[13px] font-semibold text-ink">{plan.name}</h3>
-              {plan.id === highlightedId ? <Pill tone="accent">Most popular</Pill> : null}
+              {plan.id === highlightedId ? <Pill tone="accent">{t("planGrid.mostPopular")}</Pill> : null}
             </div>
 
             <PriceLine plan={plan} />
 
             {isCurrent ? (
-              <BillingButton tone="quiet">Current plan</BillingButton>
+              <BillingButton tone="quiet">{t("planGrid.currentPlan")}</BillingButton>
             ) : isCovered ? (
-              <BillingButton tone="quiet">Covered by current plan</BillingButton>
+              <BillingButton tone="quiet">{t("planGrid.coveredByCurrentPlan")}</BillingButton>
             ) : (
               <BillingButton
                 tone={plan.id === highlightedId ? "primary" : "outline"}
                 onClick={() => onSelect(plan)}
               >
-                {currentIndex >= 0 ? "Upgrade" : "Choose"}
+                {currentIndex >= 0 ? t("planGrid.upgrade") : t("planGrid.choose")}
               </BillingButton>
             )}
 
             <div className="space-y-1">
               <p className="text-[12px] text-ink-muted">
-                {formatAmount(plan.creditsPerCycle)} credits/cycle
+                {t("planGrid.creditsPerCycle", { credits: formatAmount(plan.creditsPerCycle) })}
               </p>
               <p className="text-[12px] text-ink-muted">
-                {plan.maxParticipants} participants · {plan.maxLanguages} languages
+                {t("planGrid.limits", {
+                  participants: plan.maxParticipants,
+                  languages: plan.maxLanguages,
+                })}
               </p>
             </div>
 
             <div className="space-y-1.5">
               {previous ? (
-                <p className="text-[12px] text-ink">Everything in {previous.name}, plus</p>
+                <p className="text-[12px] text-ink">
+                  {t("planGrid.everythingInPlus", { name: previous.name })}
+                </p>
               ) : null}
               {added.length > 0 ? (
                 added.map((capability) => (
@@ -140,9 +168,9 @@ export function PlanGrid({
                   </p>
                 ))
               ) : previous ? (
-                <p className="text-[12px] text-ink-subtle">More credits and higher limits</p>
+                <p className="text-[12px] text-ink-subtle">{t("planGrid.moreCreditsAndLimits")}</p>
               ) : (
-                capabilitiesOf(plan).map((capability) => (
+                capabilitiesOf(plan, t).map((capability) => (
                   <p key={capability} className="flex items-center gap-1.5 text-[12px] text-ink-muted">
                     <Check weight="bold" className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     {capability}

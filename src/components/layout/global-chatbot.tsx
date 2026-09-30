@@ -4,16 +4,19 @@ import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
   useMemo,
   useCallback,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowUp,
   ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
-  CheckCircle,
   CornersIn,
   Plus,
   PaperPlaneTilt,
@@ -23,6 +26,9 @@ import {
   FileText,
   BookBookmark,
   PlugsConnected,
+  MagnifyingGlass,
+  Sparkle,
+  Subtitles,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -43,6 +49,12 @@ import {
 } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { composerReadiness } from "@/lib/assistant/composer-readiness";
+import {
+  assistantScopeFor,
+  PLATFORM_SCOPE_LABEL,
+  PLATFORM_SUGGESTED_PROMPTS,
+} from "@/lib/assistant/assistant-scope";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
   useWorkspaceMembers,
@@ -53,10 +65,15 @@ import {
   useAssistantConversations,
   useAssistantPlugins,
   useCreateAssistantConversation,
+  useCreatePlatformAssistantConversation,
   useInstallAssistantPlugin,
   useLoadAssistantConversation,
+  useLoadPlatformAssistantConversation,
+  usePlatformAssistantConversations,
   usePluginConnectUrl,
   useSendAssistantMessage,
+  useSendPlatformAssistantMessage,
+  useUpdatePluginToolPolicy,
 } from "@/hooks/use-assistant";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -73,15 +90,10 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-  type PluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-  type PluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
@@ -97,10 +109,37 @@ import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { UserMessageBody } from "@/components/assistant/message-mention-chips";
+import { mentionCompletion } from "@/lib/assistant/mention-completion";
+import {
+  hasMentionToken,
+  mentionToken,
+  mentionTokenEndingAt,
+  mentionTokenLabel,
+  parseMessageMentions,
+  splitMentionTokens,
+} from "@/lib/assistant/message-mentions";
+import {
+  NAMESPACE_ENTITY_TYPES,
+  namespaceHints,
+  namespaceKeyword,
+  parseMentionTrigger,
+  type MentionNamespace,
+} from "@/lib/assistant/mention-trigger";
+import { matchesSearchText } from "@/lib/ui/search-text";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
+import {
+  pluginWritesAlwaysAllowed,
+  readDisabledPluginKeys,
+  togglePluginKey,
+  writeDisabledPluginKeys,
+  writeToolPolicyUpdate,
+  type KeyValueStore,
+} from "@/lib/assistant/tool-policy";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -126,7 +165,53 @@ interface AssistantContextOption {
   isAvatar?: boolean;
   entityType: AssistantMentionDto["entityType"];
   entityId: string;
+  /**
+   * What goes on the wire as the mention's label, when it is not `title`. WT-887: a summary or
+   * transcript option is titled — and written into the draft as — "Summary · Standup", while the
+   * AI worker's contract wants the bare meeting title. See mentionTokenLabel.
+   */
+  label?: string;
 }
+
+/**
+ * WT-887: a row in the "@" menu that is not an entity but a namespace to narrow to — "document:"
+ * under a typed "@doc". Picking it writes "@document:" into the draft and keeps the menu open on
+ * that namespace; it never becomes a selected context, so it can never be sent as a mention.
+ */
+interface MentionNamespaceHint {
+  id: string;
+  /** The keyword with its colon, "document:": what Tab completes "@doc" to. */
+  title: string;
+  type: string;
+  icon: ReactNode;
+  description: string;
+  isAvatar?: false;
+  namespace: MentionNamespace;
+}
+
+type MentionMenuItem = AssistantContextOption | MentionNamespaceHint;
+
+function isNamespaceHint(item: MentionMenuItem): item is MentionNamespaceHint {
+  return "namespace" in item;
+}
+
+/**
+ * A meeting status that means it never took place, so it has no summary or transcript to point
+ * at. Page snapshots carry the status in whatever case their page had it in.
+ */
+const NEVER_HELD_STATUSES = new Set(["scheduled", "open", "cancelled", "expired"]);
+
+/** Page types whose ambient entity is a meeting — the one whose record the user is looking at. */
+const MEETING_PAGE_TYPES = new Set(["room_detail", "history", "in_meeting"]);
+
+/** The catalog key under common.chatbot that says what each namespace hint narrows to. */
+const NAMESPACE_HINT_KEYS = {
+  document: "mentionNamespaceDocument",
+  meeting: "mentionNamespaceMeeting",
+  summary: "mentionNamespaceSummary",
+  transcript: "mentionNamespaceTranscript",
+  artifact: "mentionNamespaceArtifact",
+} as const satisfies Record<MentionNamespace, string>;
 
 type ChatRole = "user" | "assistant";
 
@@ -152,6 +237,21 @@ interface ChatMessage {
    */
   steps?: AssistantStep[];
   durationMs?: number;
+  /**
+   * The @mentions this user message went out with, in the wire shape — the same list the request
+   * carried, and the same list `mentionsJson` hands back when the conversation is reopened. One
+   * shape for both paths, so a message drawn a moment after sending and the same message replayed
+   * from history cannot show different chips. See MessageMentionChips.
+   */
+  mentions?: AssistantMentionDto[];
+  /**
+   * The files this user message went out with.
+   *
+   * SENT-SESSION ONLY. Attachments are deliberately not persisted (see ChatAttachmentStrip and
+   * ai_assistant_worker._attach_attachments), so a conversation reopened from history has no
+   * bytes to draw and this is absent. Unlike mentions, that is by design, not a gap.
+   */
+  attachments?: ChatAttachment[];
 }
 
 
@@ -171,74 +271,84 @@ interface SlashCommand {
 // injects (see chat_worker.py::_format_page_context) — entity_id is in there, so the
 // prompt just has to unambiguously name the current entity and the model's own
 // tool-calling picks the right id. The frontend never calls tools directly.
-const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    command: "/summarize",
-    label: "Summarize this meeting",
-    description: "Summarize this meeting based on its transcript",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () => "Summarize this meeting based on its transcript.",
-  },
-  {
-    command: "/action-items",
-    label: "Action items",
-    description: "List action items and decisions from this meeting",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () =>
-      "List the action items and key decisions from this meeting's transcript.",
-  },
-  {
-    command: "/room-info",
-    label: "Room info",
-    description: "Get this room's status, languages, and host",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () => "Tell me this room's status, languages, and host.",
-  },
-  {
-    command: "/summarize-doc",
-    label: "Summarize this document",
-    description: "Summarize the document you're viewing",
-    pageTypes: ["document_detail"],
-    autoSend: true,
-    buildPrompt: () => "Summarize this document.",
-  },
-  {
-    command: "/extract-terms",
-    label: "Extract key terms",
-    description: "Pull out key terms and terminology from this document",
-    pageTypes: ["document_detail"],
-    autoSend: true,
-    buildPrompt: () =>
-      "Extract the key terms and terminology used in this document.",
-  },
-  {
-    command: "/recent-meetings",
-    label: "Recent meetings",
-    description: "List your recent meetings",
-    pageTypes: ["history", "documents"],
-    autoSend: true,
-    buildPrompt: () => "List my recent meetings.",
-  },
-  {
-    command: "/search-docs",
-    label: "Search documents",
-    description: "Search the workspace's documents — keep typing your query",
-    pageTypes: ["documents"],
-    autoSend: false,
-    buildPrompt: () => "Search the workspace's documents for: ",
-  },
-];
+//
+// Built from `t` rather than a module-level constant so the labels, descriptions and the
+// prompt text actually sent as the user's message can be localized — this list is created
+// inside the component, where the translator is available.
+function buildSlashCommands(
+  t: ReturnType<typeof useTranslations>,
+): SlashCommand[] {
+  return [
+    {
+      command: "/summarize",
+      label: t("slashCommands.summarize.label"),
+      description: t("slashCommands.summarize.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.summarize.prompt"),
+    },
+    {
+      command: "/action-items",
+      label: t("slashCommands.actionItems.label"),
+      description: t("slashCommands.actionItems.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.actionItems.prompt"),
+    },
+    {
+      command: "/room-info",
+      label: t("slashCommands.roomInfo.label"),
+      description: t("slashCommands.roomInfo.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.roomInfo.prompt"),
+    },
+    {
+      command: "/summarize-doc",
+      label: t("slashCommands.summarizeDoc.label"),
+      description: t("slashCommands.summarizeDoc.description"),
+      pageTypes: ["document_detail"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.summarizeDoc.prompt"),
+    },
+    {
+      command: "/extract-terms",
+      label: t("slashCommands.extractTerms.label"),
+      description: t("slashCommands.extractTerms.description"),
+      pageTypes: ["document_detail"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.extractTerms.prompt"),
+    },
+    {
+      command: "/recent-meetings",
+      label: t("slashCommands.recentMeetings.label"),
+      description: t("slashCommands.recentMeetings.description"),
+      pageTypes: ["history", "documents"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.recentMeetings.prompt"),
+    },
+    {
+      command: "/search-docs",
+      label: t("slashCommands.searchDocs.label"),
+      description: t("slashCommands.searchDocs.description"),
+      pageTypes: ["documents"],
+      autoSend: false,
+      buildPrompt: () => t("slashCommands.searchDocs.prompt"),
+    },
+  ];
+}
 
-const PAGE_CONTEXT_LABELS: Record<string, string> = {
-  room_detail: "Meeting",
-  in_meeting: "Live meeting",
-  document_detail: "Document",
-  documents: "Documents",
-  history: "History",
-};
+function buildPageContextLabels(
+  t: ReturnType<typeof useTranslations>,
+): Record<string, string> {
+  return {
+    room_detail: t("pageContextLabels.roomDetail"),
+    in_meeting: t("pageContextLabels.inMeeting"),
+    document_detail: t("pageContextLabels.documentDetail"),
+    documents: t("pageContextLabels.documents"),
+    history: t("pageContextLabels.history"),
+  };
+}
 
 const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {
   room_detail: <VideoCamera size={15} weight="regular" />,
@@ -248,10 +358,14 @@ const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {
   history: <ClockCounterClockwise size={15} weight="regular" />,
 };
 
-function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
+function getAmbientContextDisplay(
+  context: AssistantPageContextDto | null,
+  pageContextLabels: Record<string, string>,
+  fallbackPageLabel: string,
+) {
   if (!context) return null;
 
-  const pageLabel = PAGE_CONTEXT_LABELS[context.pageType] ?? "Page";
+  const pageLabel = pageContextLabels[context.pageType] ?? fallbackPageLabel;
   const rawTitle =
     context.snapshot?.title ||
     context.snapshot?.name ||
@@ -321,7 +435,21 @@ function getPageContextKey(context: AssistantPageContextDto | null) {
  */
 const COMPOSER_MAX_HEIGHT_PX = 132;
 
+/** localStorage when the browser allows it; private modes and blocked storage read as nothing saved. */
+function browserStore(): KeyValueStore | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function GlobalChatbot() {
+  const t = useTranslations("common.chatbot");
+  // Reused rather than duplicated: these plugin-connection toasts (see
+  // handlePluginConnectionAction) are worded identically to the ones the other, simpler
+  // AI chat panel already ships under aiChat.toasts.
+  const tPluginToasts = useTranslations("aiChat.toasts");
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -335,6 +463,8 @@ export function GlobalChatbot() {
   >([]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
+  /** WT-887: the namespace typed before the query ("@summary:…"), or null for a plain "@…". */
+  const [mentionNamespace, setMentionNamespace] = useState<MentionNamespace | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
@@ -343,6 +473,7 @@ export function GlobalChatbot() {
     string | null
   >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [composerOverflowing, setComposerOverflowing] = useState(false);
   /**
    * WT-667 — a `rows={1}` textarea is one line tall forever.
    *
@@ -358,6 +489,9 @@ export function GlobalChatbot() {
     if (!element) return;
     element.style.height = "auto";
     element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+    // Read here because this is the one place that already measured it. The ghost completion
+    // cannot be drawn over a textarea that is scrolling — see the mirror in the composer.
+    setComposerOverflowing(element.scrollHeight > COMPOSER_MAX_HEIGHT_PX);
   }, []);
   /**
    * Sizing on ATTACH as well as on change, because the widget is a popover: the textarea is
@@ -386,11 +520,23 @@ export function GlobalChatbot() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  /**
+   * Platform scope — a system admin on /admin — talks to a SEPARATE conversation store about the
+   * whole platform, with read-only admin tools. Everywhere else the widget is exactly what it was.
+   * Presentation only: AssistantService refuses the platform routes to anyone without the
+   * platform "admin" role, whatever this decides. See lib/assistant/assistant-scope.
+   */
+  const pathname = usePathname();
+  const isSystemAdmin = useIsSystemAdmin();
+  const assistantScope = assistantScopeFor({ pathname, isSystemAdmin });
+  const isPlatformScope = assistantScope === "platform";
   // WT-541: one answer to "can this send", shared by the button and by sendMessage.
   const composerState = composerReadiness({
     text: inputValue,
-    attachmentCount: attachments.length,
+    // A platform turn is text only; files dropped in cannot ride along, so they cannot enable it.
+    attachmentCount: isPlatformScope ? 0 : attachments.length,
     activeWorkspaceId,
+    scope: assistantScope,
   });
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
@@ -409,6 +555,28 @@ export function GlobalChatbot() {
    * documents, not to catch one label mid-flash.
    */
   const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /**
+   * WT-620 — the same trail, readable from inside the hub handlers.
+   *
+   * Those handlers are registered once per conversation, so the `steps` they close over is the
+   * trail of the render that ran the effect: empty, because the question had not been asked yet.
+   * The completed handler folded that onto the answer, and every finished answer carried an empty
+   * trail. Subscribing again on every step is not the fix — it would drop and re-add the handlers
+   * mid-turn — so the handlers read this ref instead, as the meeting chat and the Meet-popup pane
+   * already do.
+   *
+   * Only correct if EVERY write goes through updateSteps: a raw setSteps leaves the ref holding a
+   * trail the screen no longer shows.
+   */
+  const stepsRef = useRef<AssistantStep[]>([]);
+  const updateSteps = useCallback(
+    (next: (current: AssistantStep[]) => AssistantStep[]) => {
+      const value = next(stepsRef.current);
+      stepsRef.current = value;
+      setSteps(value);
+    },
+    [],
+  );
   /** When the open turn began, so the folded summary can say how long it took. */
   const turnStartedAtRef = useRef<number | null>(null);
   /**
@@ -426,18 +594,30 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  const [pendingPluginConnection, setPendingPluginConnection] =
-    useState<PluginConnectionAction | null>(null);
-  const [pendingPluginSetup, setPendingPluginSetup] =
-    useState<PluginOperatorSetupAction | null>(null);
-  // Both plugin cards are turn-scoped. Nothing but a click used to clear them, so a Connect
-  // card outlived the turn that raised it: still there under a successful answer, still there
-  // after New chat - where pressing Connect opened an OAuth flow the current turn never asked
-  // for - and two of them could stack up, one per error code. The meeting panel already gets
-  // this right by clearing in beginAssistantTurn; this is the same rule.
+  // What WarpBot is waiting on before it may act: a write to confirm, a plugin to connect, or a
+  // provider only an operator can register. One at a time, and it lives above the composer rather
+  // than in the thread — see AssistantPermissionPrompt.
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
+  // That prompt has been answered. Two readers: Enter, which must not send the same answer twice
+  // while the first is still running, and the form itself, which cannot see an answer the composer
+  // sent on the user's behalf.
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
+  // When the last turn ended, and null while one is open — which is how the permission form knows
+  // whether the write it just allowed is still running. A stamp rather than a clear of the slot:
+  // the form is what says the write is over, and it takes itself off the screen.
+  const [turnEndedAt, setTurnEndedAt] = useState<number | null>(null);
+  // Both plugin cards last until the NEXT turn starts. Nothing but a click used to clear them, so
+  // a Connect card survived New chat - where pressing Connect opened an OAuth flow the current
+  // turn never asked for - and two of them could stack up, one per error code. So they clear when
+  // a message is sent, on New chat, and when a conversation is opened, as the meeting panel does
+  // in beginAssistantTurn.
+  //
+  // NOT when the turn that raised them completes or fails. A card is raised mid-turn, when the
+  // plugin tool returns, and the answer that lands next is the one explaining it; clearing there
+  // erased the card moments after it appeared, before anyone could press it (WT-688).
   const clearPluginCards = useCallback(() => {
-    setPendingPluginConnection(null);
-    setPendingPluginSetup(null);
+    setPendingPermission(null);
+    setPermissionAnswered(false);
   }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
@@ -457,13 +637,44 @@ export function GlobalChatbot() {
     setInputValue(prompt);
     setIsMinimized(false);
     setIsOpen(true);
+    // When the panel was already open, initialFocus below does not run again and focus stays on
+    // the hint that was clicked — Enter would press that instead of sending. Wait a frame so the
+    // textarea holds the new value before the caret is put at its end.
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
   }, [pendingPrompt, consumePendingPrompt]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversationTitle, setConversationTitle] = useState("New chat");
+  // WT-687: plugins switched off for this conversation. Every connected plugin starts on, as in
+  // Claude; a switch is remembered per conversation on this device and sent with each message.
+  const [disabledPluginKeys, setDisabledPluginKeys] = useState<string[]>([]);
+  // A conversation opened from history brings back its own switches; a new chat starts with every
+  // plugin on. Adjusted while rendering rather than in an effect, so the menu never paints one frame
+  // of the previous conversation's switches. Keyed on the id only, so switches flipped before the
+  // first message are not wiped when that message creates the conversation.
+  const [pluginSwitchesConversationId, setPluginSwitchesConversationId] = useState<string | null>(null);
+  if (pluginSwitchesConversationId !== conversationId) {
+    setPluginSwitchesConversationId(conversationId);
+    setDisabledPluginKeys(conversationId ? readDisabledPluginKeys(browserStore(), conversationId) : []);
+  }
+  const togglePluginForConversation = (pluginKey: string) => {
+    setDisabledPluginKeys((current) => {
+      const next = togglePluginKey(current, pluginKey);
+      if (conversationId) writeDisabledPluginKeys(browserStore(), conversationId, next);
+      return next;
+    });
+  };
+  const [conversationTitle, setConversationTitle] = useState(t("newChat"));
 
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
+  const createPlatformConversation = useCreatePlatformAssistantConversation();
+  const sendPlatformMessage = useSendPlatformAssistantMessage();
+  const loadPlatformConversation = useLoadPlatformAssistantConversation();
   // Scoped to the active workspace, exactly as the Plugins settings page reads it. Unscoped, the
   // API has no policy to apply and answers with every row unblocked — so a workspace that had
   // turned plugins off still had them offered here, and the install and connect below went through
@@ -472,6 +683,19 @@ export function GlobalChatbot() {
     useAssistantPlugins(activeWorkspaceId ?? undefined);
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
+  const updateToolPolicy = useUpdatePluginToolPolicy();
+  // Always allow for a whole plugin: its write tools stop showing the Allow / Always allow card.
+  // The catalog refetch the hook triggers brings the resolved choice back to the checkbox.
+  const setPluginAlwaysAllow = async (plugin: AssistantPluginCatalogItemDto, alwaysAllow: boolean) => {
+    try {
+      await updateToolPolicy.mutateAsync({
+        pluginKey: plugin.key,
+        tools: writeToolPolicyUpdate(plugin.tools, alwaysAllow),
+      });
+    } catch {
+      toast.error(t("pluginPermissionSaveFailed", { label: plugin.label }));
+    }
+  };
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   // Read through the same helper the Plugins settings page uses, so the Ready/Connect chip below
@@ -481,8 +705,15 @@ export function GlobalChatbot() {
     () => assistantPlugins.map(withEffectiveConnectionStatus),
     [assistantPlugins],
   );
+  // The plugin menu and, through it, the @mention list. A plugin this workspace has not added is left
+  // out even when the member installed it: the server refuses its tools here, so its switch would do
+  // nothing and its mention would go nowhere. It stays on the Plugins page, where it is revoked.
+  // Past messages still resolve their chips against the whole catalog (`catalogPlugins`).
   const installedAssistantPlugins = useMemo(
-    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    () =>
+      catalogPlugins.filter(
+        (plugin) => plugin.installationStatus === "installed" && isOfferedInWorkspaceChat(plugin),
+      ),
     [catalogPlugins],
   );
   // Only a plugin that's actually usable can be @mentioned — mentioning a disconnected plugin
@@ -493,9 +724,18 @@ export function GlobalChatbot() {
   );
 
   // Only fetch the conversation list while the history menu is actually open.
-  const conversationsQuery = useAssistantConversations(
-    historyMenuOpen ? activeWorkspaceId : null,
+  // One list per scope, each fetched only in its own mode: a platform thread is never listed
+  // among a workspace's, nor the other way round.
+  const workspaceConversationsQuery = useAssistantConversations(
+    historyMenuOpen && !isPlatformScope ? activeWorkspaceId : null,
   );
+  const platformConversationsQuery = usePlatformAssistantConversations(
+    historyMenuOpen && isPlatformScope,
+  );
+  const conversationsQuery = isPlatformScope
+    ? platformConversationsQuery
+    : workspaceConversationsQuery;
+  const conversationLoader = isPlatformScope ? loadPlatformConversation : loadConversation;
   const visibleConversations = (conversationsQuery.data ?? []).filter(
     (conversation) => !conversation.isArchived,
   );
@@ -507,7 +747,7 @@ export function GlobalChatbot() {
           pluginKey: plugin.key,
           workspaceId: activeWorkspaceId ?? undefined,
         });
-        toast.success(`${plugin.label} installed`);
+        toast.success(t("pluginInstalled", { label: plugin.label }));
         return;
       }
 
@@ -520,23 +760,33 @@ export function GlobalChatbot() {
           client: isDesktopApp() ? "desktop" : "web",
           workspaceId: activeWorkspaceId ?? undefined,
         });
-        if (openProviderConsent(result.url)) {
-          toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        if (result.apiKeyRequired) {
+          window.location.assign(pluginApiKeyPageHref(plugin.key));
+          return;
+        }
+        // The provider's grant already covered it, so there is no consent page to finish.
+        if (result.connected || !result.url) {
+          toast.success(t("pluginConnected", { label: plugin.label }));
+          return;
+        }
+        const consentUrl = result.url;
+        if (openProviderConsent(consentUrl)) {
+          toast.message(t("pluginConnectOpenBrowser", { label: plugin.label }));
         } else {
           // The toast action is a real click, so the open it makes is not blocked.
-          toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
+          toast.error(t("pluginConnectBlocked", { label: plugin.label }), {
             action: {
-              label: "Open it",
-              onClick: () => openProviderConsent(result.url),
+              label: t("pluginConnectBlockedAction"),
+              onClick: () => openProviderConsent(consentUrl),
             },
           });
         }
         return;
       }
 
-      toast.message(`${plugin.label} is connected.`);
+      toast.message(t("pluginAlreadyConnected", { label: plugin.label }));
     } catch {
-      toast.error(`Could not update ${plugin.label}.`);
+      toast.error(t("pluginUpdateFailed", { label: plugin.label }));
     }
   };
 
@@ -547,19 +797,26 @@ export function GlobalChatbot() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
-      if (openProviderConsent(result.url)) {
-        toast.message("Finish connecting this plugin in your browser.");
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
+      const consentUrl = result.url;
+      if (result.connected || !consentUrl) {
+        toast.success(tPluginToasts("pluginConnected"));
+      } else if (openProviderConsent(consentUrl)) {
+        toast.message(tPluginToasts("pluginConnectOpenBrowser"));
       } else {
-        toast.error("Your browser blocked the consent window.", {
+        toast.error(tPluginToasts("pluginConnectBlocked"), {
           action: {
-            label: "Open it",
-            onClick: () => openProviderConsent(result.url),
+            label: tPluginToasts("pluginConnectBlockedAction"),
+            onClick: () => openProviderConsent(consentUrl),
           },
         });
       }
       void refetchAssistantPlugins();
     } catch {
-      toast.error("Could not open the plugin connection flow.");
+      toast.error(tPluginToasts("pluginConnectFailed"));
     }
   };
 
@@ -601,23 +858,37 @@ export function GlobalChatbot() {
   const startNewConversation = () => {
     clearResponseTimeout();
     setConversationId(null);
-    setConversationTitle("New chat");
+    setConversationTitle(t("newChat"));
     setMessages([]);
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
-    setSteps([]);
+    updateSteps(() => []);
     setIsSlow(false);
     setIsMinimized(false);
     clearPluginCards();
     shouldAutoScrollRef.current = true;
   };
 
-  const openConversationFromHistory = async (
-    conversation: AssistantConversationDto,
-  ) => {
+  /**
+   * Crossing between /admin and a workspace page switches conversation STORES. The open thread
+   * belongs to the scope it was started in, so it is closed rather than continued in the other —
+   * a workspace thread's id sent to the platform routes (or the reverse) is simply not found.
+   */
+  const lastScopeRef = useRef(assistantScope);
+  const resetForScopeChange = useEffectEvent(() => startNewConversation());
+  useEffect(() => {
+    if (lastScopeRef.current === assistantScope) return;
+    lastScopeRef.current = assistantScope;
+    resetForScopeChange();
+  }, [assistantScope]);
+
+  const openConversationFromHistory = (conversation: AssistantConversationDto) =>
+    openConversationById(conversation.id);
+
+  const openConversationById = async (id: string) => {
     try {
-      const detail = await loadConversation.mutateAsync(conversation.id);
+      const detail = await conversationLoader.mutateAsync(id);
       clearResponseTimeout();
       setMessages(
         detail.messages
@@ -631,12 +902,13 @@ export function GlobalChatbot() {
             content: message.content,
             failed: message.status === "failed",
             sources: parseAnswerSources(message.sourcesJson),
+            mentions: parseMessageMentions(message.mentionsJson),
           })),
       );
-      setConversationTitle(detail.title?.trim() || "Chat history");
+      setConversationTitle(detail.title?.trim() || t("chatHistory"));
       setConversationId(detail.id);
       setIsAiTyping(false);
-      setSteps([]);
+      updateSteps(() => []);
       setIsSlow(false);
       setInputValue("");
       setSelectedContexts([]);
@@ -646,9 +918,33 @@ export function GlobalChatbot() {
       shouldAutoScrollRef.current = true;
       setIsOpen(true);
     } catch {
-      toast.error("Could not open that conversation.");
+      toast.error(t("openConversationFailed"));
     }
   };
+
+  /**
+   * A conversation handed over from somewhere else — today, a meeting's WarpBot thread ("Continue
+   * in widget", or WarpBot's own continue_in_widget tool). See lib/assistant/continue-in-widget.
+   *
+   * An effect EVENT, not a plain effect over openConversationById: that function is re-created
+   * every render, and a dependency on it would re-run this on every keystroke. Opening goes
+   * through the same path as picking the conversation from history, so a handed-over thread
+   * renders exactly as a reopened one does — including the turns the meeting seeded.
+   */
+  const pendingConversationId = useAssistantWidgetStore((state) => state.pendingConversationId);
+  const consumePendingConversation = useAssistantWidgetStore(
+    (state) => state.consumePendingConversation,
+  );
+  const openHandedOverConversation = useEffectEvent(async (id: string) => {
+    await openConversationById(id);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  });
+  useEffect(() => {
+    if (!pendingConversationId) return;
+    const id = consumePendingConversation();
+    if (!id) return;
+    void openHandedOverConversation(id);
+  }, [pendingConversationId, consumePendingConversation]);
 
   // Real workspace members/meetings/documents for the @mention picker — each refetches
   // as the user types after "@". Selecting one attaches a real entityId that rides along
@@ -670,6 +966,34 @@ export function GlobalChatbot() {
     5,
     mentionQuery,
   );
+  // WT-887: the meetings a "@summary:" / "@transcript:" / "@artifact:" option can point at. The
+  // same list endpoint the Meetings group reads, narrowed to ENDED — a meeting that has not ended
+  // has no summary yet and no finished transcript, and five scheduled rows would otherwise crowd
+  // out every meeting that does. Only fetched while one of those namespaces is being typed.
+  const wantsMeetingArtifacts =
+    mentionMenuOpen &&
+    !isPlatformScope &&
+    (mentionNamespace === "summary" ||
+      mentionNamespace === "transcript" ||
+      mentionNamespace === "artifact");
+  const { data: endedRoomResults } = useTranslationRooms({
+    search: mentionQuery,
+    status: "ENDED",
+    pageSize: 5,
+    workspaceId: activeWorkspaceId ?? undefined,
+    enabled: wantsMeetingArtifacts,
+  });
+  // The meeting the widget was opened over — a room page, its record, or the live meeting — goes
+  // first: "@summary:" on a meeting's own page is almost always about that meeting. Not when it
+  // never took place, since there is nothing of it to read.
+  const currentMeeting = useMemo(() => {
+    if (!ambientPageContext || !MEETING_PAGE_TYPES.has(ambientPageContext.pageType)) return null;
+    const id = ambientPageContext.entityId;
+    const title = ambientPageContext.snapshot?.title?.trim();
+    const status = ambientPageContext.snapshot?.status?.toLowerCase() ?? "";
+    if (!id || !title || NEVER_HELD_STATUSES.has(status)) return null;
+    return { id, title };
+  }, [ambientPageContext]);
   const CONTEXT_OPTIONS: AssistantContextOption[] = useMemo(() => {
     const memberOptions: AssistantContextOption[] = (
       memberResults?.items ?? []
@@ -721,8 +1045,51 @@ export function GlobalChatbot() {
       entityType: "plugin",
       entityId: plugin.key,
     }));
-    return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
-  }, [memberResults, roomResults, documentResults, mentionablePlugins]);
+    // WT-887: a meeting's summary and transcript. The id is the ROOM id and the wire label the bare
+    // meeting title (the AI worker's contract); the title is the token written into the draft —
+    // see mentionTokenLabel for why it carries the kind. All summaries, then all transcripts: the
+    // menu groups rows by `type` in order of first appearance and arrows walk this array, so
+    // interleaving them would make the highlight jump between groups.
+    const artifactMeetings = [
+      ...(currentMeeting ? [currentMeeting] : []),
+      ...(endedRoomResults?.rooms ?? [])
+        .filter((r) => r.id !== currentMeeting?.id)
+        .map((r) => ({ id: r.id, title: r.title })),
+    ];
+    const artifactOption = (
+      meeting: { id: string; title: string },
+      entityType: "summary" | "transcript",
+    ): AssistantContextOption => ({
+      id: `${entityType}-${meeting.id}`,
+      title: mentionTokenLabel({ entityType, label: meeting.title }),
+      label: meeting.title,
+      type: entityType === "summary" ? t("mentionGroupSummaries") : t("mentionGroupTranscripts"),
+      icon: entityType === "summary" ? <Sparkle size={14} /> : <Subtitles size={14} />,
+      description: meeting.id === currentMeeting?.id ? t("mentionCurrentMeeting") : "",
+      entityType,
+      entityId: meeting.id,
+    });
+    const summaryOptions = artifactMeetings.map((meeting) => artifactOption(meeting, "summary"));
+    const transcriptOptions = artifactMeetings.map((meeting) =>
+      artifactOption(meeting, "transcript"),
+    );
+    return [
+      ...memberOptions,
+      ...roomOptions,
+      ...documentOptions,
+      ...pluginOptions,
+      ...summaryOptions,
+      ...transcriptOptions,
+    ];
+  }, [
+    memberResults,
+    roomResults,
+    documentResults,
+    mentionablePlugins,
+    endedRoomResults,
+    currentMeeting,
+    t,
+  ]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
@@ -731,20 +1098,30 @@ export function GlobalChatbot() {
     () => getPageContextKey(ambientPageContext),
     [ambientPageContext],
   );
+  // Never in platform scope: page context names a workspace entity, and a platform turn carries
+  // none (the platform send has no field for it).
   const effectivePageContext =
-    ambientPageContextKey && disabledPageContextKey === ambientPageContextKey
+    isPlatformScope ||
+    (ambientPageContextKey && disabledPageContextKey === ambientPageContextKey)
       ? null
       : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
 
+  const slashCommands = useMemo(() => buildSlashCommands(t), [t]);
+  const pageContextLabels = useMemo(() => buildPageContextLabels(t), [t]);
   const availableSlashCommands = useMemo(() => {
     const pageType = effectivePageContext?.pageType ?? "";
     if (!pageType) return [];
-    return SLASH_COMMANDS.filter((cmd) => cmd.pageTypes.includes(pageType));
-  }, [effectivePageContext?.pageType]);
+    return slashCommands.filter((cmd) => cmd.pageTypes.includes(pageType));
+  }, [effectivePageContext?.pageType, slashCommands]);
   const ambientContextDisplay = useMemo(
-    () => getAmbientContextDisplay(effectivePageContext),
-    [effectivePageContext],
+    () =>
+      getAmbientContextDisplay(
+        effectivePageContext,
+        pageContextLabels,
+        t("pageContextLabels.fallback"),
+      ),
+    [effectivePageContext, pageContextLabels, t],
   );
   const contextComposerShellClassName = isPageContextVisible
     ? "rounded-[14px] bg-surface-2/55 p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
@@ -791,7 +1168,7 @@ export function GlobalChatbot() {
         // Seeded with the step that is genuinely running: before the first tool call WarpBot is
         // reading the question, which on a slow turn is the longest stretch of the whole thing
         // and used to be drawn as a bare "Thinking..." with no trail at all.
-        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
+        updateSteps(() => [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
         turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
@@ -817,7 +1194,7 @@ export function GlobalChatbot() {
         // but what it ran is exactly what the reader wants left on screen — and writing the
         // answer is itself a step, so the trail names it rather than going quiet for the
         // longest visible part of the turn.
-        setSteps((current) => {
+        updateSteps((current) => {
           const settled = current.map((step) => ({ ...step, done: true }));
           return settled.some((step) => step.tool === WRITING_STEP)
             ? settled
@@ -839,7 +1216,7 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // Anything still marked running when a new tool starts has finished — the worker
           // emits a completed for each, but the trail must not show two spinners if one is lost.
           ...current.map((step) => ({ ...step, done: true })),
@@ -862,7 +1239,7 @@ export function GlobalChatbot() {
         const body = payload.body?.trim() ?? "";
         if (!title && !body) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // The model has moved on from whatever it was doing when it wrote this.
           ...current.map((step) => ({ ...step, done: true })),
           {
@@ -882,21 +1259,15 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
-        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
-        // A malformed payload leaves the card absent rather than rendering an empty shell —
+        // A malformed payload leaves the prompt absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
-        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
-        // will help" cannot both be true, but they are two independent keys on one payload,
-        // and two unconditional setters rendered both cards the moment anything emitted both.
-        // Setup wins: it is the one saying the registration ladder is already exhausted.
-        if (pluginSetup) {
-          setPendingPluginSetup(pluginSetup);
-          setPendingPluginConnection(null);
-        } else if (pluginConnection) {
-          setPendingPluginConnection(pluginConnection);
-          setPendingPluginSetup(null);
+        // A new ask replaces whatever the slot held, answered or not: the previous one's receipt is
+        // not worth a question going unseen behind it.
+        if (permission) {
+          setPendingPermission(permission);
+          setPermissionAnswered(false);
         }
         armResponseTimeout();
       },
@@ -908,7 +1279,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         // The hosted web search publishes its started event before OpenAI has said what it is
         // searching for, so this is often the first event that can name the target.
-        setSteps((current) =>
+        updateSteps((current) =>
           withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
             ...step,
             done: true,
@@ -930,7 +1301,10 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
-        clearPluginCards();
+        // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
+        // The permission form is told the turn is over so it can stop saying "Running…" — a stamp,
+        // not a clear, because the form owns how long its receipt lives.
+        setTurnEndedAt(Date.now());
 
         // Folded onto the answer, not deleted.
         //
@@ -939,10 +1313,13 @@ export function GlobalChatbot() {
         // throwing them away also threw away the only record of which tools an answer came
         // through — the first thing a person checking a surprising answer reaches for. It is one
         // folded line now: over, and still there.
-        const finishedSteps = steps.map((step) => ({ ...step, done: true }));
+        //
+        // From the REF (WT-620): this handler was registered before the turn began, and the
+        // `steps` it closes over is that render's empty trail.
+        const finishedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const startedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
 
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
@@ -968,12 +1345,16 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
-        clearPluginCards();
+        // The plugin cards stay: a turn that failed after raising one still needs it pressed.
+        // A turn that died still ended, so the permission form stops waiting on it rather than
+        // spinning until the next question; what went wrong is in the failed reply below it.
+        setTurnEndedAt(Date.now());
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
-        const failedSteps = steps.map((step) => ({ ...step, done: true }));
+        // From the ref, for the same reason as the completed handler.
+        const failedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
@@ -1041,20 +1422,34 @@ export function GlobalChatbot() {
       void connection.stop();
       hubConnectionRef.current = null;
     };
-  }, [conversationId, armResponseTimeout, clearResponseTimeout]);
+  }, [conversationId, armResponseTimeout, clearResponseTimeout, updateSteps]);
 
   // Calculate mention/slash menu visibility based on @ or leading / characters
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputValue(val);
+    // Deleting "@Google Meet" from the text is how a mention is removed now that it lives in the
+    // sentence, so a context whose token is gone goes with it.
+    setSelectedContexts((prev) => {
+      const kept = prev.filter((ctx) => hasMentionToken(val, ctx.title));
+      return kept.length === prev.length ? prev : kept;
+    });
 
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPosition);
 
-    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (mentionMatch) {
+    // No @mentions in platform scope: everything mentionable is a workspace entity or a plugin.
+    // WT-887: "@summary:standup" is a namespace and a query — see mention-trigger.ts.
+    const mentionTrigger = isPlatformScope ? null : parseMentionTrigger(textBeforeCursor);
+    if (mentionTrigger) {
       setMentionMenuOpen(true);
-      setMentionQuery(mentionMatch[1]);
+      setMentionNamespace(mentionTrigger.namespace);
+      setMentionQuery(mentionTrigger.query);
+      // Back to the top on every keystroke, the way the slash menu already does it. The
+      // highlight used to keep an index from the previous, longer list: typing one more letter
+      // could leave it past the end, which reads as "nothing is selected" and now also costs
+      // the ghost completion and Tab.
+      setSelectedIndex(0);
     } else {
       setMentionMenuOpen(false);
     }
@@ -1072,11 +1467,26 @@ export function GlobalChatbot() {
     }
   };
 
+  /**
+   * One way out of the permission form, whether the answer was pressed or taken by Enter on an
+   * empty composer: the slot keeps the prompt, because the form is now the only thing on screen
+   * saying the write is running, and the stamp is what stops Enter answering it twice.
+   */
+  const answerPermissionPrompt = (message: string) => {
+    void sendMessage(message, { keepPermissionPrompt: true });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Every branch that handles a key here must return. Falling through to the send path
     // below runs sendMessage() in the same handler, against pre-update state — which is how
     // picking a mention with Enter used to send the literal "@Al" with no mentions attached
     // and leave the chip dangling for the *next* message.
+    //
+    // An IME (Vietnamese Telex, Japanese, Chinese…) owns the keyboard while it composes: its Enter
+    // confirms the candidate, its arrows move through candidates. Sending on that Enter posted half
+    // a word and left the rest in the box, and the menu branches would pick a row mid-word.
+    // Same check as the Meet-popup pane's composer.
+    if (e.nativeEvent.isComposing) return;
     if (slashMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -1129,6 +1539,19 @@ export function GlobalChatbot() {
         setMentionMenuOpen(false);
         return;
       }
+      // Tab accepts what the ghost text is offering. preventDefault unconditionally, including
+      // on a query that matches nothing: the default would move focus out of the composer to
+      // the paperclip, which is never what somebody mid-"@goo" meant by it.
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        const option = filteredOptions[selectedIndex];
+        if (option) {
+          insertMention(option);
+          return;
+        }
+        setMentionMenuOpen(false);
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         // Guard the index: with a query that matches nothing (e.g. "@zzzz") this used to
@@ -1146,7 +1569,35 @@ export function GlobalChatbot() {
       return;
     }
 
-    // Handle backspace when input is empty to delete the last context
+    // A mention lives in the text as "@Google Meet", so Backspace at its end removes the whole
+    // token. One character off it used to leave "@Google Mee" behind as ordinary words, with the
+    // structured mention silently dropped — the message then looked like it named a plugin it no
+    // longer named.
+    if (e.key === "Backspace" && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const input = inputRef.current;
+      const caret = input?.selectionStart ?? 0;
+      if (input && caret === input.selectionEnd) {
+        const token = mentionTokenEndingAt(
+          inputValue,
+          caret,
+          selectedContexts.map((ctx) => ({ label: ctx.title })),
+        );
+        if (token) {
+          e.preventDefault();
+          const next = inputValue.slice(0, token.start) + inputValue.slice(token.end);
+          setInputValue(next);
+          setSelectedContexts((prev) => prev.filter((ctx) => hasMentionToken(next, ctx.title)));
+          setTimeout(() => {
+            input.focus();
+            input.setSelectionRange(token.start, token.start);
+          }, 0);
+          return;
+        }
+      }
+    }
+
+    // Handle backspace when input is empty to delete the last context. Only mentions that never
+    // made it into the text can be left by now (see the sent bubble's `unplaced`).
     if (
       e.key === "Backspace" &&
       inputValue === "" &&
@@ -1158,40 +1609,125 @@ export function GlobalChatbot() {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      // Enter answers the permission prompt only while there is nothing written. A half-typed
+      // question is a better answer than a button press the user did not mean, so anything in the
+      // box wins — and this is a write, which should never be approved by a stray keystroke.
+      const firstAnswer = pendingPermission?.options?.find((option) => option.value)?.value;
+      if (
+        !inputValue.trim() &&
+        pendingPermission?.kind === "tool" &&
+        // Not one already answered: the form is still there, showing the write running, and Enter
+        // on an empty box would confirm the same write twice.
+        !permissionAnswered &&
+        firstAnswer
+      ) {
+        answerPermissionPrompt(firstAnswer);
+        return;
+      }
       void sendMessage();
     }
   };
 
-  const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
-    opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
+  // WT-887: a namespace narrows to its own kinds; a plain "@" offers everything it always did, and
+  // not summaries or transcripts — those are reached through "@summary:" and friends, so the plain
+  // list does not double in length with a copy of every meeting. Names match through the same
+  // folding the server's search uses, so "@meeting:hop" keeps the "họp" rows the API returned.
+  const namespaceEntityTypes = mentionNamespace ? NAMESPACE_ENTITY_TYPES[mentionNamespace] : null;
+  const matchingOptions: MentionMenuItem[] = CONTEXT_OPTIONS.filter(
+    (opt) =>
+      (namespaceEntityTypes
+        ? namespaceEntityTypes.includes(opt.entityType)
+        : opt.entityType !== "summary" && opt.entityType !== "transcript") &&
+      matchesSearchText(mentionQuery, opt.label ?? opt.title),
   );
+  // A plain "@doc" also offers the namespace it could be the start of. See namespaceHints for why
+  // the hint leads only when the query IS a keyword.
+  const hints = mentionNamespace ? null : namespaceHints(mentionQuery);
+  const hintOptions: MentionNamespaceHint[] = (hints?.namespaces ?? []).map((namespace) => ({
+    id: `namespace-${namespace}`,
+    title: namespaceKeyword(namespace),
+    type: t("mentionGroupNamespaces"),
+    icon: <MagnifyingGlass size={14} />,
+    description: t(NAMESPACE_HINT_KEYS[namespace]),
+    namespace,
+  }));
+  const filteredOptions: MentionMenuItem[] = hints?.exact
+    ? [...hintOptions, ...matchingOptions]
+    : [...matchingOptions, ...hintOptions];
 
-  const insertMention = (opt: (typeof CONTEXT_OPTIONS)[0]) => {
+  // The composer's text split around the mentions written into it, for the mirror's highlight.
+  const composerMentionSegments = splitMentionTokens(
+    inputValue,
+    selectedContexts.map((ctx) => ({
+      entityType: ctx.entityType,
+      entityId: ctx.entityId,
+      label: ctx.label ?? ctx.title,
+    })),
+  ).segments;
+
+  // What Tab would finish the typed name with — see mention-completion.ts for when it is empty.
+  const mentionGhost = mentionMenuOpen
+    ? mentionCompletion({
+        draft: inputValue,
+        query: mentionQuery,
+        highlightedTitle: filteredOptions[selectedIndex]?.title,
+      })
+    : "";
+
+  const insertMention = (opt: MentionMenuItem) => {
+    const cursorPosition = inputRef.current?.selectionStart || 0;
+    const textBeforeCursor = inputValue.slice(0, cursorPosition);
+    const textAfterCursor = inputValue.slice(cursorPosition);
+    const mentionTrigger = parseMentionTrigger(textBeforeCursor);
+
+    // WT-887: a namespace hint is not a mention. It rewrites "@doc" as "@document:" and leaves the
+    // menu open on that namespace, exactly as if the user had typed the colon.
+    if (isNamespaceHint(opt)) {
+      const keptBefore = textBeforeCursor.slice(0, mentionTrigger?.start ?? cursorPosition);
+      const nextBefore = `${keptBefore}@${opt.title}`;
+      setInputValue(nextBefore + textAfterCursor);
+      setMentionNamespace(opt.namespace);
+      setMentionQuery("");
+      setSelectedIndex(0);
+      setTimeout(() => {
+        const input = inputRef.current;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(nextBefore.length, nextBefore.length);
+      }, 0);
+      return;
+    }
+
     setSelectedContexts((prev) => {
       if (prev.find((p) => p.id === opt.id)) return prev;
       return [...prev, opt];
     });
 
-    const cursorPosition = inputRef.current?.selectionStart || 0;
-    const textBeforeCursor = inputValue.slice(0, cursorPosition);
-    const textAfterCursor = inputValue.slice(cursorPosition);
-
-    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (mentionMatch) {
-      const newTextBefore = textBeforeCursor.slice(0, mentionMatch.index);
-      setInputValue(newTextBefore + textAfterCursor);
-    }
+    // The mention stays in the sentence as "@Google Meet", where it was typed. It used to be cut
+    // out and kept only as a chip, so "tạo 1 cuộc họp bằng @Google Meet" was sent - and shown
+    // back in the bubble - as "tạo 1 cuộc họp bằng", with the chip stranded above it (17 Sep).
+    // A namespace goes with it: "@summary:stand" becomes "@Summary · Standup".
+    const newTextBefore = mentionTrigger
+      ? textBeforeCursor.slice(0, mentionTrigger.start)
+      : textBeforeCursor;
+    const token = `${mentionToken(opt.title)} `;
+    const needsSpaceBefore = newTextBefore.length > 0 && !/\s$/.test(newTextBefore);
+    const nextBefore = `${newTextBefore}${needsSpaceBefore ? " " : ""}${token}`;
+    setInputValue(nextBefore + textAfterCursor.replace(/^ /, ""));
 
     setMentionMenuOpen(false);
 
-    // Focus back
+    // Focus back, with the caret after the token rather than at the end of the box.
     setTimeout(() => {
-      inputRef.current?.focus();
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextBefore.length, nextBefore.length);
     }, 0);
   };
 
   const handleMentionClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const option = CONTEXT_OPTIONS.find(
+    const option = filteredOptions.find(
       (item) => item.id === event.currentTarget.dataset.optionId,
     );
     if (option) insertMention(option);
@@ -1260,7 +1796,8 @@ export function GlobalChatbot() {
    * never received.
    */
   const addFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    // A platform turn is text only; a file chip here would promise an attachment never sent.
+    if (files.length === 0 || isPlatformScope) return;
 
     let accepted = attachments.length;
     for (const file of files) {
@@ -1277,7 +1814,7 @@ export function GlobalChatbot() {
         setAttachments((prev) => [...prev, attachment]);
         accepted += 1;
       } catch {
-        toast.error(`"${file.name}" could not be read.`);
+        toast.error(t("fileReadFailed", { name: file.name }));
       }
     }
   };
@@ -1304,25 +1841,44 @@ export function GlobalChatbot() {
     void addFiles(files);
   };
 
-  const sendMessage = async (overrideContent?: string) => {
+  const sendMessage = async (
+    overrideContent?: string,
+    // Set only by the permission form's own answer. Every other send starts a turn that has
+    // nothing to do with the prompt on screen, and a prompt outliving the turn it belongs to is
+    // how a Connect button came to offer an OAuth flow nobody had asked for (WT-688). An answer is
+    // the one send that must NOT end it: the form is what says the write is running.
+    options?: { keepPermissionPrompt?: boolean },
+  ) => {
     const content = (overrideContent ?? inputValue).trim();
     // WT-541: the same rule the send button is disabled by. It used to be spelled out here and
     // only half-spelled on the button, so a turn with no workspace was swallowed by a control
     // that looked alive.
     const readiness = composerReadiness({
       text: content,
-      attachmentCount: attachments.length,
+      attachmentCount: isPlatformScope ? 0 : attachments.length,
       activeWorkspaceId,
+      scope: assistantScope,
     });
     if (!readiness.canSend) return;
+    // A turn is opening, so the last one's end is no longer the state of anything. Before the
+    // awaits below, and in that order, because these two are what the permission form reads to
+    // tell an allowed write that is still running from one that is over.
+    setTurnEndedAt(null);
+    if (options?.keepPermissionPrompt) setPermissionAnswered(true);
     // The id travels with the yes, so this handler cannot disagree with the check above about
-    // which workspace the turn belongs to.
-    const sendWorkspaceId = readiness.workspaceId;
+    // which workspace the turn belongs to — and a platform yes carries no workspace at all.
+    const platformTurn = readiness.scope === "platform";
+
+    // A message this component composed rather than the user typing it — a question card's
+    // answer, a slash command — carries neither the draft's @mentions nor its attachments, and
+    // leaves the draft alone. Sending "Create" used to clear whatever the user had half-written
+    // and attach its chips to the answer.
+    const fromComposer = overrideContent === undefined;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
     // unrelated message too.
-    const mentions: AssistantMentionDto[] = selectedContexts
+    const mentions: AssistantMentionDto[] = (platformTurn || !fromComposer ? [] : selectedContexts)
       .filter(
         (
           ctx,
@@ -1334,33 +1890,46 @@ export function GlobalChatbot() {
       .map((ctx) => ({
         entityType: ctx.entityType,
         entityId: ctx.entityId,
-        label: ctx.title,
+        label: ctx.label ?? ctx.title,
       }));
 
     // Captured before the state is cleared, for the same reason mentions are: this handler runs
     // against pre-update state and the request is built further down.
-    const sentAttachments = attachments;
+    const sentAttachments = platformTurn || !fromComposer ? [] : attachments;
 
-    setInputValue("");
+    if (fromComposer) {
+      setInputValue("");
+      setSelectedContexts([]);
+      setAttachments([]);
+    }
     setMentionMenuOpen(false);
-    setSelectedContexts([]);
-    setAttachments([]);
 
     let convId = conversationId;
     if (!convId) {
       try {
         const conversation =
-          await createConversation.mutateAsync(sendWorkspaceId);
+          readiness.scope === "platform"
+            ? await createPlatformConversation.mutateAsync()
+            : await createConversation.mutateAsync(readiness.workspaceId);
         convId = conversation.id;
+        // Saved before the id lands in state, so the effect that reloads switches on an id change
+        // reads back the ones the user set in this still-unsaved chat instead of clearing them.
+        writeDisabledPluginKeys(browserStore(), convId, disabledPluginKeys);
         setConversationId(convId);
       } catch {
         setMessages((prev) => [
           ...prev,
-          { id: `local-${Date.now()}`, role: "user", content },
+          {
+            id: `local-${Date.now()}`,
+            role: "user",
+            content,
+            mentions,
+            attachments: sentAttachments,
+          },
           {
             id: `conv-failed-${Date.now()}`,
             role: "assistant",
-            content: "Couldn't start a conversation with WarpBot. Please try again.",
+            content: t("conversationStartFailed"),
             failed: true,
           },
         ]);
@@ -1370,10 +1939,16 @@ export function GlobalChatbot() {
 
     setMessages((prev) => [
       ...prev,
-      { id: `local-${Date.now()}`, role: "user", content },
+      {
+        id: `local-${Date.now()}`,
+        role: "user",
+        content,
+        mentions,
+        attachments: sentAttachments,
+      },
     ]);
     setIsAiTyping(true);
-    clearPluginCards();
+    if (!options?.keepPermissionPrompt) clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
 
@@ -1385,13 +1960,18 @@ export function GlobalChatbot() {
       // Ambient page context (e.g. "user is looking at this room") rides along with every
       // message automatically — no explicit @-mention needed. It's a hint, not a hard fact:
       // .NET re-validates it against the conversation's own workspace before forwarding it.
-      await sendAssistantMessage.mutateAsync({
-        conversationId: convId,
-        content,
-        pageContext: effectivePageContext,
-        mentions,
-        attachments: sentAttachments,
-      });
+      if (platformTurn) {
+        await sendPlatformMessage.mutateAsync({ conversationId: convId, content });
+      } else {
+        await sendAssistantMessage.mutateAsync({
+          conversationId: convId,
+          content,
+          pageContext: effectivePageContext,
+          mentions,
+          attachments: sentAttachments,
+          disabledPluginKeys,
+        });
+      }
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
       clearResponseTimeout();
@@ -1401,7 +1981,7 @@ export function GlobalChatbot() {
         {
           id: `send-failed-${Date.now()}`,
           role: "assistant",
-          content: "That message couldn't be sent. Please try again.",
+          content: t("messageSendFailed"),
           failed: true,
         },
       ]);
@@ -1425,7 +2005,7 @@ export function GlobalChatbot() {
                 }}
                 className="flex items-center h-[26px] px-3 rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors text-ink text-[12px] font-medium mr-1 truncate max-w-[200px]"
               >
-                {messages.find((m) => m.role === "user")?.content || "New chat"}
+                {messages.find((m) => m.role === "user")?.content || t("newChat")}
               </motion.button>
             )}
           </AnimatePresence>
@@ -1446,7 +2026,7 @@ export function GlobalChatbot() {
             }}
           >
             <PopoverTrigger
-              aria-label="Ask WarpBot"
+              aria-label={t("askWarpBot")}
               data-tour="warpbot-launcher"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
@@ -1461,18 +2041,32 @@ export function GlobalChatbot() {
                 />
               </span>
               <span className="text-[12px] leading-none whitespace-nowrap">
-                Ask WarpBot
+                {t("askWarpBot")}
               </span>
             </PopoverTrigger>
             <PopoverContent
               align="end"
               sideOffset={8}
+              // Base UI focuses the first focusable element on open, which is the minimize button
+              // in the header: typing went nowhere and Enter pressed minimize, so the panel hid
+              // instead of sending. The composer is what the panel is opened for.
+              initialFocus={inputRef}
               className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? "w-[680px] h-[600px]" : "w-[460px] h-[412px]"}`}
             >
               {/* Chat Header */}
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
-                <span className="font-semibold text-[13px] text-ink truncate">
-                  {conversationTitle}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-semibold text-[13px] text-ink truncate">
+                    {conversationTitle}
+                  </span>
+                  {isPlatformScope ? (
+                    <span
+                      data-testid="warpbot-scope-chip"
+                      className="shrink-0 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-subtle"
+                    >
+                      {PLATFORM_SCOPE_LABEL}
+                    </span>
+                  ) : null}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -1495,8 +2089,8 @@ export function GlobalChatbot() {
                     )}
                   </button>
                   <button
-                    aria-label="New chat"
-                    title="New chat"
+                    aria-label={t("newChat")}
+                    title={t("newChat")}
                     onClick={startNewConversation}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
@@ -1512,6 +2106,23 @@ export function GlobalChatbot() {
                 onScroll={handleMessagesScroll}
                 className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
+                {isPlatformScope && messages.length === 0 && !isAiTyping ? (
+                  <div
+                    data-testid="warpbot-platform-suggestions"
+                    className="mt-auto flex flex-col items-start gap-1.5 px-2 pb-2"
+                  >
+                    {PLATFORM_SUGGESTED_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => void sendMessage(prompt)}
+                        className="rounded-full border border-hairline bg-surface-1 px-3 py-1 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {messages.length > 0 &&
                   messages.map((msg) => (
                     <div
@@ -1534,7 +2145,7 @@ export function GlobalChatbot() {
                       >
                         {msg.role === "assistant" && !msg.failed ? (
                           <>
-                            <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                            <AssistantMarkdown withMeetingCards>{msg.content}</AssistantMarkdown>
                             <AnswerSources
                               sources={msg.sources ?? []}
                               workspaceSlug={activeWorkspaceSlug}
@@ -1548,7 +2159,20 @@ export function GlobalChatbot() {
                             />
                           </>
                         ) : (
-                          msg.content
+                          <>
+                            <UserMessageBody
+                              content={msg.content}
+                              mentions={msg.mentions ?? []}
+                              plugins={catalogPlugins}
+                            >
+                              {msg.attachments && msg.attachments.length > 0 ? (
+                                <ChatAttachmentStrip
+                                  attachments={msg.attachments}
+                                  className="mb-1 flex justify-end px-0 pb-0"
+                                />
+                              ) : null}
+                            </UserMessageBody>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1568,7 +2192,7 @@ export function GlobalChatbot() {
                     same fact in a second place. */}
                 {isSlow && steps.length === 0 && (
                   <p className="py-1 pl-4 text-[12px] text-ink-subtle">
-                    Still working — this one is taking a while.
+                    {t("stillWorking")}
                   </p>
                 )}
 
@@ -1579,7 +2203,7 @@ export function GlobalChatbot() {
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
                       <LumidotSpinner />
-                      <span>Thinking...</span>
+                      <span>{t("thinking")}</span>
                     </div>
                   </div>
                 )}
@@ -1602,24 +2226,7 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
-                {pendingPluginConnection ? (
-                  <div className="pl-4">
-                    <PluginConnectionActionCard
-                      action={pendingPluginConnection}
-                      disabled={connectPlugin.isPending}
-                      onDismiss={() => setPendingPluginConnection(null)}
-                      onConnect={handlePluginConnectionAction}
-                    />
-                  </div>
-                ) : null}
-                {pendingPluginSetup ? (
-                  <div className="pl-4">
-                    <PluginOperatorSetupCard
-                      action={pendingPluginSetup}
-                      onDismiss={() => setPendingPluginSetup(null)}
-                    />
-                  </div>
-                ) : null}
+
               </div>
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
@@ -1659,7 +2266,7 @@ export function GlobalChatbot() {
                     >
                       <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
                         <div
-                          aria-label="Active page context"
+                          aria-label={t("activePageContext")}
                           title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
                           className="flex min-w-0 flex-1 items-center gap-1.5"
                         >
@@ -1679,8 +2286,8 @@ export function GlobalChatbot() {
                           )}
                         </div>
                         <button
-                          aria-label="Remove page context"
-                          title="Remove page context"
+                          aria-label={t("removePageContext")}
+                          title={t("removePageContext")}
                           onClick={() =>
                             setDisabledPageContextKey(ambientPageContextKey)
                           }
@@ -1692,7 +2299,28 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10`}>
+                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                  {/* What WarpBot is waiting on, where the user's hands already are. In the thread
+                      it scrolled away behind the answer that followed it and was gone when the
+                      conversation was reopened, leaving WarpBot talking about a card nobody could
+                      see. See AssistantPermissionPrompt. */}
+                  {pendingPermission ? (
+                    <AssistantPermissionPrompt
+                      prompt={pendingPermission}
+                      plugins={catalogPlugins}
+                      busy={connectPlugin.isPending}
+                      answered={permissionAnswered}
+                      turnEndedAt={turnEndedAt}
+                      // The slot is NOT cleared on an answer. Creating a meeting takes seconds, and
+                      // a form that vanishes on the press leaves nothing on screen saying the write
+                      // is running — see AssistantPermissionPrompt.
+                      onAnswer={answerPermissionPrompt}
+                      onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+                      // Declined, or the receipt's four seconds are up. One path out, so a
+                      // dismissal cannot leave the answered stamp behind for the next prompt.
+                      onDismiss={clearPluginCards}
+                    />
+                  ) : null}
                   {/* Slash Command Dropdown */}
                   <AnimatePresence>
                     {slashMenuOpen && (
@@ -1730,8 +2358,7 @@ export function GlobalChatbot() {
                           ))
                         ) : (
                           <div className="px-3 py-4 text-center text-[12px] text-ink-subtle">
-                            No matching command — press Enter to send this as a
-                            message
+                            {t("noMatchingCommand")}
                           </div>
                         )}
                       </motion.div>
@@ -1784,8 +2411,13 @@ export function GlobalChatbot() {
                                         </span>
                                       )}
                                       <div className="flex items-center gap-1.5 truncate">
+                                        {/* A summary row shows the meeting's name: its group
+                                            heading already says "Summaries". A hint shows what it
+                                            will write, "@document:". */}
                                         <span className="font-medium truncate">
-                                          {opt.title}
+                                          {isNamespaceHint(opt)
+                                            ? `@${opt.title}`
+                                            : (opt.label ?? opt.title)}
                                         </span>
                                         {opt.description && (
                                           <span className="text-[12px] text-ink-subtle truncate">
@@ -1800,7 +2432,7 @@ export function GlobalChatbot() {
                           ))
                         ) : (
                           <div className="px-3 py-4 text-center text-[12px] text-ink-subtle">
-                            No contexts found
+                            {t("noContextsFound")}
                           </div>
                         )}
                       </motion.div>
@@ -1832,7 +2464,12 @@ export function GlobalChatbot() {
                       dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
                     )}
                   >
-                    {selectedContexts.map((ctx) => (
+                    {/* Only contexts that are not already written into the sentence. A mention picked
+                        from the @ menu lives in the text as "@Google Meet" and is highlighted there
+                        by the mirror below; drawing it here too would show it twice. */}
+                    {selectedContexts
+                      .filter((ctx) => !hasMentionToken(inputValue, ctx.title))
+                      .map((ctx) => (
                       <span
                         key={ctx.id}
                         className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium"
@@ -1849,8 +2486,8 @@ export function GlobalChatbot() {
                         {ctx.title}
                         <button
                           type="button"
-                          aria-label={`Remove ${ctx.title} from this message`}
-                          title={`Remove ${ctx.title}`}
+                          aria-label={t("removeContextAria", { title: ctx.title })}
+                          title={t("removeContext", { title: ctx.title })}
                           onClick={() =>
                             setSelectedContexts((prev) =>
                               prev.filter((item) => item.id !== ctx.id),
@@ -1862,26 +2499,70 @@ export function GlobalChatbot() {
                         </button>
                       </span>
                     ))}
-                    <textarea
-                      ref={attachComposer}
-                      value={inputValue}
-                      onChange={handleInput}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      placeholder={
-                        selectedContexts.length > 0
-                          ? ""
-                          : ambientContextDisplay
-                            ? "Ask with page context..."
-                            : "Ask WarpBot..."
-                      }
-                      // WT-667: `resize-none` stays — the height is computed, not dragged. The
-                      // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
-                      // state it used to be. No `self-stretch`: an explicit height is what makes
-                      // the box the size of its text, and stretching fights it.
-                      className="flex-1 min-w-[120px] bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
-                      rows={1}
-                    />
+                    {/* The ghost completion is a MIRROR of the textarea, not a second input. A
+                        textarea paints one colour and gives no way to draw inside it, so the only
+                        way to show "@googl[e Meet]" is to re-render the same string in the same
+                        box, hide it, and let just the grey suffix show through where the caret is.
+
+                        EVERYTHING THAT MOVES A GLYPH MUST AGREE ON BOTH: font size, line height,
+                        wrapping, width, and the absence of padding. Neither sets a line height —
+                        both inherit the same one, and WT-667's six-line cap was measured against
+                        it, so this must not be the change that picks a new one.
+
+                        It is not drawn while the textarea is at its WT-667 cap and scrolling. The
+                        scrollbar then takes width the mirror does not have, so the two wrap at
+                        different points and the suffix lands on the wrong line.
+
+                        aria-hidden: the open menu already announces the option, and hearing the
+                        sentence read back a second time is worse than not hearing the hint. */}
+                    <div className="relative flex-1 min-w-[120px]">
+                      {(mentionGhost || composerMentionSegments.some((part) => part.kind === "mention"))
+                      && !composerOverflowing ? (
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 overflow-hidden text-[13px] whitespace-pre-wrap break-words"
+                        >
+                          {/* Same string, same glyphs: a mention token gets a tint BEHIND the
+                              textarea's own text (text-transparent keeps its background, where
+                              invisible would hide it), everything else stays invisible. No
+                              padding on the tint - padding would move every glyph after it. */}
+                          {composerMentionSegments.map((part, index) =>
+                            part.kind === "mention" ? (
+                              <span key={index} className="rounded-[3px] bg-primary/15 text-transparent">
+                                {mentionToken(mentionTokenLabel(part.mention))}
+                              </span>
+                            ) : (
+                              <span key={index} className="invisible">
+                                {part.text}
+                              </span>
+                            ),
+                          )}
+                          <span className="text-ink-subtle">{mentionGhost}</span>
+                        </div>
+                      ) : null}
+                      <textarea
+                        ref={attachComposer}
+                        value={inputValue}
+                        onChange={handleInput}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        placeholder={
+                          selectedContexts.length > 0
+                            ? ""
+                            : ambientContextDisplay
+                              ? t("askWithPageContext")
+                              : t("askPlaceholder")
+                        }
+                        // WT-667: `resize-none` stays — the height is computed, not dragged. The
+                        // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
+                        // state it used to be. No `self-stretch`: an explicit height is what makes
+                        // the box the size of its text, and stretching fights it. `relative` puts
+                        // the text above the ghost mirror; `block w-full` makes the wrapper, not
+                        // the textarea, the flex item, so both share one width.
+                        className="relative block w-full bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
+                        rows={1}
+                      />
+                    </div>
                   </div>
 
                   <ChatAttachmentStrip
@@ -1919,10 +2600,14 @@ export function GlobalChatbot() {
                       }}
                     />
                     <div className="flex items-center gap-0.5">
+                    {/* Platform scope is text only and has no plugins: the paperclip and the
+                        Tools menu would offer workspace things a platform turn cannot carry. */}
+                    {!isPlatformScope ? (
+                    <>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      title="Attach images or documents"
+                      title={t("attachFiles")}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium"
                     >
                       <Paperclip weight="regular" size={14} />
@@ -1933,7 +2618,7 @@ export function GlobalChatbot() {
                     >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
-                        Tools
+                        {t("tools")}
                         <CaretDown
                           weight="bold"
                           size={10}
@@ -1954,8 +2639,20 @@ export function GlobalChatbot() {
                               `cursor-default` text -- a menu that looked clickable, was not,
                               and told nobody what to do with it. */}
                           <section>
-                            <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
-                              Tools
+                            <div className="flex items-center justify-between px-2.5 pt-1 pb-1.5">
+                              <span className="text-[11px] font-medium text-ink-subtle">
+                                {t("tools")}
+                              </span>
+                              {activeWorkspaceSlug && (
+                                <Link
+                                  href={`/${activeWorkspaceSlug}/tools`}
+                                  onClick={() => setSkillsMenuOpen(false)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+                                >
+                                  <span>Explore</span>
+                                  <ArrowSquareOut size={11} />
+                                </Link>
+                              )}
                             </div>
                             {availableSlashCommands.length > 0 ? (
                               <ul className="flex flex-col">
@@ -1985,8 +2682,20 @@ export function GlobalChatbot() {
                             ) : (
                               // Not "loading": availableSlashCommands is filtered by the page
                               // you are on, so an empty list is an answer, not a wait.
-                              <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
-                                No tools for this page. Open a meeting or a document.
+                              <div className="flex flex-col gap-1 px-2.5 py-2">
+                                <div className="text-[12px] text-ink-subtle">
+                                  {t("noToolsForPage")}
+                                </div>
+                                {activeWorkspaceSlug && (
+                                  <Link
+                                    href={`/${activeWorkspaceSlug}/tools`}
+                                    onClick={() => setSkillsMenuOpen(false)}
+                                    className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline pt-0.5"
+                                  >
+                                    <span>Browse All 14 WarpBot Tools</span>
+                                    <ArrowSquareOut size={11} />
+                                  </Link>
+                                )}
                               </div>
                             )}
                           </section>
@@ -1994,7 +2703,7 @@ export function GlobalChatbot() {
                           <section className="border-t border-border pt-2">
                             <div className="flex items-center justify-between px-2.5 pb-1.5">
                               <span className="text-[11px] font-medium text-ink-subtle">
-                                Plugins
+                                {t("pluginsInThisChat")}
                               </span>
                               <a
                                 href={
@@ -2004,7 +2713,7 @@ export function GlobalChatbot() {
                                 }
                                 className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"
                               >
-                                Manage
+                                {t("manage")}
                                 <ArrowSquareOut size={11} />
                               </a>
                             </div>
@@ -2012,6 +2721,7 @@ export function GlobalChatbot() {
                               <ul className="flex flex-col gap-1">
                                 {installedAssistantPlugins.map((plugin) => {
                                   const connected = plugin.connectionStatus === "connected";
+                                  const alwaysAllowed = pluginWritesAlwaysAllowed(plugin.tools);
                                   return (
                                     <li
                                       key={plugin.key}
@@ -2023,26 +2733,58 @@ export function GlobalChatbot() {
                                           {plugin.label}
                                         </div>
                                         <div className="truncate text-[11px] text-ink-subtle">
-                                          {connected
-                                            ? plugin.connectedAccountEmail ?? "Connected"
-                                            : "Connect to use in WarpBot"}
+                                          {!connected
+                                            ? t("connectToUse")
+                                            : disabledPluginKeys.includes(plugin.key)
+                                              ? t("offInThisChat")
+                                              : t("connected")}
                                         </div>
+                                        {connected && alwaysAllowed !== null ? (
+                                          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-ink-muted">
+                                            <input
+                                              type="checkbox"
+                                              checked={alwaysAllowed}
+                                              disabled={updateToolPolicy.isPending}
+                                              onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
+                                              className="size-3 accent-primary"
+                                            />
+                                            {t("alwaysAllowChanges")}
+                                          </label>
+                                        ) : null}
                                       </div>
-                                      <button
-                                        type="button"
-                                        disabled={installPlugin.isPending || connectPlugin.isPending}
-                                        onClick={() => void handlePluginAction(plugin)}
-                                        className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
-                                      >
-                                        {connected ? (
-                                          <>
-                                            <CheckCircle size={12} weight="fill" />
-                                            Ready
-                                          </>
-                                        ) : (
-                                          "Connect"
-                                        )}
-                                      </button>
+                                      {connected ? (
+                                        // WT-687: on or off for this conversation, as in Claude's
+                                        // connector menu. Off means WarpBot is not offered this
+                                        // plugin's tools on the next message.
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={!disabledPluginKeys.includes(plugin.key)}
+                                          aria-label={t("useInThisChat", { label: plugin.label })}
+                                          onClick={() => togglePluginForConversation(plugin.key)}
+                                          className={cn(
+                                            "relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                                            disabledPluginKeys.includes(plugin.key) ? "bg-surface-3" : "bg-primary",
+                                          )}
+                                        >
+                                          <span
+                                            aria-hidden
+                                            className={cn(
+                                              "absolute top-[2px] size-[14px] rounded-full bg-white shadow-sm transition-[left] motion-reduce:transition-none",
+                                              disabledPluginKeys.includes(plugin.key) ? "left-[2px]" : "left-[14px]",
+                                            )}
+                                          />
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          disabled={installPlugin.isPending || connectPlugin.isPending}
+                                          onClick={() => void handlePluginAction(plugin)}
+                                          className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                                        >
+                                          {t("connect")}
+                                        </button>
+                                      )}
                                     </li>
                                   );
                                 })}
@@ -2050,29 +2792,31 @@ export function GlobalChatbot() {
                             ) : (
                               <div className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-ink-subtle">
                                 <PlugsConnected size={14} weight="duotone" />
-                                Install plugins from Personal Settings.
+                                {t("installPluginsHint")}
                               </div>
                             )}
                           </section>
                         </div>
                       </PopoverContent>
                     </Popover>
+                    </>
+                    ) : null}
                     </div>
 
                     <div className="flex items-center gap-1">
                       <button
                         aria-label={
                           isPageContextVisible
-                            ? "Hide page context"
-                            : "Show page context"
+                            ? t("hidePageContext")
+                            : t("showPageContext")
                         }
                         title={
                           isPageContextVisible
-                            ? "Hide page context"
-                            : "Show page context"
+                            ? t("hidePageContext")
+                            : t("showPageContext")
                         }
                         onClick={togglePageContextVisibility}
-                        disabled={!ambientPageContextKey}
+                        disabled={isPlatformScope || !ambientPageContextKey}
                         className="flex items-center justify-center size-7 rounded-full bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
                       >
                         {isPageContextVisible ? (
@@ -2087,7 +2831,7 @@ export function GlobalChatbot() {
                           the attachment path it needed now exists. */}
                       <button
                         type="button"
-                        aria-label="Send message"
+                        aria-label={t("sendMessage")}
                         onClick={() => void sendMessage()}
                         // WT-474: an attachment on its own is a question, so send is live for a
                         // turn carrying only files. Matching the same rule in sendMessage and in
@@ -2096,7 +2840,7 @@ export function GlobalChatbot() {
                         // WT-541 is the converse, and was the actual bug: a button the server
                         // CANNOT accept must not look alive. Both now read one rule.
                         disabled={!composerState.canSend}
-                        title={composerState.hint ?? "Send message"}
+                        title={composerState.hint ?? t("sendMessage")}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />
@@ -2114,9 +2858,9 @@ export function GlobalChatbot() {
               and reloads the selected one back into the widget. */}
           <Popover open={historyMenuOpen} onOpenChange={setHistoryMenuOpen}>
             <PopoverTrigger
-              aria-label="Chat history"
-              title="Chat history"
-              disabled={!activeWorkspaceId}
+              aria-label={t("chatHistory")}
+              title={t("chatHistory")}
+              disabled={!isPlatformScope && !activeWorkspaceId}
               className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50"
             >
               <ClockCounterClockwise weight="regular" size={14} />
@@ -2126,17 +2870,17 @@ export function GlobalChatbot() {
               sideOffset={8}
               className="p-1.5 w-[280px] max-h-[320px] overflow-y-auto bg-surface-1 border border-border shadow-xl rounded-xl"
             >
-              {conversationsQuery.isLoading || loadConversation.isPending ? (
+              {conversationsQuery.isLoading || conversationLoader.isPending ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                  Loading conversations…
+                  {t("loadingConversations")}
                 </div>
               ) : conversationsQuery.isError ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-red-500">
-                  Could not load chat history.
+                  {t("loadHistoryFailed")}
                 </div>
               ) : visibleConversations.length === 0 ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                  No past conversations yet
+                  {t("noPastConversations")}
                 </div>
               ) : (
                 <div className="flex flex-col">
@@ -2150,7 +2894,7 @@ export function GlobalChatbot() {
                       className="flex flex-col gap-0.5 px-2.5 py-1.5 text-left rounded-md hover:bg-surface-2 transition-colors"
                     >
                       <span className="truncate text-[12px] font-medium text-ink">
-                        {conversation.title?.trim() || "New chat"}
+                        {conversation.title?.trim() || t("newChat")}
                       </span>
                       <span className="text-[11px] text-ink-subtle">
                         {formatConversationTimestamp(

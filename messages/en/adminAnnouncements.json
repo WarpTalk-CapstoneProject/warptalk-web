@@ -1,0 +1,178 @@
+{
+  "list": {
+    "eyebrow": "Operations",
+    "title": "Announcements",
+    "description": "Platform-wide notices that have been sent to users.",
+    "compose": "Compose",
+    "refresh": "Refresh",
+    "error": {
+      "title": "Announcements could not be loaded.",
+      "description": "Check the notification service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "Nothing has been announced yet",
+      "description": "Announcements sent from the platform appear here."
+    },
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages} · {total} total",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "footerNote": "An announcement is delivered once to the people it names and cannot be edited, recalled or deleted afterwards. There is no “everyone” audience: the service accepts a named list until a segment resolver is configured.",
+    "delivery": {
+      "sentAt": "Sent {date}",
+      "createdTitle": "Created — not sent yet",
+      "delivered": "{count, plural, =0 {None delivered} one {# delivered} other {# delivered}}"
+    }
+  },
+  "detail": {
+    "back": "Announcements",
+    "eyebrow": "Operations · Announcement",
+    "headerDescription": "{type} · created {date}",
+    "refresh": "Refresh",
+    "notFound": {
+      "title": "This announcement does not exist.",
+      "description": "It may have been addressed by a stale link."
+    },
+    "loadError": {
+      "title": "The announcement could not be loaded.",
+      "description": "Check the notification service and try again."
+    },
+    "retry": "Try again",
+    "sections": {
+      "message": "Message",
+      "record": "Record",
+      "audience": "Audience",
+      "payload": "Payload"
+    },
+    "fields": {
+      "type": "Type",
+      "status": "Status",
+      "author": "Author",
+      "created": "Created",
+      "lastUpdated": "Last updated",
+      "announcementId": "Announcement id",
+      "mode": "Mode",
+      "rawTargeting": "Raw targeting",
+      "segment": "Segment",
+      "namedRecipients": "Named recipients",
+      "sentAt": "Sent",
+      "delivered": "Delivered"
+    },
+    "resolving": "· resolving…",
+    "toasts": {
+      "copied": "{label} copied",
+      "copyFailed": "Could not copy the {label}"
+    },
+    "recipients": {
+      "none": "None listed",
+      "count": "{count, plural, one {# user id} other {# user ids}}",
+      "showFewer": "Show fewer",
+      "showAll": "Show all {count}"
+    },
+    "payloadFields": {
+      "image": "Image",
+      "cta": "Call to action",
+      "discountCode": "Discount code",
+      "severity": "Severity",
+      "actionRequired": "Action required",
+      "yes": "Yes",
+      "no": "No",
+      "downtimeWindow": "Downtime window",
+      "downtimeRange": "{start} → {end}",
+      "empty": "No image, link, code or downtime window."
+    },
+    "footerNote": "The send time and delivered count are recorded once every delivery chunk has been counted; an announcement that failed any chunk stays Failed.",
+    "notSent": "Not sent yet",
+    "deliveryUnknown": "Not reported by this server",
+    "deliveredCount": "{count, plural, =0 {No recipients} one {# recipient} other {# recipients}}"
+  },
+  "composer": {
+    "types": {
+      "ANNOUNCEMENT": {
+        "label": "Announcement",
+        "hint": "General news from the platform."
+      },
+      "PROMOTION": {
+        "label": "Promotion",
+        "hint": "Carries an offer, a link and a discount code."
+      },
+      "MAINTENANCE": {
+        "label": "Maintenance",
+        "hint": "States a downtime window. Both ends required."
+      },
+      "SYSTEM": {
+        "label": "System",
+        "hint": "The platform speaking about itself. No links, no offers."
+      }
+    },
+    "title": "Compose an announcement",
+    "description": "Delivered once to the people you choose — a named list, one workspace, or everyone. There is no draft, no schedule and no recall.",
+    "typeLabel": "Type",
+    "titleLabel": "Title",
+    "messageLabel": "Message",
+    "messageHint": "Plain text. The notification service refuses anything that looks like an HTML tag.",
+    "ctaLabel": "Call-to-action link",
+    "optional": "(optional)",
+    "imageLabel": "Image URL",
+    "discountLabel": "Discount code",
+    "noPayloadFields": "A system notice carries no link, image or discount code. The service refuses them on this type.",
+    "downtimeStartLabel": "Downtime starts",
+    "downtimeEndLabel": "Downtime ends",
+    "downtimeHint": "Entered in your own time zone and sent as an absolute instant.",
+    "recipients": {
+      "label": "Recipients",
+      "nobodySelected": "Nobody selected",
+      "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+      "searchPlaceholder": "Search the platform directory by name or email",
+      "searching": "Searching…",
+      "directoryError": "The user directory could not be read.",
+      "noMatch": "No account matches that.",
+      "selected": "Selected",
+      "add": "Add",
+      "remove": "Remove {email}",
+      "clear": "Clear",
+      "footerNote": "A named list. Choose “One workspace” or “Everyone” above for a wider audience."
+    },
+    "cancel": "Cancel",
+    "review": "Review before sending",
+    "sendFailed": "The announcement could not be sent.",
+    "confirm": {
+      "title": "Send this announcement?",
+      "description": "It reaches everyone below as soon as you confirm. It cannot be edited, recalled or deleted afterwards.",
+      "recipientCount": "{count, plural, one {# recipient} other {# recipients}}",
+      "andMore": "and {count} more",
+      "back": "Back",
+      "sending": "Sending…",
+      "send": "Send to {count}",
+      "everyone": "Every active account on the platform",
+      "segment": "Every active member of {name} ({count, plural, one {# member} other {# members}} now)",
+      "sendAudience": "Send"
+    },
+    "audience": {
+      "label": "Audience",
+      "SPECIFIC_USERS": {
+        "label": "Named people",
+        "hint": "Pick accounts from the directory."
+      },
+      "SEGMENT": {
+        "label": "One workspace",
+        "hint": "Every active member of a workspace."
+      },
+      "BROADCAST": {
+        "label": "Everyone",
+        "hint": "Every active account on the platform."
+      }
+    },
+    "segment": {
+      "label": "Workspace",
+      "searchPlaceholder": "Search workspaces by name",
+      "searching": "Searching…",
+      "directoryError": "The workspace directory could not be read.",
+      "noMatch": "No workspace matches that.",
+      "change": "Change",
+      "memberCount": "{count, plural, one {# member} other {# members}}"
+    }
+  }
+}

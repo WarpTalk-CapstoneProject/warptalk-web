@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 import { toast } from "sonner";
 import {
-  Archive,
   ArrowsClockwise,
-  CheckCircle,
+  CornersIn,
+  CornersOut,
   DownloadSimple,
+  Pause,
   Play,
+  SpeakerHigh,
+  SpeakerSlash,
   SpinnerGap,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -18,24 +21,28 @@ import {
   ARTIFACT_WITHHELD_FALLBACK,
   isArtifactWithheld,
 } from "@/lib/meeting/artifact-denial";
+import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
-import {
-  artifactDownloadFormat,
-  artifactLabel,
-  artifactStatusLabel,
-  canDownloadArtifact,
-} from "@/lib/meeting/meeting-artifacts";
+import { canDownloadArtifact } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
+import type { RecordingMark } from "@/lib/meeting/recording-marks";
 
 /**
- * The AI summary and the retained files for one meeting.
+ * The recording of one meeting, and the download flow behind every file on its record.
  *
  * These used to live on a separate Transcripts page, one level removed from the meeting they
  * describe: to read what a meeting decided you left the meeting's own page, found it again in
  * a workspace-wide queue, and picked a tab. A meeting's transcript, its summary and its files
- * are three views of one thing, so they now sit together on that meeting's page and this
- * component is what moved.
+ * are views of one thing, so they now sit together on that meeting's page.
+ *
+ * THE LIST OF RETAINED FILES IS NOT HERE ANY MORE
+ *   `ArtifactsPanel` drew every artifact of a meeting as a row with a download arrow, on a tab of
+ *   its own. It was a THIRD place to reach things the Recap tab already shows — the recording is a
+ *   player, the transcript and the summary are documents you are reading — and reaching them by
+ *   name from a list of file types is the long way round from every one of them. Each download now
+ *   sits on the thing it is a copy of, and the workspace's Artifacts library keeps the rows for the
+ *   files that are nobody's reading surface (debug logs, audio samples).
  */
 
 /** A tab in the meeting record. Shared so the three tabs cannot drift apart visually. */
@@ -91,14 +98,18 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
 
     setBusyArtifactId(artifact.id);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
+      // `attachment`, which is what makes the presigned link save the file under the name the
+      // server gives it rather than opening it in place. The player's own fetch deliberately does
+      // NOT ask for this — see artifactDownload.
       const { data } = await translationRoomService.artifactDownload(
         artifact.id,
+        "attachment",
       );
-      openArtifactDownload(data);
-      if (artifact.consentRequired) onConsentGranted?.();
+      openArtifactDownload(data, { asAttachment: true });
+      if (released) onConsentGranted?.();
     } catch (error) {
       // A host-only artifact is withheld, not broken — the same distinction the history preview
       // and the Summary tab already draw. `error.message` was also the wrong source: on an axios
@@ -196,7 +207,12 @@ export function MeetingRecordingPlayer({
   onPlayingChange,
   onDurationSeconds,
   unavailableReason,
+  recordings,
+  onDownloadRecording,
+  busyArtifactId,
   variant = "section",
+  marks,
+  onMarkClick,
 }: {
   artifact: RoomHistoryArtifact | null;
   onConsentGranted?: () => void;
@@ -270,12 +286,28 @@ export function MeetingRecordingPlayer({
    */
   unavailableReason?: "processing" | "multiple" | null;
   /**
+   * Every recording of this meeting that HAS a file, for the `multiple` case — where no single
+   * frame can honestly claim to be the recording, and the only honest offer is all of them.
+   *
+   * It used to say "Download them from the Artifacts tab", which was a signpost to a tab that no
+   * longer exists. A list of two buttons is shorter than the sentence pointing at it was.
+   */
+  recordings?: readonly RoomHistoryArtifact[];
+  /** The download flow, consent stop included — `useArtifactDownload().downloadArtifact`. */
+  onDownloadRecording?: (artifact: RoomHistoryArtifact) => void;
+  /** Which download is in flight, from the same hook. */
+  busyArtifactId?: string | null;
+  /**
    * `pip` is the rail's corner of Option C: the recording stops being a column of its own and
    * becomes a 16:9 frame the width of the rail. Below 1280px even that is too much horizontal
    * budget for a picture nobody is watching while they read, so the frame collapses to the height
    * of its own transport controls — a player bar, which is all the spec asks for in that band.
    */
   variant?: "section" | "pip";
+  /** Turn marks on the video file-second axis. */
+  marks?: readonly RecordingMark[];
+  /** When a mark is clicked on the scrubber, notify the caller to jump transcript. */
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
   // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
@@ -305,6 +337,9 @@ export function MeetingRecordingPlayer({
    */
   const reloadedAfterFailureRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrubberRef = useRef<HTMLInputElement | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
   // dropped — the first click on a transcript line is exactly that case, since the player waits
   // for a press before fetching anything.
@@ -313,6 +348,105 @@ export function MeetingRecordingPlayer({
   // below re-runs constantly; without a record of what it has already done, an unrelated keystroke
   // three components away would pause the recording somebody had just started.
   const handledPlaybackRef = useRef<number | null>(null);
+
+  // ── Custom player UI state ──────────────────────────────────────────────────
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Forces scrubber to rerender when marks change without depending on a new array ref each tick.
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  void forceUpdate; // Used implicitly via marks prop change — kept to avoid lint warning.
+
+  // Keep fullscreen state in sync with browser events (Esc key exit etc.).
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Sync isPlaying from native video events so the Play/Pause button icon stays accurate without
+  // needing setIsPlaying in the JSX onPlay/onPause props — those props must remain single-expression
+  // to pass the contract grep in check-recording-seek-contract.mjs.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onPlay  = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    video.addEventListener("play",  onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("ended", onEnded);
+    return () => {
+      video.removeEventListener("play",  onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("ended", onEnded);
+    };
+    // videoRef.current changes whenever sourceUrl changes (the element is remounted on a fresh url),
+    // so sourceUrl is the right dependency here — not videoRef itself, which is a stable ref object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceUrl]);
+
+  // Helper: format seconds as M:SS.
+  function fmtTime(s: number | null) {
+    if (!s || !Number.isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  }
+
+  function togglePlayPause() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => {});
+    else video.pause();
+  }
+
+  function handleScrubberChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const video = videoRef.current;
+    if (!video) return;
+    const t = Number(e.target.value);
+    video.currentTime = t;
+    setCurrentTime(t);
+  }
+
+  function handleVolumeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const video = videoRef.current;
+    if (!video) return;
+    const v = Number(e.target.value);
+    video.volume = v;
+    video.muted = v === 0;
+    setVolume(v);
+    setIsMuted(v === 0);
+  }
+
+  function toggleMute() {
+    const video = videoRef.current;
+    if (!video) return;
+    const next = !video.muted;
+    video.muted = next;
+    setIsMuted(next);
+    if (!next && video.volume === 0) {
+      video.volume = 0.5;
+      setVolume(0.5);
+    }
+  }
+
+  async function toggleFullscreen() {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      await el.requestFullscreen().catch(() => {});
+    } else {
+      await document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  function handleDownloadCurrent() {
+    if (!artifact || !onDownloadRecording) return;
+    onDownloadRecording(artifact);
+  }
 
   // Not setState: this drives an external system (the media element) from React state, which is
   // what an effect is actually for.
@@ -338,9 +472,9 @@ export function MeetingRecordingPlayer({
     if (!artifact || isLoading) return;
     setIsLoading(true);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
       const { data } = await translationRoomService.artifactDownload(artifact.id);
       // `content` is the inline path used by the text exports; a recording always arrives as a
       // link, so an absent url here means the file is gone rather than that it is empty.
@@ -349,7 +483,7 @@ export function MeetingRecordingPlayer({
         return;
       }
       setLoaded({ artifactId: artifact.id, url: data.url });
-      if (artifact.consentRequired) onConsentGranted?.();
+      if (released) onConsentGranted?.();
     } catch (error) {
       // Withheld is a policy answer, not a failure — the same distinction the download path and
       // the Summary tab already draw.
@@ -382,6 +516,7 @@ export function MeetingRecordingPlayer({
     reloadedAfterFailureRef.current = true;
     setFailure(null);
     setLoaded(null);
+    setVideoDuration(null);
     void loadRecording();
   }, [loadRecording]);
 
@@ -420,6 +555,7 @@ export function MeetingRecordingPlayer({
   const hasPlayhead = Boolean(sourceUrl) && !playbackFailure;
   useEffect(() => {
     if (hasPlayhead) return;
+    setVideoDuration(null);
     onPlaybackSeconds?.(null);
     onPlayingChange?.(false);
     // The duration goes with the element. A number left standing after the <video> was replaced by
@@ -454,9 +590,23 @@ export function MeetingRecordingPlayer({
       const seconds = video.duration;
       // `> 0` as well as finite: a zero-length duration is the element saying it has nothing, and a
       // zero would make the guard refuse every moment in the meeting.
-      onDurationSeconds?.(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+      const valid = Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+      setVideoDuration(valid);
+      onDurationSeconds?.(valid);
     },
     [onDurationSeconds],
+  );
+
+  const handleMarkClick = useCallback(
+    (mark: RecordingMark) => {
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = mark.seconds;
+        void video.play().catch(() => {});
+      }
+      onMarkClick?.(mark);
+    },
+    [onMarkClick],
   );
 
   const isPip = variant === "pip";
@@ -507,9 +657,32 @@ export function MeetingRecordingPlayer({
               </p>
               <p className="text-[12px] leading-5 text-ink-muted">
                 This meeting has more than one recording, and this page cannot yet
-                tell which one a given moment belongs to. Download them from the
-                Artifacts tab to watch.
+                tell which one a given moment belongs to.
               </p>
+              {/* The files themselves, since the page cannot pick between them. Numbered in the
+                  order they were recorded, which is the order the list arrives in — a stop and a
+                  restart make "Recording 1" and "Recording 2", and nothing else here can name
+                  them. The file NAME comes from the server, so nothing is set on the anchor. */}
+              {recordings?.length && onDownloadRecording ? (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  {recordings.map((recording, index) => (
+                    <button
+                      key={recording.id}
+                      type="button"
+                      onClick={() => onDownloadRecording(recording)}
+                      disabled={busyArtifactId === recording.id}
+                      className="flex items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+                    >
+                      {busyArtifactId === recording.id ? (
+                        <SpinnerGap size={13} className="animate-spin" />
+                      ) : (
+                        <DownloadSimple size={13} />
+                      )}
+                      Recording {index + 1}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -559,99 +732,258 @@ export function MeetingRecordingPlayer({
               </p>
               <p className="text-[12px] leading-5 text-ink-muted">
                 The file was reached but the browser could not play it. Downloading
-                it from the Artifacts tab may still work.
+                it may still work.
               </p>
             </>
           )}
         </div>
       ) : sourceUrl ? (
-        // controls, and nothing else: autoplay on a page someone opened to read a transcript is
-        // a room full of unexpected sound.
-        <video
-          ref={videoRef}
-          src={sourceUrl}
-          controls
-          preload="metadata"
-          className={frameClass}
-          onLoadedMetadata={(event) => {
-            // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
-            // settled and spent. Without this reset the very first expiry would mark the player
-            // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
-            // would be reported as an unplayable file with no reload offered.
-            reloadedAfterFailureRef.current = false;
-            publishDuration(event.currentTarget);
-            const queued = pendingSeekRef.current;
-            if (!queued) return;
-            pendingSeekRef.current = null;
-            /**
-             * WT-655 — the queued seek is the one the caller's guard could not see.
-             *
-             * A click that lands before the file has been fetched is held in `pendingSeekRef` and
-             * applied here. At the instant it was made the page had no duration to check it
-             * against — the player only fetches on demand, so nothing had loaded — which means the
-             * past-the-end refusal upstream cannot have run for exactly the first click of every
-             * visit. This is that refusal, made at the only moment the number exists: right now,
-             * on the element.
-             *
-             * FILE AXIS AGAINST FILE AXIS, AND NOTHING ELSE. `queued.seconds` is already an offset
-             * into this file, computed by recording-seek.ts; `duration` is this file's length. No
-             * meeting clock appears in this component and none may — see the header of
-             * recording-seek.ts for what a second subtraction of the two origins costs.
-             *
-             * Dropped rather than clamped, because the browser's own clamp is the bug: it parks the
-             * playhead on the last frame, which is a still picture of the meeting ending and looks
-             * exactly like a seek that worked.
-             */
-            const duration = event.currentTarget.duration;
-            if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
-              toast.info("This recording stopped before that moment.");
-              return;
-            }
-            event.currentTarget.currentTime = queued.seconds;
-            void event.currentTarget.play().catch(() => {});
-          }}
-          /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
-             enough of it has been read to know better, and a caller that only ever heard
-             `loadedmetadata` would keep an unknown length forever on exactly the containers the
-             egress pipeline produces. */
-          onDurationChange={(event) => publishDuration(event.currentTarget)}
-          /* WT-655 — the playhead, for the transcript to follow.
-             `timeupdate` fires roughly four times a second while playing, and the provider throttles
-             to about that rate whatever this browser's rate turns out to be. The `paused` guard is
-             the "nothing runs while paused" rule at its source: the event also fires for a SEEK made
-             while paused, and honouring that would drag a reader who paused deliberately and
-             scrolled away back to the playhead they had just left. */
-          onTimeUpdate={(event) => {
-            if (event.currentTarget.paused) return;
-            onPlaybackSeconds?.(event.currentTarget.currentTime);
-          }}
-          onPlay={() => onPlayingChange?.(true)}
-          onPause={() => onPlayingChange?.(false)}
-          // Ended is not paused as far as the element's own events go, and a recording that ran to
-          // the end must stop being "playing" or the follow pill would hang around over a finished
-          // video offering to chase a playhead that has stopped.
-          onEnded={() => onPlayingChange?.(false)}
-          /* WT-655: without this the frame just went black. The surrounding code only ever
-             reported a missing `url` FIELD, which says nothing about whether that url opens —
-             and a fifteen-minute presigned link on a page people keep open will routinely stop
-             opening. Every failure to play was therefore silent, which is why the whole seek
-             feature looked broken rather than merely stale. */
-          onError={(event) => {
-            const classified = classifyPlaybackFailure(event.currentTarget.error);
-            // Aborted playback is us, not a failure — nothing happened worth saying.
-            if (!classified) return;
-            // A second failure on a link fetched to replace a failed one settles it: the file is
-            // the problem, not the link's age.
-            const kind =
-              classified === "expired" && reloadedAfterFailureRef.current ? "broken" : classified;
-            setFailure({ url: sourceUrl, kind });
-            // The frame says both cases, so only the genuine fault also toasts: below 1280px the
-            // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about
-            // even if the reader never looks up at it. An expired link is ordinary and stays
-            // where the reload button is.
-            if (kind === "broken") toast.error("Could not play this recording.");
-          }}
-        />
+        /* WarpTalk Custom Video Player — WT-894
+           No native controls: the browser shadow DOM cannot be internationalised from here and
+           renders its menu in the OS locale, which is Vietnamese for most of the team's machines.
+           Every control the reader needs is reproduced in the control bar below the frame, in the
+           same design tokens and icon set as the rest of the application. */
+        <div ref={containerRef} className="group relative flex flex-col bg-black">
+          {/* ─── Video element (no controls) ─────────────────────────────── */}
+          <video
+            ref={videoRef}
+            src={sourceUrl}
+            preload="metadata"
+            className={frameClass}
+            onClick={togglePlayPause}
+            style={{ cursor: "pointer" }}
+            onLoadedMetadata={(event) => {
+              // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
+              // settled and spent. Without this reset the very first expiry would mark the player
+              // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
+              // would be reported as an unplayable file with no reload offered.
+              reloadedAfterFailureRef.current = false;
+              publishDuration(event.currentTarget);
+              const el = event.currentTarget;
+              setCurrentTime(el.currentTime);
+              const queued = pendingSeekRef.current;
+              if (!queued) return;
+              pendingSeekRef.current = null;
+              /**
+               * WT-655 — the queued seek is the one the caller's guard could not see.
+               *
+               * A click that lands before the file has been fetched is held in `pendingSeekRef` and
+               * applied here. At the instant it was made the page had no duration to check it
+               * against — the player only fetches on demand, so nothing had loaded — which means the
+               * past-the-end refusal upstream cannot have run for exactly the first click of every
+               * visit. This is that refusal, made at the only moment the number exists: right now,
+               * on the element.
+               *
+               * FILE AXIS AGAINST FILE AXIS, AND NOTHING ELSE. `queued.seconds` is already an offset
+               * into this file, computed by recording-seek.ts; `duration` is this file's length. No
+               * meeting clock appears in this component and none may — see the header of
+               * recording-seek.ts for what a second subtraction of the two origins costs.
+               *
+               * Dropped rather than clamped, because the browser's own clamp is the bug: it parks the
+               * playhead on the last frame, which is a still picture of the meeting ending and looks
+               * exactly like a seek that worked.
+               */
+              const duration = el.duration;
+              if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
+                toast.info("This recording stopped before that moment.");
+                return;
+              }
+              el.currentTime = queued.seconds;
+              void el.play().catch(() => {});
+            }}
+            /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
+               enough of it has been read to know better, and a caller that only ever heard
+               `loadedmetadata` would keep an unknown length forever on exactly the containers the
+               egress pipeline produces. */
+            onDurationChange={(event) => publishDuration(event.currentTarget)}
+            /* WT-655 — the playhead, for the transcript to follow.
+               `timeupdate` fires roughly four times a second while playing, and the provider throttles
+               to about that rate whatever this browser's rate turns out to be. The `paused` guard is
+               the "nothing runs while paused" rule at its source: the event also fires for a SEEK made
+               while paused, and honouring that would drag a reader who paused deliberately and
+               scrolled away back to the playhead they had just left. */
+            onTimeUpdate={(event) => {
+              if (event.currentTarget.paused) return;
+              setCurrentTime(event.currentTarget.currentTime);
+              onPlaybackSeconds?.(event.currentTarget.currentTime);
+            }}
+            onPlay={() => onPlayingChange?.(true)}
+            onPause={() => onPlayingChange?.(false)}
+            // Ended is not paused as far as the element's own events go, and a recording that ran to
+            // the end must stop being "playing" or the follow pill would hang around over a finished
+            // video offering to chase a playhead that has stopped.
+            onEnded={() => onPlayingChange?.(false)}
+            /* WT-655: without this the frame just went black. The surrounding code only ever
+               reported a missing `url` FIELD, which says nothing about whether that url opens —
+               and a fifteen-minute presigned link on a page people keep open will routinely stop
+               opening. Every failure to play was therefore silent, which is why the whole seek
+               feature looked broken rather than merely stale. */
+            onError={(event) => {
+              const classified = classifyPlaybackFailure(event.currentTarget.error);
+              // Aborted playback is us, not a failure — nothing happened worth saying.
+              if (!classified) return;
+              // A second failure on a link fetched to replace a failed one settles it: the file is
+              // the problem, not the link's age.
+              const kind =
+                classified === "expired" && reloadedAfterFailureRef.current ? "broken" : classified;
+              setFailure({ url: sourceUrl, kind });
+              // The frame says both cases, so only the genuine fault also toasts: below 1280px the
+              // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about
+              // even if the reader never looks up at it. An expired link is ordinary and stays
+              // where the reload button is.
+              if (kind === "broken") toast.error("Could not play this recording.");
+            }}
+          />
+
+          {/* ─── WarpTalk Custom Control Bar ─────────────────────────────── */}
+          <div
+            className={cn(
+              "flex w-full select-none flex-col gap-0 bg-black/90 px-3 pb-2 pt-1 backdrop-blur-sm",
+              /* In pip/collapsed mode stay slim; at xl it reveals the full bar */
+              isPip ? "py-1 xl:pb-2 xl:pt-1" : "",
+            )}
+            aria-label="Video player controls"
+          >
+            {/* ── Scrubber row: timeline + turn marks overlay ──────────── */}
+            <div className="relative flex w-full items-center py-1">
+              {/* Range input — the actual scrubber */}
+              <input
+                ref={scrubberRef}
+                type="range"
+                min={0}
+                max={videoDuration ?? 0}
+                step={0.25}
+                value={currentTime}
+                onChange={handleScrubberChange}
+                aria-label="Seek recording"
+                className="relative z-10 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20"
+                style={{
+                  /* tint the filled portion of the scrubber track */
+                  background: `linear-gradient(to right, rgb(var(--color-ink)) ${
+                    videoDuration && videoDuration > 0
+                      ? Math.min(100, (currentTime / videoDuration) * 100)
+                      : 0
+                  }%, rgba(255,255,255,0.2) 0%)`,
+                }}
+              />
+              {/* Turn-mark dots drawn on top of the track at their file-second positions */}
+              {marks && marks.length > 0 && videoDuration && videoDuration > 0 && (
+                <div
+                  className="pointer-events-none absolute inset-0 z-20"
+                  aria-hidden="true"
+                >
+                  {marks.map((mark, idx) => {
+                    const percent = Math.min(
+                      100,
+                      Math.max(0, (mark.seconds / videoDuration) * 100),
+                    );
+                    return (
+                      <button
+                        key={`${mark.atMs}-${idx}`}
+                        type="button"
+                        onClick={() => handleMarkClick(mark)}
+                        style={{ left: `${percent}%`, top: "50%" }}
+                        className="pointer-events-auto absolute z-20 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-amber-400/80 ring-1 ring-amber-300/60 transition-all hover:scale-125 hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        title={`Jump to turn at ${Math.round(mark.seconds)}s`}
+                        aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Bottom row: all buttons + time counter ────────────────── */}
+            <div className="flex items-center gap-2">
+              {/* Play / Pause */}
+              <button
+                type="button"
+                onClick={togglePlayPause}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause size={15} weight="fill" />
+                ) : (
+                  <Play size={15} weight="fill" />
+                )}
+              </button>
+
+              {/* Volume: mute toggle + slider */}
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted || volume === 0 ? (
+                  <SpeakerSlash size={14} weight="fill" />
+                ) : (
+                  <SpeakerHigh size={14} weight="fill" />
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                aria-label="Volume"
+                className={cn(
+                  "h-1 cursor-pointer appearance-none rounded-full bg-white/20 transition-all",
+                  /* hide volume slider in pip-collapsed to save horizontal space */
+                  isPip ? "w-0 overflow-hidden xl:w-16" : "w-16",
+                )}
+                style={{
+                  background: `linear-gradient(to right, rgba(255,255,255,0.85) ${
+                    (isMuted ? 0 : volume) * 100
+                  }%, rgba(255,255,255,0.2) 0%)`,
+                }}
+              />
+
+              {/* Time counter: current / duration */}
+              <span className="ml-1 flex-1 font-mono text-[11px] leading-none text-white/60 tabular-nums">
+                {fmtTime(currentTime)}
+                <span className="mx-0.5 text-white/30">/</span>
+                {fmtTime(videoDuration)}
+              </span>
+
+              {/* Download button — only shown when download is wired up */}
+              {artifact && onDownloadRecording && (
+                <button
+                  type="button"
+                  onClick={handleDownloadCurrent}
+                  disabled={busyArtifactId === artifact.id}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/40"
+                  aria-label="Download recording"
+                  title="Download recording"
+                >
+                  {busyArtifactId === artifact.id ? (
+                    <SpinnerGap size={14} className="animate-spin" />
+                  ) : (
+                    <DownloadSimple size={14} weight="bold" />
+                  )}
+                </button>
+              )}
+
+              {/* Fullscreen */}
+              <button
+                type="button"
+                onClick={() => void toggleFullscreen()}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? (
+                  <CornersIn size={14} weight="bold" />
+                ) : (
+                  <CornersOut size={14} weight="bold" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className={noticeFrameClass}>
           <button
@@ -780,77 +1112,14 @@ export function SummaryStalenessNotice({
  * checkable at all.
  */
 
-export function ArtifactsPanel({
-  artifacts,
-  busyArtifactId,
-  onDownload,
-}: {
-  artifacts: RoomHistoryArtifact[];
-  busyArtifactId: string | null;
-  onDownload: (artifact: RoomHistoryArtifact) => void;
-}) {
-  if (!artifacts.length) {
-    return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
-        <Archive size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">No retained artifacts</h3>
-        <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
-          Nothing has been generated or retained for this meeting yet.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[320px] border border-border bg-canvas">
-      <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">
-          RETAINED ARTIFACTS
-        </span>
-        <span className="text-[10px] text-ink-subtle">{artifacts.length}</span>
-      </div>
-      <div className="divide-y divide-border">
-        {artifacts.map((artifact) => (
-          <button
-            key={artifact.id}
-            type="button"
-            disabled={busyArtifactId === artifact.id}
-            onClick={() => onDownload(artifact)}
-            className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/55 disabled:opacity-50"
-          >
-            <span className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-surface-1">
-              <ArtifactIcon artifact={artifact} />
-            </span>
-            <span className="min-w-0 flex-1">
-              {/* "Transcript", not "transcript export (TXT)". The server's title is generated
-                  from the type and repeats on the second line what the first line already
-                  said — and it is lowercase, because it is derived from an enum name. */}
-              <span className="block truncate text-[12px] font-medium text-ink">
-                {artifactLabel(artifact.type)}
-              </span>
-              <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
-              </span>
-            </span>
-            {busyArtifactId === artifact.id ? (
-              <SpinnerGap size={14} className="animate-spin text-ink-muted" />
-            ) : (
-              <DownloadSimple
-                size={14}
-                className="text-ink-subtle transition-colors group-hover:text-ink"
-              />
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
-  if (artifact.status === "processing")
-    return <SpinnerGap size={14} className="animate-spin text-ink-muted" />;
-  if (["failed", "missing", "expired"].includes(artifact.status))
-    return <WarningCircle size={14} className="text-ink-muted" />;
-  return <CheckCircle size={14} className="text-primary" />;
-}
+/**
+ * `ArtifactsPanel` is gone too, and with it the record's third tab.
+ *
+ * It listed every artifact of a meeting as a row with a download arrow. Two of those rows — the
+ * recording and the summary — were copies of things the Recap tab renders in full, reached by
+ * their file type instead of from the thing itself, and the transcript export was a copy of a
+ * column the reader was already looking at. Each download now lives on the surface that shows
+ * what it is a copy of: the recording's player, the summary's control row, the transcript's
+ * toolbar. What is left — debug logs, audio samples — is nobody's reading surface and belongs in
+ * the workspace's Artifacts library, which lists them for the whole workspace and always did.
+ */

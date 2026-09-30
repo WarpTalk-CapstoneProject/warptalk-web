@@ -1,0 +1,118 @@
+{
+  "heading": "Bảo mật",
+  "subheading": "Ai có thể truy cập không gian làm việc này, ai được tính là người nội bộ, và điều gì được đưa vào bản ghi.",
+  "accessDenied": {
+    "title": "Từ chối truy cập",
+    "description": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem cài đặt bảo mật."
+  },
+  "loadError": {
+    "title": "Không thể tải cài đặt bảo mật",
+    "description": "Không có gì được hiển thị thay vì giá trị mặc định không thuộc về không gian làm việc này. Hãy thử lại, và nếu vẫn thất bại hãy kiểm tra dịch vụ workspace có hoạt động không.",
+    "retrying": "Đang thử lại…",
+    "retry": "Thử lại"
+  },
+  "toasts": {
+    "saveFailed": "Lưu cài đặt bảo mật thất bại.",
+    "keywordExists": "Từ khóa đã có trong danh sách.",
+    "transferSuccess": "Chuyển giao quyền sở hữu không gian làm việc thành công.",
+    "transferFailed": "Chuyển giao quyền sở hữu thất bại.",
+    "confirmNameMismatch": "Tên xác nhận không khớp với tên không gian làm việc.",
+    "deleteSuccess": "Xóa không gian làm việc thành công.",
+    "deleteFailed": "Xóa không gian làm việc thất bại."
+  },
+  "membership": {
+    "heading": "Thành viên",
+    "howDecided": "Cách xác định thành viên nội bộ",
+    "decidedByDomain": "Xác định theo tên miền đã xác minh — {domains}. Chỉ các địa chỉ trên những tên miền này mới có thể được mời làm thành viên nội bộ.",
+    "assignedByHand": "Gán thủ công. Bạn chọn nội bộ hoặc bên ngoài cho từng người bạn mời.",
+    "domainVerified": "Đã xác minh tên miền",
+    "manual": "Thủ công",
+    "verifiedDomains": "Tên miền đã xác minh",
+    "ownerOnly": "Chỉ chủ sở hữu",
+    "verifiedDomainsHint": "Bất kỳ ai được mời trên một trong các tên miền này đều có thể được đặt làm thành viên nội bộ. Xóa tên miền cuối cùng sẽ đưa việc xác định thành viên trở lại gán thủ công.",
+    "noVerifiedDomains": "Chưa có tên miền nào được xác minh. Chỉ chủ sở hữu không gian làm việc mới có thể thêm."
+  },
+  "access": {
+    "heading": "Truy cập",
+    "allowExternalCollaboration": {
+      "label": "Cho phép cộng tác bên ngoài",
+      "hint": "Cho phép người ngoài không gian làm việc này tham gia phòng họp với vai trò khách."
+    },
+    "invitationExpiry": {
+      "label": "Thời hạn lời mời",
+      "hint": "Số ngày trước khi liên kết mời vào không gian làm việc hết hạn (1 - 365 ngày)."
+    }
+  },
+  "dataProtection": {
+    "heading": "Bảo vệ dữ liệu",
+    "redactPii": {
+      "label": "Ẩn thông tin cá nhân (PII)",
+      "hint": "Phát hiện và che các định danh nhạy cảm — email, số điện thoại, số CMND/CCCD — trước khi bản ghi được lưu hoặc dịch."
+    },
+    "restrictedKeywords": {
+      "label": "Từ khóa hạn chế (DLP)",
+      "hint": "Đánh dấu hoặc chặn các cụm từ được chỉ định trong khi cuộc họp đang được dịch trực tiếp."
+    },
+    "keywordList": {
+      "label": "Danh sách từ khóa",
+      "hint": "Mỗi từ ở đây sẽ được kiểm tra với từng dòng khi được phiên âm.",
+      "placeholder": "Nhập từ khóa (vd: Bảo mật, Chỉ nội bộ)",
+      "addKeyword": "Thêm từ khóa",
+      "noKeywords": "Chưa có từ khóa hạn chế nào được cấu hình."
+    }
+  },
+  "management": {
+    "heading": "Quản lý không gian làm việc",
+    "transferOwnership": {
+      "label": "Chuyển giao quyền sở hữu",
+      "hint": "Trao không gian làm việc này cho một thành viên nội bộ khác. Bạn sẽ trở thành Quản trị viên và không thể tự hoàn tác việc này sau đó.",
+      "button": "Chuyển giao"
+    },
+    "deleteWorkspace": {
+      "label": "Xóa không gian làm việc",
+      "hint": "Chấm dứt mọi tư cách thành viên ngay lập tức. Cuộc họp, tài liệu và bộ thuật ngữ cũng bị xóa theo. Không thể hoàn tác.",
+      "button": "Xóa"
+    }
+  },
+  "transferDialog": {
+    "title": "Chuyển giao quyền sở hữu không gian làm việc",
+    "description": "Chọn một thành viên để trở thành chủ sở hữu mới. <strong>Cảnh báo:</strong> bạn sẽ bị hạ xuống Quản trị viên và không thể hoàn tác hành động này.",
+    "selectLabel": "Chọn chủ sở hữu mới",
+    "choosePlaceholder": "Chọn một thành viên...",
+    "confirmWarning": "Người này sẽ trở thành Chủ sở hữu ngay lập tức; bạn sẽ trở thành Quản trị viên. Gõ tên đầy đủ của họ để xác nhận.",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận chuyển giao"
+  },
+  "deleteDialog": {
+    "title": "Xóa không gian làm việc",
+    "description": "Không thể hoàn tác. Thao tác này sẽ xóa vĩnh viễn <name></name> và toàn bộ dữ liệu liên quan bao gồm tài liệu, thành viên và bộ thuật ngữ.",
+    "confirmLabel": "Vui lòng gõ <name></name> để xác nhận.",
+    "cancel": "Hủy",
+    "confirm": "Xóa không gian làm việc"
+  },
+  "verifiedDomainsManager": {
+    "dnsDisclaimer": "WarpTalk không kiểm tra DNS. Mỗi tên miền liệt kê ở đây là khẳng định của tổ chức bạn rằng họ sở hữu tên miền đó — bất kỳ ai được mời trên đó đều có thể trở thành thành viên nội bộ.",
+    "domainPlaceholder": "Nhập tên miền (vd: company.com)",
+    "addDomain": "Thêm tên miền",
+    "loadingDomains": "Đang tải tên miền…",
+    "noDomains": "Chưa có tên miền nào được xác minh. Cho đến khi có một tên miền, bạn gán thành viên nội bộ và bên ngoài thủ công khi mời.",
+    "selfAsserted": "Tự khẳng định",
+    "ownerEmail": "Email chủ sở hữu",
+    "selfAssertedTitle": "Do chủ sở hữu không gian làm việc khẳng định. Chưa được xác minh qua DNS.",
+    "ownerEmailTitle": "Khớp với tên miền email của chủ sở hữu không gian làm việc.",
+    "revokeTitle": "Thu hồi {domain}",
+    "selfAssertedConsentIntro": "WarpTalk không xác minh quyền sở hữu tên miền. Thêm {domain} sẽ ghi nhận khẳng định của tổ chức bạn rằng tổ chức sở hữu tên miền này.",
+    "selfAssertedConsentConfirm": "Xác nhận rằng tổ chức của bạn sở hữu {domain}, và bạn hiểu rằng bất kỳ ai được mời với địa chỉ @{domain} đều có thể được gán làm thành viên Nội bộ.",
+    "lastDomainRevokeIntro": "{domain} là tên miền đã xác minh cuối cùng của không gian làm việc này.",
+    "lastDomainRevokeDetail": "Thu hồi nó sẽ dừng việc xác định thành viên theo tên miền email: từ đó bạn sẽ gán Nội bộ và Bên ngoài thủ công khi mời. Các thành viên đã là Nội bộ vẫn giữ quyền truy cập.",
+    "toasts": {
+      "invalidFormat": "Định dạng tên miền không hợp lệ.",
+      "publicDomainRefused": "Tên miền email công cộng không thể được xác minh làm tên miền công ty.",
+      "alreadyAdded": "Tên miền đã được thêm.",
+      "added": "{domain} hiện là tên miền đã xác minh.",
+      "addFailed": "Thêm tên miền đã xác minh thất bại.",
+      "revoked": "{domain} không còn là tên miền đã xác minh.",
+      "revokeFailed": "Thu hồi tên miền đã xác minh thất bại."
+    }
+  }
+}

@@ -13,12 +13,20 @@ const legacyPage = new URL(
 const page = source("src/app/(app)/[workspaceSlug]/settings/member-roles/page.tsx");
 const sidebar = source("src/components/layout/linear-sidebar.tsx");
 const workspaceHooks = source("src/hooks/use-workspace.ts");
+// i18n: the button's copy now lives in the translation catalog rather than as literal source
+// text — see settingsMemberRoles.json.
+const memberRolesMessagesEn = JSON.parse(source("messages/en/settingsMemberRoles.json"));
 
 assert.equal(existsSync(memberRolesPage), true, "the member roles route must exist");
 assert.equal(existsSync(legacyPage), false, "the legacy access-management route must stay removed");
 assert.match(page, /function MemberRolesPage/, "the page should use the canonical domain name");
 assert.match(page, /useWorkspaceRoleLoaded/, "permission copy must wait until the workspace role is loaded");
-assert.match(page, /Change role/, "each eligible member should expose the plain role action");
+assert.match(page, /t\("internalMembers\.changeRole"\)/, "each eligible member should expose the plain role action");
+assert.equal(
+  memberRolesMessagesEn.internalMembers.changeRole,
+  "Change role",
+  "the plain role action copy must stay simple, not governance-flavoured",
+);
 assert.match(page, /createMemberRoleChangeIntent/, "the page must create one retry-safe intent per preview");
 assert.match(page, /buildMemberRoleChangeRequest/, "apply requests must reuse the reviewed intent");
 assert.doesNotMatch(

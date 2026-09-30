@@ -28,6 +28,7 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Brain } from "@phosphor-icons/react/dist/ssr";
 
 import { KnowledgeChunkSheet } from "@/components/knowledge/knowledge-chunk-sheet";
@@ -39,17 +40,21 @@ import {
 } from "@/components/workspace/page-chrome";
 import { useKnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { useWorkspaceKnowledge } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceKnowledgeChunkDto } from "@/types/workspace-knowledge";
 
 export default function WorkspaceKnowledgePage() {
+  const t = useTranslations("knowledge");
   const params = useParams();
   const workspaceSlug = String(params?.workspaceSlug ?? "");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const role = useWorkspaceStore((state) => state.role);
-  const normalizedRole = role?.toLowerCase();
-  const isOwner = normalizedRole === "owner";
-  const isOwnerOrAdmin = isOwner || normalizedRole === "admin";
+  // Was a bare `role?.toLowerCase()` comparison against the store's raw value — the exact
+  // class of bug useWorkspaceRole exists to rule out at compile time (see its doc comment):
+  // it silently reads as "not owner/admin" whenever the store hasn't populated role yet.
+  const role = useWorkspaceRole();
+  const isOwner = role === "owner";
+  const isOwnerOrAdmin = isOwner || role === "admin";
 
   const filters = useKnowledgeFilters();
   const { data, isLoading, isError, refetch, isFetching } = useWorkspaceKnowledge(
@@ -70,8 +75,8 @@ export default function WorkspaceKnowledgePage() {
         <WorkspaceBody className="pt-6">
           <WorkspaceEmptyState
             icon={<Brain size={28} weight="duotone" />}
-            title="Only a workspace Owner or Admin can see what has been indexed"
-            description="Ask a workspace Owner or Admin if you need to know what WarpTalk holds for this workspace."
+            title={t("restricted.title")}
+            description={t("restricted.description")}
           />
         </WorkspaceBody>
       </WorkspacePage>
@@ -89,7 +94,7 @@ export default function WorkspaceKnowledgePage() {
           isFetching={isFetching}
           onRetry={() => refetch()}
           onSelect={(chunk: WorkspaceKnowledgeChunkDto) => setOpenChunkId(chunk.chunkId)}
-          emptyHint="Upload a document or finish a meeting so it gets a summary, and what the system keeps will appear here."
+          emptyHint={t("emptyHint")}
         />
       </WorkspaceBody>
 

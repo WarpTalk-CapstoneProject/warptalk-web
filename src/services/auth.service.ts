@@ -8,6 +8,7 @@ import type {
   RegisterRequest,
   UpdateProfileRequest,
   UserDto,
+  UserSessionDto,
   UserSettingsDto,
   UpdateUserSettingsRequest,
 } from "@/types/auth";
@@ -50,6 +51,21 @@ export const authService = {
     });
   },
 
+  /** My live sessions; the one making this request carries `isCurrent`. */
+  getSessions() {
+    return apiClient.get<UserSessionDto[]>(API.auth.sessions);
+  },
+
+  /** End one of my OTHER sessions. The current one ends through the auth store's logout(). */
+  revokeSession(id: string) {
+    return apiClient.delete<void>(API.auth.revokeSession(id));
+  },
+
+  /** End every session except this one. */
+  revokeOtherSessions() {
+    return apiClient.post<void>(API.auth.revokeOtherSessions);
+  },
+
   getProfile() {
     return apiClient.get<UserDto>(API.auth.me);
   },
@@ -79,6 +95,18 @@ export const authService = {
 
   updateProfile(data: UpdateProfileRequest) {
     return apiClient.put<UserDto>(API.auth.me, data);
+  },
+
+  /**
+   * Same credential the login button sends: `useGoogleLogin` yields an OAuth access token, which
+   * the auth service's verifier accepts only when Google minted it for WarpTalk's client id.
+   */
+  linkGoogle(idToken: string) {
+    return apiClient.post<void>(API.auth.googleLink, { idToken });
+  },
+
+  unlinkGoogle() {
+    return apiClient.post<void>(API.auth.googleUnlink, {});
   },
 
   changePassword(data: ChangePasswordRequest) {

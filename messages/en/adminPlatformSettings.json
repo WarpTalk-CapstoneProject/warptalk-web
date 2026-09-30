@@ -1,0 +1,379 @@
+{
+  "eyebrow": "Platform",
+  "title": "Platform settings",
+  "description": "Every runtime setting the platform reads, with who changed it, when and why. Secrets stay in deploy configuration; this console only says whether they are configured.",
+  "refresh": "Refresh",
+  "categories": {
+    "general": {
+      "label": "General",
+      "description": "Maintenance mode, the support address, and what a new workspace starts with."
+    },
+    "security": {
+      "label": "Security & auth",
+      "description": "Session lifetimes, password policy, lockout, sign-in rate limits and Google sign-in. Changing these needs the settings.security permission."
+    },
+    "meetings": {
+      "label": "Meetings & AI pipeline",
+      "description": "Transcription, AI suggestions, voice cloning and recording — with the language catalog and the consent ledger below as reference."
+    },
+    "billing": {
+      "label": "Billing",
+      "description": "Trials, the billing policy (VAT) and pricing economics."
+    },
+    "notifications": {
+      "label": "Notifications & email",
+      "description": "Who transactional e-mail comes from and where replies go."
+    },
+    "limits": {
+      "label": "Limits & quotas",
+      "description": "Upload sizes and rate limits. Some can be raised for one plan or one workspace with an override."
+    },
+    "retention": {
+      "label": "Data & retention",
+      "description": "What the platform keeps, and what deletes it today."
+    },
+    "integrations": {
+      "label": "Integrations",
+      "description": "External services: whether each is configured, connection tests, and deploy-time configuration. Secrets are never shown."
+    },
+    "feature_flags": {
+      "label": "Feature flags",
+      "description": "Kill switches and gradual rollouts. A flag that is off is off for everyone, whatever its allow lists say."
+    }
+  },
+  "nav": {
+    "aria": "Setting categories",
+    "changedCount": "{count, plural, one {# setting changed from its default} other {# settings changed from their defaults}}"
+  },
+  "search": {
+    "placeholder": "Search settings by name, key, description or service",
+    "changedOnly": "Changed from default",
+    "results": "{count, plural, one {# setting matches} other {# settings match}} “{query}” across all categories",
+    "noResults": "No setting matches “{query}”.",
+    "changedOnlyEmpty": "Nothing in this category has been changed from its default."
+  },
+  "empty": {
+    "category": "No settings in this category yet."
+  },
+  "loadError": {
+    "title": "Could not load the platform settings",
+    "hint": "The workspace service did not answer. Try again in a moment.",
+    "retry": "Try again"
+  },
+  "publish": {
+    "healthy": "Published · v{version}",
+    "healthyTitle": "Last published {when}. Services pick up a change within seconds.",
+    "never": "Nothing has been published yet; services run on their deploy-time values.",
+    "unhealthy": "Services keep last values",
+    "unhealthyDetail": "The last publish did not reach the services: {error}. What you save is stored safely, but services keep running on the values they last received until a publish succeeds.",
+    "unknownError": "no detail was reported"
+  },
+  "toolbar": {
+    "export": "Export JSON",
+    "exporting": "Exporting…",
+    "import": "Import JSON",
+    "readOnly": "Read-only: your role can view platform settings but not change them."
+  },
+  "export": {
+    "done": "Exported {count, plural, one {# value} other {# values}} to {file}.",
+    "excluded": "{count, plural, one {# sensitive setting was} other {# sensitive settings were}} left out: {keys}.",
+    "failed": "The export failed."
+  },
+  "values": {
+    "on": "On",
+    "off": "Off",
+    "empty": "(empty)",
+    "none": "None",
+    "rollout": "{percent}%",
+    "plans": "{count, plural, one {# plan} other {# plans}}",
+    "workspaces": "{count, plural, one {# workspace} other {# workspaces}}",
+    "denied": "{count} denied"
+  },
+  "scopes": {
+    "platform": "Platform",
+    "plan": "Plan",
+    "workspace": "Workspace"
+  },
+  "badges": {
+    "changed": "Changed",
+    "risky": "Risky",
+    "riskyHint": "Can lock people out, stop meetings or change what customers pay. A change needs a written reason and a diff confirmation.",
+    "security": "Security",
+    "securityHint": "Part of Security & auth: changing it needs the settings.security permission on top of settings.manage.",
+    "restart": "Requires restart",
+    "restartHint": "Read once at start-up: a change applies after the owning service is next rolled out.",
+    "sensitive": "Sensitive",
+    "sensitiveHint": "Identifies people: left out of exports and shown as hidden in history."
+  },
+  "row": {
+    "copyKey": "Copy the key {key}",
+    "copied": "Key copied.",
+    "owner": "Read by {service}",
+    "default": "Default {value}",
+    "scopes": "Scopes: {scopes}",
+    "lastChanged": "Changed {when} by {who}",
+    "someone": "someone",
+    "neverChanged": "Never changed here",
+    "notSet": "Not set",
+    "notSetExplain": "{service} uses its deploy-time value (code default {value}).",
+    "edit": "Edit",
+    "reset": "Reset to default",
+    "history": "History",
+    "cancel": "Cancel",
+    "review": "Review change",
+    "readOnly": "Read-only",
+    "refusal": {
+      "manage": "Changing platform settings needs the settings.manage permission.",
+      "security": "Security & auth settings need the settings.security permission as well.",
+      "server": "The server does not allow you to change this setting."
+    },
+    "overrides": "{count, plural, =0 {Overrides} one {# override} other {# overrides}}",
+    "noOverrides": "No overrides: every plan and workspace uses the platform value.",
+    "addOverride": "Add override",
+    "editOverride": "Edit",
+    "removeOverride": "Remove"
+  },
+  "editor": {
+    "on": "On",
+    "off": "Off",
+    "itemPlaceholder": "Type an entry and press Enter (or paste a list)",
+    "removeItem": "Remove {item}",
+    "length": "{count}/{max}",
+    "entries": "{count}/{max} entries",
+    "range": "{min} – {max}",
+    "min": "at least {min}",
+    "max": "at most {max}",
+    "flag": {
+      "enabled": "Enabled",
+      "disabled": "Disabled for everyone",
+      "killSwitchHint": "The kill switch. Off turns the feature off everywhere, whatever the lists below say.",
+      "rollout": "Rollout",
+      "rolloutPercent": "Rollout percentage",
+      "rolloutHint": "Share of workspaces that get it, chosen by a stable hash of the workspace id. Platform-wide decisions need 100%.",
+      "allowPlans": "Always on for plans",
+      "allowWorkspaces": "Always on for workspaces",
+      "denyWorkspaces": "Always off for workspaces",
+      "planPlaceholder": "Plan slug, e.g. pro",
+      "workspacePlaceholder": "Workspace id"
+    }
+  },
+  "validation": {
+    "expectedBoolean": "Expected on or off.",
+    "expectedInteger": "Expected a whole number.",
+    "expectedNumber": "Expected a number.",
+    "min": "Must be at least {min}{unit}.",
+    "max": "Must be at most {max}{unit}.",
+    "expectedText": "Expected text.",
+    "tooLong": "Must be at most {max} characters.",
+    "controlCharacters": "Contains control characters.",
+    "pattern": "Is not in the expected format.",
+    "notAllowed": "“{value}” is not one of: {allowed}.",
+    "expectedList": "Expected a list.",
+    "tooManyEntries": "At most {max} entries.",
+    "entryNotText": "Is not text.",
+    "entryEmpty": "Is empty.",
+    "duplicate": "“{value}” is listed twice.",
+    "expectedFlag": "Expected a feature flag.",
+    "flagUnknownField": "Unknown flag field “{field}”.",
+    "flagEnabled": "A flag needs to be on or off.",
+    "flagRollout": "Rollout must be a whole percentage from 0 to 100.",
+    "flagList": "{field} may only contain text.",
+    "flagListTooLong": "{field} has more than {max} entries.",
+    "flagWorkspaceIds": "{field} must list workspace ids.",
+    "flagPlanSlugs": "Plans must be listed by slug (lowercase letters, digits, - and _).",
+    "entry": "Entry {index}: {message}",
+    "planSlug": "Enter a plan slug: lowercase letters, digits, - and _.",
+    "workspaceId": "Enter a workspace id (a GUID).",
+    "scopeNotAllowed": "This setting cannot be overridden at that scope."
+  },
+  "confirm": {
+    "title": "Review change",
+    "resetTitle": "Reset to default",
+    "removeOverrideTitle": "Remove override",
+    "scope": "Scope",
+    "before": "Before",
+    "after": "After",
+    "notSet": "Not set",
+    "added": "Added",
+    "removed": "Removed",
+    "flagFields": {
+      "enabled": "Enabled",
+      "rolloutPercent": "Rollout",
+      "allowPlans": "Always on for plans",
+      "allowWorkspaces": "Always on for workspaces",
+      "denyWorkspaces": "Always off for workspaces"
+    },
+    "resetExplain": "Removes the stored value: {service} falls back to its deploy-time value, then to the code default ({value}).",
+    "riskyNotice": "This setting is marked risky: it can lock people out, stop meetings or change what customers pay. Check the new value before you save.",
+    "securityNotice": "A Security & auth setting. The change is recorded with your name and reason.",
+    "restartNotice": "{service} reads this at start-up: the new value applies after its next rollout.",
+    "unchanged": "Nothing to save: the new value is the one already stored.",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why is this changing?",
+    "reasonRequired": "Required, at least {min} characters. Recorded in the setting’s history and the audit log.",
+    "reasonOptional": "Optional. Recorded in the setting’s history and the audit log.",
+    "cancel": "Cancel",
+    "confirm": "Save change",
+    "confirmReset": "Reset",
+    "saving": "Saving…",
+    "saved": "{label} saved.",
+    "resetDone": "{label} reset.",
+    "failed": "The change was not saved.",
+    "forbidden": "You do not have permission to change this setting.",
+    "conflict": "Someone else changed this setting after you opened it. Reload to see their value, then make your change again.",
+    "reload": "Reload"
+  },
+  "override": {
+    "addTitle": "Add override",
+    "editTitle": "Edit override",
+    "description": "an override wins over the platform value for one plan or one workspace (a workspace override wins over a plan one).",
+    "scopeType": "Applies to",
+    "planSlug": "Plan slug",
+    "workspaceId": "Workspace id",
+    "planPlaceholder": "pro",
+    "workspacePlaceholder": "00000000-0000-0000-0000-000000000000",
+    "workspaceHint": "The id is shown on the workspace’s admin page.",
+    "value": "Value",
+    "cancel": "Cancel",
+    "review": "Review change"
+  },
+  "history": {
+    "title": "History",
+    "error": "Could not load this setting’s history.",
+    "retry": "Try again",
+    "empty": "No changes recorded for this setting yet.",
+    "actions": {
+      "set": "Changed",
+      "reset": "Reset",
+      "revert": "Reverted",
+      "import": "Imported"
+    },
+    "by": "by {who}",
+    "revertOf": "reverts an earlier change",
+    "noReason": "No reason given",
+    "hidden": "hidden",
+    "notSet": "not set",
+    "revert": "Revert",
+    "revertTitle": "Revert this change",
+    "revertDescription": "Restores the value this change replaced. The revert is recorded as a new change with your reason.",
+    "revertConfirm": "Revert",
+    "reverting": "Reverting…",
+    "reverted": "{label} reverted."
+  },
+  "import": {
+    "title": "Import platform settings",
+    "description": "Upload a file exported from this console. Nothing changes until you apply, and the import is all-or-nothing.",
+    "choose": "Choose a JSON file",
+    "chooseAnother": "Choose another file",
+    "checking": "Checking with the server…",
+    "excluded": "The file left out {count, plural, one {# sensitive setting} other {# sensitive settings}} ({keys}); they are not changed.",
+    "summary": "{changed} to change · {unchanged} unchanged · {rejected} rejected",
+    "preview": "Import preview",
+    "columns": {
+      "setting": "Setting",
+      "scope": "Scope",
+      "outcome": "Outcome",
+      "change": "Change"
+    },
+    "outcomes": {
+      "create": "New",
+      "update": "Update",
+      "unchanged": "Unchanged",
+      "rejected": "Rejected"
+    },
+    "rejectedNoReason": "Rejected by the server.",
+    "hasRejected": "Fix or remove the rejected lines before applying: the import is all-or-nothing, so nothing would change.",
+    "nothingToApply": "Every value in the file already matches; there is nothing to apply.",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why are these settings being imported?",
+    "reasonHint": "Required, at least {min} characters. Recorded against every change.",
+    "cancel": "Cancel",
+    "apply": "{count, plural, =0 {Apply} one {Apply # change} other {Apply # changes}}",
+    "applying": "Applying…",
+    "applied": "{count, plural, one {# setting changed} other {# settings changed}}.",
+    "notApplied": "The server did not apply the import; check the lines below.",
+    "failed": "The import was not applied.",
+    "previewFailed": "The server could not check this file.",
+    "notSet": "not set",
+    "errors": {
+      "fileTooLarge": "The file is larger than 2 MB; that is not a settings export.",
+      "invalidJson": "The file is not valid JSON.",
+      "notAnObject": "The file is not a settings export (expected a JSON object).",
+      "wrongFormat": "The file’s format is “{format}”, not a WarpTalk platform settings export.",
+      "noSettings": "The file contains no settings.",
+      "tooManyEntries": "The file has more than {max} entries.",
+      "badEntry": "Entry {index}: {reason}",
+      "entryReasons": {
+        "notAnObject": "is not an object.",
+        "key": "has no valid key.",
+        "scopeType": "has an unknown scope.",
+        "scopeId": "has a scope id that does not fit its scope.",
+        "value": "has no value."
+      }
+    }
+  },
+  "integrations": {
+    "title": "Integrations",
+    "columns": {
+      "name": "Integration",
+      "configured": "Configured",
+      "services": "Reported by",
+      "lastCheck": "Last check",
+      "actions": "Actions"
+    },
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "unknown": "Unknown",
+    "unknownHint": "No service has reported on this integration yet.",
+    "noReports": "No reports",
+    "never": "Never checked",
+    "checkOk": "OK · {latency} ms",
+    "checkFailed": "Failed",
+    "test": "Test connection",
+    "testing": "Testing…",
+    "testOk": "{name}: connection OK ({latency} ms).",
+    "testFailed": "{name}: {detail}",
+    "testError": "Could not test {name}.",
+    "noDetail": "the check failed without detail.",
+    "open": "Open",
+    "empty": "No integrations are reported.",
+    "error": "Could not load the integration status.",
+    "unavailable": "This server does not report integration status yet.",
+    "retry": "Try again",
+    "secretsNote": "Keys, tokens and endpoints are never shown or stored here: they stay in deploy configuration, and only whether they are set is reported.",
+    "deployConfig": {
+      "title": "Deploy configuration",
+      "description": "Read from each service’s deployment. Changing one of these needs a deploy, not this console.",
+      "empty": "No deploy-time values are reported.",
+      "notSet": "Not set"
+    }
+  },
+  "retention": {
+    "intro": "Nothing here is a setting yet. A retention setting is added to the registry together with the job that enforces it — until then, a value typed here would be believed and ignored.",
+    "notEnforcedHeading": "Not enforced today",
+    "enforcedHeading": "Enforced today",
+    "items": {
+      "transcripts": {
+        "title": "Transcripts, summaries and meeting artifacts",
+        "body": "Kept until someone deletes them. No job removes them by age."
+      },
+      "recordings": {
+        "title": "Meeting recordings",
+        "body": "Kept in object storage until deleted. No lifecycle rule or job expires them."
+      },
+      "auditLog": {
+        "title": "Audit log and settings history",
+        "body": "Append-only. Nothing prunes either of them."
+      },
+      "workspaceRetention": {
+        "title": "Per-workspace artifact retention",
+        "body": "A workspace’s artifact retention (days) is stored and shown in its settings, but no job reads it: it is not enforced."
+      },
+      "streamTtl": {
+        "title": "Live meeting pipeline streams",
+        "body": "Redis streams expire after the TTL each service is deployed with. It is deploy-time configuration, not a setting here."
+      }
+    },
+    "footnote": "Deleting data today is a manual action: a workspace owner deletes a meeting or document, or staff act on a request."
+  }
+}

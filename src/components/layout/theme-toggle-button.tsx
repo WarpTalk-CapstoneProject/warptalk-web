@@ -2,6 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { MoonStars, SunDim } from "@phosphor-icons/react/dist/ssr";
 import { useTheme } from "next-themes";
 
@@ -93,6 +94,7 @@ function injectPolygonGradientStyles(duration: number) {
 }
 
 export function ThemeToggleButton({ className }: { className?: string }) {
+  const t = useTranslations("common.themeToggle");
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -127,9 +129,9 @@ export function ThemeToggleButton({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      aria-label={currentTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={currentTheme === "dark" ? t("switchToLight") : t("switchToDark")}
       aria-pressed={currentTheme === "dark"}
-      title={currentTheme === "dark" ? "Light mode" : "Dark mode"}
+      title={currentTheme === "dark" ? t("lightMode") : t("darkMode")}
       data-state={currentTheme}
       onClick={toggleTheme}
       className={cn(
@@ -138,7 +140,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
       )}
     >
       <span className="sr-only">
-        {currentTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        {currentTheme === "dark" ? t("switchToLight") : t("switchToDark")}
       </span>
       {currentTheme === "dark" ? (
         <SunDim weight="light" className="size-3" />

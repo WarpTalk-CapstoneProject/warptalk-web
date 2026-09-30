@@ -13,6 +13,9 @@ const registrySource = readFileSync(
   new URL("../src/lib/language/languages.ts", import.meta.url),
   "utf8",
 );
+const roomsEnCatalog = JSON.parse(
+  readFileSync(new URL("../messages/en/rooms.json", import.meta.url), "utf8"),
+);
 
 const supportedLocales = [
   "en-US",
@@ -76,10 +79,18 @@ assert.match(
 );
 // Every refusal now goes through failSubmit, which both toasts and pins the reason into the
 // dialog (WT-270) — so the assertion follows it rather than the bare toast.error it replaced.
+// i18n (WT-607): the literal English string moved into messages/en/rooms.json, so this checks
+// both halves of the same guarantee — the component calls the expected translation key, AND
+// the English catalog still carries the original wording at that key.
 assert.match(
   dialogSource,
-  /else \{\s*if \(!activeWorkspaceId\)[\s\S]*?failSubmit\("Please select a workspace before creating a room\."\)/,
+  /else \{\s*if \(!activeWorkspaceId\)[\s\S]*?failSubmit\(t\("errors\.selectWorkspace"\)\)/,
   "Create-room dialog must stop when there is no active workspace ID.",
+);
+assert.equal(
+  roomsEnCatalog.create.errors.selectWorkspace,
+  "Please select a workspace before creating a room.",
+  "messages/en/rooms.json must keep the original English wording for create.errors.selectWorkspace.",
 );
 assert.match(
   dialogSource,

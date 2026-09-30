@@ -265,7 +265,70 @@ test("STOPS polling once everything has resolved — no unbounded interval", () 
             { type: "transcript_export", status: "ready" },
             { type: "summary_export", status: "ready" },
           ],
-          summary: { summary: "We agreed to ship on Friday.", decisions: [], actionItems: [] },
+          summary: {
+            summary: "We agreed to ship on Friday.",
+            decisions: [],
+            actionItems: [],
+            templateKey: "general",
+          },
+        },
+      ],
+      { nowMs: NOW },
+    ),
+    false,
+  );
+});
+
+test("keeps polling while the summary is the untemplated fallback (WT-701)", () => {
+  // The backend stores raw markdown with no templateKey first and upgrades the SAME row to the
+  // templated shape minutes later. Stopping at "a non-empty summary exists" left the reader on
+  // the unformatted fallback until they reloaded.
+  assert.ok(
+    shouldPollRoomHistory(
+      [
+        {
+          endedAt: "2026-08-07T09:59:00Z",
+          artifacts: [
+            { type: "transcript_export", status: "ready" },
+            { type: "summary_export", status: "ready" },
+          ],
+          summary: { summary: "## Overview\n- We agreed to ship on Friday.", decisions: [], actionItems: [] },
+        },
+      ],
+      { nowMs: NOW },
+    ),
+  );
+});
+
+test("a blank templateKey counts as the fallback too", () => {
+  assert.ok(
+    shouldPollRoomHistory(
+      [
+        {
+          endedAt: "2026-08-07T09:59:00Z",
+          artifacts: [
+            { type: "transcript_export", status: "ready" },
+            { type: "summary_export", status: "ready" },
+          ],
+          summary: { summary: "Shipped.", templateKey: "  " },
+        },
+      ],
+      { nowMs: NOW },
+    ),
+  );
+});
+
+test("an untemplated fallback stops polling once the window has closed", () => {
+  assert.equal(
+    shouldPollRoomHistory(
+      [
+        {
+          endedAt: "2026-08-07T08:00:00Z",
+          artifacts: [
+            { type: "transcript_export", status: "ready" },
+            { type: "summary_export", status: "ready" },
+          ],
+          summary: { summary: "## Overview\n- We agreed to ship on Friday." },
         },
       ],
       { nowMs: NOW },

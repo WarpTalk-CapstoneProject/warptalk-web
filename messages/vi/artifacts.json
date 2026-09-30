@@ -1,0 +1,77 @@
+{
+  "filterByKindAria": "Loại tài liệu",
+  "scopeAria": "Tài liệu của ai",
+  "filters": {
+    "transcript": "Bản ghi",
+    "summary": "Tóm tắt AI",
+    "minutes": "Biên bản"
+  },
+  "scopes": {
+    "all": "Tất cả",
+    "mine": "Của bạn",
+    "shared": "Được chia sẻ với bạn"
+  },
+  "documentsCount": {
+    "transcript": "{count, plural, other {# bản ghi}}",
+    "summary": "{count, plural, other {# tóm tắt AI}}",
+    "minutes": "{count, plural, other {# biên bản}}"
+  },
+  "view": {
+    "grid": "Lưới",
+    "list": "Danh sách"
+  },
+  "search": {
+    "placeholder": "Tìm theo tên cuộc họp hoặc mã phòng"
+  },
+  "loading": "Đang tải hồ sơ cuộc họp",
+  "error": {
+    "title": "Không thể tải hồ sơ",
+    "description": "Kiểm tra dịch vụ phòng dịch và thử lại.",
+    "retry": "Thử lại"
+  },
+  "edited": "Sửa {when}",
+  "host": {
+    "you": "Bạn"
+  },
+  "state": {
+    "writing": "Đang viết…"
+  },
+  "empty": {
+    "noResultsTitle": "Không có tên nào khớp với tìm kiếm này",
+    "noResultsDescription": "Tìm kiếm theo tên cuộc họp và mã phòng, không theo nội dung đã nói.",
+    "all": {
+      "title": "Chưa có gì để đọc",
+      "description": {
+        "transcript": "Bản ghi xuất hiện ở đây sau khi cuộc họp bạn chủ trì hoặc tham gia kết thúc.",
+        "summary": "Tóm tắt AI xuất hiện ở đây khoảng một phút sau khi cuộc họp kết thúc.",
+        "minutes": "Biên bản xuất hiện ở đây khi được soạn từ tóm tắt của cuộc họp."
+      }
+    },
+    "mine": {
+      "title": "Chưa có gì từ cuộc họp bạn chủ trì",
+      "description": {
+        "transcript": "Bản ghi của các cuộc họp bạn chủ trì xuất hiện ở đây.",
+        "summary": "Tóm tắt AI của các cuộc họp bạn chủ trì xuất hiện ở đây.",
+        "minutes": "Biên bản của các cuộc họp bạn chủ trì xuất hiện ở đây."
+      }
+    },
+    "shared": {
+      "title": "Chưa có gì được chia sẻ với bạn",
+      "description": {
+        "transcript": "Khi chủ trì chia sẻ bản ghi với người tham gia, nó sẽ xuất hiện ở đây.",
+        "summary": "Khi chủ trì chia sẻ tóm tắt với người tham gia, nó sẽ xuất hiện ở đây.",
+        "minutes": "Biên bản đã ký của các cuộc họp bạn tham gia xuất hiện ở đây."
+      }
+    }
+  },
+  "failedSource": {
+    "minutes": "Không thể tải biên bản, nên danh sách này có thể thiếu một số hồ sơ.",
+    "records": "Không thể tải hồ sơ cuộc họp, nên danh sách này có thể thiếu bản ghi và tóm tắt."
+  },
+  "relativeTime": {
+    "justNow": "vừa xong",
+    "minutesAgo": "{count} phút trước",
+    "hoursAgo": "{count} giờ trước",
+    "daysAgo": "{count} ngày trước"
+  }
+}

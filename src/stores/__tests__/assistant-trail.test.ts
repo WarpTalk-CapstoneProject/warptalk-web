@@ -371,3 +371,66 @@ test("finishing re-arms the deadline", () => {
 
   assert.ok(store().assistantActivityAt >= before!);
 });
+
+// ── a prompt lives until the NEXT turn starts, not until its own answer (WT-688) ──
+
+const CONNECT_PROMPT = JSON.stringify({
+  permission: {
+    kind: "connect",
+    action: "Google Calendar",
+    pluginKey: "google_calendar",
+    connectionStatus: "not_connected",
+  },
+});
+
+test("a card survives the answer of the turn that raised it", () => {
+  // The worker raises a card mid-turn, when the plugin tool returns, and the answer that lands
+  // next is the one explaining it. Clearing on that answer erased the card moments after it
+  // appeared — and in a meeting, a plugin write's Confirm card with it.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("google_calendar_create_event", null);
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
+  store().setAssistantQuestionsJson('{"questions":[]}');
+
+  store().sealAssistantTrail("answer-1");
+
+  assert.equal(store().assistantPermissionJson, CONNECT_PROMPT);
+  assert.equal(store().assistantQuestionsJson, '{"questions":[]}');
+});
+
+test("the asker's next turn ends the previous turn's cards", () => {
+  store().beginAssistantTurn();
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
+  store().setAssistantQuestionsJson('{"questions":[]}');
+  store().sealAssistantTrail("answer-1");
+
+  store().beginAssistantTurn();
+
+  assert.equal(store().assistantPermissionJson, null);
+  assert.equal(store().assistantQuestionsJson, null);
+});
+
+test("a turn another participant opens ends the previous turn's cards too", () => {
+  // Only the asker's panel calls beginAssistantTurn; everyone else learns of a new turn from
+  // ChatAssistantResponsePending, which the session turns into clearAssistantCards.
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
+  store().setAssistantQuestionsJson('{"questions":[]}');
+
+  store().clearAssistantCards();
+
+  assert.equal(store().assistantPermissionJson, null);
+  assert.equal(store().assistantQuestionsJson, null);
+});
+
+test("idle -> thinking in the middle of a turn does not erase its card", () => {
+  // On a client that did not ask, the panel's answer baseline is stale and drops the state back
+  // to idle mid-turn. The next tool call of the SAME turn then re-enters the "starting" branch —
+  // which must not be mistaken for a new turn.
+  store().noteAssistantActivity("google_calendar_list_events", null);
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
+  store().setAssistantState("idle");
+
+  store().noteAssistantActivity("google_calendar_create_event", null);
+
+  assert.equal(store().assistantPermissionJson, CONNECT_PROMPT);
+});

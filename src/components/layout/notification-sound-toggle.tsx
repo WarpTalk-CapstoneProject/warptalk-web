@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/lib/notifications/notification-sounds";
 
 export function NotificationSoundToggle() {
+  const t = useTranslations("common.soundToggle");
   const [muted, setMuted] = useState(false);
 
   useEffect(() => {
@@ -42,8 +44,8 @@ export function NotificationSoundToggle() {
     <button
       type="button"
       onClick={toggle}
-      title={muted ? "Notification sounds are off" : "Notification sounds are on"}
-      aria-label={muted ? "Turn notification sounds on" : "Turn notification sounds off"}
+      title={muted ? t("titleMuted") : t("titleUnmuted")}
+      aria-label={muted ? t("ariaTurnOn") : t("ariaTurnOff")}
       aria-pressed={!muted}
       className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:bg-surface-2 hover:text-ink"
     >

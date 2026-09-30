@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 
 import {
@@ -13,39 +14,36 @@ import {
 import { cn } from "@/lib/utils";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
-const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short" });
-const LONG_DATE = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-});
-
 function DayChip({
   day,
   isSelected,
   isToday,
   hasMeetings,
   onSelect,
+  weekdayFormat,
+  longDateFormat,
 }: {
   day: Date;
   isSelected: boolean;
   isToday: boolean;
   hasMeetings: boolean;
   onSelect: () => void;
+  weekdayFormat: Intl.DateTimeFormat;
+  longDateFormat: Intl.DateTimeFormat;
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={isSelected}
-      aria-label={LONG_DATE.format(day)}
+      aria-label={longDateFormat.format(day)}
       className={cn(
         "flex w-11 shrink-0 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors",
         isSelected ? "bg-primary/12" : "hover:bg-surface-2",
       )}
     >
       <span className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
-        {WEEKDAY.format(day)}
+        {weekdayFormat.format(day)}
       </span>
       <span
         className={cn(
@@ -110,16 +108,26 @@ export function MeetingDayStrip({
   today: Date;
   className?: string;
 }) {
+  const t = useTranslations("common.meetingDayStrip");
+  const locale = useLocale();
   const anchor = weekAnchor ?? selectedDate ?? today;
   const week = useMemo(() => weekOf(anchor), [anchor]);
   const marked = useMemo(() => daysWithMeetings(rooms), [rooms]);
+  const weekdayFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "short" }),
+    [locale],
+  );
+  const longDateFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "long", month: "short", day: "numeric" }),
+    [locale],
+  );
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <button
         type="button"
         onClick={() => onSelectDate(shiftWeeks(anchor, -1))}
-        aria-label="Previous week"
+        aria-label={t("previousWeek")}
         className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <CaretLeft size={14} weight="bold" />
@@ -133,13 +141,15 @@ export function MeetingDayStrip({
           isToday={isSameDay(day, today)}
           hasMeetings={marked.has(startOfDay(day))}
           onSelect={() => onSelectDate(day)}
+          weekdayFormat={weekdayFormat}
+          longDateFormat={longDateFormat}
         />
       ))}
 
       <button
         type="button"
         onClick={() => onSelectDate(shiftWeeks(anchor, 1))}
-        aria-label="Next week"
+        aria-label={t("nextWeek")}
         className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <CaretRight size={14} weight="bold" />

@@ -1,0 +1,24 @@
+{
+  "quickJumps": "Quick jumps",
+  "actions": {
+    "createRoom": "Create room",
+    "findMeeting": "Find meeting",
+    "joinByCode": "Join by code",
+    "meetings": "Meetings",
+    "history": "History",
+    "artifacts": "Artifacts",
+    "documents": "Documents",
+    "members": "Members",
+    "billing": "Billing",
+    "dashboard": "Dashboard",
+    "settings": "Settings"
+  },
+  "meetingDayPanel": {
+    "ariaLabel": "Meetings by day",
+    "emptyTitleToday": "No meetings scheduled for today",
+    "emptyTitleOtherDay": "No meetings scheduled for this day",
+    "emptySubtitleCanCreate": "Schedule one, or enjoy the quiet.",
+    "emptySubtitleCannotCreate": "You'll see meetings here once someone invites you.",
+    "newMeeting": "New meeting"
+  }
+}

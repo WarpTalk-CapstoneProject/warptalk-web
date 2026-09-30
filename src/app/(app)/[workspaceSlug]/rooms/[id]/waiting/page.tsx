@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { useTranslations } from "next-intl";
+import { liveMeetingPath, roomDetailPath } from "@/lib/workspace/workspace-routes";
 import { Copy, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -14,6 +15,7 @@ import { DevicePreview } from "@/components/rooms/setup/device-preview";
 import { LanguageLabel } from "@/components/language/language-label";
 import { useDevicePreview } from "@/hooks/use-device-preview";
 import { getErrorMessage } from "@/lib/api/errors";
+import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -22,6 +24,7 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
 } from "@/hooks/use-translationRooms";
+import type { TranslationRoomStatus } from "@/types/translationRoom";
 
 /**
  * The lobby, rebuilt around the question people actually have here: "do my camera and
@@ -32,12 +35,27 @@ import {
  * questions an engineer has while debugging, not the two a participant has thirty seconds
  * before a meeting. The self-view now takes the space the diagnostics had.
  */
+/**
+ * Why the lobby closed, in the words the person waiting in it needs.
+ *
+ * A map rather than the status itself, with a neutral fallback, because `TranslationRoomStatus`
+ * carries `timeout`, which no server writes (see `meeting-day`'s ROOM_STATUSES) — and because a
+ * status added later must land on a sentence that is merely vague, never on a missing key.
+ */
+const LOBBY_EXIT_REASONS: Partial<Record<TranslationRoomStatus, string>> = {
+  ended: "ended",
+  cancelled: "cancelled",
+  expired: "expired",
+  failed: "failed",
+};
+
 export default function WaitingRoomPage() {
   const { workspaceSlug, id: roomId } = useParams<{
     workspaceSlug: string;
     id: string;
   }>();
   const router = useRouter();
+  const t = useTranslations("rooms.waiting");
   const user = useAuthStore((state) => state.user);
 
   // Polled so the lobby notices the host starting without anyone having to reload (WT-232).
@@ -54,10 +72,37 @@ export default function WaitingRoomPage() {
   useEffect(() => {
     // The host is routed by startMeeting() itself; this carries everyone else in once the
     // meeting actually opens, which is the whole point of sitting in a lobby.
-    if (roomStatus === "in_progress" || roomStatus === "paused") {
+    //
+    // WT-612 / WT-621: `open` counts, and it is the case the lobby was built for. Nobody presses
+    // Start on a scheduled meeting any more — the clock unlocks the room at its slot — so without
+    // it the people who arrived early would sit here watching a room that had already opened,
+    // waiting for a host action that is never coming.
+    if (roomStatus === "in_progress" || roomStatus === "paused" || roomStatus === "open") {
       router.push(liveMeetingPath(workspaceSlug, roomId));
+      return;
     }
-  }, [roomStatus, workspaceSlug, roomId, router]);
+
+    /*
+     * WT-714 — and the other direction, which this page never had.
+     *
+     * The lobby only ever watched for the room OPENING. A room that goes the other way — the host
+     * ends it, cancels it, or the expire sweep retires a booking nobody attended two hours after
+     * its slot — left whoever was sitting here on a spinner captioned "Waiting for the host",
+     * indefinitely, for a meeting that no longer exists. The poll above was already fetching the
+     * status that says so every three seconds; nothing read it.
+     *
+     * The rule is `canJoinTranslationRoom`, not a list spelled out here: "is there still a room to
+     * wait for" is the same question the room page's CTA asks, and this is the page whose entire
+     * job is to wait for the answer to change.
+     */
+    if (roomStatus !== undefined && !canJoinTranslationRoom(roomStatus)) {
+      // Why, not just where. Being moved off a page without explanation reads as a bug — and
+      // "cancelled" and "nobody came" are different enough facts that the person needs to know
+      // which one happened to the half-hour they set aside.
+      toast.info(t(`left.${LOBBY_EXIT_REASONS[roomStatus] ?? "unavailable"}`));
+      router.push(roomDetailPath(workspaceSlug, roomId));
+    }
+  }, [roomStatus, workspaceSlug, roomId, router, t]);
 
   async function startMeeting() {
     try {

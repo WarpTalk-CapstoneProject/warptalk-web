@@ -1,0 +1,89 @@
+{
+  "header": {
+    "badge": "Admin Panel",
+    "title": "Subscription Plans",
+    "description": "Manage commercial packages, usage limits, and Stripe synchronization",
+    "addNewPlan": "Add New Plan"
+  },
+  "list": {
+    "title": "All Packages",
+    "description": "View and modify user-facing packages.",
+    "empty": "No subscription packages found.",
+    "createFirst": "Create First Plan",
+    "columns": {
+      "name": "Name",
+      "tier": "Tier",
+      "price": "Price",
+      "creditsPerCycle": "Credits/Cycle",
+      "limits": "Limits (Voice / Glossary / ACL)",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "free": "Free",
+    "voiceClone": "Voice Clone: {status}",
+    "glossaryAccess": "Glossary Access: {status}",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "dialog": {
+    "editTitle": "Edit Subscription Plan",
+    "createTitle": "Create New Subscription Plan",
+    "description": "Define plan pricing, limits, and specific AI feature flags.",
+    "fields": {
+      "planName": "Plan Name",
+      "planNamePlaceholder": "e.g. Startup, Enterprise",
+      "slug": "Slug (URL identity)",
+      "slugPlaceholder": "e.g. startup-plan, enterprise-tier",
+      "price": "Price",
+      "currency": "Currency",
+      "currencyPlaceholder": "Select currency",
+      "billingCycle": "Billing Cycle",
+      "billingCyclePlaceholder": "Select cycle",
+      "billingCycleMonthly": "Monthly",
+      "billingCycleSemiannual": "6 Months",
+      "billingCycleYearly": "Yearly",
+      "creditsPerCycle": "Credits/Cycle",
+      "tierLevel": "Tier Level",
+      "tierLevelPlaceholder": "e.g. Pro, Premium",
+      "maxParticipants": "Max Participants",
+      "maxLanguages": "Max Languages"
+    },
+    "featureFlags": {
+      "heading": "Feature Authorization Flags",
+      "voiceCloning": "Voice Cloning",
+      "voiceCloningHint": "Allows neural voice mimicking",
+      "aiAssistant": "AI Assistant",
+      "aiAssistantHint": "Interactive AI in meetings",
+      "glossaryAccess": "Glossary Access",
+      "glossaryAccessHint": "Define business specific terminology"
+    },
+    "sortOrder": "Sort Order (display sequence)",
+    "highlights": "Plan Highlights (One per line)",
+    "highlightsPlaceholder": "e.g. Up to 5 participants&#10;Realtime Translation&#10;Standard neural TTS",
+    "activeStatus": "Active Status",
+    "activeStatusHint": "Keep this enabled for users to view and purchase",
+    "cancel": "Cancel",
+    "save": "Save Package",
+    "saving": "Saving..."
+  },
+  "errors": {
+    "nameRequired": "Name is required.",
+    "nameTooLong": "Name must not exceed 100 characters.",
+    "slugRequired": "Slug is required.",
+    "slugTooLong": "Slug must not exceed 50 characters.",
+    "slugInvalid": "Slug must be lowercase alphanumeric characters and hyphens only (e.g., 'gold-tier').",
+    "tierRequired": "Tier is required.",
+    "tierTooLong": "Tier must not exceed 20 characters.",
+    "currencyInvalid": "Currency must be a 3-character ISO code.",
+    "billingCycleInvalid": "Billing cycle must be 'monthly', 'semiannual', or 'yearly'.",
+    "priceTooLow": "Price for {currency} must be at least {minPrice} due to Stripe payment constraints.",
+    "creditsNegative": "Credits must be non-negative.",
+    "maxParticipantsTooLow": "Max participants must be at least 2.",
+    "maxLanguagesTooLow": "Max languages must be at least 1.",
+    "sortOrderNegative": "Sort order must be non-negative.",
+    "createFailed": "Failed to create plan.",
+    "updateFailed": "Failed to update plan."
+  }
+}
