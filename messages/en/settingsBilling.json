@@ -200,6 +200,8 @@
     "paceLasts": "At this pace the allowance lasts past the cycle end.",
     "paceRunsOut": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, {early, plural, one {# day} other {# days}} before the cycle ends.",
     "paceRunsOutAtEnd": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, right as the cycle ends.",
+    "paceRunsOutWithinDay": "At this pace it runs out within a day, {early, plural, one {# day} other {# days}} before the cycle ends.",
+    "paceRunsOutWithinDayAtEnd": "At this pace it runs out within a day, right as the cycle ends.",
     "overageRunning": "Overage is running: {credits} credits beyond the allowance.",
     "overageRunningNoAmount": "Overage is running.",
     "allowanceUsedStopped": "The allowance is used up. Meetings stop until credits are added or the cycle renews."

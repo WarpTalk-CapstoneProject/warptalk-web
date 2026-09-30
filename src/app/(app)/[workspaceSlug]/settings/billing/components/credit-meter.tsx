@@ -29,6 +29,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
+import { paceProjectionMessage, usedPercentLabel } from "@/lib/billing/credit-meter-format";
 import { creditUsageLevel, type CreditUsageLevel } from "@/lib/billing/credit-usage-level";
 import {
   cycleElapsedPercent,
@@ -118,7 +119,8 @@ export function CreditMeter({
 
   // Clamped: an overage cycle has spent more than this cycle held, and the bar ends at its end.
   const usedPercent = drawable ? Math.min(100, (used / total) * 100) : 0;
-  const usedLabel = Math.min(100, Math.floor((used / total) * 100 * 10) / 10);
+  // "<1" for any use under 1%, so a sliver of spend never reads "0% used" (credit-meter-format).
+  const usedLabel = usedPercentLabel(used, total);
   const elapsed = drawable ? cycleElapsedPercent(balance, now) : null;
   const tickAt = Math.round(100 - WARN_BELOW_FRACTION * 100);
 
@@ -249,10 +251,9 @@ function PaceNote({
   if (projection.kind === "lasts") {
     projectionLine = t("paceLasts");
   } else {
-    const days = Math.floor(projection.daysToEmpty);
-    const early = Math.max(0, daysLeftInCycle(balance, now) - days);
-    projectionLine =
-      early > 0 ? t("paceRunsOut", { days, early }) : t("paceRunsOutAtEnd", { days });
+    // Under one day it reads "within a day", never "in about 0 days" (credit-meter-format).
+    const message = paceProjectionMessage(projection.daysToEmpty, daysLeftInCycle(balance, now));
+    projectionLine = t(message.key, message.values);
   }
 
   return (

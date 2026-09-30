@@ -13,6 +13,8 @@
  *     cycle, so the tab follows the current cycle whatever period the other tabs show. The
  *     `period` prop is therefore deliberately unused. Dates are formatted in the viewer's local
  *     time, as `UsageOverview`'s own cycle pill formats them, so the two never disagree by a day.
+ *     `UsageOverview` is rendered `embedded`: its "Usage" h1 and cycle pill are hidden, so the
+ *     surface has one title (the Insights tab) and one cycle line (this caption).
  *   - The states the old page left on an empty surface: loading, a billing service that did not
  *     answer ("Not available yet" + retry, the admin Insights `SourceBody` wording), and a
  *     workspace with no plan (BILLING_SUBSCRIPTION_NOT_FOUND), which is an account state with its
@@ -103,6 +105,7 @@ export function UsageTab({ workspaceId, workspaceSlug }: InsightsTabProps) {
             isLoading={usage.isLoading}
             workspaceSlug={workspaceSlug}
             onRefresh={usage.onRefresh}
+            embedded
           />
         </div>
       )}

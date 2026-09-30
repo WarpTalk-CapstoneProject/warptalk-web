@@ -319,8 +319,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const canBuyCredits = canBuyExtraCredits(subscription);
 
   const currentCredits = balance?.currentCredits ?? 0;
-  const totalCredits = balance?.totalCredits ?? 0;
-  // The server's own number, not `total - current`. They agree today, but only one of them stays
+  // The server's own number, not `totalCredits - currentCredits`. They agree today, but only one of them stays
   // right if a top-up mid-cycle raises the total.
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
 

@@ -38,6 +38,7 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | `src/components/workspace/insights/overview-model.ts` | Threads source states through the lib derivations; one model feeds the cards and the export. |
 | `src/components/workspace/insights/overview-tab.tsx` | The Overview view. |
 | `src/components/workspace/insights/usage-tab.tsx`, `tools-tab.tsx` | Usage / Tools tabs (separate tasks), same `InsightsTabProps` contract. |
+| `settings/billing/components/usage-overview.tsx` (`embedded`) | The Usage tab renders the Usage page's `UsageOverview` with `embedded`: no "Usage" h1 and no cycle pill (the tab's caption states the cycle); member filter, refresh and CSV export stay. Default `false` leaves `/settings/billing/usage` unchanged. |
 | `src/hooks/use-workspace-insights.ts` | Overview sources as `InsightsSourceState`s; `INSIGHTS_QUERY_ROOT`; `useInsightsUpdatedAt`. |
 | `src/lib/workspace/insights/overview-metrics.ts` | Pure arithmetic (ledger, meetings, six months, attention, CSV). Tested. |
 | `src/lib/workspace/insights/tool-audits.ts` | Reading and counting the plugin audit log over a window. Tested; shared with the Tools tab. |
@@ -63,17 +64,19 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | Needs attention | balance, subscription, `getRecurringBilling`, audit read, workspace plugins | Each row links to where it is fixed; a source that did not answer is listed as "Not checked". |
 | Up next | `translationRoomService.list` with `UNFINISHED_ROOM_STATUSES_FILTER` | Dashboard's rule. |
 
+The topbar breadcrumb (`src/app/(app)/layout.tsx`) labels the `insights` segment with
+`sidebar.settingsNav.insights`, the same key the sidebar entry uses.
+
 ## Known limitations
 
-- The breadcrumb in `src/app/(app)/layout.tsx` has no entry for `insights` and falls back to the raw
-  segment ("insights").
 - Days are cut in browser local time (the period bar's calendar); the sources carry instants.
 - Every to-now period refreshes all paged reads once a minute.
 - Period labels and captions come from `lib/admin/insights-period.ts` in English, as on `/admin`.
 
 ## Testing checklist
 
-- `npm run test:workspace-insights` (new script, see the WT-878 report) — lib derivations.
+- `npm run test:workspace-insights` (overview + tool-audit derivations) and
+  `npm run test:workspace-insights-tools` (Tools tab derivations), both in `test:contracts`.
 - `npm run test:i18n-catalog`, `test:english-ui`, `test:page-ground`, `typecheck`, `lint`.
 - Manual: owner and admin see the page; a member sees the access notice. Switch tabs and periods;
   the URL follows and back/forward restore it. Kill one endpoint (e.g. block the audit log) and

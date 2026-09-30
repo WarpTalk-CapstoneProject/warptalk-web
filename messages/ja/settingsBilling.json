@@ -200,6 +200,8 @@
     "paceLasts": "このペースなら、付与分はサイクル終了まで持ちます。",
     "paceRunsOut": "このペースだと約{days, plural, other {#日}}で使い切り、サイクル終了の{early, plural, other {#日}}前になります。",
     "paceRunsOutAtEnd": "このペースだと約{days, plural, other {#日}}で使い切り、ちょうどサイクル終了時になります。",
+    "paceRunsOutWithinDay": "このペースだと1日以内に使い切り、サイクル終了の{early, plural, other {#日}}前になります。",
+    "paceRunsOutWithinDayAtEnd": "このペースだと1日以内に使い切り、ちょうどサイクル終了時になります。",
     "overageRunning": "超過利用中です。付与分を {credits} クレジット超えています。",
     "overageRunningNoAmount": "超過利用中です。",
     "allowanceUsedStopped": "付与分を使い切りました。クレジットを追加するかサイクルが更新されるまで、会議は停止します。"
