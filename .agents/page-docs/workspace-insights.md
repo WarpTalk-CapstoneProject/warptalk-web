@@ -38,6 +38,7 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | `src/components/workspace/insights/overview-model.ts` | Threads source states through the lib derivations; one model feeds the cards and the export. |
 | `src/components/workspace/insights/overview-tab.tsx` | The Overview view. |
 | `src/components/workspace/insights/usage-tab.tsx`, `tools-tab.tsx` | Usage / Tools tabs (separate tasks), same `InsightsTabProps` contract. |
+| `settings/billing/components/usage-overview.tsx` (`embedded`) | The Usage tab renders the Usage page's `UsageOverview` with `embedded`: no "Usage" h1 and no cycle pill (the tab's caption states the cycle); member filter, refresh and CSV export stay. Default `false` leaves `/settings/billing/usage` unchanged. |
 | `src/hooks/use-workspace-insights.ts` | Overview sources as `InsightsSourceState`s; `INSIGHTS_QUERY_ROOT`; `useInsightsUpdatedAt`. |
 | `src/lib/workspace/insights/overview-metrics.ts` | Pure arithmetic (ledger, meetings, six months, attention, CSV). Tested. |
 | `src/lib/workspace/insights/tool-audits.ts` | Reading and counting the plugin audit log over a window. Tested; shared with the Tools tab. |
