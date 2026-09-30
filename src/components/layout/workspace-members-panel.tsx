@@ -56,6 +56,10 @@ export function WorkspaceMembersPanel({
   });
 
   const onlineCount = members.filter((member) => isAround(presenceStates[member.userId])).length;
+  // This panel only ever fetches the first PANEL_PAGE_SIZE members, so members.length silently
+  // undercounted any workspace past that size — the Members page and Dashboard both read
+  // `.total` for the same figure and would disagree with what this panel showed.
+  const totalCount = membersQuery.data?.total ?? members.length;
 
   if (!workspaceId) {
     return (
@@ -83,8 +87,8 @@ export function WorkspaceMembersPanel({
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-ink-subtle">
         {onlineCount > 0
-          ? t("aroundNow", { online: onlineCount, total: members.length })
-          : t("memberCount", { count: members.length })}
+          ? t("aroundNow", { online: onlineCount, total: totalCount })
+          : t("memberCount", { count: totalCount })}
       </p>
 
       <ul className="flex flex-col gap-0.5">

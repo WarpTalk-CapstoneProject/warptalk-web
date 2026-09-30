@@ -21,6 +21,13 @@
   },
   "loading": "Đang tải phòng…",
   "copiedSuffix": "Đã sao chép {label}",
+  "hostLabel": "Chủ trì",
+  "roomCodeLabel": "Mã phòng",
+  "copyRoomCode": "Sao chép mã phòng",
+  "occupancyTooltip": {
+    "attended": "Những người đã tham gia cuộc họp này",
+    "inRoom": "Người tham gia trong phòng, trên tổng sức chứa của loại cuộc họp"
+  },
   "editRoom": "Chỉnh sửa phòng",
   "startingLabel": "Đang bắt đầu...",
   "startError": "Không thể bắt đầu cuộc họp.",

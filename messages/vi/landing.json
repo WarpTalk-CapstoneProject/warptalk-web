@@ -5,7 +5,9 @@
     "pricing": "Bảng giá",
     "contact": "Liên hệ",
     "download": "Tải xuống",
-    "getStarted": "Bắt đầu ngay"
+    "getStarted": "Bắt đầu ngay",
+    "openMenu": "Mở menu",
+    "closeMenu": "Đóng menu"
   },
   "badges": {
     "realtimeTranslation": "Dịch thời gian thực",

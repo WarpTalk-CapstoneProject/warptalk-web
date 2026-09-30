@@ -9,6 +9,17 @@
 
 ## Latest Changes
 
+### 2026-09-30 Merge with the WT-813 draft (PR #593)
+
+- PR #593 landed a *draft* of the same pages on `development` (`LegalDraft` with a "Draft" banner and
+  `[CẦN XÁC NHẬN]` markers, content in `src/content/legal/{privacy,terms}-draft.ts`) and its own
+  WT-841 footer fix. Merging `development` into this branch conflicted in `src/app/terms/page.tsx`,
+  `src/app/privacy/page.tsx` and `src/app/page.tsx`.
+- Resolution: the pages keep `LegalDocument` (the published version the owner asked for); the
+  landing footer takes `development`'s `footerCompanyLinks` (same hrefs as this branch had).
+- The draft files — `src/components/legal/legal-draft.tsx`, `src/content/legal/privacy-draft.ts`,
+  `src/content/legal/terms-draft.ts` — had no remaining importer and were deleted.
+
 ### 2026-09-30 Aligned with current Vietnamese law (follow-up review)
 
 Checked the first version against current law and against comparable products, then amended all
