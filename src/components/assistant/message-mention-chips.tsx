@@ -1,11 +1,11 @@
 "use client";
 
 import { Fragment, type ReactNode } from "react";
-import { FileText, PuzzlePiece, VideoCamera } from "@phosphor-icons/react";
+import { FileText, PuzzlePiece, Sparkle, Subtitles, VideoCamera } from "@phosphor-icons/react";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
-import { splitMentionTokens } from "@/lib/assistant/message-mentions";
+import { mentionTokenLabel, splitMentionTokens } from "@/lib/assistant/message-mentions";
 import { cn } from "@/lib/utils";
 import type { AssistantMentionDto, AssistantPluginCatalogItemDto } from "@/types/assistant";
 
@@ -99,7 +99,9 @@ function MentionChip({
       )}
     >
       <MentionIcon mention={mention} plugins={plugins} />
-      {mention.label}
+      {/* "Summary · Standup" for a meeting's summary or transcript: the bare title is also what
+          a mention of the room itself shows, and the icon alone is too small to tell them apart. */}
+      {mentionTokenLabel(mention)}
     </span>
   );
 }
@@ -130,5 +132,11 @@ function MentionIcon({
       return <VideoCamera size={12} className="shrink-0" />;
     case "document":
       return <FileText size={12} className="shrink-0" />;
+    // WT-887. Sparkle is what the artifact library marks a summary with; a transcript gets its own
+    // mark rather than the library's FileText, which here already means a document.
+    case "summary":
+      return <Sparkle size={12} className="shrink-0" />;
+    case "transcript":
+      return <Subtitles size={12} className="shrink-0" />;
   }
 }

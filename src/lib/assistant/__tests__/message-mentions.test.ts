@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { parseMessageMentions, splitMentionTokens } from "../message-mentions.ts";
+import {
+  mentionTokenLabel,
+  parseMessageMentions,
+  splitMentionTokens,
+} from "../message-mentions.ts";
 
 describe("WarpBot — mentions read back onto a user message", () => {
   test("reads the shape the send path stores, without the server's workspace stamp", () => {
@@ -64,5 +68,43 @@ describe("WarpBot — a mention is drawn where it was typed", () => {
     const { segments, unplaced } = splitMentionTokens("@Google Meet", [google, meet]);
     assert.deepEqual(segments, [{ kind: "mention", mention: meet }]);
     assert.deepEqual(unplaced, [google]);
+  });
+});
+
+describe("WarpBot — a meeting's summary and transcript (WT-887)", () => {
+  const room = { entityType: "room" as const, entityId: "r-1", label: "Standup" };
+  const summary = { entityType: "summary" as const, entityId: "r-1", label: "Standup" };
+  const transcript = { entityType: "transcript" as const, entityId: "r-1", label: "Standup" };
+
+  test("read back from history like any other mention, bare title and all", () => {
+    const raw = JSON.stringify([
+      { ...summary, workspaceId: "ws-1" },
+      { ...transcript, workspaceId: "ws-1" },
+      { entityType: "minutes", entityId: "r-1", label: "Standup" },
+    ]);
+    // "minutes" is never offered by the web, so a row of it has no chip to draw.
+    assert.deepEqual(parseMessageMentions(raw), [summary, transcript]);
+  });
+
+  test("the token carries the kind, so it does not collide with the room's own", () => {
+    assert.equal(mentionTokenLabel(summary), "Summary · Standup");
+    assert.equal(mentionTokenLabel(transcript), "Transcript · Standup");
+    assert.equal(mentionTokenLabel(room), "Standup");
+  });
+
+  test("the room, its summary and its transcript each find their own token", () => {
+    const { segments, unplaced } = splitMentionTokens(
+      "so sánh @Summary · Standup với @Transcript · Standup của @Standup",
+      [room, summary, transcript],
+    );
+    assert.deepEqual(segments, [
+      { kind: "text", text: "so sánh " },
+      { kind: "mention", mention: summary },
+      { kind: "text", text: " với " },
+      { kind: "mention", mention: transcript },
+      { kind: "text", text: " của " },
+      { kind: "mention", mention: room },
+    ]);
+    assert.deepEqual(unplaced, []);
   });
 });
