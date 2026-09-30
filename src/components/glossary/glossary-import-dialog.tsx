@@ -242,7 +242,7 @@ async function parseWorkbook(file: File): Promise<string[][]> {
  * a static asset, so it cannot drift from HEADER_ALIASES the way a checked-in file would. CSV
  * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
  */
-export function downloadSampleTemplate(
+function downloadSampleTemplate(
   sourceLanguage: string | null | undefined,
   targetLanguage: string | null | undefined,
 ) {
@@ -422,18 +422,28 @@ export function GlossaryImportDialog({
           </div>
         ) : (
           <div>
-            <div className="mb-3 flex items-center justify-between text-[12px]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
               {expectedPair ? (
                 <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
               ) : <span />}
-              <button
-                type="button"
-                onClick={() => setActiveTab("templates")}
-                className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
-              >
-                <Sparkle className="h-3.5 w-3.5" />
-                View & download sample templates (.xlsx / .csv)
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  {t("downloadSample")} (.csv)
+                </button>
+                <span className="text-border">|</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("templates")}
+                  className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  <Sparkle className="h-3.5 w-3.5" />
+                  Templates Catalog (.xlsx / .csv)
+                </button>
+              </div>
             </div>
 
             <input
