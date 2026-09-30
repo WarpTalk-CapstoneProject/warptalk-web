@@ -73,6 +73,7 @@ const HEADER_ALIASES: Record<string, keyof ParsedGlossaryRow> = {
   context: "context",
   "usage context": "context",
   "context sentence": "context",
+  // i18n-allow: Vietnamese column aliases supported by spreadsheet importer
   "ngữ cảnh": "context",
   "ngu canh": "context",
   "câu ví dụ": "context",
@@ -421,18 +422,28 @@ export function GlossaryImportDialog({
           </div>
         ) : (
           <div>
-            <div className="mb-3 flex items-center justify-between text-[12px]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
               {expectedPair ? (
                 <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
               ) : <span />}
-              <button
-                type="button"
-                onClick={() => setActiveTab("templates")}
-                className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
-              >
-                <Sparkle className="h-3.5 w-3.5" />
-                Xem và tải template mẫu (.xlsx / .csv)
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  {t("downloadSample")} (.csv)
+                </button>
+                <span className="text-border">|</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("templates")}
+                  className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  <Sparkle className="h-3.5 w-3.5" />
+                  Templates Catalog (.xlsx / .csv)
+                </button>
+              </div>
             </div>
 
             <input

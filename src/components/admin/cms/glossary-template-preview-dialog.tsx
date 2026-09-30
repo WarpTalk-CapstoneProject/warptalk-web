@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileCsv, FileXls, Copy, Check, X } from "@phosphor-icons/react";
+import { FileCsv, FileXls, Copy, Check } from "@phosphor-icons/react";
 import {
   type GlossaryTemplateDefinition,
   generateTemplateCsv,
@@ -47,9 +47,9 @@ export function GlossaryTemplatePreviewDialog({
       link.download = `glossary-template-${template.key}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống file Excel cho ${template.name}`);
+      toast.success(`Downloaded Excel file for ${template.name}`);
     } catch {
-      toast.error("Không thể xuất file Excel");
+      toast.error("Failed to export Excel file");
     } finally {
       setIsExporting(false);
     }
@@ -65,9 +65,9 @@ export function GlossaryTemplatePreviewDialog({
       link.download = `glossary-template-${template.key}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống file CSV cho ${template.name}`);
+      toast.success(`Downloaded CSV file for ${template.name}`);
     } catch {
-      toast.error("Không thể xuất file CSV");
+      toast.error("Failed to export CSV file");
     }
   };
 
@@ -75,7 +75,7 @@ export function GlossaryTemplatePreviewDialog({
     const headers = "Term\tTranslation\tContext\tField\tDefinition\tNote\tPart of speech\tPriority";
     void navigator.clipboard.writeText(headers);
     setCopied(true);
-    toast.success("Đã copy 8 tiêu đề cột chuẩn vào clipboard");
+    toast.success("Copied 8 standard column headers to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -115,7 +115,7 @@ export function GlossaryTemplatePreviewDialog({
                 className="h-8 gap-1.5 text-[12px] shadow-none text-emerald-600 dark:text-emerald-400"
               >
                 <FileXls className="h-4 w-4" />
-                Xuất .xlsx
+                Export .xlsx
               </Button>
               <Button
                 variant="outline"
@@ -124,7 +124,7 @@ export function GlossaryTemplatePreviewDialog({
                 className="h-8 gap-1.5 text-[12px] shadow-none text-sky-600 dark:text-sky-400"
               >
                 <FileCsv className="h-4 w-4" />
-                Xuất .csv
+                Export .csv
               </Button>
             </div>
           </div>
@@ -133,7 +133,7 @@ export function GlossaryTemplatePreviewDialog({
         {/* 8-Column Preview Table */}
         <div className="mt-2">
           <div className="mb-2 flex items-center justify-between text-[11.5px] text-ink-muted">
-            <span>Bảng dữ liệu mẫu chuẩn ({template.sampleTerms.length} dòng thuật ngữ)</span>
+            <span>Standard sample dataset ({template.sampleTerms.length} terms)</span>
             <span className="font-mono text-ink-subtle">Key: {template.key}</span>
           </div>
 
@@ -143,7 +143,7 @@ export function GlossaryTemplatePreviewDialog({
                 <tr>
                   <th className="px-3 py-2 font-medium">Term</th>
                   <th className="px-3 py-2 font-medium">Translation</th>
-                  <th className="px-3 py-2 font-medium min-w-[180px]">Context (Ngữ cảnh)</th>
+                  <th className="px-3 py-2 font-medium min-w-[180px]">Context</th>
                   <th className="px-3 py-2 font-medium">Field</th>
                   <th className="px-3 py-2 font-medium min-w-[160px]">Definition</th>
                   <th className="px-3 py-2 font-medium min-w-[140px]">Usage note</th>
@@ -171,7 +171,7 @@ export function GlossaryTemplatePreviewDialog({
 
         <DialogFooter className="mt-4 border-t border-hairline pt-3 flex items-center justify-between sm:justify-between">
           <span className="text-[11.5px] text-ink-subtle">
-            Hỗ trợ đầy đủ 8 cột chuẩn hóa cho AI STT & MT
+            Full support for 8 standardized columns for AI STT & MT
           </span>
           <div className="flex items-center gap-2">
             <Button
@@ -180,7 +180,7 @@ export function GlossaryTemplatePreviewDialog({
               onClick={() => onOpenChange(false)}
               className="shadow-none"
             >
-              Đóng
+              Close
             </Button>
             {onEdit ? (
               <Button
@@ -191,7 +191,7 @@ export function GlossaryTemplatePreviewDialog({
                 }}
                 className="shadow-none"
               >
-                Chỉnh sửa template
+                Edit template
               </Button>
             ) : null}
           </div>
