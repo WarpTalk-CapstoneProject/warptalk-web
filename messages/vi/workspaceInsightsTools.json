@@ -1,0 +1,59 @@
+{
+  "title": "Công cụ",
+  "notAvailable": "Chưa có dữ liệu",
+  "retry": "Thử lại",
+  "summary": {
+    "label": "Công cụ WarpBot",
+    "status": {
+      "idle": "Chưa có lượt gọi",
+      "healthy": "Ổn định",
+      "attention": "Cần xử lý"
+    },
+    "idleHint": "Không có lượt gọi công cụ nào trong kỳ này. Kết nối một plugin trong Plugin để bắt đầu.",
+    "calls": "{count, plural, other {# lượt gọi}}",
+    "callsAtLeast": "ít nhất {count, plural, other {# lượt gọi}}",
+    "successRate": "{rate} thành công",
+    "blocked": "{count} bị chặn theo chính sách",
+    "needsSetup": "{count, plural, other {# cần thiết lập}}",
+    "failed": "{count} thất bại",
+    "lastCall": "lần gọi gần nhất {time}",
+    "pluginsLink": "Plugin"
+  },
+  "figure": {
+    "calls": "{count, plural, other {# lượt gọi}}",
+    "callsAtLeast": "Ít nhất {count, plural, other {# lượt gọi}}",
+    "cappedCaption": "Chỉ các lượt gọi mới nhất · {top}"
+  },
+  "byPlugin": {
+    "title": "Lượt gọi công cụ theo plugin",
+    "empty": "Không có lượt gọi công cụ nào trong kỳ này",
+    "other": "Plugin khác",
+    "callsSegment": "Lượt gọi"
+  },
+  "outcomes": {
+    "title": "Kết quả theo ngày",
+    "aria": "Kết quả lượt gọi công cụ theo ngày, kèm tỉ lệ thành công",
+    "empty": "Không có kết quả công cụ nào trong kỳ này",
+    "figure": "{rate} thành công",
+    "captionBlocked": "{count} bị chặn theo chính sách",
+    "captionNeedsSetup": "{count, plural, other {# cần thiết lập}}",
+    "captionFailed": "{count} thất bại",
+    "captionAwaiting": "{count} đang chờ xác nhận",
+    "succeeded": "Thành công",
+    "blocked": "Bị chặn theo chính sách",
+    "problem": "Thất bại hoặc cần thiết lập",
+    "successRate": "Tỉ lệ thành công",
+    "dayTotal": "{count, plural, other {# lượt gọi}} trong ngày",
+    "stillToCome": "Chưa tới",
+    "noCalls": "Không có lượt gọi"
+  },
+  "audit": {
+    "title": "Nhật ký kiểm tra",
+    "subtitle": "Mọi lượt gọi công cụ của trợ lý trong kỳ này và quyết định chính sách phía sau",
+    "empty": "Không có lượt gọi công cụ nào trong kỳ này",
+    "showing": "Hiển thị {start}–{end} trên {total}",
+    "showingAtLeast": "Hiển thị {start}–{end} trên ít nhất {total}",
+    "cappedNote": "Chỉ đọc {count} lượt gọi mới nhất, nên các lượt gọi cũ hơn trong kỳ này không có ở đây.",
+    "openActivity": "Hoạt động plugin"
+  }
+}

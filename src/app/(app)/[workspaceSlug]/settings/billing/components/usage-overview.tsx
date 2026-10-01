@@ -77,6 +77,12 @@ export interface UsageOverviewProps {
   isLoading: boolean;
   workspaceSlug: string;
   onRefresh: () => void;
+  /**
+   * Rendered inside another page that already titles the surface and states the cycle (the
+   * Insights → Usage tab, WT-878): hides the "Usage" h1 and the cycle pill, keeps the member
+   * filter, refresh and CSV export. Defaults to false, so the Usage page is unchanged.
+   */
+  embedded?: boolean;
 }
 
 export function UsageOverview({
@@ -89,6 +95,7 @@ export function UsageOverview({
   isLoading,
   workspaceSlug,
   onRefresh,
+  embedded = false,
 }: UsageOverviewProps) {
   const t = useTranslations("settingsBillingUsage");
   const [memberKey, setMemberKey] = useState<string | null>(null);
@@ -268,9 +275,13 @@ export function UsageOverview({
     <div className="@container flex min-w-0 flex-col text-ink">
       {/* 1. Header row */}
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-hairline px-4 py-3.5 sm:px-6">
-        <h1 className="mr-auto text-[20px] font-semibold leading-tight tracking-[-0.3px] text-ink">
-          {t("header.title")}
-        </h1>
+        {embedded ? (
+          <div className="mr-auto" aria-hidden />
+        ) : (
+          <h1 className="mr-auto text-[20px] font-semibold leading-tight tracking-[-0.3px] text-ink">
+            {t("header.title")}
+          </h1>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -295,18 +306,20 @@ export function UsageOverview({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-3 text-[13px] font-medium text-ink">
-          <CalendarBlank className="size-3.5 text-ink-muted" />
-          {balance
-            ? t("header.cycleRangeElapsed", {
-                range: `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
-                  new Date(balance.currentPeriodEnd),
-                  "MMM d",
-                )}`,
-                days: cycleDaysElapsed,
-              })
-            : t("header.thisBillingCycle")}
-        </span>
+        {embedded ? null : (
+          <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-3 text-[13px] font-medium text-ink">
+            <CalendarBlank className="size-3.5 text-ink-muted" />
+            {balance
+              ? t("header.cycleRangeElapsed", {
+                  range: `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
+                    new Date(balance.currentPeriodEnd),
+                    "MMM d",
+                  )}`,
+                  days: cycleDaysElapsed,
+                })
+              : t("header.thisBillingCycle")}
+          </span>
+        )}
 
         <IconButton label={t("header.refresh")} onClick={onRefresh}>
           <ArrowClockwise className="size-4" />

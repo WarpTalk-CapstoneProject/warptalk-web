@@ -21,6 +21,7 @@ import {
   type BillingInterval,
   checkoutTotal,
   monthlyDisplayPrice,
+  yearlySavingPercent,
 } from "@/lib/billing/plan-pricing";
 import { buildFeatureList, describePlan } from "@/lib/utils";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
@@ -161,7 +162,7 @@ export function WorkspaceActivationLanding({
             >
               <TabsList>
                 <TabsTrigger value="monthly">Monthly</TabsTrigger>
-                <TabsTrigger value="yearly">Yearly · save 21%</TabsTrigger>
+                <TabsTrigger value="yearly">Yearly · save {yearlySavingPercent()}%</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>

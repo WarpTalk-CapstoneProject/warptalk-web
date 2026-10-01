@@ -100,7 +100,17 @@ export function TopUpModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[460px] rounded-[14px] border-border bg-surface-1 p-0 shadow-none">
+      {/* Motion is this file's, not dialog.tsx's: fade in over 180ms and rise ~10px. The base popup
+          already animates at 100ms with a zoom, so the durations are overridden under motion-safe
+          and every animation is switched off under motion-reduce. */}
+      <DialogContent
+        overlayClassName="motion-safe:data-open:duration-[180ms] motion-reduce:data-open:animate-none motion-reduce:data-ending-style:animate-none"
+        className={cn(
+          "max-w-[460px] rounded-[14px] border-border bg-surface-1 p-0 shadow-none",
+          "motion-safe:data-open:duration-[180ms] motion-safe:data-open:slide-in-from-bottom-[10px]",
+          "motion-reduce:data-open:animate-none motion-reduce:data-ending-style:animate-none",
+        )}
+      >
         <DialogHeader className="px-5 pt-5">
           <DialogTitle className="text-[16px] font-semibold text-ink">{t("topUpModal.title")}</DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted">
@@ -118,7 +128,7 @@ export function TopUpModal({
                   type="button"
                   onClick={() => setCredits(amount)}
                   className={cn(
-                    "rounded-[10px] border px-3 py-2.5 text-left shadow-none transition-colors",
+                    "rounded-[10px] border px-3 py-2.5 text-left shadow-none motion-safe:transition-colors motion-safe:duration-150",
                     selected
                       ? "border-primary bg-primary/5"
                       : "border-border bg-surface-1 hover:bg-surface-2",
