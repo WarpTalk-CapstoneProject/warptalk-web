@@ -30,6 +30,8 @@ type DeviceState = {
   noiseSuppressionEnabled: boolean;
   noiseSuppressionPreferenceVersion: number;
   backgroundBlurEnabled: boolean;
+  /** WT-631. The microphone picked on the pre-join screen, so the meeting captures from it. */
+  selectedMicrophoneId?: string;
 };
 
 export type MeetingMediaPreferences = {
@@ -37,6 +39,18 @@ export type MeetingMediaPreferences = {
   microphoneEnabled: boolean;
   noiseSuppressionEnabled: boolean;
   backgroundBlurEnabled: boolean;
+  /**
+   * WT-631. Which input device to capture from, or "" for whatever the browser calls default.
+   *
+   * Both pre-join screens have a microphone picker, and their preview honours it — the level
+   * meter people watch before joining reads from the device they chose. The choice then went
+   * nowhere: completeMeetingJoin stored booleans only, and the meeting captured from the OS
+   * default input instead. On a machine with a virtual audio cable installed (VB-Cable, or the
+   * devices WarpTalk's external bridge uses) that default is often the loopback, which carries
+   * every sound the machine plays — so the meeting transcribed another browser tab while the
+   * participant's real microphone sat unused.
+   */
+  selectedMicrophoneId: string;
 };
 
 function parseObject(value: string | null): Record<string, unknown> {
@@ -68,6 +82,17 @@ export function readMeetingMediaPreferences(
   roomId: string,
 ): MeetingMediaPreferences {
   const join = readMeetingJoinState(storage, roomId);
+  const devices = parseObject(storage.getItem(DEVICE_PREVIEW_KEY));
+  const roomDevices =
+    devices.roomId === roomId || devices.roomId === undefined ? devices : {};
+  // WT-631. Read even on the fail-closed path below, because it is not a permission: it only
+  // says WHICH input to use once the participant turns a microphone on, and it can never turn
+  // one on by itself. A host who started the meeting without a pre-join screen and then picked
+  // a microphone from the meeting bar keeps that pick across a reload this way.
+  const selectedMicrophoneId =
+    typeof roomDevices.selectedMicrophoneId === "string"
+      ? roomDevices.selectedMicrophoneId
+      : "";
   if (join.roomId !== roomId) {
     return {
       cameraEnabled: false,
@@ -79,12 +104,9 @@ export function readMeetingMediaPreferences(
       // dirtier microphone.
       noiseSuppressionEnabled: true,
       backgroundBlurEnabled: false,
+      selectedMicrophoneId,
     };
   }
-
-  const devices = parseObject(storage.getItem(DEVICE_PREVIEW_KEY));
-  const roomDevices =
-    devices.roomId === roomId || devices.roomId === undefined ? devices : {};
 
   return {
     cameraEnabled:
@@ -112,7 +134,60 @@ export function readMeetingMediaPreferences(
     backgroundBlurEnabled:
       roomDevices.backgroundBlurEnabled === true ||
       join.backgroundBlurEnabled === true,
+    selectedMicrophoneId,
   };
+}
+
+/**
+ * Record a microphone chosen from inside the meeting (WT-631).
+ *
+ * The meeting bar's picker moves the live capture through LiveKit, and LiveKit keeps that choice
+ * for the rest of the connection. A reload starts a new connection from this record, though, and
+ * without the write it would put the participant straight back on the device they had just moved
+ * away from. Same record the pre-join screen writes, so there is one answer to "which microphone
+ * does this meeting use".
+ *
+ * Merged into the record when it belongs to this room (or to none), so the camera/microphone
+ * permissions and the noise-suppression choice beside it survive. A record stamped for ANOTHER
+ * room is an earlier meeting in this tab; writing into it would change that meeting's preference
+ * and still not be read for this one, so it is replaced with a record for this room instead.
+ */
+export function rememberSelectedMicrophone(
+  storage: StorageReader & StorageWriter,
+  roomId: string,
+  deviceId: string,
+) {
+  const devices = parseObject(storage.getItem(DEVICE_PREVIEW_KEY));
+  const base =
+    devices.roomId === roomId || devices.roomId === undefined ? devices : {};
+  storage.setItem(
+    DEVICE_PREVIEW_KEY,
+    JSON.stringify({ ...base, roomId, selectedMicrophoneId: deviceId }),
+  );
+}
+
+/**
+ * The LiveKit room options that make the meeting capture from the chosen microphone (WT-631).
+ *
+ * Set as the ROOM's capture default rather than on the `audio` prop of <LiveKitRoom>, because the
+ * prop is read in exactly one place — the first publish after connecting. A participant who joins
+ * muted (or is muted on entry) publishes nothing then, and their microphone is created later by
+ * the toggle with the room's defaults alone; the prop would have missed them entirely. The room
+ * default is also what LiveKit itself rewrites when the participant switches device mid-meeting,
+ * so a reconnect keeps their latest pick instead of reverting to this one.
+ *
+ * `ideal`, not `exact`: an id saved from a headset that has since been unplugged would make an
+ * exact constraint throw OverconstrainedError and join them with no microphone at all. Preferring
+ * it and falling back to the default is no worse than what every meeting did before.
+ *
+ * Undefined with no preference, so the room is built exactly as it was before this existed.
+ */
+export function microphoneRoomOptions(
+  selectedMicrophoneId: string,
+): { audioCaptureDefaults: { deviceId: { ideal: string } } } | undefined {
+  return selectedMicrophoneId
+    ? { audioCaptureDefaults: { deviceId: { ideal: selectedMicrophoneId } } }
+    : undefined;
 }
 
 export function completeMeetingJoin({

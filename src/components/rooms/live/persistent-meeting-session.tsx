@@ -45,6 +45,7 @@ import {
   useSetNoiseReduction,
   useSetVoiceCloneConsent,
   useTranslationRoom,
+  translationRoomQueryKey,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
   useJoinLanguagePolicy,
@@ -54,6 +55,10 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { getLanguageName } from "@/lib/language/languages";
 import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import {
+  applyRoomLanguages,
+  parseRoomLanguages,
+} from "@/lib/meeting/room-languages-changed";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -89,6 +94,7 @@ import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
@@ -176,6 +182,7 @@ import {
 } from "@/hooks/use-track-processors";
 import {
   JOIN_PREVIEW_KEY,
+  microphoneRoomOptions,
   readMeetingJoinState,
   readMeetingMediaPreferences,
 } from "@/lib/meeting/meeting-join-state";
@@ -728,6 +735,14 @@ export function PersistentMeetingSession({
 
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
+  // WT-631. The input device to capture from, carried from the pre-join picker ("" = the
+  // browser's default, which is what every meeting used before). Read ONCE, with the other
+  // preferences, and deliberately never set again: it seeds the LiveKit Room's construction
+  // options, and <LiveKitRoom> builds a brand-new Room whenever those options change — a
+  // mid-meeting switch written back here would tear the call down. LiveKit carries a
+  // mid-meeting switch itself (switchActiveDevice rewrites the room's own capture default),
+  // and media-device-menu.tsx records it for the next page load.
+  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState("");
 
   useEffect(() => {
     const preferences = readMeetingMediaPreferences(
@@ -740,8 +755,16 @@ export function PersistentMeetingSession({
     setMicrophoneEnabled(preferences.microphoneEnabled);
     setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
     setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
+    setSelectedMicrophoneId(preferences.selectedMicrophoneId);
     setMediaPreferencesHydrated(true);
   }, [roomId]);
+  // Memoised on the id alone. <LiveKitRoom> keys its Room on JSON.stringify(options), so equal
+  // content is already stable, but a fresh object every render is one refactor away from not
+  // being.
+  const liveKitRoomOptions = useMemo(
+    () => microphoneRoomOptions(selectedMicrophoneId),
+    [selectedMicrophoneId],
+  );
 
   // Same shape as the media preferences above, and for the same reason: sessionStorage is an
   // external browser source and must be read after hydration, never during render.
@@ -3053,6 +3076,27 @@ export function PersistentMeetingSession({
       },
     );
 
+    // WT-709: the host added a language to the running meeting. The picker's options come from the
+    // room query, and the hub now refuses any language outside the meeting's set — so without this
+    // the new language is one the server would accept and the menu does not offer until the next
+    // room fetch. Patched into the cache rather than refetched: the payload is the whole set.
+    //
+    // Reaches the lobby too (the Gateway sends it to both groups, and a knocking connection sits in
+    // the lobby one), so somebody still at the door sees it before they are let in.
+    connection.on("RoomLanguagesChanged", (payload: unknown) => {
+      const languages = parseRoomLanguages(payload);
+      if (!languages) {
+        // Not the shape the backend sends. Never write that over the room's languages — ask for
+        // the room again instead, which is what would have shown the change anyway.
+        void queryClient.invalidateQueries({ queryKey: translationRoomQueryKey(roomId) });
+        return;
+      }
+      queryClient.setQueryData<TranslationRoomDto>(
+        translationRoomQueryKey(roomId),
+        (current) => (current ? applyRoomLanguages(current, languages) : current),
+      );
+    });
+
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
     });
@@ -4000,6 +4044,12 @@ export function PersistentMeetingSession({
           same map as the full room — the two used to draw the same person differently. */}
       <MeetingIdentityProvider identities={participantIdentities}>
       <LiveKitRoom
+        // WT-631. Without this LiveKit captures from whatever the OS calls the default input —
+        // on a demo laptop with VB-Cable installed that is often the loopback, which carries
+        // every other browser tab — instead of the microphone the participant picked (and
+        // watched a level meter confirm) on the pre-join screen. On the Room, not on `audio`
+        // below: see microphoneRoomOptions for why the prop alone misses muted joiners.
+        options={liveKitRoomOptions}
         video={cameraEnabled}
         audio={
           microphoneEnabled

@@ -77,6 +77,15 @@ export function useTranslationRooms(params?: {
   });
 }
 
+/**
+ * The cache key of one room. Exported so a realtime handler that patches the room (WT-709's
+ * RoomLanguagesChanged) names the same key the query uses, rather than a second literal that a
+ * rename would silently leave behind.
+ */
+export function translationRoomQueryKey(id: string) {
+  return [...MEETING_KEY, id] as const;
+}
+
 /** Fetch a single translationRoom by ID */
 /**
  * @param refetchInterval poll the room's state, in ms. Off by default — only the waiting room
@@ -85,7 +94,7 @@ export function useTranslationRooms(params?: {
  */
 export function useTranslationRoom(id: string, refetchInterval?: number) {
   return useQuery({
-    queryKey: [...MEETING_KEY, id],
+    queryKey: translationRoomQueryKey(id),
     queryFn: async () => {
       const { data } = await translationRoomService.get(id);
       return data;
