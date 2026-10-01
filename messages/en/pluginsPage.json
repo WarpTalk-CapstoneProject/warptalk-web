@@ -120,5 +120,15 @@
     "optional": "Optional",
     "reasonPlaceholder": "e.g. Use {label} with meeting action items",
     "sendRequest": "Send request"
+  },
+  "siblingPrompt": {
+    "title": "Connect your other {provider} plugins too?",
+    "titleNoProvider": "Connect the related plugins too?",
+    "body": "{label} is connected. These plugins use the same sign-in, so you can connect them now as well.",
+    "connectAll": "Connect all",
+    "notNow": "Not now",
+    "closeAria": "Close",
+    "connected": "{labels} connected",
+    "couldNotConnect": "Could not connect {labels}."
   }
 }
