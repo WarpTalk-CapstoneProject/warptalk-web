@@ -59,6 +59,7 @@ import EgressHelper from "@livekit/egress-sdk";
 
 import { isRecordableParticipant, resolveEgressDisplayName } from "@/lib/meeting/egress-participants";
 import { getInitials } from "@/lib/meeting/participant-identity";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Tile {
   identity: string;
@@ -300,8 +301,6 @@ function ParticipantGridCell({
 }) {
   const videoHolderRef = useRef<HTMLDivElement | null>(null);
   const hasVideo = Boolean(videoTile && !overlay.camMuted);
-  // A photo that fails to load (a Google URL that moved, a 404) falls back to initials, never a broken-image box.
-  const [avatarFailed, setAvatarFailed] = useState(false);
   const audioHolderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -363,34 +362,23 @@ function ParticipantGridCell({
             gap: "12px",
           }}
         >
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "50%",
-              background: AVATAR_BG,
-              color: INK,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "24px",
-              fontWeight: 600,
-              fontFamily: FONT,
-              userSelect: "none",
-            }}
-          >
-            {overlay.avatarUrl && !avatarFailed ? (
-              // eslint-disable-next-line @next/next/no-img-element -- headless recorder page, no image optimiser
-              <img
-                src={overlay.avatarUrl}
-                alt=""
-                onError={() => setAvatarFailed(true)}
-                style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
-              />
-            ) : (
-              initials
-            )}
-          </div>
+          {/* Through the app's AvatarImage like every other face (check-avatar-everywhere-contract):
+              it resolves the src, and the fallback shows initials until the photo loads or when it
+              fails, so a moved Google URL never records as a broken-image box. */}
+          <Avatar style={{ width: "80px", height: "80px" }}>
+            {overlay.avatarUrl ? <AvatarImage src={overlay.avatarUrl} alt="" /> : null}
+            <AvatarFallback
+              style={{
+                background: AVATAR_BG,
+                color: INK,
+                fontSize: "24px",
+                fontWeight: 600,
+                fontFamily: FONT,
+              }}
+            >
+              {initials}
+            </AvatarFallback>
+          </Avatar>
           <div
             style={{
               padding: "2px 10px",

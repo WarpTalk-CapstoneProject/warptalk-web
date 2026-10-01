@@ -24,6 +24,19 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   A meeting with **more than one** recording still has no player (the page cannot say which file a
   moment belongs to), and the pip now opens anyway to offer `Recording 1`, `Recording 2`… as
   separate downloads.
+  That header icon is the **only** recording download. The player's control bar used to carry a
+  second one calling the same flow; it was removed (WT-894).
+- **Player** (`MeetingRecordingPlayer`): the video frame is shown as recorded, nothing overlaid. The
+  controls sit on their own light card below it. Turn marks are hidden until the pointer is over the
+  timeline (or it has keyboard focus); then the track thickens and the dots appear.
+- **What the recording itself looks like** (`/egress/composite`, the page LiveKit's recorder opens):
+  a camera-off person is drawn like the live meeting's camera-off tile — white tile, grey avatar,
+  "Camera is off" pill, mic badge top-right — not a per-person coloured block. The face is the
+  person's own avatar when their client published it as LiveKit participant metadata
+  (`{"avatarUrl":"https://…"}`, set by `LocalMediaController` after connect; the join token carries
+  `canUpdateOwnMetadata`). The page only draws a Google-hosted picture or the API's
+  `/api/v1/auth/profile/avatar/` route, through `AvatarImage`; anything else, or a picture that
+  fails to load, shows initials.
 - File names come from `recordFileName`:
   `{Meeting title} - Transcript[ (LANG)] - yyyy-MM-dd.docx|.txt`. The title is `room.title`; the date
   is the **meeting's** own start (WT-311(c)), the same source the duration chip counts from. The
@@ -70,6 +83,10 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
 
 - The retained files that are nobody's reading surface (debug logs, audio samples) are only listed
   on the workspace's Artifacts library page.
+- The avatar in a recording needs the backend's `canUpdateOwnMetadata` grant (warptalk-backend
+  `LiveKitTokenService`) deployed first or together; without it `setMetadata` is refused and every
+  tile shows initials. It also needs `NEXT_PUBLIC_API_URL` to be a public https origin, so uploaded
+  avatars never appear in recordings made against a local `http://localhost` API.
 - A meeting with several recordings still cannot be seeked into — that needs each file's duration,
   which the backend does not store yet (WT-655).
 - **WT-683's "owed outputs" placeholder rows are gone with the tab, deliberately.** `pendingOutputs`
@@ -96,4 +113,8 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
 - [ ] The recording's download button saves the file under the server's name, with no blank tab, and
       records consent on the first press.
 - [ ] A meeting with two recordings shows `Recording 1` / `Recording 2` and no player.
+- [ ] The player shows one download (in the pip header), controls below the frame, and no marks
+      until the pointer is over the timeline.
+- [ ] In a recording, a person who turned the camera on mid-meeting appears on video; one with the
+      camera off shows their avatar (or initials), "Camera is off" and a mic badge.
 - [ ] The record has no Artifacts tab, and nothing links to one.
