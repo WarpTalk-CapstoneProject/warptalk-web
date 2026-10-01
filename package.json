@@ -36,7 +36,7 @@
     "test:message-mentions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/assistant/__tests__/message-mentions.test.ts",
     "test:composer-readiness": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/assistant/__tests__/composer-readiness.test.ts",
     "test:platform-warpbot": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/assistant/__tests__/assistant-scope.test.ts && node scripts/check-platform-warpbot-contract.mjs",
-    "test:document-actor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/document-actor.test.ts",
+    "test:document-actor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/document-actor.test.ts src/lib/documents/__tests__/document-list-options.test.ts",
     "test:record-document-models": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/transcript-document-model.test.ts src/lib/documents/__tests__/summary-document-model.test.ts src/lib/documents/__tests__/record-file-name.test.ts src/lib/documents/__tests__/saved-record-documents.test.ts",
     "test:invite-recipients": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/invite-recipients.test.ts",
     "test:egress-participants": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/egress-participants.test.ts",
