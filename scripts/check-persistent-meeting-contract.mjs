@@ -242,10 +242,13 @@ assert.match(
     "the bridge listens exactly while the transcript is open, and never before the room has loaded",
   );
 }
+// W4a: the main window draws no bridge widget any more (WT-868) — the popup over Meet is the only
+// one — so the reaped bridge's Rejoin is the popup's, over the relay: the session must tell it the
+// reaper let go (`idleReaped`) and act on its `rejoin` the way the compact view's Rejoin does.
 assert.match(
   meetingSession,
-  /<ExternalBridgeWidget[\s\S]{0,1200}?idleDisconnected=\{meetingIsIdleReaped\}[\s\S]{0,200}?onRejoin=/,
-  "a reaped bridge must be able to rejoin from its own widget — the compact overlay is never rendered for it",
+  /useBridgeWidgetRelayHost\(\{[\s\S]*?idleReaped: meetingIsIdleReaped,[\s\S]*?onRejoin: \(\) => \{\s*markMeetingInteraction\(\);\s*setIdleDisconnected\(false\);/,
+  "a reaped bridge must be able to rejoin from the popup — the compact overlay is never rendered for it",
 );
 
 // --- WT-303: localParticipant is the only source of truth for mic/camera ------------------

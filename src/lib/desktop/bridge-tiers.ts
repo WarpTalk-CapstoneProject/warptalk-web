@@ -311,6 +311,22 @@ export function selectBridgeInboundSource(input: BridgeInboundInput): BridgeInbo
 }
 
 /**
+ * W4a — the path the far side SETTLES on, for instructions that outlive the moment.
+ *
+ * `device-while-asking` is transient: the cable carries the far side only until the host answers
+ * the capture question, and the expected answer moves it to loopback. A Meet setting given on the
+ * strength of it — "point Meet's Speakers at Hi-Fi Cable Input" — would be the wrong setting the
+ * moment the host says yes, and the one people most often get wrong besides (see above). So the
+ * wizard's Speakers line reads this: loopback while the question is open, the cable only where the
+ * cable is where the far side will stay (no loopback here, it failed, or the host said no).
+ *
+ * The capture itself keeps reading `selectBridgeInboundSource(...).path`: what is opened NOW.
+ */
+export function finalBridgeInboundPath(decision: BridgeInboundDecision): BridgeInboundPath | null {
+  return decision.reason === "device-while-asking" ? "loopback" : decision.path;
+}
+
+/**
  * A loopback start that failed, remembered for the room it failed in.
  *
  * Stamped with the room AND the inbound device of the moment rather than cleared by an effect: a

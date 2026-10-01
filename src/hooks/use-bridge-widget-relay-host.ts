@@ -24,7 +24,10 @@
  *     ones. Every one of these options is optional: a caller that does not pass one leaves the
  *     popup on REST for it.
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
- *     controls that would reach nobody.
+ *     controls that would reach nobody;
+ *   - W4a: `announceEnded()` (returned) says the room ENDED, synchronously, for the moment the
+ *     session is about to unmount: a state change would never get to render. The app shell then
+ *     keeps answering on the room (use-bridge-ended-relay-host) so EndedView stays reachable.
  *
  * MOUNTED in PersistentMeetingSession, below the voice handlers it dispatches to. Callbacks may be
  * fresh closures every render (handleChangeVoiceEnabled is): they are read through a ref, so a new
@@ -35,7 +38,7 @@
  * change with no visible effect, so `onAnswerBrowserCapture` is left unset by the session today.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { BrowserCaptureConsentState } from "@/lib/audio/browser-capture-consent";
 import type { InboundHealth } from "@/lib/audio/bridge-inbound-health";
@@ -119,6 +122,15 @@ export type BridgeWidgetRelayHostOptions = {
   onOpenRoomRecord?: () => void;
 };
 
+export type BridgeWidgetRelayHost = {
+  /**
+   * W4a: tell the popup this room has ENDED, now. Called by the session from its end handler, just
+   * before it closes itself — the unmount that follows says `host-gone`, and a snapshot carried by
+   * a re-render would never be sent. Every later snapshot from this hook says ended as well.
+   */
+  announceEnded: () => void;
+};
+
 export function useBridgeWidgetRelayHost({
   roomId,
   enabled,
@@ -150,7 +162,7 @@ export function useBridgeWidgetRelayHost({
   onStopTranslation,
   onSetTranscriptPaused,
   onOpenRoomRecord,
-}: BridgeWidgetRelayHostOptions): void {
+}: BridgeWidgetRelayHostOptions): BridgeWidgetRelayHost {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
   const fieldsRef = useRef<BridgeWidgetSnapshotFields>({
     speakLanguage,
@@ -235,6 +247,8 @@ export function useBridgeWidgetRelayHost({
       connection,
       isRoomHost,
     };
+    // An end already announced stays announced: a late re-render must not un-end the room.
+    if (fieldsRef.current.roomEnded) fields.roomEnded = true;
     fieldsRef.current = fields;
     relayRef.current?.send(buildBridgeWidgetSnapshot(fields, Date.now()));
     // `voice` is represented by `voiceKey`, `translation` and `transcriptPause` by their values.
@@ -354,4 +368,10 @@ export function useBridgeWidgetRelayHost({
       if (relayRef.current === relay) relayRef.current = null;
     };
   }, [enabled, roomId]);
+
+  const announceEnded = useCallback(() => {
+    fieldsRef.current = { ...fieldsRef.current, roomEnded: true };
+    relayRef.current?.send(buildBridgeWidgetSnapshot(fieldsRef.current, Date.now()));
+  }, []);
+  return { announceEnded };
 }

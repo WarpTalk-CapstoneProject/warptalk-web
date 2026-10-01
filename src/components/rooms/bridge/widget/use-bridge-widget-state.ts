@@ -69,6 +69,7 @@ import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language"
 import {
   bridgeWidgetIsRoomHost,
   bridgeWidgetMeetingStatus,
+  bridgeWidgetRoomEnded,
   bridgeWidgetTranscriptPauseState,
   bridgeWidgetTranslationState,
 } from "@/lib/meeting/bridge-widget-relay";
@@ -141,12 +142,25 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
    *
    * The room is re-read on the slow tick below only while no main window is connected: one that is
    * running the meeting says `host-gone` the moment the meeting closes, and that re-reads it at once.
+   *
+   * W4a: the main window also SAYS so (`roomEnded` on the snapshot), the instant its meeting
+   * ends, and its app shell keeps saying it after the meeting has unmounted. Latched per room: the
+   * meeting's own `host-gone` lands between the two and clears the snapshot, and the popup must
+   * not flicker back to the dock for that moment — a room does not un-end.
    */
-  const ended = room?.status === "ended";
+  const relayEnded = bridgeWidgetRoomEnded(relayView);
+  const [endedLatchRoomId, setEndedLatchRoomId] = useState<string | null>(null);
+  if (relayEnded && endedLatchRoomId !== roomId) setEndedLatchRoomId(roomId);
+  const ended = room?.status === "ended" || relayEnded || endedLatchRoomId === roomId;
   const relayStatus = relayView.status;
   useEffect(() => {
     if (relayStatus === "no-host" && roomId && signedIn) void refetchRoom();
   }, [relayStatus, roomId, signedIn, refetchRoom]);
+  // Told before the room record knows: bring the record up to date, so the rest of the popup that
+  // reads `room` (and the slow tick, which stops once ended) agrees.
+  useEffect(() => {
+    if (relayEnded && roomId && signedIn) void refetchRoom();
+  }, [relayEnded, roomId, signedIn, refetchRoom]);
 
   // ── hub ──────────────────────────────────────────────────────────────────
 

@@ -16,6 +16,7 @@ import {
   availableBridgeTiers,
   canCaptureBrowserLoopback,
   describeLoopbackFailure,
+  finalBridgeInboundPath,
   findBridgeTier,
   isLoopbackFallbackActive,
   selectBridgeInboundSource,
@@ -509,4 +510,30 @@ test("a loopback failure is described by the desktop's risk id and reason when i
   );
   assert.equal(describeLoopbackFailure(new Error("capture failed")), "capture failed");
   assert.equal(describeLoopbackFailure(undefined), "loopback capture could not be started");
+});
+
+test("W4a: the wizard's final path ignores the cable stopgap while the question is open", () => {
+  // device-while-asking is the cable for NOW; the Speakers instruction must name where it settles.
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null }))), "loopback");
+  // Every settled answer is passed through unchanged.
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: true }))), "loopback");
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: false }))), "device");
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null, loopbackFailed: true }))),
+    "device",
+  );
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ loopbackCapable: false }))),
+    "device",
+  );
+  assert.equal(
+    finalBridgeInboundPath(
+      selectBridgeInboundSource(inbound({ loopbackCapable: false, hasInboundDevice: false })),
+    ),
+    null,
+  );
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null, hasInboundDevice: false }))),
+    "loopback",
+  );
 });
