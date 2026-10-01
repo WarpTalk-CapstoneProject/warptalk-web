@@ -23,3 +23,9 @@ test("reaped or no longer joinable is disconnected, whatever LiveKit last said",
   assert.equal(bridgeMeetingConnection({ ...live, canConnectRoom: false }), "disconnected");
   assert.equal(bridgeMeetingConnection({ ...live, idleReaped: true, reconnecting: true }), "disconnected");
 });
+
+test("displaced by another login is disconnected: this window is not trying to connect", () => {
+  assert.equal(bridgeMeetingConnection({ ...live, displaced: true }), "disconnected");
+  assert.equal(bridgeMeetingConnection({ ...live, displaced: true, connected: false }), "disconnected");
+  assert.equal(bridgeMeetingConnection({ ...live, displaced: false }), "connected");
+});

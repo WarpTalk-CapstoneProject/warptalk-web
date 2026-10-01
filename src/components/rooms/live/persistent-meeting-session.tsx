@@ -2880,6 +2880,7 @@ export function PersistentMeetingSession({
       hasToken: Boolean(meetingSession?.token),
       canConnectRoom: canConnectMeeting,
       idleReaped: meetingIsIdleReaped,
+      displaced: sessionDisplaced,
       reconnecting: isReconnecting,
       connected: liveKitConnected,
     }),
@@ -2892,6 +2893,11 @@ export function PersistentMeetingSession({
     // Text-only bridge: how Meet hears this user, and the popup's switch (any participant).
     audioMode: isBridgeRoom ? bridgeAudioMode : undefined,
     onSetAudioMode: isBridgeRoom ? (mode) => void handleSetBridgeAudioMode(mode) : undefined,
+    // web #646: another login of this account took the meeting over, and this window stopped
+    // connecting. The main window's own "Use this device" card went with the in-window bridge
+    // widget (WT-868), so the popup carries the offer, and this is the native take-over behind it.
+    sessionDisplaced,
+    onTakeOverSession: takeOverDisplacedSession,
     // The native Stop, for the room host or the bridge capturer (PO, 2026-10-01: canControlBridge).
     // Absent for anybody else, and the hook then answers the popup with a snapshot instead.
     onStopTranslation: bridgeCanControl ? handleStopWarptalk : undefined,

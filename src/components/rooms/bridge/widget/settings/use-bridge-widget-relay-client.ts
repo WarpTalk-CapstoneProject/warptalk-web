@@ -62,6 +62,8 @@ export type BridgeWidgetRelayClient = {
    * window whose snapshot carries `audioMode` (canRelayAudioMode); the result is the next snapshot.
    */
   setAudioMode: (mode: BridgeAudioMode) => boolean;
+  /** web #646: "Use this device" — the main window takes the meeting back from another login. */
+  takeOverSession: () => boolean;
 };
 
 export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayClient {
@@ -197,6 +199,10 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     () => sendWhenConnected({ type: "take-over-capture" }),
     [sendWhenConnected],
   );
+  const takeOverSession = useCallback(
+    () => sendWhenConnected({ type: "take-over-session" }),
+    [sendWhenConnected],
+  );
 
   const setAudioMode = useCallback(
     (mode: BridgeAudioMode) =>
@@ -225,6 +231,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openRoomRecord,
       takeOverCapture,
       setAudioMode,
+      takeOverSession,
     }),
     [
       view,
@@ -242,6 +249,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openRoomRecord,
       takeOverCapture,
       setAudioMode,
+      takeOverSession,
     ],
   );
 }

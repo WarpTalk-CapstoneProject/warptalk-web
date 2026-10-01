@@ -57,6 +57,7 @@ import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetingNotices } from "./meeting-notices";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
+import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { RelayCarryNotice } from "./relay-carry-notice";
 import { SettingsFlyout } from "./settings-flyout";
 import { BridgeStartStep } from "./start-step";
@@ -93,6 +94,9 @@ export function WidgetShell() {
         <WidgetTabs>
           {/* W4b: nobody is running this room in the main window — said first, with the way out. */}
           <RelayCarryNotice />
+          {/* Another login has the meeting: nothing below is true for this device until it is
+              taken back, so the way to do that comes before everything else. */}
+          <SessionDisplacedNotice />
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
@@ -173,11 +177,18 @@ const MEETING_CONNECTION_NOTE: Partial<Record<BridgeWidgetMeetingConnection, str
 };
 
 function WidgetStatus() {
-  const { translationStatus, transcriptPaused, connectionState, meetingConnection, idleReaped } =
-    useBridgeWidget();
+  const {
+    translationStatus,
+    transcriptPaused,
+    connectionState,
+    meetingConnection,
+    idleReaped,
+    sessionDisplaced,
+  } = useBridgeWidget();
   const status = STATUS[translationStatus];
+  // A notice below already says why (reaped, or displaced by another login) and what to press.
   const meetingNote =
-    meetingConnection && !(idleReaped && meetingConnection === "disconnected")
+    meetingConnection && !((idleReaped || sessionDisplaced) && meetingConnection === "disconnected")
       ? MEETING_CONNECTION_NOTE[meetingConnection]
       : undefined;
   const connectionNote = meetingNote ?? CONNECTION_NOTE[connectionState];

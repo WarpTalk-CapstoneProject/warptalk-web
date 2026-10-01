@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { BridgeAudioModeChoice, BridgeMeetMicNotice } from "./audio-mode-choice";
 import { BridgeLanguageMenu, useBridgeLanguagePick } from "./bridge-language-menu";
 import { CaptureTakeoverNotice } from "./capture-takeover-notice";
+import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { useStartBridgeTranslation } from "./dock-session-controls";
 import { RelayCarryNotice } from "./relay-carry-notice";
 import { useBridgeWidget } from "./widget-context";
@@ -71,6 +72,7 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
       </div>
 
       <RelayCarryNotice />
+      <SessionDisplacedNotice />
       <CaptureTakeoverNotice />
       <BridgeMeetMicNotice />
 

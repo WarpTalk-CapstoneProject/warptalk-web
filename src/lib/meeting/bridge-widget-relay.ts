@@ -51,6 +51,8 @@
  *                                                                     on this device" (bridge claim)
  *                    set-audio-mode           { mode }                text-only bridge: "voice" | "text",
  *                                                                     how Meet hears this user
+ *                    take-over-session                                "Use this device", after another
+ *                                                                     login displaced this session
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
@@ -58,7 +60,7 @@
  *                                                 creditsSuspended?, creditsSuspendedReason?,
  *                                                 meetingError?, idleReaped?, connection?,
  *                                                 isRoomHost?, roomEnded?, bridgeRole?,
- *                                                 bridgeCapturerAway?, audioMode?, at }
+ *                                                 bridgeCapturerAway?, audioMode?, sessionDisplaced?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -96,6 +98,14 @@
  *   one-way rule (never text → voice while translation runs, lib/meeting/bridge-audio-mode) and owns
  *   the PUT, the store and the routing. Optional and forgiving like the WT-901 fields; the popup
  *   offers the switch only to a main window whose snapshot carries `audioMode`.
+ *
+ *   `sessionDisplaced` (web #646): the same account joined this meeting from another device or tab,
+ *   and this main window was the one evicted. It then stops reconnecting on its own — reconnecting
+ *   would evict the other one, and the two would evict each other forever — until the person takes
+ *   the meeting back (`take-over-session`). The main window drew that offer in its own bridge
+ *   widget, which WT-868 removed, so the popup is the only place it can be made. Optional and
+ *   forgiving like the WT-901 fields: a main window that does not say draws no notice, and so is
+ *   never sent the intent.
  *
  *   There is deliberately NO end intent. The popup does not end a bridge meeting (PO, 2026-10-01):
  *   the room ends when its Google Meet conference does. `open-room-record` is how the ended screen
@@ -216,6 +226,11 @@ export type BridgeWidgetSnapshot = {
    * no switch and falls back to the participant row.
    */
   audioMode?: BridgeAudioMode;
+  /**
+   * Another login of this account took the meeting over, and this main window stopped connecting
+   * rather than evict it back (web #646). Only `take-over-session` brings it back.
+   */
+  sessionDisplaced?: boolean;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -272,7 +287,8 @@ export type BridgeWidgetIntent =
   | { type: "open-setup" }
   | { type: "open-room-record" }
   | { type: "take-over-capture" }
-  | { type: "set-audio-mode"; mode: BridgeAudioMode };
+  | { type: "set-audio-mode"; mode: BridgeAudioMode }
+  | { type: "take-over-session" };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
 
@@ -317,6 +333,7 @@ const INTENT_TYPES = new Set<string>([
   "open-room-record",
   "take-over-capture",
   "set-audio-mode",
+  "take-over-session",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -373,6 +390,7 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
     snapshot.meetingError = raw.meetingError.trim().slice(0, MEETING_ERROR_MAX);
   }
   if (typeof raw.idleReaped === "boolean") snapshot.idleReaped = raw.idleReaped;
+  if (typeof raw.sessionDisplaced === "boolean") snapshot.sessionDisplaced = raw.sessionDisplaced;
   if (typeof raw.connection === "string" && MEETING_CONNECTIONS.has(raw.connection)) {
     snapshot.connection = raw.connection as BridgeWidgetMeetingConnection;
   }
@@ -513,6 +531,8 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return { type: "take-over-capture" };
     case "set-audio-mode":
       return isBridgeAudioMode(raw.mode) ? { type: "set-audio-mode", mode: raw.mode } : null;
+    case "take-over-session":
+      return { type: "take-over-session" };
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -618,6 +638,8 @@ export type BridgeWidgetSnapshotFields = {
   bridgeCapturerAway?: boolean;
   /** Text-only bridge: see `BridgeWidgetSnapshot.audioMode`. */
   audioMode?: BridgeAudioMode;
+  /** web #646: see `BridgeWidgetSnapshot.sessionDisplaced`. */
+  sessionDisplaced?: boolean;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -659,6 +681,7 @@ export function buildBridgeWidgetSnapshot(
   if (fields.bridgeRole) snapshot.bridgeRole = fields.bridgeRole;
   if (fields.bridgeCapturerAway !== undefined) snapshot.bridgeCapturerAway = fields.bridgeCapturerAway;
   if (fields.audioMode) snapshot.audioMode = fields.audioMode;
+  if (fields.sessionDisplaced !== undefined) snapshot.sessionDisplaced = fields.sessionDisplaced;
   return snapshot;
 }
 
@@ -688,6 +711,16 @@ export function buildEndedBridgeWidgetSnapshot(
  */
 export function acceptsRejoin(idleReaped: boolean | undefined): boolean {
   return idleReaped === true;
+}
+
+/**
+ * Whether a `take-over-session` may be acted on right now: only while the main window says another
+ * login displaced it. One that arrives after the meeting is back here — taken over in the main
+ * window, or a double press — is stale, and acting on it would reconnect a session that is working
+ * and evict the other device again for nothing. Rejected, never reinterpreted, like `acceptsRejoin`.
+ */
+export function acceptsSessionTakeOver(sessionDisplaced: boolean | undefined): boolean {
+  return sessionDisplaced === true;
 }
 
 /**
@@ -936,6 +969,8 @@ export type BridgeWidgetMeetingStatus = {
   creditsSuspendedReason: string | null;
   meetingError: string | null;
   idleReaped: boolean;
+  /** Another login took the meeting over; the popup offers "Use this device". */
+  sessionDisplaced: boolean;
   connection: BridgeWidgetMeetingConnection | null;
 };
 
@@ -946,6 +981,7 @@ export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWi
     creditsSuspendedReason: snapshot?.creditsSuspendedReason ?? null,
     meetingError: snapshot?.meetingError ?? null,
     idleReaped: snapshot?.idleReaped === true,
+    sessionDisplaced: snapshot?.sessionDisplaced === true,
     connection: snapshot?.connection ?? null,
   };
 }

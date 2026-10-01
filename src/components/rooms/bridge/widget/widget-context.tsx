@@ -219,6 +219,11 @@ export type BridgeWidgetState = {
   meetingError: string | null;
   /** The idle reaper let go of the meeting in the main window; "Rejoin meeting" brings it back. */
   idleReaped: boolean;
+  /**
+   * Another login of this account took the meeting over and the main window stopped connecting
+   * (web #646); "Use this device" takes it back. False without a main window that says so.
+   */
+  sessionDisplaced: boolean;
   /** Translation was stopped because the workspace cannot pay for it (WT-699). */
   creditsSuspended: boolean;
   /** The reason billing gave, for `translationSuspendedNotice`. */
