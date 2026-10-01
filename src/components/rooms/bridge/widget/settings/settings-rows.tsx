@@ -44,6 +44,8 @@ export function SettingsRow({
   value,
   active,
   hasSubmenu,
+  disabled = false,
+  hint,
   onClick,
 }: {
   label: string;
@@ -51,15 +53,22 @@ export function SettingsRow({
   value?: string;
   active?: boolean;
   hasSubmenu?: boolean;
+  /** A row that cannot act right now. Say why in `hint`. */
+  disabled?: boolean;
+  /** The hover tooltip; for a disabled row, the reason it is disabled. */
+  hint?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      title={hint}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent",
         active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2",
       )}
     >

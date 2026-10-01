@@ -67,9 +67,45 @@ import { useBridgeWidget } from "./widget-context";
  */
 const STICK_TO_BOTTOM_PX = 48;
 
+/**
+ * What an empty transcript says. WT-901.
+ *
+ * It used to say "Waiting for the first thing anyone says" in every state, including before
+ * anybody had pressed Start — which told a user looking at a silent popup over a live call to keep
+ * waiting for something that was never going to come. So: paused says paused; not started says
+ * what to press; only a running translation is waiting for speech. While the popup does not know
+ * yet (the sessions list has not answered and no main window has said), it keeps the waiting line
+ * rather than tell a user with translation running to press Start.
+ */
+export function emptyTranscriptMessage({
+  paused,
+  started,
+  known,
+}: {
+  paused: boolean;
+  started: boolean;
+  known: boolean;
+}): string {
+  if (paused) return "Transcript is paused.";
+  if (known && !started) return "Translation hasn't started. Press Start to translate this call.";
+  return "Waiting for the first thing anyone says. Speak in your meeting and it will appear here.";
+}
+
 export function TranscriptPane(): JSX.Element {
-  const { segments, cleanSentences, readerLanguage, transcriptPaused, transcriptPausedSince } =
-    useBridgeWidget();
+  const {
+    segments,
+    cleanSentences,
+    readerLanguage,
+    transcriptPaused,
+    transcriptPausedSince,
+    translationStarted,
+    translationStatus,
+  } = useBridgeWidget();
+  const emptyMessage = emptyTranscriptMessage({
+    paused: transcriptPaused,
+    started: translationStarted,
+    known: translationStatus !== "unknown",
+  });
   /**
    * WT-716. The same reader preference the in-meeting panel uses — one key in localStorage, and
    * this window is the same origin, so switching in either one switches both (the `storage` event
@@ -210,10 +246,7 @@ export function TranscriptPane(): JSX.Element {
             {bubbles.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                 <ClosedCaptioning className="h-8 w-8 text-ink-tertiary" weight="light" />
-                <p className="max-w-[240px] text-[13px] text-ink-subtle">
-                  Waiting for the first thing anyone says. Speak in your meeting and it will appear
-                  here.
-                </p>
+                <p className="max-w-[240px] text-[13px] text-ink-subtle">{emptyMessage}</p>
               </div>
             ) : (
               // Mounted with the first batch, not before, so `initial={false}` covers exactly that

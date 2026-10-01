@@ -43,12 +43,23 @@
  */
 
 import type { BrowserCaptureConsentState } from "../audio/browser-capture-consent";
+import type { InboundHealth } from "../audio/bridge-inbound-health";
+import type { BridgeInboundPath, BridgeInboundReason } from "../desktop/bridge-tiers";
 
 /** Every message carries it, so a desktop build running an older popup is ignored, not misread. */
 export const BRIDGE_CONSENT_PROTOCOL_VERSION = 1;
 
 /** How long the main window waits for the popup to acknowledge a "required" snapshot before raising it. */
 export const CONSENT_POPUP_RAISE_GRACE_MS = 1500;
+
+/**
+ * WT-900. While the question stays open, how often main checks again that the popup is still
+ * showing it - and, after a raise, how long it waits for the raised popup to say so.
+ */
+export const CONSENT_POPUP_RECHECK_MS = 60_000;
+
+/** WT-900. Raises in a row that no `ack` followed before the question moves to the main window. */
+export const CONSENT_POPUP_MAX_UNANSWERED_RAISES = 2;
 
 /** A process the loopback could listen to, reduced to what the popup needs to offer it. */
 export interface BridgeConsentSource {
@@ -65,6 +76,14 @@ export interface BridgeConsentSnapshot {
   sources: BridgeConsentSource[];
   selectedSourceId: string | null;
   loadingSources: boolean;
+  /**
+   * WT-900, optional so an older main is still read: where the far side comes in right now, why,
+   * and whether anything is arriving. The popup uses them to ask quietly while the cable already
+   * carries Meet (see isCompactConsentAsk). Absent means "not said", never a guess.
+   */
+  inboundPath?: BridgeInboundPath;
+  inboundReason?: BridgeInboundReason;
+  inboundHealth?: InboundHealth;
 }
 
 /** Popup to main: what the host asked for. A request, never a statement of state. */
@@ -86,6 +105,31 @@ const CONSENT_STATES: ReadonlySet<string> = new Set<BrowserCaptureConsentState>(
   "granted",
   "declined",
 ]);
+
+const INBOUND_PATHS: ReadonlySet<string> = new Set<BridgeInboundPath>(["loopback", "device"]);
+
+const INBOUND_REASONS: ReadonlySet<string> = new Set<BridgeInboundReason>([
+  "loopback",
+  "awaiting-consent",
+  "device-while-asking",
+  "awaiting-source",
+  "loopback-unavailable",
+  "loopback-failed",
+  "consent-declined",
+  "no-source",
+]);
+
+const INBOUND_HEALTHS: ReadonlySet<string> = new Set<InboundHealth>([
+  "unknown",
+  "listening",
+  "quiet",
+  "no-signal",
+]);
+
+/** An optional enum field: the value when it is one of `allowed`, otherwise nothing at all. */
+function optionalMember<T extends string>(value: unknown, allowed: ReadonlySet<string>): T | undefined {
+  return typeof value === "string" && allowed.has(value) ? (value as T) : undefined;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -113,6 +157,11 @@ function parseSources(value: unknown): BridgeConsentSource[] | null {
  * null. Never throws. Strips unknown extra fields (return a fresh object with only the known
  * fields).
  *
+ * The WT-900 inbound fields are the exception to "mistyped means rejected": they are optional
+ * hints added without a version bump, so a value this build does not know (a newer main, a new
+ * reason) is DROPPED and the rest of the snapshot kept. Rejecting the whole snapshot over a hint
+ * would hide the question itself.
+ *
  * Strict because the channel is open to every same-origin page, and one bad source in a list is
  * reason enough to distrust the rest of the message. Fresh objects because whatever came in was
  * structured-cloned from someone else's data, and nothing unknown should ride along into state.
@@ -134,7 +183,7 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
         const selectedSourceId = data.selectedSourceId;
         if (selectedSourceId !== null && !isNonEmptyString(selectedSourceId)) return null;
         if (typeof data.loadingSources !== "boolean") return null;
-        return {
+        const snapshot: BridgeConsentSnapshot = {
           v,
           kind: "snapshot",
           roomId,
@@ -143,6 +192,13 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
           selectedSourceId,
           loadingSources: data.loadingSources,
         };
+        const inboundPath = optionalMember<BridgeInboundPath>(data.inboundPath, INBOUND_PATHS);
+        const inboundReason = optionalMember<BridgeInboundReason>(data.inboundReason, INBOUND_REASONS);
+        const inboundHealth = optionalMember<InboundHealth>(data.inboundHealth, INBOUND_HEALTHS);
+        if (inboundPath) snapshot.inboundPath = inboundPath;
+        if (inboundReason) snapshot.inboundReason = inboundReason;
+        if (inboundHealth) snapshot.inboundHealth = inboundHealth;
+        return snapshot;
       }
       case "hello":
         return { v, kind: "hello", roomId };
@@ -179,8 +235,11 @@ export function buildBridgeConsentSnapshot(input: {
   sources: ReadonlyArray<{ id: string; name: string }>;
   selectedSourceId: string | null;
   loadingSources: boolean;
+  inboundPath?: BridgeInboundPath | null;
+  inboundReason?: BridgeInboundReason | null;
+  inboundHealth?: InboundHealth | null;
 }): BridgeConsentSnapshot {
-  return {
+  const snapshot: BridgeConsentSnapshot = {
     v: BRIDGE_CONSENT_PROTOCOL_VERSION,
     kind: "snapshot",
     roomId: input.roomId,
@@ -189,6 +248,27 @@ export function buildBridgeConsentSnapshot(input: {
     selectedSourceId: input.selectedSourceId,
     loadingSources: input.loadingSources,
   };
+  if (input.inboundPath) snapshot.inboundPath = input.inboundPath;
+  if (input.inboundReason) snapshot.inboundReason = input.inboundReason;
+  if (input.inboundHealth) snapshot.inboundHealth = input.inboundHealth;
+  return snapshot;
+}
+
+/**
+ * WT-900 - ask quietly, or ask prominently?
+ *
+ * Quietly (one line: "Listening through Hi-Fi Cable. Switch to listening to the browser?") only
+ * while the far side is ALREADY being heard through the cable: the leg is on the device because
+ * the question is open, and the meter says Meet is arriving. Then nothing is waiting on the answer,
+ * and a framed prompt over the transcript would be asking the host to fix something that is not
+ * broken. Anywhere else - the cable carrying silence, no reading yet, no cable at all - the answer
+ * is what stands between the host and hearing the far side, so it keeps the full prompt.
+ */
+export function isCompactConsentAsk(input: {
+  inboundReason?: BridgeInboundReason | null;
+  inboundHealth?: InboundHealth | null;
+}): boolean {
+  return input.inboundReason === "device-while-asking" && input.inboundHealth === "listening";
 }
 
 /** What main knows right now, which is what every intent is checked against. */
@@ -303,6 +383,8 @@ export type BridgeConsentPromptView =
       selectedSourceId: string | null;
       loadingSources: boolean;
       canConfirm: boolean;
+      /** WT-900: render as the non-blocking one-line ask rather than the framed prompt. */
+      compact: boolean;
     }
   /**
    * The host said yes, and this is which source they said yes TO — a permission, not a live
@@ -340,6 +422,7 @@ export function bridgeConsentPromptView(
         selectedSourceId: snapshot.selectedSourceId,
         loadingSources: snapshot.loadingSources,
         canConfirm: selected !== undefined,
+        compact: isCompactConsentAsk(snapshot),
       };
     case "granted":
       return { kind: "listening", sourceName: selected?.name ?? null };
@@ -368,4 +451,118 @@ export function shouldAcknowledgeConsentSnapshot(
     snapshot.consent === "required" &&
     documentVisible
   );
+}
+
+/**
+ * WT-900 - keeping the question in front of somebody until it is answered.
+ *
+ * WHAT WAS WRONG
+ *   Main raised the popup once per ask. A host who then closed or minimised the popup without
+ *   answering left the state "required" for the rest of the meeting: nothing raised it again, and
+ *   the main-window modal never took over because a popup was "available". On a machine without a
+ *   cable the far side stayed silent all meeting.
+ *
+ * THE LOOP
+ *   Every check goes out as a snapshot, and a popup that is visibly showing the question acks it.
+ *   - phase "check": the first is the ask itself; later ones are a republish every
+ *     CONSENT_POPUP_RECHECK_MS for as long as the popup keeps acknowledging. Silence past the grace
+ *     means the prompt is not on screen, so the popup is raised.
+ *   - phase "raised": a raised popup (reopened, restored) says hello and acks on becoming visible.
+ *     Silence for CONSENT_POPUP_RECHECK_MS after a raise is an unanswered raise, and it is raised
+ *     again.
+ *   After CONSENT_POPUP_MAX_UNANSWERED_RAISES of those in a row, or wherever no popup can be opened
+ *   at all, the question moves to the main window's modal ("use-main").
+ *
+ * An acknowledged check costs nothing the host can see: a republish of the same state, no raise,
+ * and so no OS notification over a popup they are already reading.
+ */
+export interface ConsentRaiseState {
+  consent: BrowserCaptureConsentState;
+  /** `canOpenTranscriptWindow()` in a bridge room. */
+  popupAvailable: boolean;
+  phase: "check" | "raised";
+  /** When the current check or raise went out. */
+  sentAtMs: number;
+  /** The popup has acked since `sentAtMs`. */
+  acknowledged: boolean;
+  /** Raises in a row that no ack followed. */
+  unansweredRaises: number;
+}
+
+export type ConsentRaiseDecision =
+  /** Nothing is being asked. */
+  | { type: "idle" }
+  /** Ask in the main window instead. Final for this ask. */
+  | { type: "use-main" }
+  /** Nothing to do until `atMs`. */
+  | { type: "wait"; atMs: number }
+  /** Republish and start a new check. */
+  | { type: "check" }
+  /** Raise the popup. */
+  | { type: "raise" };
+
+/** The state of a question that has just been asked. */
+export function initialConsentRaiseState(input: {
+  consent: BrowserCaptureConsentState;
+  popupAvailable: boolean;
+  nowMs: number;
+}): ConsentRaiseState {
+  return {
+    consent: input.consent,
+    popupAvailable: input.popupAvailable,
+    phase: "check",
+    sentAtMs: input.nowMs,
+    acknowledged: false,
+    unansweredRaises: 0,
+  };
+}
+
+export function nextConsentRaise(
+  state: ConsentRaiseState,
+  nowMs: number,
+  options: { graceMs?: number; recheckMs?: number; maxUnansweredRaises?: number } = {},
+): ConsentRaiseDecision {
+  const graceMs = options.graceMs ?? CONSENT_POPUP_RAISE_GRACE_MS;
+  const recheckMs = options.recheckMs ?? CONSENT_POPUP_RECHECK_MS;
+  const maxUnanswered = options.maxUnansweredRaises ?? CONSENT_POPUP_MAX_UNANSWERED_RAISES;
+
+  if (state.consent !== "required") return { type: "idle" };
+  if (!state.popupAvailable) return { type: "use-main" };
+
+  if (state.acknowledged) {
+    // Seen. Look again later, in case it is closed or minimised in the meantime.
+    const atMs = state.sentAtMs + recheckMs;
+    return nowMs < atMs ? { type: "wait", atMs } : { type: "check" };
+  }
+
+  const atMs = state.sentAtMs + (state.phase === "check" ? graceMs : recheckMs);
+  if (nowMs < atMs) return { type: "wait", atMs };
+  if (state.phase === "raised" && state.unansweredRaises >= maxUnanswered) return { type: "use-main" };
+  return { type: "raise" };
+}
+
+/**
+ * The state after acting on a decision at `nowMs`. A check is a fresh start (an ack proved the
+ * popup was seen); a raise counts against the limit until an ack follows it. `wait`, `idle` and
+ * `use-main` change nothing.
+ */
+export function applyConsentRaise(
+  state: ConsentRaiseState,
+  decision: ConsentRaiseDecision,
+  nowMs: number,
+): ConsentRaiseState {
+  switch (decision.type) {
+    case "check":
+      return { ...state, phase: "check", sentAtMs: nowMs, acknowledged: false, unansweredRaises: 0 };
+    case "raise":
+      return {
+        ...state,
+        phase: "raised",
+        sentAtMs: nowMs,
+        acknowledged: false,
+        unansweredRaises: state.unansweredRaises + 1,
+      };
+    default:
+      return state;
+  }
 }

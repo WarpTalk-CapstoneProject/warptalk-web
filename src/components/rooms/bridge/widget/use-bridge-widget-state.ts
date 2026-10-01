@@ -37,6 +37,13 @@
  *       uses. With no broadcast ever arriving, the window list is what answers.
  *   TODO(WT-525 relay / backend): replace the poll with room events once this window can receive
  *   them without joining — a join-free hub method, or the main window's `bridge:session-state`.
+ *
+ * WT-901: THE MAIN WINDOW SAYS IT FIRST
+ *   Translation running, the transcript pause and room-host now also arrive over the relay
+ *   snapshot, the moment the main window's state changes. Where the snapshot carries one, it wins
+ *   over the poll; where it does not (no main window, or one too old to send it), the poll is the
+ *   answer as before. The poll keeps running either way — it is also how the transcript itself is
+ *   read, and it is the fallback the moment the main window goes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,7 +65,20 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
+import { activateBridgeRoom } from "@/lib/desktop/bridge";
+import { canControlBridge, resolveBridgeRole } from "@/lib/meeting/bridge-capturer";
 import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
+import {
+  bridgeWidgetBridgeRole,
+  bridgeWidgetIsRoomHost,
+  bridgeWidgetMeetingStatus,
+  bridgeWidgetRoomEnded,
+  bridgeWidgetTranscriptPauseState,
+  bridgeWidgetTranslationState,
+  canOfferCaptureTakeover,
+} from "@/lib/meeting/bridge-widget-relay";
 import { resolveTranscriptPause } from "@/lib/meeting/transcript-pause";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
@@ -66,11 +86,20 @@ import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { TranscriptCleanSentenceEventDto, TranscriptSegmentDto } from "@/types/realtime";
 
+import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import type {
+  BridgeWidgetCarryState,
   BridgeWidgetConnectionState,
   BridgeWidgetState,
   BridgeWidgetTranslationStatus,
 } from "./widget-context";
+
+/**
+ * How long the popup waits for the main window to answer after asking it to carry the room before
+ * it says so and offers "Show WarpTalk". Mounting a meeting (room read, token, hub) takes a few
+ * seconds on a cold window; much longer than this and the user is looking at a dead control.
+ */
+const CARRY_ANSWER_TIMEOUT_MS = 10_000;
 
 /**
  * How often the saved transcript and the pause windows are re-read while this window is visible.
@@ -93,23 +122,113 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
 
   // ── room, host, translation ──────────────────────────────────────────────
 
-  const { data: room } = useTranslationRoom(roomId);
+  const relay = useBridgeWidgetRelayClient(roomId);
+  const relayView = relay.view;
+
+  const { data: room, refetch: refetchRoom } = useTranslationRoom(roomId);
   const { data: sessions } = useTranslationRoomSessions(roomId);
-  const translationStarted = (sessions ?? []).some((session) => session.status === "ACTIVE");
+  const polledStarted = (sessions ?? []).some((session) => session.status === "ACTIVE");
+  const translation = bridgeWidgetTranslationState(relayView, { started: polledStarted });
+  const translationStarted = translation.started;
   // `undefined` covers a failed first read too: a sessions request that errored has not told us
-  // translation is ready, it has told us nothing.
-  const translationStatus: BridgeWidgetTranslationStatus = sessions === undefined
-    ? "unknown"
-    : translationStarted
-      ? "translating"
+  // translation is ready, it has told us nothing — unless the main window has.
+  const translationStatus: BridgeWidgetTranslationStatus = translationStarted
+    ? "translating"
+    : sessions === undefined
+      ? translation.mirrored
+        ? "ready"
+        : "unknown"
       : sessions.length > 0
         ? "stopped"
         : "ready";
-  // Both halves, as bridge-overlay-controls and every other host check in the app does it.
-  const isHost = Boolean(user?.id && room?.hostId === user.id) || room?.isHost === true;
+  // Both halves, as bridge-overlay-controls and every other host check in the app does it — or,
+  // better, the main window's `isRoomHost`, which also follows a live host transfer.
+  const isHost = bridgeWidgetIsRoomHost(
+    relayView,
+    Boolean(user?.id && room?.hostId === user.id) || room?.isHost === true,
+  );
+  const meetingStatus = bridgeWidgetMeetingStatus(relayView);
+  /**
+   * W4b: this desktop's role in the shared bridge room — the main window's answer (it heard the
+   * claim, the heartbeats and any takeover), else the room record (lib/meeting/bridge-capturer).
+   * `canControl` is the PO rule for Start/Stop, Pause/Resume and "They speak": host OR capturer.
+   */
+  const bridgeRole = bridgeWidgetBridgeRole(
+    relayView,
+    resolveBridgeRole({
+      userId: user?.id,
+      bridgeCapturerUserId: room?.bridgeCapturerUserId,
+      isLegacyOwner: Boolean(room?.isHost || (user?.id && room?.hostId === user.id)),
+    }),
+  );
+  const canControl = canControlBridge({ isRoomHost: isHost, bridgeRole });
+  const canOfferTakeover = canOfferCaptureTakeover(relayView);
+  /**
+   * Translation has never run in this room — the sessions list answered, and it is empty. The
+   * popup's first screen (the language step with one Start) is for exactly this. Not while the
+   * list is unknown: a room started before must not flash the step while its sessions load.
+   */
+  const neverStarted = sessions !== undefined && sessions.length === 0 && !translationStarted;
 
-  const [ended, setEnded] = useState(false);
-  const markEnded = useCallback(() => setEnded(true), []);
+  /**
+   * The popup does not end the meeting (PO, 2026-10-01): a bridge room ends when its Google Meet
+   * conference does, which the backend learns from Google, or from the main window's own End. The
+   * popup only notices that it has — the room record says ENDED — and then shows EndedView.
+   *
+   * The room is re-read on the slow tick below only while no main window is connected: one that is
+   * running the meeting says `host-gone` the moment the meeting closes, and that re-reads it at once.
+   *
+   * W4a: the main window also SAYS so (`roomEnded` on the snapshot), the instant its meeting
+   * ends, and its app shell keeps saying it after the meeting has unmounted. Latched per room: the
+   * meeting's own `host-gone` lands between the two and clears the snapshot, and the popup must
+   * not flicker back to the dock for that moment — a room does not un-end.
+   */
+  const relayEnded = bridgeWidgetRoomEnded(relayView);
+  const [endedLatchRoomId, setEndedLatchRoomId] = useState<string | null>(null);
+  if (relayEnded && endedLatchRoomId !== roomId) setEndedLatchRoomId(roomId);
+  const ended = room?.status === "ended" || relayEnded || endedLatchRoomId === roomId;
+  const relayStatus = relayView.status;
+  useEffect(() => {
+    if (relayStatus === "no-host" && roomId && signedIn) void refetchRoom();
+  }, [relayStatus, roomId, signedIn, refetchRoom]);
+
+  /**
+   * W4b: NO DEAD END. A popup nobody answers (the trigger, the tray or the room page opened it for
+   * a room the main window is not running) asks the main window to CARRY the room — the same
+   * `activateBridgeRoom` Start uses, answered by the shell with `openMeeting` — so the relay host
+   * exists and the language, Text | Voice and voice controls work. Once per room. The shell will
+   * not swap out a native meeting for it; then, or off the desktop, the popup says so and offers
+   * "Show WarpTalk" (`carry: "failed"`).
+   */
+  const [carry, setCarry] = useState<{ roomId: string; state: BridgeWidgetCarryState } | null>(null);
+  const carryState: BridgeWidgetCarryState = carry?.roomId === roomId ? carry.state : "idle";
+  const roomType = room?.translationRoomType;
+  const roomStatus = room?.status;
+  useEffect(() => {
+    if (relayStatus !== "no-host" || !roomId || !signedIn || ended || carryState !== "idle") return;
+    if (!roomType || !roomStatus) return;
+    if (!isExternalBridge(roomType) || !canJoinTranslationRoom(roomStatus)) return;
+    setCarry({ roomId, state: "asking" });
+    void activateBridgeRoom(roomId).then((asked) => {
+      if (!asked) {
+        setCarry((current) => (current?.roomId === roomId ? { roomId, state: "failed" } : current));
+      }
+    });
+  }, [relayStatus, roomId, signedIn, ended, carryState, roomType, roomStatus]);
+  // Asked, and still nobody after a while: say so. An answer arriving later still connects.
+  useEffect(() => {
+    if (carryState !== "asking" || relayStatus === "connected") return;
+    const timer = window.setTimeout(
+      () => setCarry((current) => (current?.roomId === roomId ? { roomId, state: "failed" } : current)),
+      CARRY_ANSWER_TIMEOUT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [carryState, relayStatus, roomId]);
+  // Told before the room record knows: bring the record up to date, so the rest of the popup that
+  // reads `room` (and the slow tick, which stops once ended) agrees.
+  useEffect(() => {
+    if (relayEnded && roomId && signedIn) void refetchRoom();
+  }, [relayEnded, roomId, signedIn, refetchRoom]);
 
   // ── hub ──────────────────────────────────────────────────────────────────
 
@@ -211,10 +330,13 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   // ── transcript pause ─────────────────────────────────────────────────────
 
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
-  const transcriptPause = resolveTranscriptPause({
-    windows: pauseWindowsQuery.data,
-    event: transcriptPauseEvent,
-  });
+  const transcriptPause = bridgeWidgetTranscriptPauseState(
+    relayView,
+    resolveTranscriptPause({
+      windows: pauseWindowsQuery.data,
+      event: transcriptPauseEvent,
+    }),
+  );
   useEffect(() => {
     transcriptPausedRef.current = transcriptPause.paused;
   }, [transcriptPause.paused]);
@@ -270,6 +392,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     const tick = () => {
       // Hidden to the tray: nobody is reading, so nothing is worth a request.
       if (document.visibilityState === "hidden") return;
+      if (relayStatus !== "connected") void refetchRoom();
       void refetchPauseWindows();
       if (!savesTranscript) return;
       if (!transcriptId) {
@@ -296,6 +419,8 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     refetchTranslations,
     refetchCleanSentences,
     refetchPauseWindows,
+    refetchRoom,
+    relayStatus,
   ]);
 
   // ── reader language ──────────────────────────────────────────────────────
@@ -371,40 +496,66 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       room,
       isHost,
       translationStarted,
+      translationMirrored: translation.mirrored,
       translationStatus,
       transcriptPaused: transcriptPause.paused,
       transcriptPausedSince: transcriptPause.since,
       transcriptPauseKnown: transcriptPause.known,
+      transcriptPauseMirrored: transcriptPause.mirrored,
       segments,
       cleanSentences,
       connectionState,
       hub,
+      relay,
+      relayConnected: relayView.status === "connected",
+      carry: relayView.status === "connected" ? ("idle" as const) : carryState,
+      bridgeRole,
+      canControl,
+      canOfferTakeover,
+      neverStarted,
+      meetingConnection: meetingStatus.connection,
+      meetingError: meetingStatus.meetingError,
+      idleReaped: meetingStatus.idleReaped,
+      creditsSuspended: meetingStatus.creditsSuspended,
+      creditsSuspendedReason: meetingStatus.creditsSuspendedReason,
       readerLanguage,
       setReaderLanguage,
       farSideLanguage,
       setFarSideLanguage,
       ended,
-      markEnded,
     }),
     [
       roomId,
       room,
       isHost,
       translationStarted,
+      translation.mirrored,
       translationStatus,
       transcriptPause.paused,
       transcriptPause.since,
       transcriptPause.known,
+      transcriptPause.mirrored,
       segments,
       cleanSentences,
       connectionState,
       hub,
+      relay,
+      relayView.status,
+      carryState,
+      bridgeRole,
+      canControl,
+      canOfferTakeover,
+      neverStarted,
+      meetingStatus.connection,
+      meetingStatus.meetingError,
+      meetingStatus.idleReaped,
+      meetingStatus.creditsSuspended,
+      meetingStatus.creditsSuspendedReason,
       readerLanguage,
       setReaderLanguage,
       farSideLanguage,
       setFarSideLanguage,
       ended,
-      markEnded,
     ],
   );
 }

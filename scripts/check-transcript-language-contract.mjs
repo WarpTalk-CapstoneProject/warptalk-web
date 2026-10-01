@@ -90,7 +90,9 @@ assert.ok(
 
 // 3. What is copied is what is read.
 assert.ok(
-  panel.includes("assembleTranscriptText(blocks, translationIndex, displayLanguage)"),
+  // A trailing argument (the translated speaker labels) is allowed; the three that pick WHAT is
+  // copied are not negotiable.
+  /assembleTranscriptText\(blocks, translationIndex, displayLanguage[,)]/.test(panel),
   "Copy and Download must assemble the transcript in the language on screen.",
 );
 

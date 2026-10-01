@@ -23,6 +23,14 @@
  *   colour is the fast path, not the answer.
  */
 
+// Relative, with the extension: the unit tests run under node's strip-types runner.
+import {
+  isBridgeStandInSpeaker,
+  transcriptSpeakerDisplayName,
+  transcriptSpeakerKey,
+  type SpeakerLabels,
+} from "./speaker-identity.ts";
+
 /** How many speaker colours the theme defines. Keep in step with globals.css. */
 export const SPEAKER_COLOR_COUNT = 6;
 
@@ -84,7 +92,12 @@ export function speakerInitials(name: string | null | undefined): string {
 
 /** What a transcript knows about the person who said a line. */
 export type TranscriptSpeaker = {
-  /** The speaker's user id — what transcript_segments.speaker_participant_id actually holds. */
+  /**
+   * Who this is, for colour and for telling two speakers apart: the user id — what
+   * transcript_segments.speaker_participant_id holds — for everybody except the Google Meet
+   * stand-in, where it is one key PER MEET PERSON (transcriptSpeakerKey). Every Meet person shares
+   * the stand-in's user id; keyed by it, they would all be one colour.
+   */
   id: string | null;
   name: string;
   /** Absent for anyone with no picture, which is the normal state and not an error. */
@@ -99,18 +112,29 @@ export type TranscriptSpeaker = {
  * join in the live meeting). Somebody who was in the meeting and is not a member of the workspace
  * — an external guest, a bridge — resolves to their recorded name and no picture, which is the
  * correct answer for them rather than a degraded one.
+ *
+ * The Google Meet stand-in is nobody's account: its name is the Meet person on the line (or the
+ * far-side fallback label), its key is per person, and it never has a face.
  */
 export function resolveTranscriptSpeaker(
   speakerId: string | null | undefined,
   speakerName: string | null | undefined,
   directory?: Readonly<Record<string, { fullName?: string | null; avatarUrl?: string | null }>>,
+  labels?: SpeakerLabels,
 ): TranscriptSpeaker {
   const id = (speakerId ?? "").trim() || null;
+  if (isBridgeStandInSpeaker(id)) {
+    return {
+      id: transcriptSpeakerKey({ speakerId: id, speakerName }),
+      name: transcriptSpeakerDisplayName(id, speakerName, labels),
+    };
+  }
   const entry = id ? directory?.[id] : undefined;
 
   // The recorded name wins over the directory's. It is what the person was called IN that meeting,
   // and a display name changed since then would silently rewrite the record of who spoke.
-  const name = (speakerName ?? "").trim() || entry?.fullName?.trim() || "Unknown speaker";
+  const name =
+    (speakerName ?? "").trim() || entry?.fullName?.trim() || labels?.unknown || "Unknown speaker";
 
   return {
     id,

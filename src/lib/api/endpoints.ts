@@ -127,6 +127,15 @@ export const API = {
       `/translation-rooms/${id}/participants/${participantId}/kick`,
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
+    /**
+     * W4b — bridge claim: find-or-create this Google Meet call's room in the workspace, join it, and
+     * learn whether this desktop captures the far side ("capturer") or only its mic ("member").
+     */
+    bridgeClaim: "/translation-rooms/bridge/claim",
+    /** W4b — the capturer renews its lease. 409 CONFLICT once someone else holds it. */
+    bridgeCapturerHeartbeat: (id: string) => `/translation-rooms/${id}/bridge/capturer/heartbeat`,
+    /** W4b — a participant takes the capture over once the lease is stale. 409 while it is live. */
+    bridgeCapturerTakeover: (id: string) => `/translation-rooms/${id}/bridge/capturer/takeover`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
     /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,

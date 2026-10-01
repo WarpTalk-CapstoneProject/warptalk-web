@@ -233,12 +233,18 @@ export function availableBridgeTiers(status: VirtualAudioStatus | null): BridgeT
  *   3  none       nothing reaches WarpTalk from Meet.
  *
  * CONSENT IS PART OF THE DECISION, NOT A GATE AFTER IT
- *   Loopback takes the whole browser, so it waits for the host's yes. While the question is open
- *   the answer is still "loopback, not yet" — NOT the cable in the meantime. Quietly running on the
- *   cable until someone answers would leave an unanswered prompt carrying no weight at all, and the
- *   wizard would already have told the user to leave Meet's speakers alone, so the cable would be
- *   carrying silence anyway. A "no" is different: it is a settled answer, and when a cable exists
- *   the far side can still be heard through it.
+ *   Loopback takes the whole browser, so it never starts before the host's yes. WT-900: while the
+ *   question is open, a machine that HAS the cable listens through it in the meantime
+ *   ("device-while-asking") instead of capturing nothing. Waiting on the answer used to leave the
+ *   far side silent for as long as the prompt sat unanswered — and a popup closed or minimised
+ *   without an answer left it silent for the whole meeting. The prompt still carries weight: a yes
+ *   moves the leg onto loopback (the capture key changes, so the running device capture is
+ *   replaced), a no keeps the cable. Without a cable there is nothing to listen through, and the
+ *   answer is still "loopback, not yet".
+ *
+ *   The ask itself gets quieter while the cable demonstrably carries Meet (see the consent relay's
+ *   compact prompt), and the far-side monitor stays off until it does, because Meet may still be
+ *   playing to the host's own speakers (bridge-far-side-monitor).
  */
 export type BridgeInboundPath = "loopback" | "device";
 
@@ -247,6 +253,11 @@ export type BridgeInboundReason =
   | "loopback"
   /** Loopback is the path, but the host has not answered the capture question yet. */
   | "awaiting-consent"
+  /**
+   * The device, for now: the host has not answered the capture question yet and a cable exists.
+   * A yes moves the leg to loopback, a no keeps it here (WT-900).
+   */
+  | "device-while-asking"
   /** Loopback is the path and allowed, but no browser window has been picked to capture yet. */
   | "awaiting-source"
   /** The device, because this machine cannot capture the browser. */
@@ -289,12 +300,30 @@ export function selectBridgeInboundSource(input: BridgeInboundInput): BridgeInbo
   if (input.loopbackFailed) return device("loopback-failed");
   if (input.consentAnswer === false) return device("consent-declined");
   if (input.consentAnswer === null) {
+    // WT-900: listen through the cable while asking rather than hear nothing until someone answers.
+    if (input.hasInboundDevice) return { path: "device", startable: true, reason: "device-while-asking" };
     return { path: "loopback", startable: false, reason: "awaiting-consent" };
   }
   if (!input.hasLoopbackSource) {
     return { path: "loopback", startable: false, reason: "awaiting-source" };
   }
   return { path: "loopback", startable: true, reason: "loopback" };
+}
+
+/**
+ * W4a — the path the far side SETTLES on, for instructions that outlive the moment.
+ *
+ * `device-while-asking` is transient: the cable carries the far side only until the host answers
+ * the capture question, and the expected answer moves it to loopback. A Meet setting given on the
+ * strength of it — "point Meet's Speakers at Hi-Fi Cable Input" — would be the wrong setting the
+ * moment the host says yes, and the one people most often get wrong besides (see above). So the
+ * wizard's Speakers line reads this: loopback while the question is open, the cable only where the
+ * cable is where the far side will stay (no loopback here, it failed, or the host said no).
+ *
+ * The capture itself keeps reading `selectBridgeInboundSource(...).path`: what is opened NOW.
+ */
+export function finalBridgeInboundPath(decision: BridgeInboundDecision): BridgeInboundPath | null {
+  return decision.reason === "device-while-asking" ? "loopback" : decision.path;
 }
 
 /**

@@ -16,8 +16,21 @@
  *   - broadcasts a new snapshot whenever one of the fields changes, from any cause (the native
  *     picker, a remembered-language auto-apply, a relayed intent);
  *   - dispatches the language, Text | Voice, voice panel and meeting-audio intents to the callbacks;
+ *   - WT-901 / WT-868: mirrors the meeting itself (translation running, transcript pause, the
+ *     credits stop, the meeting error, the idle reaper, the LiveKit connection, room-host) so the
+ *     popup shows a Start or Pause made here at once instead of on its next 5–10s poll, and
+ *     dispatches the popup's Stop, Pause/Resume, Rejoin, Device settings and "Open meeting record"
+ *     to this window's own handlers — so the host check, the toasts and the wizard are the native
+ *     ones. Every one of these options is optional: a caller that does not pass one leaves the
+ *     popup on REST for it.
+ *   - W4b: says this desktop's bridge role (`bridgeRole`, `bridgeCapturerAway`) and dispatches a
+ *     member's `take-over-capture` to the lease hook (use-bridge-capturer-lease), so the popup can
+ *     gate its controls on host-or-capturer and offer the takeover when the capturer has gone;
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
- *     controls that would reach nobody.
+ *     controls that would reach nobody;
+ *   - W4a: `announceEnded()` (returned) says the room ENDED, synchronously, for the moment the
+ *     session is about to unmount: a state change would never get to render. The app shell then
+ *     keeps answering on the room (use-bridge-ended-relay-host) so EndedView stays reachable.
  *
  * MOUNTED in PersistentMeetingSession, below the voice handlers it dispatches to. Callbacks may be
  * fresh closures every render (handleChangeVoiceEnabled is): they are read through a ref, so a new
@@ -28,18 +41,23 @@
  * change with no visible effect, so `onAnswerBrowserCapture` is left unset by the session today.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { BrowserCaptureConsentState } from "@/lib/audio/browser-capture-consent";
 import type { InboundHealth } from "@/lib/audio/bridge-inbound-health";
 import {
   acceptsBrowserCaptureAnswer,
+  acceptsRejoin,
   buildBridgeWidgetSnapshot,
   openBridgeWidgetRelay,
+  type BridgeWidgetMeetingConnection,
   type BridgeWidgetRelay,
   type BridgeWidgetSnapshotFields,
+  type BridgeWidgetTranscriptPauseSnapshot,
+  type BridgeWidgetTranslationSnapshot,
   type BridgeWidgetVoiceSnapshot,
 } from "@/lib/meeting/bridge-widget-relay";
+import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
 
 export type BridgeWidgetRelayHostOptions = {
   roomId: string;
@@ -72,6 +90,57 @@ export type BridgeWidgetRelayHostOptions = {
    * question was settled in this window is dropped (see `acceptsBrowserCaptureAnswer`).
    */
   onAnswerBrowserCapture?: (answer: { granted: boolean; sourceId?: string }) => void;
+
+  // ── WT-901 / WT-868: the meeting itself. All optional; see the header. ──────
+  /** `{ started: translationStarted }`. Sending it is also what lets the popup's Stop use the relay. */
+  translation?: BridgeWidgetTranslationSnapshot;
+  /** `resolveTranscriptPause`'s answer here. Sending it lets the popup's Pause use the relay. */
+  transcriptPause?: BridgeWidgetTranscriptPauseSnapshot;
+  /** True after TranslationCreditsExhausted, false after TranslationCreditsRestored. */
+  creditsSuspended?: boolean;
+  /** The reason TranslationCreditsExhausted carried, so the popup words it the same way. */
+  creditsSuspendedReason?: string | null;
+  /** `meetingError`, already worded for a person; null for none. */
+  meetingError?: string | null;
+  /** The idle reaper let go (`meetingIsIdleReaped`). Gates `onRejoin`. */
+  idleReaped?: boolean;
+  /** The LiveKit connection of this window's meeting. */
+  connection?: BridgeWidgetMeetingConnection;
+  /** `isRoomHost` — the actual host after any transfer, not workspace owner/admin. */
+  isRoomHost?: boolean;
+  /** "Rejoin meeting" in the popup. Called only while `idleReaped` is true. */
+  onRejoin?: () => void;
+  /** "Device settings" in the popup: open the bridge setup wizard here and bring this window up. */
+  onOpenSetup?: () => void;
+  /** The popup's Stop translation — the same handler as the native Stop. */
+  onStopTranslation?: () => void;
+  /**
+   * The popup's Pause / Resume transcript. The popup has ALREADY asked "are you sure" before a
+   * pause, so this commits directly (commitTranscriptPause), never opens a second confirmation.
+   */
+  onSetTranscriptPaused?: (paused: boolean) => void;
+  /**
+   * "Open meeting record" on the popup's ended screen: navigate this window to `/rooms/{roomId}`
+   * and bring it up. The popup never ends a meeting; there is no end callback on purpose.
+   */
+  onOpenRoomRecord?: () => void;
+
+  // ── W4b: bridge claim. Optional, like the WT-901 fields. ──────────────────
+  /** This desktop's role in the shared bridge room (lib/meeting/bridge-capturer). */
+  bridgeRole?: BridgeRole;
+  /** The capturer is somebody else and not connected: the popup offers a member the takeover. */
+  bridgeCapturerAway?: boolean;
+  /** "Capture audio on this device" in a member's popup. Absent: answered with a snapshot. */
+  onTakeOverCapture?: () => void;
+};
+
+export type BridgeWidgetRelayHost = {
+  /**
+   * W4a: tell the popup this room has ENDED, now. Called by the session from its end handler, just
+   * before it closes itself — the unmount that follows says `host-gone`, and a snapshot carried by
+   * a re-render would never be sent. Every later snapshot from this hook says ended as well.
+   */
+  announceEnded: () => void;
 };
 
 export function useBridgeWidgetRelayHost({
@@ -85,6 +154,16 @@ export function useBridgeWidgetRelayHost({
   selectedLoopbackSourceId,
   voice,
   inboundHealth,
+  translation,
+  transcriptPause,
+  creditsSuspended,
+  creditsSuspendedReason,
+  meetingError,
+  idleReaped,
+  connection,
+  isRoomHost,
+  bridgeRole,
+  bridgeCapturerAway,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -92,7 +171,13 @@ export function useBridgeWidgetRelayHost({
   onSetVoiceCloneConsent,
   onSetMeetingAudioLevel,
   onAnswerBrowserCapture,
-}: BridgeWidgetRelayHostOptions): void {
+  onRejoin,
+  onOpenSetup,
+  onStopTranslation,
+  onSetTranscriptPaused,
+  onOpenRoomRecord,
+  onTakeOverCapture,
+}: BridgeWidgetRelayHostOptions): BridgeWidgetRelayHost {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
   const fieldsRef = useRef<BridgeWidgetSnapshotFields>({
     speakLanguage,
@@ -103,6 +188,16 @@ export function useBridgeWidgetRelayHost({
     selectedLoopbackSourceId,
     voice,
     inboundHealth,
+    translation,
+    transcriptPause,
+    creditsSuspended,
+    creditsSuspendedReason,
+    meetingError,
+    idleReaped,
+    connection,
+    isRoomHost,
+    bridgeRole,
+    bridgeCapturerAway,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -112,6 +207,12 @@ export function useBridgeWidgetRelayHost({
     onSetVoiceCloneConsent,
     onSetMeetingAudioLevel,
     onAnswerBrowserCapture,
+    onRejoin,
+    onOpenSetup,
+    onStopTranslation,
+    onSetTranscriptPaused,
+    onOpenRoomRecord,
+    onTakeOverCapture,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -125,12 +226,23 @@ export function useBridgeWidgetRelayHost({
       onSetVoiceCloneConsent,
       onSetMeetingAudioLevel,
       onAnswerBrowserCapture,
+      onRejoin,
+      onOpenSetup,
+      onStopTranslation,
+      onSetTranscriptPaused,
+      onOpenRoomRecord,
+      onTakeOverCapture,
     };
   });
 
   // The voice half is an object built fresh every render by the caller; keyed by its content so an
   // unrelated re-render does not broadcast an identical snapshot.
   const voiceKey = voice ? JSON.stringify(voice) : "";
+  // The same for the two WT-901 objects: callers build them inline.
+  const translationStarted = translation?.started;
+  const pauseKnown = transcriptPause?.known;
+  const pausePaused = transcriptPause?.paused;
+  const pauseSince = transcriptPause?.since;
 
   // Declared BEFORE the channel effect on purpose. On mount it only records the fields (the
   // channel is not open yet, and the channel effect announces them); after that it is what
@@ -145,10 +257,22 @@ export function useBridgeWidgetRelayHost({
       selectedLoopbackSourceId,
       voice,
       inboundHealth,
+      translation,
+      transcriptPause,
+      creditsSuspended,
+      creditsSuspendedReason,
+      meetingError,
+      idleReaped,
+      connection,
+      isRoomHost,
+      bridgeRole,
+      bridgeCapturerAway,
     };
+    // An end already announced stays announced: a late re-render must not un-end the room.
+    if (fieldsRef.current.roomEnded) fields.roomEnded = true;
     fieldsRef.current = fields;
     relayRef.current?.send(buildBridgeWidgetSnapshot(fields, Date.now()));
-    // `voice` is represented by `voiceKey`.
+    // `voice` is represented by `voiceKey`, `translation` and `transcriptPause` by their values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     speakLanguage,
@@ -159,6 +283,18 @@ export function useBridgeWidgetRelayHost({
     selectedLoopbackSourceId,
     voiceKey,
     inboundHealth,
+    translationStarted,
+    pauseKnown,
+    pausePaused,
+    pauseSince,
+    creditsSuspended,
+    creditsSuspendedReason,
+    meetingError,
+    idleReaped,
+    connection,
+    isRoomHost,
+    bridgeRole,
+    bridgeCapturerAway,
   ]);
 
   useEffect(() => {
@@ -210,6 +346,33 @@ export function useBridgeWidgetRelayHost({
             sendSnapshot();
           }
           break;
+        // WT-901. The same no-reply rule: the handler changes state, the field effect reports it.
+        // An intent this window has no handler for is answered with a snapshot instead, so the
+        // popup re-reads what is true rather than waiting on a change that will not come.
+        case "stop-translation":
+          if (handlers.onStopTranslation) handlers.onStopTranslation();
+          else sendSnapshot();
+          break;
+        case "set-transcript-paused":
+          if (handlers.onSetTranscriptPaused) handlers.onSetTranscriptPaused(message.paused);
+          else sendSnapshot();
+          break;
+        case "rejoin":
+          // Stale once the meeting is back: rebuilding a working meeting is not what was asked.
+          if (handlers.onRejoin && acceptsRejoin(fieldsRef.current.idleReaped)) handlers.onRejoin();
+          else sendSnapshot();
+          break;
+        case "open-setup":
+          handlers.onOpenSetup?.();
+          break;
+        case "open-room-record":
+          handlers.onOpenRoomRecord?.();
+          break;
+        // W4b. The same no-reply rule: a takeover changes `bridgeRole`, and the field effect says so.
+        case "take-over-capture":
+          if (handlers.onTakeOverCapture) handlers.onTakeOverCapture();
+          else sendSnapshot();
+          break;
         default:
           // snapshot / host-gone from another main window on the same room (a second tab in a
           // plain browser). Not ours to act on.
@@ -233,4 +396,10 @@ export function useBridgeWidgetRelayHost({
       if (relayRef.current === relay) relayRef.current = null;
     };
   }, [enabled, roomId]);
+
+  const announceEnded = useCallback(() => {
+    fieldsRef.current = { ...fieldsRef.current, roomEnded: true };
+    relayRef.current?.send(buildBridgeWidgetSnapshot(fieldsRef.current, Date.now()));
+  }, []);
+  return { announceEnded };
 }

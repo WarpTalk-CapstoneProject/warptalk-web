@@ -81,7 +81,8 @@
   "speaker": {
     "you": "You",
     "unknownSpeaker": "Unknown speaker",
-    "unknownSpeakerLower": "unknown speaker"
+    "unknownSpeakerLower": "unknown speaker",
+    "googleMeetParticipants": "Google Meet participants"
   },
   "line": {
     "editAria": "Edit transcript line",

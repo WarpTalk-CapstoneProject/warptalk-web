@@ -31,6 +31,7 @@
   "editRoom": "ルームを編集",
   "startingLabel": "開始しています...",
   "startError": "ミーティングを開始できませんでした。",
+  "bridgeDesktopOnly": "このミーティングは、Google Meet の横で WarpTalk デスクトップアプリから翻訳されます。",
   "occupancyNoun": {
     "attended": "参加",
     "inRoom": "在室"

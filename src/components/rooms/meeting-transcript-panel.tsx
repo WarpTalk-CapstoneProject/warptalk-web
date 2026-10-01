@@ -153,6 +153,10 @@ import {
 } from "@/lib/transcript/speaker-color";
 import { recordFileName } from "@/lib/documents/record-file-name";
 import { buildTranscriptDocumentModel } from "@/lib/documents/transcript-document-model";
+import {
+  transcriptSpeakerDisplayName,
+  type SpeakerLabels,
+} from "@/lib/transcript/speaker-identity";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { transcriptService } from "@/services/transcript.service";
@@ -358,6 +362,19 @@ export function MeetingTranscriptArtifact({
   saveTranscript?: boolean;
 }) {
   const t = useTranslations("meetingTranscript");
+  /**
+   * What a line with no name is called, in the reader's language — and, in a Google Meet bridge
+   * room, what a Meet-side line is called when the gateway could not tell which Meet person spoke.
+   * Handed to every speaker resolution below (rows, turns, downloads) so none of them falls back
+   * to English or to the stand-in's "External Meeting" seat. See speaker-identity.ts.
+   */
+  const speakerLabels = useMemo<SpeakerLabels>(
+    () => ({
+      farSideFallback: t("speaker.googleMeetParticipants"),
+      unknown: t("speaker.unknownSpeaker"),
+    }),
+    [t],
+  );
   /**
    * WT-716 — Clean by default, Verbatim one click away, and the choice is this reader's alone.
    *
@@ -653,8 +670,8 @@ export function MeetingTranscriptArtifact({
    * once, and a meeting stops being taller than the thing it is a record of.
    */
   const readingTurns = useMemo(
-    () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments)),
-    [blocks],
+    () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments, speakerLabels)),
+    [blocks, speakerLabels],
   );
 
   // Each window is drawn in exactly ONE session block. Passing the whole list to every block —
@@ -1005,6 +1022,7 @@ export function MeetingTranscriptArtifact({
         segment.speakerParticipantId,
         segment.speakerName,
         speakerDirectory,
+        speakerLabels,
       ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
@@ -1308,7 +1326,7 @@ export function MeetingTranscriptArtifact({
    *  needs the recogniser's exact words switches to Verbatim first, which is the same rule the
    *  language picker has always followed. */
   function transcriptAsText() {
-    return assembleTranscriptText(blocks, translationIndex, displayLanguage);
+    return assembleTranscriptText(blocks, translationIndex, displayLanguage, speakerLabels);
   }
 
   function segmentTime(startMs: number) {
@@ -1351,6 +1369,7 @@ export function MeetingTranscriptArtifact({
       // passed in rather than built in the model because it is translated, and a catalog lookup
       // is a hook away.
       sessionDividerLabel: (block) => sessionDividerLabel(block.sessionNumber),
+      speakerLabels,
     });
   }
 
@@ -1747,13 +1766,14 @@ export function MeetingTranscriptArtifact({
                     ? // One dot per stretch of the meeting a person held, so the rail shows who had
                       // the floor and when — the thing neither of the other two layouts can show at
                       // a glance, because both of them draw one row per utterance.
-                      groupIntoSpeakerTurns(sub.segments).map((turn, index) => (
+                      groupIntoSpeakerTurns(sub.segments, speakerLabels).map((turn, index) => (
                         <TranscriptTimelineTurn
                           key={turn.key}
                           speaker={resolveTranscriptSpeaker(
                             turn.speakerId,
                             turn.speakerName,
                             speakerDirectory,
+                            speakerLabels,
                           )}
                           speakerName={turn.speakerName}
                           time={base ? segmentTime(turn.startTimeMs) : null}
@@ -1768,7 +1788,7 @@ export function MeetingTranscriptArtifact({
                       ? // One block per TURN, not per utterance: the name, the face and the
                         // timestamp are printed once for a stretch of talking rather than once per
                         // STT chunk.
-                        groupIntoSpeakerTurns(sub.segments).map((turn) => (
+                        groupIntoSpeakerTurns(sub.segments, speakerLabels).map((turn) => (
                           <TranscriptDocumentTurn
                             key={turn.key}
                             turnKey={turn.key}
@@ -1778,6 +1798,7 @@ export function MeetingTranscriptArtifact({
                               turn.speakerId,
                               turn.speakerName,
                               speakerDirectory,
+                              speakerLabels,
                             )}
                             // No "You" here. A document names the people in it, and a record that
                             // reads differently depending on who opened it is not a record.
@@ -1808,7 +1829,11 @@ export function MeetingTranscriptArtifact({
                               speakerName={
                                 row.isSelf
                                   ? t("speaker.you")
-                                  : segment.speakerName || t("speaker.unknownSpeaker")
+                                  : transcriptSpeakerDisplayName(
+                                      segment.speakerParticipantId,
+                                      segment.speakerName,
+                                      speakerLabels,
+                                    )
                               }
                             />
                           );

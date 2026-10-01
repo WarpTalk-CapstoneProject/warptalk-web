@@ -81,7 +81,8 @@
   "speaker": {
     "you": "あなた",
     "unknownSpeaker": "不明な発言者",
-    "unknownSpeakerLower": "不明な発言者"
+    "unknownSpeakerLower": "不明な発言者",
+    "googleMeetParticipants": "Google Meet の参加者"
   },
   "line": {
     "editAria": "文字起こしの行を編集",

@@ -159,6 +159,16 @@ export interface DesktopBridge {
   watchMeetPresence?: () => Promise<void>;
   unwatchMeetPresence?: () => Promise<void>;
   onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
+  /**
+   * Bring the main window to the front (IPC `bridge:show-main-window`). Desktop PR #43; an older
+   * build simply does not have it, and the window stays where it is.
+   */
+  showMainWindow?: () => Promise<void>;
+  /**
+   * Tell the shell whether this window is signed in (IPC `auth:signed-in-state`). Desktop PR #43;
+   * fire-and-forget on the desktop side.
+   */
+  reportSignedIn?: (signedIn: boolean) => void;
 }
 
 /**
@@ -408,5 +418,36 @@ export function onWindowsLoopbackPcmChunk(
     return bridge.onWindowsLoopbackPcmChunk(callback);
   } catch {
     return null;
+  }
+}
+
+/**
+ * W4a: bring the desktop main window to the front — the room's record after a bridge meeting
+ * ended, the device wizard asked for from the popup. Returns false off the desktop shell and on a
+ * build older than the method (desktop PR #43), where the window simply stays where it is.
+ */
+export async function showDesktopMainWindow(): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.showMainWindow) return false;
+  try {
+    await bridge.showMainWindow();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * W4a: tell the desktop shell whether this window is signed in (desktop PR #43). A no-op in a
+ * browser and on an older desktop build. Never throws: it is called from an auth subscription,
+ * and a broken IPC must not break signing in or out.
+ */
+export function reportDesktopSignedIn(signedIn: boolean): void {
+  const bridge = getDesktopBridge();
+  if (!bridge?.reportSignedIn) return;
+  try {
+    bridge.reportSignedIn(signedIn);
+  } catch {
+    // Nothing to do: the shell keeps whatever it last knew.
   }
 }

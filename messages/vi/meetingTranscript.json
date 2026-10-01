@@ -81,7 +81,8 @@
   "speaker": {
     "you": "Bạn",
     "unknownSpeaker": "Người nói không xác định",
-    "unknownSpeakerLower": "người nói không xác định"
+    "unknownSpeakerLower": "người nói không xác định",
+    "googleMeetParticipants": "Người tham gia Google Meet"
   },
   "line": {
     "editAria": "Sửa dòng bản ghi",
