@@ -78,7 +78,14 @@ export type RoomEntryMode =
   /** Not started, approval-gated, and this viewer is not the host: the lobby is where they wait. */
   | "lobby"
   /** Live: straight through device setup into the call. */
-  | "join";
+  | "join"
+  /**
+   * WT-904: an external meeting (Google Meet) opened by someone who is not its host. The call is
+   * on Meet; WarpTalk's side of it has two seats, the host and the Meet stand-in, so sending this
+   * person through device setup ended in "Room full" or a wizard for audio cables they do not
+   * need. The button opens the Meet link instead.
+   */
+  | "external_meeting";
 
 export interface RoomEntryIntent {
   mode: RoomEntryMode;
@@ -88,6 +95,14 @@ export interface RoomEntryIntent {
   helpText: string | null;
   /** False only for a room nobody can enter, which is what disables the control. */
   isActionable: boolean;
+  /** `external_meeting` only: the Meet link the button opens. */
+  href?: string;
+}
+
+/** Only an https link is ever opened — the value comes from the database, not from a constant. */
+function safeExternalMeetingUrl(value?: string | null): string | null {
+  const url = value?.trim();
+  return url && /^https:\/\//i.test(url) ? url : null;
 }
 
 /**
@@ -108,6 +123,10 @@ export function resolveRoomEntryIntent(input: {
    * gets, because the server now accepts it from them.
    */
   requiresApproval?: boolean;
+  /** WT-904: the room is an EXTERNAL_BRIDGE (isExternalBridge on translationRoomType). */
+  isExternalBridge?: boolean;
+  /** WT-904: the room's `externalMeetingUrl` — where an external meeting actually happens. */
+  externalMeetingUrl?: string | null;
 }): RoomEntryIntent {
   if (!canJoinTranslationRoom(input.status)) {
     return {
@@ -127,6 +146,21 @@ export function resolveRoomEntryIntent(input: {
       label: "Return to meeting",
       helpText: "You are currently in this meeting. Click to return.",
       isActionable: true,
+    };
+  }
+
+  // WT-904: before the lobby. An external meeting does not wait for anyone on WarpTalk — the call
+  // is on Meet whether or not the host has opened WarpTalk's side of it.
+  const meetUrl = input.isExternalBridge && !input.isHost
+    ? safeExternalMeetingUrl(input.externalMeetingUrl)
+    : null;
+  if (meetUrl) {
+    return {
+      mode: "external_meeting",
+      label: "Join on Google Meet",
+      helpText: "This meeting takes place on Google Meet. WarpTalk translates it from the host's side.",
+      isActionable: true,
+      href: meetUrl,
     };
   }
 

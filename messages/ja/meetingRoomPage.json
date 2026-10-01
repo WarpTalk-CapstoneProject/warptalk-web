@@ -50,6 +50,7 @@
     "panelTitle": "参加者",
     "participantsCount": "参加者: {label}",
     "noneInvited": "まだ他に招待された人はいません。",
+    "bridgeConnection": "Google Meet 通話の音声です。Meet 側の参加者全員の音声はこの接続を通して届きます。参加者ではありません。",
     "groupCount": "{label}: {count}",
     "groups": {
       "waitingToBeAdmitted": "入室許可待ち",

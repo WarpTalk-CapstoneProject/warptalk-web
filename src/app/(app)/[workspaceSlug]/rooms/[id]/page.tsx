@@ -150,6 +150,8 @@ import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
 } from "@/lib/meeting/translation-room-access";
+import { isExternalBridge, isExternalBridgeStandIn } from "@/lib/meeting/meeting-types";
+import { GoogleMeetMark } from "@/components/meeting/google-meet-mark";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -348,6 +350,13 @@ export default function RoomInformationPage() {
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
+  // WT-904: an external meeting's Google Meet stand-in ("External Meeting") is a connection that
+  // carries everyone on the far side, not a person. It is listed apart, never as a participant.
+  const bridgeStandIn =
+    apiParticipants.find((participant) => isExternalBridgeStandIn(participant.userId)) ?? null;
+  const peopleParticipants = bridgeStandIn
+    ? apiParticipants.filter((participant) => participant !== bridgeStandIn)
+    : apiParticipants;
   const apiInvitations = invitationsQuery.data ?? [];
   const { data: workspaces } = useWorkspaces();
   const validWorkspaceId =
@@ -953,6 +962,9 @@ export default function RoomInformationPage() {
     // WT-341: a meeting that does not require the host's approval can be opened by anyone
     // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
     requiresApproval: room.settings?.requiresApproval,
+    // WT-904: a non-host's way into an external meeting is the Meet link, not WarpTalk's room.
+    isExternalBridge: isExternalBridge(room.translationRoomType),
+    externalMeetingUrl: room.externalMeetingUrl,
   });
 
   async function handleRoomEntry() {
@@ -979,6 +991,10 @@ export default function RoomInformationPage() {
       case "join":
         useUIStore.getState().setSetupRoomId(roomId);
         useUIStore.getState().setSetupRoomModalOpen(true);
+        return;
+      case "external_meeting":
+        if (entryIntent.href) window.open(entryIntent.href, "_blank", "noopener,noreferrer");
+        return;
     }
   }
 
@@ -995,7 +1011,7 @@ export default function RoomInformationPage() {
 
   const participants = buildUserList(
     room,
-    apiParticipants,
+    peopleParticipants,
     apiInvitations,
     membersArray,
     user,
@@ -1100,7 +1116,7 @@ export default function RoomInformationPage() {
                   ) : null}
                   <MeetingPropertiesPills
                     room={room}
-                    apiParticipants={apiParticipants}
+                    apiParticipants={peopleParticipants}
                     occupancyLabel={occupancy.label}
                     occupancyNoun={
                       isFinishedStatus(room.status)
@@ -1332,6 +1348,12 @@ export default function RoomInformationPage() {
               <p className="mb-2 text-[12px] text-muted-foreground">
                 {t("people.participantsCount", { label: occupancy.label })}
               </p>
+              {bridgeStandIn ? (
+                <div className="mb-2 flex items-start gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground">
+                  <GoogleMeetMark size={14} className="mt-px" />
+                  <span>{t("people.bridgeConnection")}</span>
+                </div>
+              ) : null}
 
               {rosterGroups.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">

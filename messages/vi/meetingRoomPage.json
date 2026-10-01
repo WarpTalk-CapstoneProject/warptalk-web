@@ -50,6 +50,7 @@
     "panelTitle": "Người tham gia",
     "participantsCount": "Người tham gia: {label}",
     "noneInvited": "Chưa mời thêm ai khác.",
+    "bridgeConnection": "Âm thanh cuộc gọi Google Meet. Mọi người phía Meet được nghe qua kết nối này; đây không phải là người tham gia.",
     "groupCount": "{label}: {count}",
     "groups": {
       "waitingToBeAdmitted": "Đang chờ được cho vào",

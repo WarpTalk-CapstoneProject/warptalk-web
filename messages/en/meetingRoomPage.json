@@ -50,6 +50,7 @@
     "panelTitle": "People",
     "participantsCount": "Participants: {label}",
     "noneInvited": "No one else invited yet.",
+    "bridgeConnection": "Google Meet call audio. Everyone on the Meet side is heard through this connection; it is not a participant.",
     "groupCount": "{label}: {count}",
     "groups": {
       "waitingToBeAdmitted": "Waiting to be admitted",
