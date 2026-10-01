@@ -177,6 +177,12 @@ export interface TranslationRoomParticipantDto {
   avatarUrl?: string;
   joinedAt?: string;
   isExternal?: boolean;
+  /**
+   * EXTERNAL_BRIDGE (backend #509): this person is in Meet with their real mic and speakers
+   * (text-only bridge mode), so no outbound dub is synthesized for them. Always false outside
+   * bridge rooms; absent from an older server, which means voice.
+   */
+  isBridgeTextOnly?: boolean;
 }
 
 // ── Request DTOs ──────────────────────────────

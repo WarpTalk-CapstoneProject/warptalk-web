@@ -83,15 +83,26 @@ function hasInstalledOutboundDevice(status: VirtualAudioStatus): boolean {
  * (build 20348 and later); `processLoopbackRuntime` says the capture is actually wired. Treating
  * the first as the second is how a path gets selected that then produces silence.
  */
-export function canCaptureBrowserLoopback(status: VirtualAudioStatus | null): boolean {
-  return Boolean(
-    status
-      && status.supported
-      && status.platform === "win32"
-      && status.capabilities?.processLoopback === true
-      && status.capabilities?.processLoopbackRuntime === "available"
-      && hasInstalledOutboundDevice(status),
-  );
+export function canCaptureBrowserLoopback(
+  status: VirtualAudioStatus | null,
+  options: { textOnly?: boolean } = {},
+): boolean {
+  if (
+    !status
+    || !status.supported
+    || status.platform !== "win32"
+    || status.capabilities?.processLoopback !== true
+    || status.capabilities?.processLoopbackRuntime !== "available"
+  ) {
+    return false;
+  }
+  // TEXT-ONLY MODE (PO, 2026-10-01; desktop #45). The cable is where the DUB leaves for Meet, not
+  // part of listening to the browser; a user in text mode keeps their real mic in Meet and is never
+  // dubbed, so the desktop starts a "text-only" capture without it. Only where the desktop itself
+  // says text-only works: an older build has no `bridgeModes` and still refuses without the cable
+  // (B2), and promising it would select a path that then fails to start.
+  if (options.textOnly) return status.bridgeModes?.textOnly?.possible === true;
+  return hasInstalledOutboundDevice(status);
 }
 
 /**

@@ -26,6 +26,8 @@
  *   - W4b: says this desktop's bridge role (`bridgeRole`, `bridgeCapturerAway`) and dispatches a
  *     member's `take-over-capture` to the lease hook (use-bridge-capturer-lease), so the popup can
  *     gate its controls on host-or-capturer and offer the takeover when the capturer has gone;
+ *   - text-only bridge: says this user's audio mode (`audioMode`) and dispatches the popup's
+ *     `set-audio-mode` to the session, which re-checks the one-way rule and calls the server;
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
  *     controls that would reach nobody;
  *   - W4a: `announceEnded()` (returned) says the room ENDED, synchronously, for the moment the
@@ -58,6 +60,7 @@ import {
   type BridgeWidgetVoiceSnapshot,
 } from "@/lib/meeting/bridge-widget-relay";
 import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
+import type { BridgeAudioMode } from "@/lib/meeting/bridge-audio-mode";
 
 export type BridgeWidgetRelayHostOptions = {
   roomId: string;
@@ -132,6 +135,15 @@ export type BridgeWidgetRelayHostOptions = {
   bridgeCapturerAway?: boolean;
   /** "Capture audio on this device" in a member's popup. Absent: answered with a snapshot. */
   onTakeOverCapture?: () => void;
+
+  // ── Text-only bridge. Optional, like the rest. ────────────────────────────
+  /** This user's bridge audio mode as the session resolves it (lib/meeting/bridge-audio-mode). */
+  audioMode?: BridgeAudioMode;
+  /**
+   * The popup's mode chooser. The session re-checks the one-way rule and owns the PUT; the result
+   * comes back on the next snapshot. Absent: answered with a snapshot.
+   */
+  onSetAudioMode?: (mode: BridgeAudioMode) => void;
 };
 
 export type BridgeWidgetRelayHost = {
@@ -164,6 +176,7 @@ export function useBridgeWidgetRelayHost({
   isRoomHost,
   bridgeRole,
   bridgeCapturerAway,
+  audioMode,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -177,6 +190,7 @@ export function useBridgeWidgetRelayHost({
   onSetTranscriptPaused,
   onOpenRoomRecord,
   onTakeOverCapture,
+  onSetAudioMode,
 }: BridgeWidgetRelayHostOptions): BridgeWidgetRelayHost {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
   const fieldsRef = useRef<BridgeWidgetSnapshotFields>({
@@ -198,6 +212,7 @@ export function useBridgeWidgetRelayHost({
     isRoomHost,
     bridgeRole,
     bridgeCapturerAway,
+    audioMode,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -213,6 +228,7 @@ export function useBridgeWidgetRelayHost({
     onSetTranscriptPaused,
     onOpenRoomRecord,
     onTakeOverCapture,
+    onSetAudioMode,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -232,6 +248,7 @@ export function useBridgeWidgetRelayHost({
       onSetTranscriptPaused,
       onOpenRoomRecord,
       onTakeOverCapture,
+      onSetAudioMode,
     };
   });
 
@@ -267,6 +284,7 @@ export function useBridgeWidgetRelayHost({
       isRoomHost,
       bridgeRole,
       bridgeCapturerAway,
+      audioMode,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
@@ -295,6 +313,7 @@ export function useBridgeWidgetRelayHost({
     isRoomHost,
     bridgeRole,
     bridgeCapturerAway,
+    audioMode,
   ]);
 
   useEffect(() => {
@@ -371,6 +390,13 @@ export function useBridgeWidgetRelayHost({
         // W4b. The same no-reply rule: a takeover changes `bridgeRole`, and the field effect says so.
         case "take-over-capture":
           if (handlers.onTakeOverCapture) handlers.onTakeOverCapture();
+          else sendSnapshot();
+          break;
+        // Text-only bridge. The same no-reply rule: a switch changes `audioMode`, the field effect
+        // says so. A refused one (text → voice while live) leaves `audioMode` as it is, and the
+        // popup's pending pick expires against it and says why.
+        case "set-audio-mode":
+          if (handlers.onSetAudioMode) handlers.onSetAudioMode(message.mode);
           else sendSnapshot();
           break;
         default:

@@ -16,13 +16,22 @@
  *
  * Once translation has run, the step never comes back for the room: the dock's pill is where the
  * language changes from then on.
+ *
+ * TEXT-ONLY BRIDGE (PO, 2026-10-01): "How Meet hears you" sits under the language — Translated voice
+ * (VB-CABLE) or Your own voice (real mic, text only). Chosen HERE, before Start, where both
+ * directions are free; once live only voice → text remains (settings). Any participant chooses their
+ * own. The default is the machine's: the claim already started a cable-less machine in text, and a
+ * room that is still on voice on such a machine is moved to text once, here (voice cannot run there).
  */
 
 import { useTranslations } from "next-intl";
 import { Play, SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 
+import { useEffect, useRef } from "react";
+
 import { Button } from "@/components/ui/button";
 
+import { BridgeAudioModeChoice, BridgeMeetMicNotice } from "./audio-mode-choice";
 import { BridgeLanguageMenu, useBridgeLanguagePick } from "./bridge-language-menu";
 import { CaptureTakeoverNotice } from "./capture-takeover-notice";
 import { useStartBridgeTranslation } from "./dock-session-controls";
@@ -32,9 +41,19 @@ import { useBridgeWidget } from "./widget-context";
 export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
   const t = useTranslations("rooms.bridgeWidget");
   const tPicker = useTranslations("meetingControlBar");
-  const { room, canControl } = useBridgeWidget();
+  const { room, canControl, roomId, audioMode, canSwitchAudioMode, modeSupport, translationStarted, relay } =
+    useBridgeWidget();
   const { enabled, shownLanguage, options, pick } = useBridgeLanguagePick();
   const starter = useStartBridgeTranslation();
+
+  // Voice cannot run on a machine without the cable: move such a room to text once, before Start.
+  const defaultedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (defaultedRef.current === roomId || !canSwitchAudioMode || translationStarted) return;
+    if (audioMode !== "voice" || !modeSupport || modeSupport.voice || !modeSupport.text) return;
+    defaultedRef.current = roomId;
+    relay.setAudioMode("text");
+  }, [roomId, canSwitchAudioMode, translationStarted, audioMode, modeSupport, relay]);
 
   const canStart = canControl && Boolean(room) && Boolean(shownLanguage) && !starter.pending;
 
@@ -53,6 +72,7 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
 
       <RelayCarryNotice />
       <CaptureTakeoverNotice />
+      <BridgeMeetMicNotice />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {/* The native picker's body. A menu of radio items, as in the meeting; dimmed while no main
@@ -66,6 +86,12 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
           <BridgeLanguageMenu shownLanguage={shownLanguage} options={options} onPick={(code) => void pick(code)} />
         </div>
       </div>
+
+      {audioMode ? (
+        <div className="shrink-0 border-t border-border bg-surface-1 px-3 py-2.5">
+          <BridgeAudioModeChoice />
+        </div>
+      ) : null}
 
       <div className="shrink-0 border-t border-border bg-surface-2 px-3 py-2.5">
         {canControl ? (

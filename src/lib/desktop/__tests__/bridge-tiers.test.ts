@@ -375,6 +375,28 @@ test("loopback capability needs Windows, the capability, the runtime and VB-CABL
   assert.equal(selectBridgeTier(wiredLoopback())?.id, "loopback-bridge");
 });
 
+test("text-only mode opens the cable requirement, only where the desktop says text-only works", () => {
+  const textOnly = (possible: boolean) => ({
+    textOnly: { possible },
+    voice: { possible: false, cableInstalled: false, reason: "cable-missing" as const },
+  });
+  const noCable = wiredLoopback({ devices: [], bridgeModes: textOnly(true) });
+  assert.equal(canCaptureBrowserLoopback(noCable, { textOnly: true }), true, "no cable, text mode: listen anyway");
+  assert.equal(canCaptureBrowserLoopback(noCable), false, "voice mode still needs the cable");
+  // An older desktop (no bridgeModes) refuses a cable-less capture with B2: never promise it.
+  assert.equal(canCaptureBrowserLoopback(wiredLoopback({ devices: [] }), { textOnly: true }), false);
+  assert.equal(
+    canCaptureBrowserLoopback(wiredLoopback({ bridgeModes: textOnly(false) }), { textOnly: true }),
+    false,
+    "the desktop's own no is believed",
+  );
+  // The runtime gates hold for text mode exactly as for voice.
+  assert.equal(
+    canCaptureBrowserLoopback(windowsCable({ bridgeModes: textOnly(true) }), { textOnly: true }),
+    false,
+  );
+});
+
 test("loopback wins over an installed Hi-Fi Cable", () => {
   assert.deepEqual(selectBridgeInboundSource(inbound()), {
     path: "loopback",

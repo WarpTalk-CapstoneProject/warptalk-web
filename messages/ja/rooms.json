@@ -316,6 +316,37 @@
       "done": "このデバイスが通話の音声を収録しています。",
       "failed": "このデバイスで通話の音声を収録できませんでした。",
       "failedDescription": "まだ誰かが収録している可能性があります。詳細は WarpTalk ウィンドウを確認してください。"
+    },
+    "audioMode": {
+      "label": "Meet での聞こえ方",
+      "settingsRow": "Meet での聞こえ方",
+      "voice": "翻訳音声",
+      "text": "自分の声",
+      "voiceHint": "WarpTalk が VB-CABLE 経由で翻訳したあなたの声が Meet に届きます。",
+      "textHint": "Meet には実際のマイクの声が届きます。文字起こしと翻訳はテキストで表示されます。",
+      "unknown": "WarpTalk に接続しています…",
+      "voiceNeedsCable": "翻訳音声には VB-CABLE が必要です。デバイス設定からインストールしてください。",
+      "textUnavailable": "このコンピューターでは自分の声モードを使用できません。",
+      "lockedHint": "翻訳を停止すると翻訳音声に戻せます。",
+      "headphones": "ヘッドホンを使用してください。スピーカーの通話音声をマイクが拾うことがあります。",
+      "nowText": "Meet にはあなた自身の声が届いています。",
+      "nowVoice": "Meet には翻訳音声が届いています。",
+      "locked": "翻訳中は翻訳音声に切り替えられません。",
+      "lockedDescription": "翻訳を停止してから切り替えてください。",
+      "failed": "Meet での聞こえ方を変更できませんでした。",
+      "failedDescription": "詳しくは WarpTalk のウィンドウを確認してください。"
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "Meet にあなたの声が届いていません。",
+        "body": "Meet は仮想ケーブルをマイクとして使用していますが、このモードでは何も再生されません。Meet の音声設定で実際のマイクを選択してください。",
+        "action": "翻訳音声を使う"
+      },
+      "voiceOnReal": {
+        "title": "Meet に翻訳前の声が届いています。",
+        "body": "Meet は実際のマイクを使用しています。Meet のマイクに「CABLE Output (VB-Audio Virtual Cable)」を選択するか、自分の声モードに切り替えてください。",
+        "action": "自分の声を使う"
+      }
     }
   }
 }
