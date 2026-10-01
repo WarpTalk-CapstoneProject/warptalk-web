@@ -275,5 +275,50 @@
     "subscriptionExpired": "Gói đăng ký của workspace đã hết hạn — đã tạm dừng dịch. Hãy nhờ chủ workspace gia hạn.",
     "suspended": "Đã dừng dịch: dịch vụ AI của workspace đang bị tạm ngưng. Hãy nhờ chủ workspace kiểm tra thanh toán.",
     "restored": "Đã có thể dịch trở lại — thanh toán của workspace đã được khôi phục."
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "Đang kết nối tới WarpTalk…",
+      "noHost": "WarpTalk chưa chạy cuộc họp này.",
+      "incompatible": "WarpTalk vừa được cập nhật. Hãy tải lại để dùng ở đây."
+    },
+    "carry": {
+      "asking": "Đang mở cuộc họp này trong WarpTalk…",
+      "failed": "WarpTalk chưa chạy cuộc họp này, nên chưa đổi được ngôn ngữ và giọng nói từ đây.",
+      "incompatible": "WarpTalk vừa được cập nhật. Hãy tải lại cửa sổ WarpTalk để dùng các nút này.",
+      "show": "Mở WarpTalk"
+    },
+    "language": {
+      "connected": "Chọn ngôn ngữ của bạn"
+    },
+    "listen": {
+      "label": "Bạn nghe gì",
+      "text": "Chữ",
+      "voice": "Giọng",
+      "textHint": "Chữ: bạn đọc bản dịch và nghe cuộc gọi như bình thường.",
+      "voiceHint": "Giọng: bạn nghe họ được dịch, giọng gốc nhỏ hơn bên dưới."
+    },
+    "devices": {
+      "hint": "Mở phần thiết lập thiết bị trong cửa sổ WarpTalk"
+    },
+    "startStep": {
+      "title": "Dịch cuộc gọi này",
+      "intro": "Chọn ngôn ngữ của bạn. Mọi người khác trong cuộc gọi được dịch sang ngôn ngữ đó cho bạn.",
+      "start": "Bắt đầu dịch",
+      "pickFirst": "Hãy chọn ngôn ngữ của bạn trước",
+      "waitingForHost": "Chủ phòng hoặc người đang thu âm cuộc gọi này sẽ bắt đầu dịch.",
+      "continue": "Tiếp tục",
+      "started": "Đã bắt đầu dịch.",
+      "startFailed": "Không bắt đầu dịch được.",
+      "notCarried": "Đã bắt đầu dịch, nhưng WarpTalk không mở được cuộc họp này.",
+      "notCarriedDescription": "Hãy mở cuộc họp trong cửa sổ WarpTalk để giọng nói của bạn và bản lồng tiếng được truyền đi."
+    },
+    "takeover": {
+      "notice": "Người đang thu âm cuộc gọi này đã rời WarpTalk.",
+      "action": "Thu âm trên thiết bị này",
+      "done": "Thiết bị này hiện thu âm cuộc gọi.",
+      "failed": "Không thu âm cuộc gọi được trên thiết bị này.",
+      "failedDescription": "Có thể vẫn có người đang thu âm. Xem chi tiết trong cửa sổ WarpTalk."
+    }
   }
 }

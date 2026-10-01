@@ -9,12 +9,13 @@
  *   (dock-icon-button.tsx), left-aligned tooltips. Nothing else: Meet owns mic, camera and
  *   leaving, and the dock must not look like Meet's call bar.
  *
- * WHY BOTH ARE HOST-ONLY, AND WHY A NON-HOST SEES NOTHING
- *   `/resume`, `/stop-translation` and the transcript pause endpoints all gate on the host on the
- *   server. A button offered to anybody else is a 403 and a toast over someone's live call. A
- *   bridge room has two seats and the host is the person at this machine, so this is nearly always
- *   moot — but "nearly" is why it is checked. Nothing rather than a disabled button: a control
- *   that exists and refuses reads as broken.
+ * WHO SEES THEM: THE HOST OR THE CAPTURER (PO, 2026-10-01; W4b)
+ *   A bridge room is now shared by every WarpTalk user in the Meet call (bridge claim). Start/Stop
+ *   and Pause/Resume are for the room host or the bridge capturer — `canControl` in the context
+ *   (lib/meeting/bridge-capturer `canControlBridge`) — and a member sees nothing. Nothing rather
+ *   than a disabled button: a control that exists and refuses reads as broken.
+ *   Known gap: `/resume`, `/stop-translation` and the pause endpoints still check the HOST on the
+ *   server, so a capturer who is not the host is refused there (see bridge-capturer.ts).
  *
  * WHERE THE STATE COMES FROM
  *   Nothing here holds "is translation running" or "is the transcript paused" in local state. The
@@ -43,6 +44,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pause, Play, SpinnerGap, Stop } from "@phosphor-icons/react/dist/ssr";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -75,10 +77,10 @@ const ICON_SIZE = 17;
 const spinner = <SpinnerGap size={ICON_SIZE} className="animate-spin" aria-hidden="true" />;
 
 export function DockSessionControls() {
-  const { isHost } = useBridgeWidget();
+  const { canControl } = useBridgeWidget();
   // False while the room is loading too, so the two buttons appear together once the room has
   // answered rather than a Start that a moment later turns out to belong to somebody else.
-  if (!isHost) return null;
+  if (!canControl) return null;
 
   return (
     <>
@@ -86,6 +88,60 @@ export function DockSessionControls() {
       <TranscriptPauseToggle />
     </>
   );
+}
+
+// ── Start (shared with the language step) ────────────────────────────────────
+
+/**
+ * Start translation the one way the popup may: activate, open the ROOM if nobody has, then /resume
+ * — `startBridgeTranslation`, whose order is the point (see bridge-overlay-start.ts). Shared by the
+ * dock's Start and the language step's Start (start-step.tsx), so there is one sequence and one set
+ * of toasts. Resolves true when translation was started.
+ */
+export function useStartBridgeTranslation() {
+  const t = useTranslations("rooms.bridgeWidget");
+  const { room } = useBridgeWidget();
+  const queryClient = useQueryClient();
+  const startRoom = useStartTranslationRoom();
+  const resumeRoom = useResumeTranslationRoom();
+  const [working, setWorking] = useState(false);
+  const pending = working || startRoom.isPending || resumeRoom.isPending;
+
+  async function start(): Promise<boolean> {
+    if (!room || pending) return false;
+    setWorking(true);
+    try {
+      // Activate, then open the ROOM if nobody has, then /resume. The order is the point, and it
+      // lives in startBridgeTranslation so its unit test can hold it: a session opened before the
+      // main window is asked to carry the room is a room marked translating that no LiveKit
+      // connection, dub or bridge leg is feeding. check-bridge-overlay-contract.mjs fails the
+      // build if this file ever calls /resume outside that sequence.
+      const { activated } = await startBridgeTranslation(room, {
+        activate: activateBridgeRoom,
+        openRoom: (id) => startRoom.mutateAsync(id),
+        startTranslation: (id) => resumeRoom.mutateAsync(id),
+      });
+      // Re-read the sessions list the context's `translationStarted` comes from, so the spinner
+      // covers the whole flip. `refetchQueries` does not throw.
+      await queryClient.refetchQueries({ queryKey: sessionsKey(room.id) });
+      if (activated) {
+        toast.success(t("startStep.started"));
+      } else {
+        // Without the main window this is the old bug — a session marked running that nothing is
+        // feeding — and the one thing the user can do about it is open the meeting there.
+        toast.warning(t("startStep.notCarried"), { description: t("startStep.notCarriedDescription") });
+      }
+      return true;
+    } catch (error) {
+      // WT-699: the backend's sentence (out of credits, invoice overdue…), never the status line.
+      toast.error(getErrorMessage(error, t("startStep.startFailed")));
+      return false;
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return { start, pending };
 }
 
 // ── Start / Stop translation ─────────────────────────────────────────────────
@@ -103,8 +159,7 @@ function TranslationToggle() {
       if (!started) toast.error("Could not stop translation.", { description: NO_ANSWER_DESCRIPTION });
     },
   });
-  const startRoom = useStartTranslationRoom();
-  const resumeRoom = useResumeTranslationRoom();
+  const starter = useStartBridgeTranslation();
   const stopTranslation = useStopTranslation();
 
   /**
@@ -120,8 +175,7 @@ function TranslationToggle() {
   const busy =
     working
     || relayed.waiting
-    || startRoom.isPending
-    || resumeRoom.isPending
+    || starter.pending
     || stopTranslation.isPending;
 
   /** "Unknown" until the sessions list first answers: Start before that may be a lie. */
@@ -161,33 +215,11 @@ function TranslationToggle() {
     }
 
     try {
-      // Activate, then open the ROOM if nobody has, then /resume. The order is the point, and it
-      // lives in startBridgeTranslation so its unit test can hold it: a session opened before the
-      // main window is asked to carry the room is a room marked translating that no LiveKit
-      // connection, dub or bridge leg is feeding. check-bridge-overlay-contract.mjs fails the
-      // build if this file ever calls /resume outside that sequence.
-      const { activated } = await startBridgeTranslation(room, {
-        activate: activateBridgeRoom,
-        openRoom: (id) => startRoom.mutateAsync(id),
-        startTranslation: (id) => resumeRoom.mutateAsync(id),
-      });
-      await settle(room.id);
+      // The shared sequence (useStartBridgeTranslation above): activate, open, /resume, toasts.
+      const started = await starter.start();
       // The mirror can trail the REST answer by a snapshot; hold the spinner until it agrees, so
       // the button does not flash back to Start.
-      if (translationMirrored) relayed.expect(true);
-      if (activated) {
-        toast.success("Translation started.");
-      } else {
-        // Word for word what bridge-overlay-controls.tsx says (#490). Without the main window this
-        // is the old bug — a session marked running that nothing is feeding — and the one thing
-        // the user can do about it is open the meeting there themselves.
-        toast.warning("Translation started, but WarpTalk could not open this meeting.", {
-          description: "Open it in the WarpTalk window so your voice and the dub are carried.",
-        });
-      }
-    } catch (error) {
-      // WT-699: the backend's sentence (out of credits, invoice overdue…), never the status line.
-      toast.error(getErrorMessage(error, "Failed to start translation."));
+      if (started && translationMirrored) relayed.expect(true);
     } finally {
       setWorking(false);
     }

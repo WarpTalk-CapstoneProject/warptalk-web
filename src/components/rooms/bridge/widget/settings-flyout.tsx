@@ -40,6 +40,7 @@ import {
   SpeakerHigh,
 } from "@phosphor-icons/react/dist/ssr";
 import { AnimatePresence, motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { noiseReductionLabel } from "@/lib/meeting/noise-reduction";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ type SettingsSection = "root" | "microphone" | "voice";
 const FLYOUT_LABEL = "Voice & translation settings";
 
 export function SettingsFlyout() {
+  const tWidget = useTranslations("rooms.bridgeWidget");
   const { roomId, isHost, relay, relayConnected } = useBridgeWidget();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("root");
@@ -179,11 +181,7 @@ export function SettingsFlyout() {
                   label="Device settings"
                   icon={<SlidersHorizontal className="h-4 w-4" />}
                   disabled={!relayConnected}
-                  hint={
-                    relayConnected
-                      ? "Opens device setup in the WarpTalk window"
-                      : "Open this meeting in the WarpTalk window to change devices"
-                  }
+                  hint={relayConnected ? tWidget("devices.hint") : tWidget("relay.noHost")}
                   onClick={() => {
                     if (relay.openSetup()) close();
                   }}

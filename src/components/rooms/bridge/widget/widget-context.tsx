@@ -50,6 +50,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { HubConnection } from "@microsoft/signalr";
 
 import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
+import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptCleanSentenceDto } from "@/types/transcript";
@@ -58,6 +59,14 @@ import type { BridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay
 import { useBridgeWidgetState } from "./use-bridge-widget-state";
 
 export type BridgeWidgetConnectionState = "connecting" | "live" | "reconnecting" | "failed";
+
+/**
+ * W4b: whether this popup asked the main window to carry its room because nobody answered.
+ * `asking` while it waits for the answer; `failed` once there is no main window to ask (a browser
+ * tab, an old desktop build), the shell refused (a native meeting is running there), or it never
+ * answered. Always `idle` while a main window is connected.
+ */
+export type BridgeWidgetCarryState = "idle" | "asking" | "failed";
 
 /**
  * What the header says about translation.
@@ -162,6 +171,27 @@ export type BridgeWidgetState = {
   relay: BridgeWidgetRelayClient;
   /** True while a main window is running this room and has answered the relay. */
   relayConnected: boolean;
+  /** W4b: see BridgeWidgetCarryState. */
+  carry: BridgeWidgetCarryState;
+
+  /**
+   * W4b: this desktop's role in the shared bridge room (lib/meeting/bridge-capturer): the main
+   * window's snapshot when it says, else the room record's `bridgeCapturerUserId`, else the legacy
+   * rule (the host captures).
+   */
+  bridgeRole: BridgeRole;
+  /**
+   * PO, 2026-10-01: Start/Stop translation, Pause/Resume transcript and "They speak" are for the
+   * room host OR the capturer (`canControlBridge`). Members see none of them.
+   */
+  canControl: boolean;
+  /** A member whose main window says the capturer is away: offer "Capture audio on this device". */
+  canOfferTakeover: boolean;
+  /**
+   * Translation has never run in this room (sessions answered, none). The popup opens on the
+   * language step with one Start for exactly this.
+   */
+  neverStarted: boolean;
   /** The main window's meeting connection (LiveKit), or null when no main window says. */
   meetingConnection: BridgeWidgetMeetingConnection | null;
   /** The meeting's own error from the main window, worded for a person, or null. */

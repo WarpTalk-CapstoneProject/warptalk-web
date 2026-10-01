@@ -89,8 +89,22 @@ if (!existsSync(pillPath)) {
         + "re-sends its own language on every reconnect and would undo it.",
     );
   }
-  if (!/useBridgeWidgetRelayClient\(/.test(pill) || !/pickLanguage\(/.test(pill)) {
-    failures.push("dock-language-pill.tsx no longer sends its pick through useBridgeWidgetRelayClient.");
+  // W4b: the pill and the language step share bridge-language-menu.tsx, which owns the relayed pick
+  // (the widget context's relay client → pickLanguage). Either the pill relays itself, or it uses
+  // that hook and the hook relays.
+  const menuPath = join(root, "src/components/rooms/bridge/widget/bridge-language-menu.tsx");
+  const menu = existsSync(menuPath) ? code(menuPath) : "";
+  const pillRelays = /useBridgeWidgetRelayClient\(/.test(pill) && /pickLanguage\(/.test(pill);
+  const pillUsesSharedPick =
+    /\buseBridgeLanguagePick\(/.test(pill) && /\bpickLanguage\(/.test(menu) && /\brelay\b/.test(menu);
+  if (!pillRelays && !pillUsesSharedPick) {
+    failures.push(
+      "dock-language-pill.tsx no longer sends its pick through the relay client "
+        + "(directly, or via useBridgeLanguagePick in bridge-language-menu.tsx).",
+    );
+  }
+  if (/Set(Speak|Listen)Language|\bhub\b[\s\S]{0,40}\.invoke\(/.test(menu)) {
+    failures.push("bridge-language-menu.tsx talks to the hub. A pick must go through the relay.");
   }
 }
 

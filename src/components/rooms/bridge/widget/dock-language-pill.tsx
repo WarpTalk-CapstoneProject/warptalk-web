@@ -19,111 +19,46 @@
  *   applies it exactly as its own picker would — both halves, then the remembered profile — and
  *   the pill shows what the main window then reports back.
  *
- *   When no main window is running this room's meeting — nobody answers within
- *   BRIDGE_WIDGET_HOST_ANSWER_TIMEOUT_MS, or it left — the pill is disabled and says to open it.
- *   Falling back to the hub then would make a change the next meeting window silently undoes.
+ *   W4b: the popup asks the main window to carry its room when nobody answers
+ *   (use-bridge-widget-state.ts), so a pill with nobody behind it is the rare case. Then the pill
+ *   is dimmed and says why, and the notice above the panes offers "Show WarpTalk". Falling back to
+ *   the hub would make a change the next meeting window silently undoes.
+ *
+ *   The menu itself is bridge-language-menu.tsx — the native picker, shared with the language step
+ *   that opens a never-started room.
  *
  * The widget context's `readerLanguage` follows the language the main window reports this user
  * HEARS, so the transcript pane reads the same language the dub speaks. A pick also sets it at
  * once, before the main window confirms.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { CaretDown, CaretRight, CheckCircle, Translate } from "@phosphor-icons/react/dist/ssr";
+import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { CaretDown, Translate } from "@phosphor-icons/react/dist/ssr";
 
-import { useJoinLanguagePolicy } from "@/hooks/use-translationRooms";
-import {
-  getLanguageCode,
-  getLanguageName,
-  isLanguageAllowedByPolicy,
-  meetingLanguageSet,
-  meetingLanguagesForPolicy,
-  normalizeLanguageCode,
-} from "@/lib/language/languages";
-import {
-  bridgeWidgetReaderLanguage,
-  bridgeWidgetShownLanguage,
-  canRelayLanguagePick,
-  type BridgeWidgetRelayStatus,
-} from "@/lib/meeting/bridge-widget-relay";
+import { getLanguageName } from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 
-import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
+import { BridgeLanguageMenu, useBridgeLanguagePick } from "./bridge-language-menu";
 import { useBridgeWidget } from "./widget-context";
 
-/** What the pill's tooltip says, by what the relay knows about the main window. */
-const PILL_HINT: Record<BridgeWidgetRelayStatus, string> = {
-  waiting: "Connecting to the WarpTalk window…",
-  connected: "Choose your language",
-  "no-host": "Open the WarpTalk window to change language",
-  incompatible: "WarpTalk was updated. Reload it to change language here.",
-};
-
 export function DockLanguagePill() {
-  const { roomId, room, translationStarted, readerLanguage, setReaderLanguage } = useBridgeWidget();
-  const { view, pickLanguage } = useBridgeWidgetRelayClient(roomId);
+  const t = useTranslations("rooms.bridgeWidget");
+  const tPicker = useTranslations("meetingControlBar");
+  const { translationStarted } = useBridgeWidget();
+  const { enabled, status, shownLanguage, options, pick } = useBridgeLanguagePick();
   const [open, setOpen] = useState(false);
-  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const hintId = useId();
 
-  const enabled = canRelayLanguagePick(view);
   // Derived, not synced: a main window that leaves while the menu is open must take the menu with
   // it, and an effect closing it would render it once more pointing at nobody.
   const menuOpen = open && enabled;
-  const shownLanguage = bridgeWidgetShownLanguage(view, readerLanguage);
 
-  // The main window's reader language wins over this window's own guess. Only when the relay
-  // has one: with no main window, the context's own resolution is all there is.
-  const relayedReaderLanguage = bridgeWidgetReaderLanguage(view);
-  useEffect(() => {
-    if (relayedReaderLanguage && relayedReaderLanguage !== readerLanguage) {
-      setReaderLanguage(relayedReaderLanguage);
-    }
-  }, [relayedReaderLanguage, readerLanguage, setReaderLanguage]);
-
-  // The workspace's language policy for THIS room — the public per-room read, which is
-  // persistent-meeting-session's primary source too (it answers for guests, and is about the
-  // room's workspace rather than whichever one is selected).
-  const { data: languagePolicy } = useJoinLanguagePolicy(room?.translationRoomCode ?? "");
-  const allowedTargetLanguages = languagePolicy?.allowedTargetLanguages;
-
-  // The room's languages, as `availableListenLanguages` in persistent-meeting-session builds
-  // them: the room's set plus the language this user is on now, narrowed by the workspace policy
-  // — except the current one, which stays even if the policy has since dropped it, because
-  // removing the selected option from its own menu leaves no way to move off it.
-  const roomLanguages = useMemo(() => {
-    const codes = new Set<string>();
-    for (const language of meetingLanguageSet(room?.sourceLanguage, room?.targetLanguages)) {
-      codes.add(normalizeLanguageCode(language));
-    }
-    if (shownLanguage) codes.add(shownLanguage);
-    return Array.from(codes).filter(
-      (code) =>
-        Boolean(code) &&
-        (code === shownLanguage || isLanguageAllowedByPolicy(code, allowedTargetLanguages)),
-    );
-  }, [room?.sourceLanguage, room?.targetLanguages, shownLanguage, allowedTargetLanguages]);
-
-  // The meeting bar's `languagesNotAlreadyOffered`, which is module-private there: every meeting
-  // language the WORKSPACE permits (WT-497 — never "every language WarpTalk knows"), minus the
-  // ones the room already offers. `meetingLanguagesForPolicy` keeps an empty policy meaning
-  // "unrestricted", so a policy still loading leaves this at full width rather than empty.
-  const otherLanguages = useMemo(
-    () =>
-      meetingLanguagesForPolicy(allowedTargetLanguages)
-        .map((language) => language.code)
-        .filter((code) => !roomLanguages.includes(code)),
-    [allowedTargetLanguages, roomLanguages],
-  );
-
-  function pick(language: string) {
-    if (!enabled) return;
-    pickLanguage(language);
-    // At once: the transcript should switch with the pill, not a round trip later.
-    setReaderLanguage(language);
+  function onPick(language: string) {
+    if (!pick(language)) return;
     setOpen(false);
     triggerRef.current?.focus();
   }
@@ -152,7 +87,17 @@ export function DockLanguagePill() {
   // Rings the pill while translation runs and nothing has been chosen — the one moment the choice
   // is urgent. Same condition as the meeting bar's `highlight`.
   const highlight = enabled && translationStarted && !shownLanguage;
-  const hint = PILL_HINT[view.status];
+  // What the tooltip says, by what the relay knows about the main window. The no-main-window case
+  // also has a notice with "Show WarpTalk" above the panes (relay-carry-notice.tsx); this only says
+  // why the pill is dimmed.
+  const hint =
+    status === "connected"
+      ? t("language.connected")
+      : status === "waiting"
+        ? t("relay.waiting")
+        : status === "incompatible"
+          ? t("relay.incompatible")
+          : t("relay.noHost");
 
   return (
     // Not `relative`: the menu is positioned against the dock, so it can use the dock's full width
@@ -169,7 +114,7 @@ export function DockLanguagePill() {
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-controls={menuOpen ? menuId : undefined}
-          aria-busy={view.status === "waiting"}
+          aria-busy={status === "waiting"}
           onClick={() => {
             if (enabled) setOpen((current) => !current);
           }}
@@ -184,7 +129,7 @@ export function DockLanguagePill() {
         >
           <Translate className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
-            {shownLanguage ? getLanguageName(shownLanguage) : "Set language"}
+            {shownLanguage ? getLanguageName(shownLanguage) : tPicker("languagePicker.setLanguage")}
           </span>
           <CaretDown
             className={cn("h-3 w-3 shrink-0 transition-transform", menuOpen && "rotate-180")}
@@ -211,96 +156,12 @@ export function DockLanguagePill() {
         <div
           id={menuId}
           role="menu"
-          aria-label="My language"
+          aria-label={tPicker("languagePicker.myLanguage.title")}
           className="absolute bottom-full left-3 z-50 mb-2 max-h-[min(24rem,calc(100dvh-4.5rem))] w-64 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-2xl border border-border bg-surface-1 p-1.5 shadow-lg"
         >
-          <LanguageColumn
-            title="My language"
-            hint="What you speak, and what everyone else is translated into for you."
-            options={roomLanguages}
-            selected={shownLanguage || undefined}
-            onSelect={pick}
-          />
-
-          {/* The room's languages are what is OFFERED, not what a person is limited to — somebody
-              who speaks Korean in a Vietnamese/Japanese room can still say so. Behind a
-              disclosure because the room's set is the right answer for almost everybody. */}
-          {otherLanguages.length > 0 ? (
-            <>
-              <div className="my-1 h-[1px] bg-border" />
-              {showOtherLanguages ? (
-                <LanguageColumn
-                  title="Other languages"
-                  hint="Not offered by this room, but still translated for you."
-                  options={otherLanguages}
-                  selected={shownLanguage || undefined}
-                  onSelect={pick}
-                />
-              ) : (
-                <button
-                  type="button"
-                  aria-expanded={false}
-                  onClick={() => setShowOtherLanguages(true)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-                >
-                  <CaretRight className="h-3 w-3" weight="bold" />
-                  <span>Another language</span>
-                </button>
-              )}
-            </>
-          ) : null}
+          <BridgeLanguageMenu shownLanguage={shownLanguage} options={options} onPick={onPick} />
         </div>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * One section of the menu, drawn as the meeting picker's `LanguageColumn` (module-private there):
- * a title, a one-line hint, then code + name + a filled check on the one in use.
- */
-function LanguageColumn({
-  title,
-  hint,
-  options,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  hint: string;
-  options: string[];
-  selected?: string;
-  onSelect: (language: string) => void;
-}) {
-  return (
-    <div role="group" aria-label={title}>
-      <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-        {title}
-      </p>
-      <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
-      <div className="max-h-40 overflow-y-auto">
-        {options.map((language) => {
-          const active = selected === language;
-          return (
-            <button
-              key={language}
-              type="button"
-              role="menuitemradio"
-              aria-checked={active}
-              onClick={() => onSelect(language)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                active ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-              )}
-            >
-              <span>{getLanguageCode(language)}</span>
-              <span className="flex-1 truncate">{getLanguageName(language)}</span>
-              {active ? <CheckCircle className="h-3.5 w-3.5 shrink-0" weight="fill" /> : null}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

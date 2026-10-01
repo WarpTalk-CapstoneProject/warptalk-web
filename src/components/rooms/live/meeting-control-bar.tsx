@@ -6,7 +6,8 @@ import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSi
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
-import { getLanguageCode, getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
+import { LanguageColumn } from "@/components/rooms/live/language-column";
+import { getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
   describeLanguageChoice,
@@ -1150,7 +1151,7 @@ function languagesNotAlreadyOffered(
 
 // AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
 // submenus. Those submenus were unreachable and are gone; LanguageColumn is the one row renderer
-// now, and it is the picker's own.
+// now. W4b moved it to language-column.tsx so the bridge popup draws the same picker.
 
 function LayoutOption({
   label,
@@ -1501,47 +1502,6 @@ function LanguagePairPicker({
           ) : null}
         </FlyoutSurface>
       ) : null}
-    </div>
-  );
-}
-
-function LanguageColumn({
-  title,
-  hint,
-  options,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  hint: string;
-  options: string[];
-  selected?: string;
-  onSelect: (language: string) => void;
-}) {
-  return (
-    <div>
-      <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-        {title}
-      </p>
-      <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
-      <div className="max-h-40 overflow-y-auto">
-        {options.map((language) => (
-          <button
-            key={language}
-            type="button"
-            role="menuitemradio"
-            aria-checked={selected === language}
-            onClick={() => onSelect(language)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              selected === language ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-            }`}
-          >
-            <span>{getLanguageCode(language)}</span>
-            <span className="flex-1 truncate">{getLanguageName(language)}</span>
-            {selected === language ? <CheckCircle className="h-3.5 w-3.5" weight="fill" /> : null}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

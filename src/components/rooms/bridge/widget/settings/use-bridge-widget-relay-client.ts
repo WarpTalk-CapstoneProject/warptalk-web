@@ -54,6 +54,8 @@ export type BridgeWidgetRelayClient = {
   openSetup: () => boolean;
   /** Ask the main window to open this room's record (`/rooms/{roomId}`) and come to the front. */
   openRoomRecord: () => boolean;
+  /** W4b: a member asks the main window to take the far side's capture over (bridge takeover). */
+  takeOverCapture: () => boolean;
 };
 
 export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayClient {
@@ -185,6 +187,10 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     () => sendWhenConnected({ type: "open-room-record" }),
     [sendWhenConnected],
   );
+  const takeOverCapture = useCallback(
+    () => sendWhenConnected({ type: "take-over-capture" }),
+    [sendWhenConnected],
+  );
 
   // Memoized: the widget context carries this object (WT-901), and a fresh one every render would
   // re-render every slot whenever anything above the provider did.
@@ -203,6 +209,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       rejoin,
       openSetup,
       openRoomRecord,
+      takeOverCapture,
     }),
     [
       view,
@@ -218,6 +225,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       rejoin,
       openSetup,
       openRoomRecord,
+      takeOverCapture,
     ],
   );
 }
