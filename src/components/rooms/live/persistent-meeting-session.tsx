@@ -3751,7 +3751,11 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
-          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          // Only the host feeds the cable: they are the one sitting in the Meet call with it as
+          // their microphone. Anyone else in the room playing dubs or their own mic into a device of
+          // the same name would be feeding a cable no Meet of theirs is listening to — or, on a
+          // shared machine, a second voice into the same call.
+          bridgeOutboundDeviceId={isBridgeRoom && isHost ? bridgeOutboundDeviceId : null}
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
         />
