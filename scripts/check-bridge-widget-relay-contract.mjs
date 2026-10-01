@@ -150,6 +150,9 @@ for (const file of [...filesUnder("src/components"), ...filesUnder("src/hooks"),
 //   - The idle reaper's "Rejoin meeting", the credits stop and the meeting error are drawn, and
 //     "Device settings" asks the main window for its wizard — the main window's own bridge widget,
 //     which used to carry all four, is going away.
+//   - web #646: "Use this device" after another login displaced the session. It lived on a card in
+//     that same in-window widget; once the widget went, a displaced bridge session had no way back.
+//     The popup draws it on both screens (the language step and the tabs) and relays the press.
 const widgetDir = "src/components/rooms/bridge/widget";
 function widgetCode(file) {
   const full = join(root, widgetDir, file);
@@ -178,6 +181,29 @@ if (noticesCode === null || !/<MeetingNotices\b/.test(shellCode)) {
   failures.push("the widget shell no longer renders MeetingNotices (credits stop, meeting error, Rejoin meeting).");
 } else if (!/\.rejoin\(\)/.test(noticesCode) || !/translationSuspendedNotice\(/.test(noticesCode)) {
   failures.push("meeting-notices.tsx no longer offers Rejoin meeting or words the credits stop with translationSuspendedNotice.");
+}
+const displacedCode = widgetCode("session-displaced-notice.tsx");
+const startStepCode = widgetCode("start-step.tsx") ?? "";
+if (displacedCode === null) {
+  failures.push(`${widgetDir}/session-displaced-notice.tsx is missing: a displaced bridge session has no "Use this device".`);
+} else {
+  if (!/\.takeOverSession\(\)/.test(displacedCode)) {
+    failures.push("session-displaced-notice.tsx no longer relays \"Use this device\" (take-over-session) to the main window.");
+  }
+  if (!/useTranslations\(\s*["']meetingCallChrome\.displaced["']\s*\)/.test(displacedCode)) {
+    failures.push(
+      "session-displaced-notice.tsx no longer uses DisplacedSessionNotice's copy (meetingCallChrome.displaced); "
+        + "the two surfaces must say the same thing.",
+    );
+  }
+  if (!/\bsessionDisplaced\b/.test(displacedCode)) {
+    failures.push("session-displaced-notice.tsx is not gated on the main window's sessionDisplaced.");
+  }
+}
+for (const [file, source] of [["widget-shell.tsx", shellCode], ["start-step.tsx", startStepCode]]) {
+  if (!/<SessionDisplacedNotice\b/.test(source)) {
+    failures.push(`${file} no longer renders SessionDisplacedNotice — a displaced session there has no way back.`);
+  }
 }
 const flyoutCode = widgetCode("settings-flyout.tsx");
 if (flyoutCode !== null && !/\.openSetup\(\)/.test(flyoutCode)) {

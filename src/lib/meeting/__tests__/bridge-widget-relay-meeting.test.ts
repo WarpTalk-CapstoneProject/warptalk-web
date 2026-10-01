@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   BRIDGE_WIDGET_RELAY_VERSION,
   acceptsRejoin,
+  acceptsSessionTakeOver,
   bridgeWidgetIsRoomHost,
   bridgeWidgetMeetingStatus,
   bridgeWidgetTranscriptPauseState,
@@ -75,6 +76,7 @@ test("the new intents cross the relay, rebuilt field by field", () => {
     [{ type: "rejoin", why: "x" }, { type: "rejoin" }],
     [{ type: "open-setup" }, { type: "open-setup" }],
     [{ type: "open-room-record", url: "https://evil" }, { type: "open-room-record" }],
+    [{ type: "take-over-session", deviceId: "d-1" }, { type: "take-over-session" }],
   ] as const) {
     const result = parseBridgeWidgetMessage({ v, roomId: ROOM, ...wire }, ROOM);
     assert.ok(result.ok, `${wire.type} must parse`);
@@ -105,6 +107,14 @@ test("a rejoin is acted on only while the main window says the reaper let go", (
   assert.equal(acceptsRejoin(undefined), false);
 });
 
+test("a session take-over is acted on only while the main window says it was displaced", () => {
+  // A second press, or a take-over already made in the main window, must not evict the other
+  // login again for a session that is already back here.
+  assert.equal(acceptsSessionTakeOver(true), true);
+  assert.equal(acceptsSessionTakeOver(false), false);
+  assert.equal(acceptsSessionTakeOver(undefined), false);
+});
+
 // ── snapshot fields ──────────────────────────────────────────────────────────
 
 test("an old main window's snapshot, with none of the new fields, still parses unchanged", () => {
@@ -116,6 +126,7 @@ test("an old main window's snapshot, with none of the new fields, still parses u
     "creditsSuspendedReason",
     "meetingError",
     "idleReaped",
+    "sessionDisplaced",
     "connection",
     "isRoomHost",
   ]) {
@@ -132,6 +143,7 @@ test("every new field round-trips through the builder and the validator", () => 
     creditsSuspendedReason: "insufficient_credits",
     meetingError: "Could not connect to the meeting.",
     idleReaped: true,
+    sessionDisplaced: true,
     connection: "reconnecting",
     isRoomHost: false,
   };
@@ -147,16 +159,30 @@ test("every new field round-trips through the builder and the validator", () => 
   });
   assert.equal(built.connection, "reconnecting");
   assert.equal(built.isRoomHost, false);
+  assert.equal(built.sessionDisplaced, true);
 });
 
 test("the builder leaves out what it was not given, and keeps null as 'no error'", () => {
   const bare = buildBridgeWidgetSnapshot(baseFields, 1);
-  for (const key of ["translation", "transcriptPause", "creditsSuspended", "meetingError", "idleReaped", "connection", "isRoomHost"]) {
+  for (const key of [
+    "translation",
+    "transcriptPause",
+    "creditsSuspended",
+    "meetingError",
+    "idleReaped",
+    "sessionDisplaced",
+    "connection",
+    "isRoomHost",
+  ]) {
     assert.equal(key in bare, false, `${key} must not be sent when not given`);
   }
-  const cleared = buildBridgeWidgetSnapshot({ ...baseFields, meetingError: null, creditsSuspended: false }, 1);
+  const cleared = buildBridgeWidgetSnapshot(
+    { ...baseFields, meetingError: null, creditsSuspended: false, sessionDisplaced: false },
+    1,
+  );
   assert.equal(cleared.meetingError, null);
   assert.equal(cleared.creditsSuspended, false);
+  assert.equal(cleared.sessionDisplaced, false, "taken back is said, so the popup drops the notice");
   const parsed = parsedSnapshot({ meetingError: null, creditsSuspended: false });
   assert.equal(parsed.meetingError, null);
   assert.equal(parsed.creditsSuspended, false);
@@ -170,6 +196,7 @@ test("an unreadable new field is dropped on its own; the rest of the snapshot su
     creditsSuspendedReason: "x".repeat(65),
     meetingError: 42,
     idleReaped: 1,
+    sessionDisplaced: "yes",
     connection: "teleporting",
     isRoomHost: "host",
     inboundHealth: "listening",
@@ -183,6 +210,7 @@ test("an unreadable new field is dropped on its own; the rest of the snapshot su
     "creditsSuspendedReason",
     "meetingError",
     "idleReaped",
+    "sessionDisplaced",
     "connection",
     "isRoomHost",
   ]) {
@@ -230,12 +258,16 @@ test("translation: the main window's answer wins at once; without it the REST fa
 
 test("a main window that left stops being the answer", () => {
   const gone = run([
-    { type: "snapshot-received", snapshot: parsedSnapshot({ translation: { started: true }, isRoomHost: true }) },
+    {
+      type: "snapshot-received",
+      snapshot: parsedSnapshot({ translation: { started: true }, isRoomHost: true, sessionDisplaced: true }),
+    },
     { type: "host-gone" },
   ]);
   assert.deepEqual(bridgeWidgetTranslationState(gone, { started: false }), { started: false, mirrored: false });
   assert.equal(bridgeWidgetIsRoomHost(gone, false), false);
   assert.equal(bridgeWidgetMeetingStatus(gone).idleReaped, false);
+  assert.equal(bridgeWidgetMeetingStatus(gone).sessionDisplaced, false);
 });
 
 test("pause: 'not told yet' from the main window does not overrule what the popup already knows", () => {
@@ -265,6 +297,7 @@ test("meeting status claims nothing without a main window, and reads what one sa
     creditsSuspendedReason: null,
     meetingError: null,
     idleReaped: false,
+    sessionDisplaced: false,
     connection: null,
   });
   const view = connected(
@@ -273,6 +306,7 @@ test("meeting status claims nothing without a main window, and reads what one sa
       creditsSuspendedReason: "invoice_overdue",
       meetingError: "Could not connect.",
       idleReaped: true,
+      sessionDisplaced: true,
       connection: "disconnected",
     }),
   );
@@ -281,6 +315,7 @@ test("meeting status claims nothing without a main window, and reads what one sa
     creditsSuspendedReason: "invoice_overdue",
     meetingError: "Could not connect.",
     idleReaped: true,
+    sessionDisplaced: true,
     connection: "disconnected",
   });
 });
