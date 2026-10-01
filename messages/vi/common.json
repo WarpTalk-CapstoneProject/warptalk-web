@@ -287,6 +287,8 @@
     "connect": "Kết nối",
     "useInThisChat": "Dùng {label} trong cuộc trò chuyện này",
     "noToolsForPage": "Không có công cụ nào cho trang này. Hãy mở một cuộc họp hoặc tài liệu.",
+    "exploreTools": "Khám phá",
+    "browseAllTools": "Xem các công cụ WarpBot",
     "installPluginsHint": "Cài đặt plugin từ Cài đặt cá nhân.",
     "loadingConversations": "Đang tải cuộc trò chuyện…",
     "loadHistoryFailed": "Không thể tải lịch sử trò chuyện.",

@@ -1,0 +1,56 @@
+{
+  "title": "WarpBot tools",
+  "subtitle": "What WarpBot can do in this workspace, and how to ask for it.",
+  "searchPlaceholder": "Search tools",
+  "clearSearch": "Clear search",
+  "categoryFilterLabel": "Filter built-in tools by category",
+  "categories": {
+    "all": "All",
+    "meetings": "Meetings",
+    "knowledge": "Knowledge",
+    "documents": "Documents",
+    "glossary": "Glossary",
+    "translation": "Translation",
+    "workspace": "Workspace",
+    "conversation": "Conversation",
+    "platform": "Platform"
+  },
+  "badges": {
+    "changesData": "Changes data",
+    "asksFirst": "Asks you first"
+  },
+  "row": {
+    "hostOnly": "Meeting host only. Anyone can ask, but only the meeting's host can share its minutes.",
+    "platformOnly": "Visible to WarpTalk platform staff only.",
+    "samplePrompts": "Try asking",
+    "tryInWarpBot": "Try in WarpBot",
+    "tryAria": "Try in WarpBot: {prompt}"
+  },
+  "tryToast": "Prompt sent to WarpBot",
+  "builtIn": {
+    "title": "Built in",
+    "description": "Tools WarpBot uses on its own when your question needs them.",
+    "empty": "No built-in tools match your search."
+  },
+  "webSearch": {
+    "title": "Web search",
+    "description": "Answers from the public web, with links to the sources.",
+    "name": "Search the web",
+    "rowDescription": "Looks things up on the public web and cites the pages it used.",
+    "unknownNote": "Available when your workspace allows it. When WarpBot searches the web, its answer says so and links the pages.",
+    "empty": "Web search does not match your search."
+  },
+  "plugins": {
+    "title": "From your plugins",
+    "description": "Tools from plugins you connected that this workspace has. Tools you blocked are not listed.",
+    "loading": "Loading your plugins",
+    "error": "Could not load your plugins.",
+    "retry": "Retry",
+    "emptyTitle": "No plugin tools yet",
+    "emptyDescription": "Connect a plugin this workspace has, and the tools WarpBot can use from it show up here.",
+    "openConnections": "Open My connections",
+    "manage": "Manage plugins",
+    "noMatches": "No plugin tools match your search.",
+    "toolCount": "{count, plural, one {# tool} other {# tools}}"
+  }
+}
