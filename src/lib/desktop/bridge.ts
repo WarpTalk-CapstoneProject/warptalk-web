@@ -47,6 +47,38 @@ export interface VirtualAudioStatus {
   };
   riskControls?: VirtualAudioRiskControl[];
   foreignDrivers: string[];
+  /**
+   * What each side of VB-Audio Hi-Fi Cable is set to in Windows Sound settings.
+   *
+   * Hi-Fi Cable passes NO audio at all when "Hi-Fi Cable Input" (the playback side Meet renders
+   * into) and "Hi-Fi Cable Output" (the recording side WarpTalk reads) differ in sample rate or bit
+   * depth — the tone test then fails with nothing to say why. Optional because desktop builds
+   * older than this field never send it; a side is null when the device is not installed or its
+   * format could not be read.
+   */
+  hifiFormat?: HiFiCableFormats;
+  /** The desktop app's own verdict on `hifiFormat`. Absent on older builds; see hifi-format.ts. */
+  hifiFormatMismatch?: boolean;
+}
+
+/** One Windows endpoint's shared-mode format, as the desktop app read it from the registry. */
+export interface EndpointFormat {
+  sampleRate: number;
+  bitsPerSample: number;
+  channels: number;
+}
+
+export interface HiFiCableFormats {
+  input: EndpointFormat | null;
+  output: EndpointFormat | null;
+}
+
+/** `before`/`after` let the caller say what changed rather than only that something did. */
+export interface HiFiCableAlignResult {
+  ok: boolean;
+  before: HiFiCableFormats;
+  after: HiFiCableFormats;
+  error?: string;
 }
 
 export interface VirtualAudioRiskControl {
@@ -110,6 +142,8 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
+  /** Sets both sides of Hi-Fi Cable to one format. Newer desktop builds only. */
+  alignHiFiCableFormat?: () => Promise<HiFiCableAlignResult>;
   openTranscriptWindow?: (roomId: string | null) => Promise<void>;
   activateRoom?: (roomId: string) => Promise<void>;
   onRoomActivated?: (callback: (roomId: string) => void) => () => void;

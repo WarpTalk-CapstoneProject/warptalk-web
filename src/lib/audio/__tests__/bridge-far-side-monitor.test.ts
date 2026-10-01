@@ -7,6 +7,7 @@ import {
   clampMeetingAudioLevel,
   farSideMonitorGain,
   shouldMonitorFarSide,
+  shouldShowMeetSpeakerResetNotice,
 } from "../bridge-far-side-monitor.ts";
 
 test("only a virtual-device source is monitored", () => {
@@ -38,4 +39,14 @@ test("a chosen level is bounded, and an unreadable one falls back to the default
   assert.equal(clampMeetingAudioLevel(4), FAR_SIDE_MONITOR_FULL);
   assert.equal(clampMeetingAudioLevel(Number.NaN), FAR_SIDE_MONITOR_UNDER_DUB);
   assert.equal(farSideMonitorGain(true, 7), FAR_SIDE_MONITOR_FULL);
+});
+
+test("hosts who may still point Meet at Hi-Fi Cable are told to undo it, only on the loopback path", () => {
+  // Loopback in use and the cable still installed: the old advice leaves the host hearing nothing.
+  assert.equal(shouldShowMeetSpeakerResetNotice("loopback", true), true);
+  // No cable, nothing the host could have pointed Meet at.
+  assert.equal(shouldShowMeetSpeakerResetNotice("loopback", false), false);
+  // On the device path the monitor plays the call back, so the cable setting is still the right one.
+  assert.equal(shouldShowMeetSpeakerResetNotice("device", true), false);
+  assert.equal(shouldShowMeetSpeakerResetNotice(null, true), false);
 });
