@@ -762,7 +762,51 @@ function mergeTranscriptSegment(
             }
           : existing,
       )
-    : [...current, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }];
+    : insertByStartTime(current, { ...segment, receivedAt: segment.receivedAt ?? Date.now() });
+}
+
+/**
+ * How far back on the meeting clock a NEW line may be inserted rather than appended.
+ *
+ * Late lines are real and bounded: a translation held for its predecessor (10 s), a message
+ * retried by the stale reclaim (about a minute). A line much further back than that is not late,
+ * it is on a different clock — the STT worker lost the room's anchor and started counting from
+ * zero again — and inserting it by start time would bury it above minutes of conversation.
+ */
+export const LATE_LINE_WINDOW_MS = 120_000;
+
+/**
+ * Puts a NEW live line where it was spoken: after every line that started at the same time or
+ * earlier, before the first one that started later. Arrival order is not speech order — two
+ * speakers' lines are transcribed in parallel, and a retried line comes back late — and the
+ * owner's rule is that a later sentence never shows above an earlier one.
+ *
+ * `startTimeMs` is on the room's anchor clock (stt_worker `_elapsed_ms`, WT-421), not a per-track
+ * offset; the per-track reset that `dedupeTranscriptSegments` once defended against is gone.
+ * Ties keep arrival order. Exported for tests.
+ */
+export function insertByStartTime(
+  current: TranscriptSegmentDto[],
+  segment: TranscriptSegmentDto,
+): TranscriptSegmentDto[] {
+  const start = segment.startTimeMs;
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const existing of current) {
+    if (existing.startTimeMs > latest) latest = existing.startTimeMs;
+  }
+  if (!Number.isFinite(start) || current.length === 0 || start >= latest || latest - start > LATE_LINE_WINDOW_MS) {
+    return [...current, segment];
+  }
+  // Scan from the end: a late line is almost always within the last few.
+  let index = current.length;
+  while (index > 0 && current[index - 1].startTimeMs > start) index -= 1;
+  return [...current.slice(0, index), segment, ...current.slice(index)];
+}
+
+/** The sentence index a translation carries in its own id, `{source}-{lang}-c{n}`; null if none. */
+function sentenceIndexOf(translation: TranslationTextDto): number | null {
+  const match = /-c(\d+)$/.exec(translation.segmentId ?? "");
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -810,20 +854,21 @@ function mergeTranslationText(
 
   if (existingIndex === -1) {
     if (!createIfMissing) return current;
-    return [
-      ...current,
-      {
-        segmentId: joinKey,
-        speakerId: translation.speakerId,
-        speakerName: "Speaker",
-        originalText: translation.originalText,
-        originalLanguage: translation.sourceLang,
-        translations: { [language]: translation.translatedText },
-        confidence: 1,
-        startTimeMs: translation.startTimeMs ?? 0,
-        endTimeMs: translation.endTimeMs ?? 0,
-      },
-    ];
+    const sentence = sentenceIndexOf(translation);
+    return insertByStartTime(current, {
+      segmentId: joinKey,
+      speakerId: translation.speakerId,
+      speakerName: "Speaker",
+      originalText: translation.originalText,
+      originalLanguage: translation.sourceLang,
+      translations: { [language]: translation.translatedText },
+      ...(sentence === null
+        ? {}
+        : { translationSentences: { [language]: placeSentence([], sentence, translation.translatedText) } }),
+      confidence: 1,
+      startTimeMs: translation.startTimeMs ?? 0,
+      endTimeMs: translation.endTimeMs ?? 0,
+    });
   }
 
   const segment = current[existingIndex];
@@ -834,11 +879,28 @@ function mergeTranslationText(
   // segment's first one). Now scoped to the language being written: sentence 2 of the
   // Vietnamese translation must never be appended to the English one, which is what a
   // single shared slot made possible whenever two languages interleaved.
+  //
+  // `chunkIndex` on the wire is the STT AUDIO chunk counter, not the sentence number, so it says
+  // "append" for every sentence after a track's first chunk and "replace" for every sentence of
+  // that first chunk — the second sentence of somebody's first utterance overwrote the first. The
+  // sentence number is the `-c{n}` suffix of the translation's own id; when it is present each
+  // sentence has its own slot, so a late or repeated one cannot land after a later sentence or on
+  // top of itself. The chunkIndex rule stays only for messages without the suffix.
   const previous = existingTranslations[language];
-  const text =
-    chunkIndex > 0 && previous
-      ? `${previous} ${translation.translatedText}`.trim()
-      : translation.translatedText;
+  const sentence = sentenceIndexOf(translation);
+  const existingSentences = segment.translationSentences?.[language];
+  let text: string;
+  let translationSentences = segment.translationSentences;
+  if (sentence !== null) {
+    const sentences = placeSentence(existingSentences ?? [], sentence, translation.translatedText);
+    translationSentences = { ...(segment.translationSentences ?? {}), [language]: sentences };
+    text = sentences.filter((part) => part).join(" ").trim();
+  } else {
+    text =
+      chunkIndex > 0 && previous
+        ? `${previous} ${translation.translatedText}`.trim()
+        : translation.translatedText;
+  }
 
   const next = current.slice();
   next[existingIndex] = {
@@ -846,9 +908,17 @@ function mergeTranslationText(
     originalText: segment.originalText || translation.originalText,
     originalLanguage: segment.originalLanguage || translation.sourceLang,
     translations: { ...existingTranslations, [language]: text },
+    ...(translationSentences ? { translationSentences } : {}),
     startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
     endTimeMs: translation.endTimeMs || segment.endTimeMs,
   };
+  return next;
+}
+
+function placeSentence(sentences: string[], index: number, text: string): string[] {
+  const next = sentences.slice();
+  while (next.length < index) next.push("");
+  next[index] = text;
   return next;
 }
 
