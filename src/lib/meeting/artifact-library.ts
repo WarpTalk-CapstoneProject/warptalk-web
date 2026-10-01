@@ -39,6 +39,11 @@ import type { WorkspaceMinutesItem } from "@/types/workspaceMinutes";
 
 export type ArtifactKind = "transcript" | "summary" | "minutes";
 
+/** The `?kind=` a record page was opened with, or null when it is absent or not a known kind. */
+export function parseKindParam(raw: string | null | undefined): ArtifactKind | null {
+  return raw === "transcript" || raw === "summary" || raw === "minutes" ? raw : null;
+}
+
 /**
  * Why an entry has no body to show. Never collapsed into one "unavailable": the three need
  * different sentences because they need different next actions — wait, ask the host, or accept
