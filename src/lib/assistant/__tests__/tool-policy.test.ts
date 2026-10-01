@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  effectiveToolPolicyOf,
   groupToolsByEffect,
+  memberCanChooseToolPolicy,
   pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
   summarizeToolPolicies,
@@ -10,6 +12,11 @@ import {
   toolPolicyOf,
   trustsAWriteTool,
   writeDisabledPluginKeys,
+  strictestToolPolicy,
+  withWorkspaceToolRule,
+  WORKSPACE_TOOL_RULE_OPTIONS,
+  workspaceRuleOf,
+  workspaceWriteLock,
   writeToolPolicyUpdate,
   type KeyValueStore,
 } from "../tool-policy.ts";
@@ -127,5 +134,69 @@ describe("disabled plugins per conversation", () => {
   test("togglePluginKey switches one key", () => {
     assert.deepEqual(togglePluginKey([], "linear"), ["linear"]);
     assert.deepEqual(togglePluginKey(["linear", "notion"], "linear"), ["notion"]);
+  });
+});
+
+describe("workspace rules (wave 2)", () => {
+  test("the stricter of the member's choice and the workspace rule wins", () => {
+    assert.equal(strictestToolPolicy("allow", null), "allow");
+    assert.equal(strictestToolPolicy("allow", "approval"), "approval");
+    assert.equal(strictestToolPolicy("blocked", "approval"), "blocked");
+    assert.equal(strictestToolPolicy("approval", "blocked"), "blocked");
+  });
+
+  test("effectiveToolPolicyOf reads the rule beside the member's own policy", () => {
+    assert.equal(effectiveToolPolicyOf(tool({ effect: "write", policy: "allow", workspacePolicy: "approval" })), "approval");
+    assert.equal(effectiveToolPolicyOf(tool({ effect: "read", workspacePolicy: "blocked" })), "blocked");
+    assert.equal(effectiveToolPolicyOf(tool({ effect: "read", workspacePolicy: null })), "allow");
+  });
+
+  test("an unknown rule value is ignored, as the server ignores it", () => {
+    assert.equal(workspaceRuleOf(tool({ workspacePolicy: "allow" as never })), null);
+    assert.equal(workspaceRuleOf(tool({})), null);
+  });
+
+  test("a member may only choose something at least as strict as the rule", () => {
+    assert.equal(memberCanChooseToolPolicy("allow", null), true);
+    assert.equal(memberCanChooseToolPolicy("allow", "approval"), false);
+    assert.equal(memberCanChooseToolPolicy("approval", "approval"), true);
+    assert.equal(memberCanChooseToolPolicy("blocked", "approval"), true);
+    assert.equal(memberCanChooseToolPolicy("approval", "blocked"), false);
+    assert.equal(memberCanChooseToolPolicy("blocked", "blocked"), true);
+  });
+
+  test("the Owner's control offers member's choice, ask and blocked — never allow", () => {
+    assert.deepEqual([...WORKSPACE_TOOL_RULE_OPTIONS], [null, "approval", "blocked"]);
+  });
+
+  test("withWorkspaceToolRule replaces one tool's rule and leaves the rest", () => {
+    const dto = {
+      pluginKey: "linear",
+      pluginLabel: "Linear",
+      canManage: true,
+      tools: [
+        { name: "a", label: "A", description: "", effect: "read" as const, workspacePolicy: null },
+        { name: "b", label: "B", description: "", effect: "write" as const, workspacePolicy: "blocked" as const },
+      ],
+    };
+    const next = withWorkspaceToolRule(dto, "a", "approval");
+    assert.equal(next.tools[0]!.workspacePolicy, "approval");
+    assert.equal(next.tools[1]!.workspacePolicy, "blocked");
+    assert.equal(dto.tools[0]!.workspacePolicy, null, "the cached list is not mutated");
+    assert.equal(withWorkspaceToolRule(dto, "b", null).tools[1]!.workspacePolicy, null);
+  });
+
+  test("write tools under a rule are left out of Always allow, and lock it when they are all ruled", () => {
+    const ruled = tool({ name: "create", effect: "write", policy: "approval", workspacePolicy: "approval" });
+    const free = tool({ name: "update", effect: "write", policy: "allow" });
+    assert.equal(workspaceWriteLock([ruled, free]), "some");
+    assert.equal(pluginWritesAlwaysAllowed([ruled, free]), true);
+    assert.deepEqual(writeToolPolicyUpdate([ruled, free], true), { update: "allow" });
+
+    assert.equal(workspaceWriteLock([ruled]), "all");
+    assert.equal(pluginWritesAlwaysAllowed([ruled]), false);
+    assert.deepEqual(writeToolPolicyUpdate([ruled], true), {});
+
+    assert.equal(workspaceWriteLock([free]), null);
   });
 });

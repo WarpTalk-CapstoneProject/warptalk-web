@@ -46,7 +46,6 @@
     "floorNote": "Read up to a limit; the real figure may be higher",
     "withoutDuration": "{count, plural, one {# meeting did not record how long it ran and is left out} other {# meetings did not record how long they ran and are left out}}",
     "hoursNote": "Time from start to end of the meetings held in this period",
-    "successNote": "Of the newest {count, plural, one {# call} other {# calls}} read; older calls in this period were not read",
     "noCalls": "No calls this period"
   },
   "snapshot": {
@@ -90,9 +89,8 @@
       "healthy": "Working",
       "noCalls": "No calls yet"
     },
-    "noCallsHint": "No plugin calls in this period",
+    "noCallsHint": "No WarpBot tool calls in this period",
     "calls": "{count, plural, one {{value} call} other {{value} calls}} this period",
-    "callsAtLeast": "at least {count, plural, one {{value} call} other {{value} calls}} this period",
     "success": "{percent} success",
     "blocked": "{count} blocked by policy",
     "needsSetup": "{count} need setup",
@@ -133,10 +131,16 @@
     "hoursCaption": "{hours} translated",
     "hoursUnknown": "Hours not available",
     "hoursSuffix": "{hours} translated",
-    "pluginsTitle": "Tool calls by plugin",
-    "pluginsCaption": "WarpBot calls · {period}",
-    "pluginsAria": "WarpBot tool calls by plugin",
-    "noToolCalls": "No plugin calls in this period",
+    "toolSourcesTitle": "Tool calls by source",
+    "toolSourcesCaption": "Built-in, web search and plugin calls · {period}",
+    "toolSourcesAria": "WarpBot tool calls by source",
+    "toolOrigin": {
+      "builtin": "Built-in tools",
+      "webSearch": "Web search",
+      "plugin": "Plugin",
+      "other": "Other"
+    },
+    "noToolCalls": "No tool calls in this period",
     "callsValue": "{count, plural, one {{value} call} other {{value} calls}}"
   },
   "attention": {
@@ -214,6 +218,8 @@
       "succeeded": "Succeeded",
       "blocked": "Blocked",
       "blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+      "workspaceToolBlocked": "Blocked by workspace",
+      "workspaceToolBlockedHint": "The workspace Owner blocked this tool for WarpBot. Only the Owner can allow it again, on the workspace plugin page.",
       "awaitingConfirmation": "Awaiting confirmation",
       "awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
       "needsSetup": "Needs setup",

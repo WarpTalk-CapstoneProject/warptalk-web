@@ -50,6 +50,11 @@ export const API = {
   voiceProfiles: {
     list: "/auth/voice-profiles",
     create: "/auth/voice-profiles",
+    /**
+     * WT-888 — a random phrase to read aloud for a new profile. The recording must say it, and is
+     * uploaded to `create` with the returned challengeId; nothing else becomes a voice profile.
+     */
+    challenges: "/auth/voice-profiles/challenges",
     delete: (id: string) => `/auth/voice-profiles/${id}`,
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
@@ -402,6 +407,8 @@ export const API = {
       sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
     },
     skills: "/assistant/skills",
+    /** GET ?workspaceId= — WarpBot's built-in tools, web search state and offered plugin tools. */
+    tools: "/assistant/tools",
     plugins: "/assistant/plugins",
     installPlugin: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
@@ -431,6 +438,13 @@ export const API = {
      */
     workspacePluginToolAudits: "/assistant/mcp/tools/audits",
     /**
+     * Every WarpBot tool call of one workspace over `from`/`to` (ISO, UTC), counted by the
+     * assistant service: totals, by source, by UTC day and by tool (wave 4). Owner/Admin only, the
+     * audit log's check. At most 180 days; the default is the last 30.
+     */
+    workspaceToolInsights: (workspaceId: string) =>
+      `/assistant/workspaces/${encodeURIComponent(workspaceId)}/insights/tools`,
+    /**
      * The workspace half of the plugin marketplace (2026-09-17). Its own prefix rather than more
      * literals under `/assistant/plugins`, where every literal beside `{pluginKey}` reserves a key.
      * Authorised against the workspace in the path: reads Owner/Admin, writes Owner, requests any
@@ -449,6 +463,9 @@ export const API = {
       /** Members who connected the plugin — Owner or Admin; connection metadata only. */
       members: (workspaceId: string, pluginKey: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/members`,
+      /** The Owner's per-tool rules — GET Owner or Admin, PUT Owner. */
+      toolPolicies: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/tool-policies`,
       requests: (workspaceId: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
       myRequests: (workspaceId: string) =>

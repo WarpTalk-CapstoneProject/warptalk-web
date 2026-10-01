@@ -1,3 +1,5 @@
+import { formatDurationMs } from "@/lib/workspace/insights/tools-metrics";
+
 /**
  * Locale-aware formatting for the Tools tab. Day keys are calendar dates (YYYY-MM-DD in the page's
  * time zone), so they are labelled as UTC dates: the key is the day, no instant is re-bucketed.
@@ -25,6 +27,7 @@ export function toolsFormatters(locale: string, timeZone: string) {
     timeZone,
   });
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
+  const date = new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric", timeZone });
 
   return {
     count: (value: number) => count.format(value),
@@ -42,6 +45,13 @@ export function toolsFormatters(locale: string, timeZone: string) {
       const ms = Date.parse(iso);
       return Number.isFinite(ms) ? dateTime.format(new Date(ms)) : iso;
     },
+    /** A calendar date in the page's zone: "Oct 1, 2026". */
+    date: (value: Date | string) => {
+      const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+      return Number.isFinite(ms) ? date.format(new Date(ms)) : String(value);
+    },
+    /** A median call time: "850 ms", "1.2 s"; "—" when not measured. */
+    duration: (ms: number | null | undefined) => formatDurationMs(ms, locale) ?? "—",
     /** "4 min ago", measured against `nowMs` (passed in so rendering stays pure). */
     ago: (iso: string, nowMs: number) => {
       const ms = Date.parse(iso);

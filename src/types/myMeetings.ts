@@ -52,8 +52,8 @@ export interface MyMeetingItem {
 
   /**
    * The moment this meeting belongs to on the timeline — booked slot, else when it actually
-   * started, else when it ended, else when it was created. Mirrors the ordering the server sorts
-   * by, so the grouping the user sees cannot disagree with the order rows arrived in.
+   * started, else when it was created. Mirrors the server's range filter and sort, so a meeting is
+   * placed on the same day the server fetched it for (see lib/meeting/meeting-occurs-at.ts).
    */
   occursAt: string;
 
