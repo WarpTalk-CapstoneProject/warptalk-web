@@ -259,7 +259,7 @@
     "test:bridge-overlay": "node scripts/check-bridge-overlay-contract.mjs",
     "test:bridge-overlay-start": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-overlay-start.test.ts",
     "test:bridge-capture-consent-relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-capture-consent-relay.test.ts",
-    "test:bridge-widget-relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-widget-relay.test.ts src/lib/meeting/__tests__/bridge-widget-relay-voice.test.ts",
+    "test:bridge-widget-relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-widget-relay.test.ts src/lib/meeting/__tests__/bridge-widget-relay-voice.test.ts src/lib/meeting/__tests__/bridge-widget-relay-meeting.test.ts",
     "test:bridge-widget-relay-contract": "node scripts/check-bridge-widget-relay-contract.mjs",
     "test:bridge-tiers": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/desktop/__tests__/bridge-tiers.test.ts",
     "test:windows-loopback-pcm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/audio/__tests__/windows-loopback-pcm.test.ts",

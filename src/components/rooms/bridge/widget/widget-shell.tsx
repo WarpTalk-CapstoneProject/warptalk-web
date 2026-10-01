@@ -3,9 +3,10 @@
 /**
  * The layout of the Meet widget. WT-525, Phase 2.
  *
- *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  [End · t3] ┐
+ *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  Reconnecting… ┐
  *   ├ consent, only while the main window is asking ───────────────────────────────┤
  *   ├ "No sound from Meet yet", only before the main window has heard anything ───┤
+ *   ├ credits stop / meeting error / "Disconnected · Rejoin meeting" (WT-901) ─────┤
  *   │                                                                               │
  *   │   TranscriptPane (t2)   or   WarpBotPane (t5)                                 │
  *   │                                                                               │
@@ -13,12 +14,17 @@
  *   │ [session t3] │ [language t4]                    [Text | Voice] [settings t4] │
  *   └───────────────────────────────────────────────────────────────────────────────┘
  *
- *   Once `ended`, EndedView (t3) replaces the tabs and the dock.
+ *   Once the room is ENDED, EndedView (t3) replaces the tabs and the dock.
+ *
+ * NO END (PO, 2026-10-01)
+ *   The popup does not end a bridge meeting: it ends when the Google Meet conference does, which
+ *   the backend learns from Google. The End button that used to sit at the right of the tab row is
+ *   gone; the dock carries translation controls only (Start/Stop, Pause/Resume transcript).
  *
  * ONE TOP ROW, NOT TWO
- *   The status and End used to sit in a header row of their own above the tabs. In a window this
- *   small, floating over the call, that was a whole line spent on one word and one button, so they
- *   now share the tab row: tabs on the left, status and End on the right.
+ *   The status used to sit in a header row of its own above the tabs. In a window this small,
+ *   floating over the call, that was a whole line spent on one word, so it now shares the tab row:
+ *   tabs on the left, status on the right.
  *
  * The shell passes its slots NO props — see widget-context.tsx. Adding something a slot needs is
  * a change to the context, never to this file.
@@ -27,7 +33,7 @@
  *   - Mic, camera, chat, leave. Google Meet owns the call, including in its own PiP window.
  *   - A participant chat tab. Exactly two tabs: Transcript and WarpBot.
  *   - A Leave button. In a bridge room the stand-in never disconnects, so leaving would orphan the
- *     room; End (t3) is the one exit.
+ *     room. Nor an End: see above.
  *   - Colours. Theme tokens only: this window floats among the user's own, and the hardcoded
  *     black background WT-577 removed is the complaint that rule exists for.
  */
@@ -43,12 +49,13 @@ import { DockFarSideLanguagePill, FarSideLanguageNotice } from "./dock-far-side-
 import { DockLanguagePill } from "./dock-language-pill";
 import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
-import { EndSessionButton } from "./end-session";
 import { EndedView } from "./ended-view";
+import { MeetingNotices } from "./meeting-notices";
 import { SettingsFlyout } from "./settings-flyout";
-import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import { TranscriptPane } from "./transcript-pane";
 import { WarpBotPane } from "./warpbot-pane";
+import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
+
 import {
   useBridgeWidget,
   type BridgeWidgetConnectionState,
@@ -75,6 +82,7 @@ export function WidgetShell() {
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
           <InboundNoSignalNotice />
+          <MeetingNotices />
         </WidgetTabs>
       )}
       {ended ? null : <WidgetDock />}
@@ -96,8 +104,9 @@ export function WidgetShell() {
  * including against a main window old enough not to send the field.
  */
 function InboundNoSignalNotice() {
-  const { roomId } = useBridgeWidget();
-  const { view } = useBridgeWidgetRelayClient(roomId);
+  const {
+    relay: { view },
+  } = useBridgeWidget();
   const noSignal = view.status === "connected" && view.snapshot?.inboundHealth === "no-signal";
   if (!noSignal) return null;
 
@@ -133,10 +142,28 @@ const CONNECTION_NOTE: Partial<Record<BridgeWidgetConnectionState, string>> = {
   failed: "Disconnected",
 };
 
+/**
+ * WT-901 / WT-868: the MEETING's connection, from the main window — the one that carries the
+ * user's voice and the dub, which the main window no longer shows anywhere a bridge host looks.
+ * It speaks for the call, so it wins over this window's own hub note when both have something to
+ * say. "Disconnected" is left to the idle-reaped notice when that is the cause, which says why and
+ * what to press.
+ */
+const MEETING_CONNECTION_NOTE: Partial<Record<BridgeWidgetMeetingConnection, string>> = {
+  connecting: "Connecting…",
+  reconnecting: "Reconnecting…",
+  disconnected: "Disconnected",
+};
+
 function WidgetStatus() {
-  const { translationStatus, transcriptPaused, connectionState } = useBridgeWidget();
+  const { translationStatus, transcriptPaused, connectionState, meetingConnection, idleReaped } =
+    useBridgeWidget();
   const status = STATUS[translationStatus];
-  const connectionNote = CONNECTION_NOTE[connectionState];
+  const meetingNote =
+    meetingConnection && !(idleReaped && meetingConnection === "disconnected")
+      ? MEETING_CONNECTION_NOTE[meetingConnection]
+      : undefined;
+  const connectionNote = meetingNote ?? CONNECTION_NOTE[connectionState];
 
   return (
     <div
@@ -163,8 +190,6 @@ function WidgetStatus() {
           {connectionNote}
         </span>
       ) : null}
-
-      <EndSessionButton />
     </div>
   );
 }
