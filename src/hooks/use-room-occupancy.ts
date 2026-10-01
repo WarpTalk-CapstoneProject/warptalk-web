@@ -3,7 +3,11 @@
 import { useMemo } from "react";
 
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
-import { roomOccupancy, type RoomOccupancy } from "@/lib/meeting/room-occupancy";
+import {
+  discountBridgeStandIn,
+  roomOccupancy,
+  type RoomOccupancy,
+} from "@/lib/meeting/room-occupancy";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type {
   TranslationRoomDto,
@@ -50,14 +54,21 @@ export function useRoomOccupancy(
             ? mergeParticipants([], liveForThisRoom)
             : null;
 
-    return roomOccupancy<TranslationRoomParticipantDto>({
+    // WT-904: an external meeting's Google Meet stand-in is a connection, not a person.
+    const people = discountBridgeStandIn({
+      roster,
       capacity: room?.maxParticipants,
-      participants: roster,
+      attendedCount: room?.attendedCount,
+    });
+
+    return roomOccupancy<TranslationRoomParticipantDto>({
+      capacity: people.capacity,
+      participants: people.roster,
       fallbackCount: room?.participantCount,
       // A finished meeting reports how many turned up. Live occupancy is 0 for every room that
       // has ended, so "0/100" was the only thing a finished meeting could ever say.
       status: room?.status,
-      attendedCount: room?.attendedCount,
+      attendedCount: people.attendedCount,
     });
   }, [
     apiParticipants,

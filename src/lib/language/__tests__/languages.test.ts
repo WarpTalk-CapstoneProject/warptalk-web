@@ -8,6 +8,7 @@ import {
   getLanguageName,
   isLanguageAllowedByPolicy,
   languagesInScope,
+  meetingLanguagePickerOptions,
   meetingLanguagesForPolicy,
   normalizeLanguageCode,
   normalizeLanguagePolicy,
@@ -144,6 +145,34 @@ test("the policy is compared on bare codes however either side spells them", () 
   assert.equal(isLanguageAllowedByPolicy("en-US", ["en", "vi"]), true);
   assert.equal(isLanguageAllowedByPolicy("ko-KR", ["en", "vi"]), false);
   assert.deepEqual(normalizeLanguagePolicy(["EN", "vi-VN", "en"]), ["en", "vi"]);
+});
+
+test("the meeting-language picker lists only what the workspace permits", () => {
+  // The owner's screenshot: policy vi/en/ja, and the picker still listed Korean, French and
+  // Spanish greyed out under a "Blocked" tag. A forbidden language is not offered at all.
+  const codes = (selected: string[], policy?: string[] | null) =>
+    meetingLanguagePickerOptions(selected, policy).map((language) => language.code);
+
+  assert.deepEqual(codes(["vi-VN", "en-US"], ["en", "vi", "ja"]), ["vi", "en", "ja"]);
+  assert.deepEqual(codes(["vi", "en"], ["en", "vi", "ja"]), ["vi", "en", "ja"]);
+
+  // Empty or missing policy is unrestricted, as everywhere else.
+  for (const policy of [[], undefined, null]) {
+    assert.deepEqual(codes(["vi-VN"], policy), ["vi", "en", "ja", "ko", "fr", "es"]);
+  }
+});
+
+test("a forbidden language the room already holds stays listed while it is selected", () => {
+  // A room created before the policy was tightened. Hiding Korean would hide the only control
+  // that can remove it, and the server would keep refusing the saved set.
+  const codes = (selected: string[], policy?: string[] | null) =>
+    meetingLanguagePickerOptions(selected, policy).map((language) => language.code);
+
+  assert.deepEqual(codes(["vi-VN", "ko-KR"], ["en", "vi", "ja"]), ["vi", "en", "ja", "ko"]);
+  // Either spelling of the stored value counts as held.
+  assert.deepEqual(codes(["vi", "ko"], ["en", "vi", "ja"]), ["vi", "en", "ja", "ko"]);
+  // Once removed, it is gone from the list — it cannot be put back.
+  assert.deepEqual(codes(["vi-VN"], ["en", "vi", "ja"]), ["vi", "en", "ja"]);
 });
 
 test("a picked set is trimmed to the policy, never emptied", () => {

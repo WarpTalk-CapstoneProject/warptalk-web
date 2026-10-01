@@ -27,12 +27,17 @@ const supportedLocales = [
 ];
 
 // The locales used to be spelled out in the picker itself. They now live once, in the
-// language registry, and the picker asks it for everything in the "meeting" scope — so the
-// contract is checked where the values actually are.
+// language registry, and the picker asks it for the "meeting" scope through
+// meetingLanguagePickerOptions — so the contract is checked where the values actually are.
 assert.match(
   selectorSource,
-  /languagesInScope\("meeting"\)/,
+  /meetingLanguagePickerOptions\(/,
   "Create-room language picker must take its options from the language registry.",
+);
+assert.match(
+  registrySource,
+  /export function meetingLanguagePickerOptions\([\s\S]*?languagesInScope\("meeting"\)/,
+  "The picker's options must be the registry's meeting scope.",
 );
 assert.match(
   selectorSource,
@@ -112,8 +117,31 @@ assert.match(
 );
 assert.match(
   selectorSource,
-  /isLanguageAllowedByPolicy\(\s*language\.code,\s*allowedTargetLanguages,?\s*\)/,
-  "Create-room language picker must check every option against the workspace policy.",
+  /meetingLanguagePickerOptions\(\s*selected,\s*allowedTargetLanguages,?\s*\)/,
+  "Create-room language picker must narrow its options to the workspace policy, keeping only "
+    + "what the room already holds.",
+);
+assert.match(
+  registrySource,
+  /export function meetingLanguagePickerOptions\([\s\S]*?isLanguageAllowedByPolicy\(language\.code,\s*allowedTargetLanguages\)\s*\|\|\s*picked\.has\(language\.code\)/,
+  "The picker must list a permitted language, or a forbidden one only while it is selected.",
+);
+// Owner, 1 Oct 2026: a forbidden language is not offered at all — no greyed row, no "Blocked"
+// tag, no footnote pointing at workspace settings.
+assert.doesNotMatch(
+  selectorSource,
+  /t\("blocked(Reason|Footer)?"/,
+  "Create-room language picker must not render blocked languages or explain them.",
+);
+assert.equal(
+  roomsEnCatalog.create.language.blockedFooter,
+  undefined,
+  "The blocked-languages footnote must be gone from the catalog.",
+);
+assert.match(
+  selectorSource,
+  /isLanguageAllowedByPolicy\(code,\s*allowedTargetLanguages\)/,
+  "Toggling must still refuse to ADD a language the policy forbids.",
 );
 assert.match(
   dialogSource,

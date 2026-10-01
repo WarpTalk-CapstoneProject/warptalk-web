@@ -38,6 +38,7 @@ import { downloadBlob } from "@/lib/ui/download-blob";
 import { documentActorName } from "@/lib/documents/document-actor";
 import {
   canUploadRevision as canUploadRevisionFor,
+  documentFileRevision,
   shouldShowRejectionFeedback,
 } from "@/lib/documents/document-review";
 import {
@@ -278,6 +279,8 @@ export default function DocumentDetailPage({ params }: PageProps) {
     );
   }
 
+  const fileRevision = documentFileRevision(doc);
+
   return (
     /* h-full + min-h-0, not min-h-full: the page owns the viewport and the panes scroll inside
        it. With min-h-full the whole page grew with the document, which is what pushed the
@@ -364,12 +367,16 @@ export default function DocumentDetailPage({ params }: PageProps) {
             panel to the right, which already lists them. */}
         {/* The scroll lives HERE, on the document, not on the page. */}
         <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto lg:h-full">
+          {/* Keyed by the file revision so a replaced file starts from a clean reader: the parsed
+              Word HTML, sheets and failure flag of the previous file must not outlive it (WT-857). */}
           <DocumentPreview
+            key={fileRevision}
             workspaceId={activeWorkspaceId}
             documentId={doc.id}
             fileName={doc.fileName}
             fileExtension={doc.fileExtension}
             sizeBytes={doc.sizeBytes}
+            revision={fileRevision}
             onDownload={handleDownload}
           />
         </div>
