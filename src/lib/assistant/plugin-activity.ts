@@ -39,7 +39,8 @@ export type PluginActivityTone = "success" | "blocked" | "attention" | "failed";
  * and per-tool switches belong to that member alone. Saying so on the row keeps the Owner from
  * opening the workspace plugin page to fix something only the member can fix.
  *
- *  - `owner`    — the workspace refused the plugin; the Owner adds it on the workspace plugin page.
+ *  - `owner`    — the workspace refused the plugin, or its Owner blocked the tool; both are fixed on
+ *                 the workspace plugin page.
  *  - `member`   — only the person who made the call can fix it, in their own connections or chat.
  *  - `platform` — WarpTalk's own provider setup is wrong; a platform admin has to fix the catalog.
  *  - `nobody`   — nothing to fix here: the provider was down, or the tool refused the request.
@@ -70,12 +71,15 @@ export interface PluginActivityRow extends WorkspacePluginToolAuditDto {
  * Anything not listed is a plain failure; an unknown code is not an error here.
  *
  * `permission_denied` is what `WorkspacePluginGuard` answers when the workspace does not allow the
- * plugin, so it is the Owner's. `tool_blocked` is the member's own per-tool switch (WT-687) and
+ * plugin, so it is the Owner's. So is `workspace_tool_blocked`: the plugin is allowed but the Owner
+ * blocked that one tool for everyone, whatever the member chose. `tool_blocked` is the member's own per-tool switch (WT-687) and
  * `access_denied` is a member pressing Cancel on the provider's consent screen: both are decisions,
  * not faults, so they sit with the refusals rather than with the failures.
  */
 const WORKSPACE_REFUSED = "permission_denied";
 const MEMBER_TURNED_OFF = "tool_blocked";
+/** The workspace Owner blocked this one tool for everyone (wave 2) — the Owner's to lift. */
+const WORKSPACE_TOOL_BLOCKED = "workspace_tool_blocked";
 const MEMBER_DECLINED = "access_denied";
 const NEEDS_SETUP = new Set([
   "plugin_not_installed",
@@ -97,6 +101,8 @@ const DEFAULT_PLUGIN_ACTIVITY_COPY: Record<string, string> = {
   "outcome.succeeded": "Succeeded",
   "outcome.blocked": "Blocked",
   "outcome.blockedHint": "This workspace doesn't allow this plugin. Add it on the workspace plugin page.",
+  "outcome.workspaceToolBlocked": "Blocked by workspace",
+  "outcome.workspaceToolBlockedHint": "The workspace Owner blocked this tool for WarpBot. Only the Owner can allow it again, on the workspace plugin page.",
   "outcome.turnedOff": "Turned off by member",
   "outcome.turnedOffHint": "The member switched this tool off for WarpBot. Only they can turn it back on.",
   "outcome.declined": "Declined",
@@ -126,6 +132,15 @@ export function describePluginActivityOutcome(
   if (code === "success") return { label: t("outcome.succeeded"), tone: "success", code: null, fixer: null };
   if (code === WORKSPACE_REFUSED) {
     return { label: t("outcome.blocked"), tone: "blocked", code, hint: t("outcome.blockedHint"), fixer: "owner" };
+  }
+  if (code === WORKSPACE_TOOL_BLOCKED) {
+    return {
+      label: t("outcome.workspaceToolBlocked"),
+      tone: "blocked",
+      code,
+      hint: t("outcome.workspaceToolBlockedHint"),
+      fixer: "owner",
+    };
   }
   if (code === MEMBER_TURNED_OFF) {
     return { label: t("outcome.turnedOff"), tone: "blocked", code, hint: t("outcome.turnedOffHint"), fixer: "member" };

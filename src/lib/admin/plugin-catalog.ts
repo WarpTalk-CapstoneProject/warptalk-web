@@ -592,8 +592,9 @@ export interface PluginToolOutcome {
 
 /** Codes from `PluginConstants.ErrorCodes`, grouped by what someone does about them. */
 // `tool_blocked` is a member's own per-tool switch and `access_denied` a cancelled consent screen:
-// decisions, grouped with the refusals. An API key not pasted, or pasted wrong, is setup.
-const BLOCKED_TOOL_CODES = new Set(["permission_denied", "access_denied", "tool_blocked"]);
+// decisions, grouped with the refusals, as is `workspace_tool_blocked`, a workspace Owner's per-tool
+// rule. An API key not pasted, or pasted wrong, is setup.
+const BLOCKED_TOOL_CODES = new Set(["permission_denied", "access_denied", "tool_blocked", "workspace_tool_blocked"]);
 const NEEDS_SETUP_TOOL_CODES = new Set([
   "plugin_not_installed",
   "connection_required",
