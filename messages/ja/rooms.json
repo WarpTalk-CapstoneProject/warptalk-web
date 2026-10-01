@@ -67,10 +67,6 @@
     "collapse": "折りたたむ",
     "expand": "展開する",
     "workspaceFallback": "ワークスペース",
-    "bridgeNotice": {
-      "line1": "通話は<meet>Google Meet</meet>上で行われます。WarpTalkはその横で動作し、このルームには2席（あなたと、相手側全員を代表する1席）が用意されます。<src>ソース言語</src>はあなたが話す言語、<tgt>ターゲット言語</tgt>は通話が聞き取る言語です。",
-      "line2": "2つの仮想オーディオデバイスをインストールし、Meetをそれらに向けて設定する必要があります。セットアップの確認はルームを開いたときに実行されます。"
-    },
     "titlePlaceholder": "ミーティングのタイトル",
     "descriptionPlaceholder": "説明を追加...",
     "dailyPill": "毎日 {time}",
@@ -158,7 +154,6 @@
     },
     "templatePicker": {
       "meetingType": "ミーティングの種類",
-      "translateElsewhere": "外部の通話を翻訳する",
       "types": {
         "event": "イベント",
         "channelMeeting": "チャンネルミーティング",
