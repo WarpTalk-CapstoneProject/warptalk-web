@@ -421,6 +421,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // its old address forwards home in proxy.ts. Action items still live on each meeting's record.
   );
 
+  // Every member, not just Owner/Admin: a connection is a person's own. It used to sit in the
+  // Settings sidebar, where a plain member had no reason to look (2026-10-01). The page is not
+  // workspace-shaped, so the row is active by exact path rather than by NavLink's prefix match.
+  workspaceNav.push({
+    icon: PlugsConnected,
+    label: t("settingsNav.myConnections"),
+    href: "/settings/plugins",
+    exact: true,
+  });
+
   if (isOwnerOrAdmin) {
     // No Invitations entry: invitations and join requests are rows on Members now, because
     // "who is in this workspace" and "who is on the way in" were never two questions.
@@ -447,9 +457,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // 2026-09-16. Security lives under /settings, so `includes("/settings")` already covers it —
   // but the line had to go WITH the route: left behind it would have matched nothing, and
   // removed without moving the page it would have dropped the reader out of Settings.
+  //
+  // Except the personal /settings/plugins ("My connections"): it is a row of the main nav now, for
+  // every member, so it keeps that chrome. The workspace's own /<slug>/settings/plugins does not
+  // start with "/settings", so it still lands in Settings.
+  //
   // Insights is not here: it moved from the Settings sidebar to the main one (2026-10-01), so it
   // gets the main chrome like every other place in the workspace.
-  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/payment");
+  const isSettingsPage =
+    (pathname.includes("/settings") && !pathname.startsWith("/settings/plugins")) ||
+    pathname.includes("/payment");
 
   // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
   // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
@@ -755,13 +772,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           ? `/${activeWorkspaceSlug}/settings/account/sessions`
           : "/workspace",
       },
-      {
-        // "My connections", not "Plugins": the workspace section below has its own plugin list, and
-        // two rows both called "Plugins" read as the same page twice (owner report, 2026-09-24).
-        icon: PlugsConnected,
-        label: t("settingsNav.myConnections"),
-        href: "/settings/plugins",
-      },
     ];
 
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
@@ -849,8 +859,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <div
               key={item.href}
               className={cn(
-                // Keyed on the row, not its index, so Personal rows can be added above it.
-                item.href === "/settings/plugins" && "mt-3 border-t border-border/50 pt-3",
+                // Keyed on the row, not its index, so Personal rows can be added above it. The rule
+                // marks where Personal ends and the workspace's own pages begin.
+                item.href === `/${activeWorkspaceSlug}/settings` && "mt-3 border-t border-border/50 pt-3",
               )}
             >
               <NavLink item={item} pathname={pathname} collapsed />
@@ -957,18 +968,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <Devices size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   {t("settingsNav.sessionsDevices")}
-                </span>
-              </Link>
-            </div>
-
-            <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-              navRowTone(pathname === "/settings/plugins")
-            )}>
-              <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  {t("settingsNav.myConnections")}
                 </span>
               </Link>
             </div>
