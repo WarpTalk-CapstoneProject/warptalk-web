@@ -105,6 +105,7 @@ test("success carries no code; setup gaps and unknown codes are told apart", () 
 test("every code says who can act on it, and most of them are the member's", () => {
   const fixer = (code: string) => describePluginActivityOutcome(code).fixer;
   assert.equal(fixer("permission_denied"), "owner");
+  assert.equal(fixer("workspace_tool_blocked"), "owner");
   for (const code of [
     "plugin_not_installed",
     "connection_required",
@@ -131,6 +132,24 @@ test("a member's own switch and a cancelled consent are decisions, not failures"
   const declined = describePluginActivityOutcome("access_denied");
   assert.equal(declined.tone, "blocked");
   assert.equal(declined.label, "Declined");
+});
+
+test("a tool the workspace Owner blocked is a refusal the Owner lifts, told apart from the member's switch", () => {
+  const outcome = describePluginActivityOutcome("workspace_tool_blocked");
+  assert.equal(outcome.label, "Blocked by workspace");
+  assert.equal(outcome.tone, "blocked");
+  assert.equal(outcome.code, "workspace_tool_blocked");
+  assert.equal(outcome.fixer, "owner");
+  assert.match(outcome.hint ?? "", /Owner/);
+  assert.notEqual(outcome.label, describePluginActivityOutcome("tool_blocked").label);
+  // Case and stray whitespace from the audit row do not change the reading.
+  assert.equal(describePluginActivityOutcome(" WORKSPACE_TOOL_BLOCKED ").fixer, "owner");
+});
+
+test("rows carry the workspace-block outcome through the join", () => {
+  const [row] = toPluginActivityRows([audit({ resultStatus: "workspace_tool_blocked" })], MEMBERS, PLUGINS);
+  assert.equal(row.outcome.label, "Blocked by workspace");
+  assert.equal(row.outcome.fixer, "owner");
 });
 
 test("an API key the member has not pasted, or pasted wrong, is setup rather than a failure", () => {
