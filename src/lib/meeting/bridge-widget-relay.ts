@@ -47,13 +47,16 @@
  *                                                                     the main window then surfaces
  *                    open-room-record                                 the room's record (/rooms/{id}),
  *                                                                     from the ended screen
+ *                    take-over-capture                                W4b: a member's "Capture audio
+ *                                                                     on this device" (bridge claim)
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
  *                                                 inboundHealth?, translation?, transcriptPause?,
  *                                                 creditsSuspended?, creditsSuspendedReason?,
  *                                                 meetingError?, idleReaped?, connection?,
- *                                                 isRoomHost?, roomEnded?, at }
+ *                                                 isRoomHost?, roomEnded?, bridgeRole?,
+ *                                                 bridgeCapturerAway?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -78,6 +81,13 @@
  *   them as "unknown-type", which is why the popup only sends them to a main window whose snapshot
  *   carries the matching field.
  *
+ *   W4b (bridge claim): `bridgeRole` is this desktop's role in the shared room — "capturer" (it
+ *   publishes the far side and renews the lease) or "member" (its own mic only) — and
+ *   `bridgeCapturerAway` says the capturer is not connected, which is when the popup offers a member
+ *   "Capture audio on this device" (`take-over-capture`). Both optional and forgiving like the
+ *   WT-901 fields; the popup falls back to the room record for the role, and offers no takeover to
+ *   a main window that does not say. The popup's controls are gated on `isRoomHost || capturer`.
+ *
  *   There is deliberately NO end intent. The popup does not end a bridge meeting (PO, 2026-10-01):
  *   the room ends when its Google Meet conference does. `open-room-record` is how the ended screen
  *   hands the user to the room's record in the main window, where they are signed in.
@@ -97,6 +107,7 @@ import type { BrowserCaptureConsentState } from "../audio/browser-capture-consen
 import type { InboundHealth } from "../audio/bridge-inbound-health.ts";
 import type { VoiceCloneStateDto } from "../../types/realtime.ts";
 import { applySingleLanguageChoice, describeLanguageChoice } from "./language-choice.ts";
+import { isBridgeRole, type BridgeRole } from "./bridge-capturer.ts";
 
 export const BRIDGE_WIDGET_RELAY_VERSION = 1;
 
@@ -182,6 +193,13 @@ export type BridgeWidgetSnapshot = {
    * reaches a window that is signed in. Only `true` is ever sent; absent means "not said".
    */
   roomEnded?: boolean;
+  /**
+   * W4b: this desktop's role in the shared bridge room (lib/meeting/bridge-capturer). Absent from a
+   * main window that predates bridge claim; the popup then reads the room record.
+   */
+  bridgeRole?: BridgeRole;
+  /** W4b: the capturer is somebody else and is not connected — offer the takeover. */
+  bridgeCapturerAway?: boolean;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -236,7 +254,8 @@ export type BridgeWidgetIntent =
   | { type: "set-transcript-paused"; paused: boolean }
   | { type: "rejoin" }
   | { type: "open-setup" }
-  | { type: "open-room-record" };
+  | { type: "open-room-record" }
+  | { type: "take-over-capture" };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
 
@@ -279,6 +298,7 @@ const INTENT_TYPES = new Set<string>([
   "rejoin",
   "open-setup",
   "open-room-record",
+  "take-over-capture",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -342,6 +362,10 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
   // Only `true` means anything: "not ended" is what every other snapshot already says by saying
   // nothing, and a `false` from another window must not un-end a room the REST record calls ENDED.
   if (raw.roomEnded === true) snapshot.roomEnded = true;
+  if (typeof raw.bridgeRole === "string" && isBridgeRole(raw.bridgeRole)) {
+    snapshot.bridgeRole = raw.bridgeRole;
+  }
+  if (typeof raw.bridgeCapturerAway === "boolean") snapshot.bridgeCapturerAway = raw.bridgeCapturerAway;
 }
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
@@ -466,6 +490,8 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return { type: "open-setup" };
     case "open-room-record":
       return { type: "open-room-record" };
+    case "take-over-capture":
+      return { type: "take-over-capture" };
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -566,6 +592,9 @@ export type BridgeWidgetSnapshotFields = {
   isRoomHost?: boolean;
   /** W4a: set only once the room has ENDED; see `BridgeWidgetSnapshot.roomEnded`. */
   roomEnded?: boolean;
+  /** W4b: see `BridgeWidgetSnapshot.bridgeRole`. */
+  bridgeRole?: BridgeRole;
+  bridgeCapturerAway?: boolean;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -604,6 +633,8 @@ export function buildBridgeWidgetSnapshot(
   if (fields.connection) snapshot.connection = fields.connection;
   if (fields.isRoomHost !== undefined) snapshot.isRoomHost = fields.isRoomHost;
   if (fields.roomEnded === true) snapshot.roomEnded = true;
+  if (fields.bridgeRole) snapshot.bridgeRole = fields.bridgeRole;
+  if (fields.bridgeCapturerAway !== undefined) snapshot.bridgeCapturerAway = fields.bridgeCapturerAway;
   return snapshot;
 }
 
@@ -828,6 +859,23 @@ export function bridgeWidgetTranscriptPauseState(
 export function bridgeWidgetIsRoomHost(view: BridgeWidgetRelayView, fallback: boolean): boolean {
   const relayed = liveSnapshot(view)?.isRoomHost;
   return relayed === undefined ? fallback : relayed;
+}
+
+/**
+ * W4b: this desktop's bridge role — the main window's answer when it gives one (it heard the claim,
+ * the heartbeat and any takeover), the caller's fallback (the room record) otherwise.
+ */
+export function bridgeWidgetBridgeRole(view: BridgeWidgetRelayView, fallback: BridgeRole): BridgeRole {
+  return liveSnapshot(view)?.bridgeRole ?? fallback;
+}
+
+/**
+ * W4b: whether the popup may offer "Capture audio on this device": a main window that knows the
+ * role (and so handles `take-over-capture`) says this desktop is a member and the capturer is away.
+ */
+export function canOfferCaptureTakeover(view: BridgeWidgetRelayView): boolean {
+  const snapshot = liveSnapshot(view);
+  return snapshot?.bridgeRole === "member" && snapshot.bridgeCapturerAway === true;
 }
 
 /**

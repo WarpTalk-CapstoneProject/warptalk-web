@@ -222,7 +222,9 @@ assert.match(
 }
 assert.match(
   meetingSession,
-  /const wanted =\s*isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
+  // W4b: `bridgeAudioOwner` is isBridgeRoom && (this desktop is the bridge capturer) — the host of a
+  // legacy room, or whoever holds the capturer lease of a claimed one.
+  /const wanted =\s*(?:isBridgeRoom && isHost|bridgeAudioOwner) && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
   "an idle reap must also release the stand-in's second LiveKit connection and its capture",
 );
 // WT-828: the far side is transcribed from the moment the meeting opens. Start Translation controls

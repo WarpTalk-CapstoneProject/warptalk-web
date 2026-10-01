@@ -101,8 +101,9 @@ if (!hostCall) {
     [/\n {4}idleReaped: meetingIsIdleReaped,/,"idleReaped (without it Rejoin never shows)"],
     [/\bconnection: bridgeMeetingConnection\(/, "connection"],
     [/\bisRoomHost,/, "isRoomHost"],
-    [/onStopTranslation: isRoomHost \? handleStopWarptalk : undefined/, "onStopTranslation → the native Stop"],
-    [/onSetTranscriptPaused: isRoomHost \? \(paused\) => commitTranscriptPause\(paused\)/,
+    // W4b: host OR bridge capturer (canControlBridge, PO 2026-10-01), still the native handlers.
+    [/onStopTranslation: (?:isRoomHost|bridgeCanControl) \? handleStopWarptalk : undefined/, "onStopTranslation → the native Stop"],
+    [/onSetTranscriptPaused: (?:isRoomHost|bridgeCanControl) \? \(paused\) => commitTranscriptPause\(paused\)/,
       "onSetTranscriptPaused → commitTranscriptPause (WT-605; the popup has already confirmed)"],
     [/onRejoin: \(\) => \{\s*markMeetingInteraction\(\);\s*setIdleDisconnected\(false\);/, "onRejoin → the idle reaper's way back"],
     [/onOpenSetup: \(\) => \{\s*setBridgeSetupOpen\(true\);\s*void showDesktopMainWindow\(\);/, "onOpenSetup → the wizard + the main window shown"],

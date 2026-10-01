@@ -1,6 +1,12 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  parseBridgeClaimLease,
+  type BridgeClaimLease,
+  type BridgeClaimRequest,
+  type BridgeRole,
+} from "@/lib/meeting/bridge-capturer";
 import type {
   SummaryRenderingDto,
   SummaryRenderingSummaryDto,
@@ -54,6 +60,30 @@ type BackendRecurringCreate = {
   firstOccurrence: BackendRoom;
   materializedOccurrenceCount: number;
   totalOccurrenceCount: number;
+};
+
+/** W4b — POST /translation-rooms/bridge/claim, before normalisation. */
+type BackendBridgeClaim = {
+  room: BackendRoom;
+  participant?: BackendParticipant | null;
+  bridgeRole?: string;
+  created?: boolean;
+  capturerHeartbeatIntervalSeconds?: number;
+  capturerLeaseSeconds?: number;
+};
+
+export type BridgeClaimResult = BridgeClaimLease & {
+  room: TranslationRoomDto;
+  participant: TranslationRoomParticipantDto | null;
+};
+
+/** W4b — heartbeat / takeover answer (BridgeCapturerStatusDto). */
+export type BridgeCapturerStatus = {
+  roomId: string;
+  bridgeRole: BridgeRole;
+  capturerUserId: string | null;
+  capturerHeartbeatAt: string | null;
+  capturerLeaseSeconds: number;
 };
 
 type BackendJoinResponse = {
@@ -464,6 +494,31 @@ export const translationRoomService = {
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
+  },
+
+  /**
+   * W4b — bridge claim. The room and the participant are normalized like every other read; the
+   * lease half (role, intervals) goes through parseBridgeClaimLease, which reads an unknown role as
+   * "member" rather than let two desktops capture the far side.
+   */
+  async claimBridgeRoom(request: BridgeClaimRequest): Promise<BridgeClaimResult> {
+    const response = await apiClient.post<BackendBridgeClaim>(API.translationRooms.bridgeClaim, request);
+    const body = response.data;
+    return {
+      room: normalizeRoom(body.room),
+      participant: body.participant ? normalizeParticipant(body.participant) : null,
+      ...parseBridgeClaimLease(body),
+    };
+  },
+
+  /** W4b — renew this desktop's capturer lease. Rejects (409 CONFLICT) once it is not the capturer. */
+  heartbeatBridgeCapturer(id: string) {
+    return apiClient.post<BridgeCapturerStatus>(API.translationRooms.bridgeCapturerHeartbeat(id));
+  },
+
+  /** W4b — take the far side's capture over. Rejects (409 CONFLICT) while a live capturer holds it. */
+  takeOverBridgeCapturer(id: string) {
+    return apiClient.post<BridgeCapturerStatus>(API.translationRooms.bridgeCapturerTakeover(id));
   },
 
   pause(id: string) {

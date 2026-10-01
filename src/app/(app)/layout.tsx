@@ -362,32 +362,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   });
 
   /**
-   * Flow 2: a Google Meet call with no room behind it gets one straight away - reused when this
-   * workspace already has a bridge room for the same call - and this window carries it, which is
-   * what opens the transcript popup. There is no separate "Translate this call?" window any more;
-   * the language is chosen in the popup's dock. See use-bridge-auto-room.ts.
+   * Flow 2: a Google Meet call with no room behind it is CLAIMED straight away (W4b): the server
+   * finds this call's room in the workspace or makes it, seats this user, and says whether this
+   * desktop captures the far side — and this window carries it, which is what opens the transcript
+   * popup. The language is chosen in the popup. See use-bridge-auto-room.ts.
    *
-   * Created HERE rather than in a popup because this window holds the validated workspace. The old
+   * Claimed HERE rather than in a popup because this window holds the validated workspace. The old
    * offer window read the persisted workspace id on its own and once sent a room to a workspace
    * that had been deleted, which the server refused with a bare 403.
    */
-  const canCreateMeetings = useWorkspaceStore((state) => state.canCreateMeetings);
-  const bridgeAutoRoomCandidates = useMemo(
-    () =>
-      (workspaceRoomsQuery.data?.rooms ?? []).map((room) => ({
-        id: room.id,
-        translationRoomType: room.translationRoomType,
-        externalMeetingUrl: room.externalMeetingUrl,
-        joinable: canJoinTranslationRoom(room.status),
-      })),
-    [workspaceRoomsQuery.data],
-  );
   useBridgeAutoRoom({
     triggerState: bridgeTrigger.state,
     meetCode: meetSensor?.meetCode,
-    rooms: bridgeAutoRoomCandidates,
     workspaceId: activeWorkspaceId,
-    canCreateMeetings,
   });
 
   /**
@@ -402,8 +389,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
    * nobody opened in this window is carried here like any other rather than translating nothing.
    */
   const openMeeting = useActiveMeetingStore((state) => state.openMeeting);
+  /**
+   * W4b: the popup now asks to be carried on its own when nobody answers it (a room the trigger or
+   * the tray opened, not this window). That must never throw the user out of a NATIVE meeting they
+   * are in here: a bridge room replaces a bridge room (one popup, one Meet call), never a
+   * non-bridge meeting. The popup then offers "Show WarpTalk" instead.
+   */
+  const activeMeetingIsNativeRef = useRef(false);
   useEffect(() => {
-    const stop = onBridgeRoomActivated((roomId) => openMeeting(roomId));
+    activeMeetingIsNativeRef.current =
+      Boolean(activeMeetingRoomId) &&
+      activeBridgeRoomQuery.isSuccess &&
+      !isExternalBridge(activeBridgeRoomQuery.data?.translationRoomType);
+  }, [activeMeetingRoomId, activeBridgeRoomQuery.isSuccess, activeBridgeRoomQuery.data]);
+  useEffect(() => {
+    const stop = onBridgeRoomActivated((roomId) => {
+      const current = useActiveMeetingStore.getState().activeRoomId;
+      if (current && current !== roomId && activeMeetingIsNativeRef.current) return;
+      openMeeting(roomId);
+    });
     return stop ?? undefined;
   }, [openMeeting]);
 
