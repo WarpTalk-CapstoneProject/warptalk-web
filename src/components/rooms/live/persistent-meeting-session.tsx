@@ -182,6 +182,9 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   lastSignOfLife,
+  leaveFailureMeansAlreadyOut,
+  ROOM_STATUS_POLL_MS,
+  roomEndedUnderSession,
   shouldConnectMeeting,
   type MeetSensorReading,
 } from "@/lib/meeting/meeting-session-lifecycle";
@@ -211,7 +214,7 @@ import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
 import { translationRoomService } from "@/services/translation-room.service";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import {
   type TranslationCreditsTranslator,
@@ -328,7 +331,9 @@ export function PersistentMeetingSession({
   // strength of not knowing.
   const [wasConnectable, setWasConnectable] = useState(false);
 
-  const roomQuery = useTranslationRoom(roomId);
+  // WT-899: polled, so an end this client was never told about over the hub still reaches it.
+  // See ROOM_STATUS_POLL_MS for who that is.
+  const roomQuery = useTranslationRoom(roomId, ROOM_STATUS_POLL_MS);
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
@@ -1590,6 +1595,34 @@ export function PersistentMeetingSession({
     if (!meetingRoomIsGone) return;
     onMeetingClosed();
   }, [meetingRoomIsGone, onMeetingClosed]);
+
+  /**
+   * WT-899 — the same exit as the TranslationRoomEnded handler, for a client the broadcast never
+   * reaches.
+   *
+   * A participant on an EXTERNAL_BRIDGE room whose registration was refused (two seats: the host
+   * and the Google Meet stand-in) is never admitted to the hub's room group, so when the host ended
+   * the call they stayed on /live behind the bridge wizard indefinitely. The polled room status
+   * closes the session — which unmounts the wizard and the Leave dialog with it — and lands them
+   * where everyone else lands.
+   */
+  const roomStatusForEnd = room?.status;
+  const sawRoomJoinableRef = useRef(false);
+  useEffect(() => {
+    if (canConnectMeeting && roomStatusForEnd) sawRoomJoinableRef.current = true;
+    if (
+      !roomEndedUnderSession({
+        status: roomStatusForEnd,
+        sawJoinable: sawRoomJoinableRef.current,
+        exiting: endedByMeRef.current || exitInFlightRef.current,
+      })
+    ) {
+      return;
+    }
+    toast.info("This meeting has ended.");
+    onMeetingClosed();
+    router.replace(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+  }, [roomStatusForEnd, canConnectMeeting, onMeetingClosed, router, activeWorkspaceSlug, roomId]);
 
   const displayName =
     savedJoinConfig.displayName ||
@@ -3361,7 +3394,13 @@ export function PersistentMeetingSession({
         toast.success("Room ended.");
       } else {
         if (room?.status !== "ended" && room?.status !== "cancelled") {
-          await leaveRoom.mutateAsync();
+          try {
+            await leaveRoom.mutateAsync();
+          } catch (error) {
+            // WT-899: NOT_FOUND means this person has no seat to give up — the server already
+            // considers them out. Refusing the exit over it trapped them behind the Leave dialog.
+            if (!leaveFailureMeansAlreadyOut(apiErrorCode(error))) throw error;
+          }
         }
         toast.success("You left the room.");
       }

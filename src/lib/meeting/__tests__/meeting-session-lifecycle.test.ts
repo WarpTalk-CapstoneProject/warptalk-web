@@ -10,6 +10,8 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   lastSignOfLife,
+  leaveFailureMeansAlreadyOut,
+  roomEndedUnderSession,
   shouldConnectMeeting,
   type MeetSensorReading,
 } from "../meeting-session-lifecycle.ts";
@@ -469,4 +471,26 @@ test("main-window input still counts for a bridge when it is the newest sign", (
     }),
     now - MINUTE,
   );
+});
+
+test("WT-899: a room that ends under a running session closes it, even with no hub broadcast", () => {
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: true, exiting: false }), true);
+  assert.equal(roomEndedUnderSession({ status: "cancelled", sawJoinable: true, exiting: false }), true);
+  // Still running.
+  assert.equal(roomEndedUnderSession({ status: "in_progress", sawJoinable: true, exiting: false }), false);
+  // Restored onto a room that was already over: isRestoredMeetingStale's job, closed quietly.
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: false, exiting: false }), false);
+  // This client's own Leave / End owns the redirect.
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: true, exiting: true }), false);
+  // Unknown is not ended.
+  assert.equal(roomEndedUnderSession({ status: undefined, sawJoinable: true, exiting: false }), false);
+});
+
+test("WT-899: Leave answered NOT_FOUND means there was no seat to give up", () => {
+  assert.equal(leaveFailureMeansAlreadyOut("NOT_FOUND"), true);
+  assert.equal(leaveFailureMeansAlreadyOut(404), true);
+  assert.equal(leaveFailureMeansAlreadyOut("FORBIDDEN"), false);
+  assert.equal(leaveFailureMeansAlreadyOut(500), false);
+  // A network failure has no code: keep the person in the room and say it failed.
+  assert.equal(leaveFailureMeansAlreadyOut(undefined), false);
 });
