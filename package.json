@@ -137,7 +137,7 @@
     "test:warpbot-widget": "node scripts/check-warpbot-widget-contract.mjs",
     "test:room-code": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-code-guess.test.ts",
     "test:time-zones": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/format/__tests__/time-zones.test.ts",
-    "test:livekit-error": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/livekit-error.test.ts",
+    "test:livekit-error": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/livekit-error.test.ts src/lib/meeting/__tests__/session-displacement.test.ts",
     "test:mini-dock": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/mini-dock-position.test.ts",
     "test:transcript-catch-up": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/transcript-catch-up.test.ts",
     "test:presence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/components/presence/presence-appearance.test.ts",

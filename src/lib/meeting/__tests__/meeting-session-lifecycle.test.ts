@@ -51,6 +51,29 @@ test("a room that has ended never reconnects, however good the token is", () => 
   );
 });
 
+test("a session evicted by the same account elsewhere stops connecting until it takes over", () => {
+  // Reconnecting here evicts the other device, which reconnects and evicts this one — the
+  // DUPLICATE_IDENTITY ping-pong from prod on 1 Oct 2026.
+  assert.equal(
+    shouldConnectMeeting({
+      hasToken: true,
+      canConnectRoom: true,
+      idleReaped: false,
+      displaced: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldConnectMeeting({
+      hasToken: true,
+      canConnectRoom: true,
+      idleReaped: false,
+      displaced: false,
+    }),
+    true,
+  );
+});
+
 test("no token, no connection", () => {
   assert.equal(
     shouldConnectMeeting({

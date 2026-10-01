@@ -200,6 +200,12 @@ import {
   type FloatingReaction,
 } from "@/components/rooms/live/reaction-overlay";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
+import {
+  isDisplacedConnectionError,
+  isDisplacedHubReason,
+  isDuplicateIdentityDisconnect,
+} from "@/lib/meeting/session-displacement";
+import { DisplacedSessionNotice } from "@/components/rooms/live/displaced-session-notice";
 import { TranscriptPauseConfirmDialog } from "@/components/rooms/live/transcript-pause-confirm-dialog";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
@@ -605,6 +611,20 @@ export function PersistentMeetingSession({
   const localMediaControlRef = useRef<LocalMediaControl | null>(null);
 
   const [meetingError, setMeetingError] = useState<string | null>(null);
+  // The same account joined this meeting from another device or tab, and this session was the one
+  // evicted (LiveKit DUPLICATE_IDENTITY, or the hub's "joined from another device" kick). Terminal
+  // until the person takes over: it gates <LiveKitRoom connect> and every hub rejoin, because
+  // reconnecting evicts the other device and the two then evict each other forever. The ref is
+  // what the hub's long-lived handlers read. See @/lib/meeting/session-displacement.
+  const [sessionDisplaced, setSessionDisplaced] = useState(false);
+  const sessionDisplacedRef = useRef(false);
+  const markSessionDisplaced = useCallback(() => {
+    if (sessionDisplacedRef.current) return;
+    sessionDisplacedRef.current = true;
+    setSessionDisplaced(true);
+    // Whatever the stage was saying ("Could not reach the media server") was about this.
+    setMeetingError(null);
+  }, []);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
   // "Your meeting's ready": shown only to whoever just started an instant meeting in this tab,
@@ -1736,6 +1756,9 @@ export function PersistentMeetingSession({
   const translationConnectionRef = useRef<
     import("@microsoft/signalr").HubConnection | null
   >(null);
+  // The current connection's JoinTranslationRoom (with its retries), for a take-over after this
+  // session was displaced. Set and cleared by the SignalR effect below.
+  const rejoinTranslationRoomRef = useRef<(() => Promise<void>) | null>(null);
 
   /**
    * Bumped every time the translation hub becomes usable — the initial start AND every
@@ -1759,6 +1782,21 @@ export function PersistentMeetingSession({
    * retried instead of silently kept.
    */
   const [hubGeneration, setHubGeneration] = useState(0);
+
+  // "Use this device". Clearing the flag re-enables <LiveKitRoom connect>, and the LiveKit join
+  // evicts the other device; the hub rejoin kicks the other device's hub connection. Each eviction
+  // is what shows the OTHER side this same notice, so the hand-over happens exactly once.
+  const takeOverDisplacedSession = useCallback(() => {
+    sessionDisplacedRef.current = false;
+    setSessionDisplaced(false);
+    const rejoin = rejoinTranslationRoomRef.current;
+    if (!rejoin) return;
+    void rejoin().then(() => {
+      // Same reason as startAndJoin: re-run the language/voice sync effects against a hub that
+      // is in the room again.
+      setHubGeneration((generation) => generation + 1);
+    });
+  }, []);
 
   // Publish the REAL mic state to the roster, whenever it changes and however it changed.
   //
@@ -2920,6 +2958,14 @@ export function PersistentMeetingSession({
 
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
+      // The same account joined from another device or tab. That is not "the room is closed":
+      // leaving the meeting here only sent people back in to evict the other device in turn. Stop
+      // and say so; DisplacedSessionNotice offers the take-over. Ignored on a connection this
+      // effect has already torn down — its successor is the one in the room.
+      if (isDisplacedHubReason(reason)) {
+        if (translationConnectionRef.current === connection) markSessionDisplaced();
+        return;
+      }
       toast.error(
         reason ||
           "This room has been forcibly closed or you were disconnected from another device.",
@@ -2962,7 +3008,8 @@ export function PersistentMeetingSession({
     const joinRetryDelaysMs = [0, 1000, 2500, 5000];
     const joinCurrentRoom = async () => {
       for (const delay of joinRetryDelaysMs) {
-        if (cancelled) return;
+        // Displaced: joining would kick the other device's hub connection. Only a take-over may.
+        if (cancelled || sessionDisplacedRef.current) return;
         if (delay) await wait(delay);
         try {
           await invokeJoinTranslationRoom();
@@ -2998,6 +3045,7 @@ export function PersistentMeetingSession({
             : "",
           targetLanguageRef.current,
         );
+    rejoinTranslationRoomRef.current = joinCurrentRoom;
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
@@ -3038,6 +3086,9 @@ export function PersistentMeetingSession({
       setTranscriptPauseEvent(null);
       void pauseWindowsQuery.refetch();
       void (async () => {
+        // Displaced: the replays below are keyed by user, not connection, so they would overwrite
+        // the languages of the device that is actually in the meeting.
+        if (sessionDisplacedRef.current) return;
         await joinCurrentRoom();
 
         const currentListenLanguage = appliedListenLanguageRef.current;
@@ -3096,6 +3147,9 @@ export function PersistentMeetingSession({
       if (translationConnectionRef.current === connection) {
         translationConnectionRef.current = null;
       }
+      if (rejoinTranslationRoomRef.current === joinCurrentRoom) {
+        rejoinTranslationRoomRef.current = null;
+      }
       resetLiveRoom();
     };
     // targetLanguage/sourceLanguage intentionally excluded — see joinCurrentRoom's comment
@@ -3119,6 +3173,7 @@ export function PersistentMeetingSession({
     updateParticipantSpeakLanguage,
     user?.id,
     onMeetingClosed,
+    markSessionDisplaced,
   ]);
 
   // WT-248 removed the auto-start that used to live here. WT-183 had added it because a room
@@ -3344,6 +3399,13 @@ export function PersistentMeetingSession({
   }
 
   async function handleExit(action: "leave" | "end") {
+    // Displaced: this account is still in the meeting on the other device, and the leave is keyed
+    // by user, so sending it would take THAT session out. Closing this window is the whole leave.
+    if (action === "leave" && sessionDisplacedRef.current) {
+      onMeetingClosed();
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      return;
+    }
     // Single-flight: an exit already under way owns the redirect and the toast; a second call
     // (another press, or the end dialog racing the leave menu) is ignored until it settles.
     if (exitInFlightRef.current) return;
@@ -3693,6 +3755,7 @@ export function PersistentMeetingSession({
     hasToken: Boolean(meetingSession?.token),
     canConnectRoom: canConnectMeeting,
     idleReaped: meetingIsIdleReaped,
+    displaced: sessionDisplaced,
   });
 
   return (
@@ -3725,8 +3788,21 @@ export function PersistentMeetingSession({
         // nothing ever called setMeetingError. So every failure to connect rendered as
         // "Waiting for LiveKit" with no message and no retry, indistinguishable from a slow
         // join. This is the wire that was missing.
-        onError={(error) => setMeetingError(describeLiveKitError(error))}
+        onError={(error) => {
+          // Refused because this account joined elsewhere mid-connect: not a failure to report,
+          // and not one to retry (see session-displacement.ts).
+          if (isDisplacedConnectionError(error)) {
+            markSessionDisplaced();
+            return;
+          }
+          setMeetingError(describeLiveKitError(error));
+        }}
         onConnected={() => setMeetingError(null)}
+        // The other device joined with this identity and LiveKit evicted this connection. Without
+        // this, the next render re-ran room.connect() and evicted the other device back.
+        onDisconnected={(reason) => {
+          if (isDuplicateIdentityDisconnect(reason)) markSessionDisplaced();
+        }}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-1 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
@@ -3795,6 +3871,8 @@ export function PersistentMeetingSession({
               isHost && shouldShowMeetSpeakerResetNotice(bridgeInboundPath, Boolean(bridgeInboundDeviceId))
             }
             idleDisconnected={meetingIsIdleReaped}
+            sessionDisplaced={sessionDisplaced}
+            onTakeOver={takeOverDisplacedSession}
             onRejoin={() => {
               markMeetingInteraction();
               setIdleDisconnected(false);
@@ -3884,6 +3962,13 @@ export function PersistentMeetingSession({
                   variant="compact"
                 />
               </div>
+            ) : null}
+
+            {sessionDisplaced ? (
+              <DisplacedSessionNotice
+                variant="compact-overlay"
+                onTakeOver={takeOverDisplacedSession}
+              />
             ) : null}
 
             {idleDisconnected ? (
@@ -4048,6 +4133,9 @@ export function PersistentMeetingSession({
                   reactions={reactions}
                   onReactionExpired={handleReactionExpired}
                 />
+                {sessionDisplaced ? (
+                  <DisplacedSessionNotice variant="overlay" onTakeOver={takeOverDisplacedSession} />
+                ) : null}
               </div>
             </section>
 

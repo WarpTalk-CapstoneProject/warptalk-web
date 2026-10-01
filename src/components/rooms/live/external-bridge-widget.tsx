@@ -26,6 +26,7 @@ import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openInSystemBrowser } from "@/lib/desktop/bridge";
 import type { BridgeInboundPath } from "@/lib/desktop/bridge-tiers";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import { DisplacedSessionNotice } from "./displaced-session-notice";
 import { MeetingExitControl } from "./meeting-top-bar";
 
 export function ExternalBridgeWidget({
@@ -41,6 +42,8 @@ export function ExternalBridgeWidget({
   meetSpeakerResetNotice,
   idleDisconnected,
   onRejoin,
+  sessionDisplaced = false,
+  onTakeOver,
   onToggleMicrophone,
   onStartTranslation,
   onStopTranslation,
@@ -83,6 +86,10 @@ export function ExternalBridgeWidget({
    */
   idleDisconnected: boolean;
   onRejoin: () => void;
+  /** The same account joined this meeting elsewhere and evicted this session. */
+  sessionDisplaced?: boolean;
+  /** "Use this device": reconnect here, which evicts the other session. */
+  onTakeOver?: () => void;
   onToggleMicrophone: () => void;
   onStartTranslation: () => void;
   onStopTranslation: () => void;
@@ -251,6 +258,10 @@ export function ExternalBridgeWidget({
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <p className="leading-relaxed">{meetingError}</p>
           </div>
+        ) : null}
+
+        {sessionDisplaced && onTakeOver ? (
+          <DisplacedSessionNotice variant="card" onTakeOver={onTakeOver} />
         ) : null}
 
         {idleDisconnected ? (

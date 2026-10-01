@@ -34,6 +34,18 @@ test("an unreachable server points at the connection", () => {
   }
 });
 
+test("being displaced by the same account elsewhere is not called a network failure", () => {
+  // Prod, 1 Oct 2026: a shared demo account on two devices read as "Could not reach the media
+  // server", and nobody could tell it was a second login.
+  const error = Object.assign(new Error("Received leave request while trying to (re)connect"), {
+    reasonName: "LeaveRequest",
+    context: 2, // DisconnectReason.DUPLICATE_IDENTITY
+  });
+  const text = describeLiveKitError(error);
+  assert.doesNotMatch(text, /reach the media server/i);
+  assert.match(text, /another device or tab/i);
+});
+
 test("an unrecognised failure keeps its original wording rather than inventing one", () => {
   // The raw text is the only thing anyone can search for when the cause is unknown.
   assert.match(describeLiveKitError(new Error("SFU exploded")), /SFU exploded/);
