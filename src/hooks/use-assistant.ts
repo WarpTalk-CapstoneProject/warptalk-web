@@ -211,12 +211,15 @@ export function usePluginConnectUrl() {
       pluginKey,
       client,
       workspaceId,
+      alsoConnect,
     }: {
       pluginKey: string;
       client?: string;
       workspaceId?: string | null;
+      /** GMCAL1001: same-provider siblings to connect in the same call. */
+      alsoConnect?: readonly string[];
     }) => {
-      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId);
+      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId, alsoConnect);
       return data;
     },
     // Either the plugin was just connected on the server (`connected: true`), or the catalog is

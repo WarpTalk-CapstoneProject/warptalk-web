@@ -31,6 +31,7 @@ import { PeriodBar, type PeriodChoice } from "@/components/workspace/insights/pe
 import { ToolsTab } from "@/components/workspace/insights/tools-tab";
 import { UsageTab } from "@/components/workspace/insights/usage-tab";
 import { useInsightsUpdatedAt, useWorkspaceInsightsOverview } from "@/hooks/use-workspace-insights";
+import { useWorkspaceToolInsights } from "@/hooks/use-workspace-tool-insights";
 import type { ResolvedInsightsPeriod } from "@/lib/admin/insights-period";
 import { downloadBlob } from "@/lib/ui/download-blob";
 import { overviewCsv } from "@/lib/workspace/insights/overview-metrics";
@@ -73,7 +74,9 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   const updatedAt = useInsightsUpdatedAt(workspaceId);
   const sources = useWorkspaceInsightsOverview({ workspaceId, period, nowMs, enabled: tab === "overview" });
-  const model = useMemo(() => buildOverviewModel(sources, period), [sources, period]);
+  // The Tools tab reads the same period through the same hook, so the two share one cached answer.
+  const { insights: toolInsights } = useWorkspaceToolInsights({ workspaceId, period, enabled: tab === "overview" });
+  const model = useMemo(() => buildOverviewModel(sources, toolInsights, period), [sources, toolInsights, period]);
 
   const tabProps: InsightsTabProps = { workspaceId, workspaceSlug, period, timeZone, updatedAt };
 

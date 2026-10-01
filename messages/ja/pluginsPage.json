@@ -124,5 +124,15 @@
     "optional": "任意",
     "reasonPlaceholder": "例：会議のアクションアイテムで{label}を使用",
     "sendRequest": "リクエストを送信"
+  },
+  "siblingPrompt": {
+    "title": "ほかの {provider} プラグインも接続しますか？",
+    "titleNoProvider": "関連するプラグインも接続しますか？",
+    "body": "{label} を接続しました。これらのプラグインは同じサインインを使うので、今すぐまとめて接続できます。",
+    "connectAll": "すべて接続",
+    "notNow": "後で",
+    "closeAria": "閉じる",
+    "connected": "{labels} を接続しました",
+    "couldNotConnect": "{labels} を接続できませんでした。"
   }
 }

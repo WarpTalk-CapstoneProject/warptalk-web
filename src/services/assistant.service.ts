@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ChatAttachment } from "@/lib/assistant/attachments";
+import type { WorkspaceToolInsightsDto } from "@/types/assistant-tool-insights";
 import type {
   AssistantConversationDetailDto,
   AssistantConversationDto,
@@ -10,6 +11,7 @@ import type {
   AssistantSkillDto,
   CreateAssistantConversationOptions,
   CreatePrivatePluginRequest,
+  PluginConnectRequest,
   PluginConnectResultDto,
   PluginToolPolicy,
   SendAssistantMessageResponse,
@@ -151,9 +153,21 @@ export const assistantService = {
   /**
    * Connects a plugin. When the provider's grant already covers it the server connects it on the
    * spot and answers `connected: true` without a URL; otherwise it answers with the consent URL.
+   *
+   * `alsoConnect` (GMCAL1001) folds same-provider siblings into the same call: the server connects
+   * those its grant already covers and returns one consent URL for the rest. Omitted or empty sends
+   * no body, which is the old single-plugin behaviour.
    */
-  connectPlugin(pluginKey: string, client?: string, workspaceId?: string | null) {
-    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
+  connectPlugin(
+    pluginKey: string,
+    client?: string,
+    workspaceId?: string | null,
+    alsoConnect?: readonly string[],
+  ) {
+    const body: PluginConnectRequest | undefined = alsoConnect?.length
+      ? { alsoConnect: [...alsoConnect] }
+      : undefined;
+    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), body, {
       params: workspaceId ? { workspaceId } : undefined,
     });
   },
@@ -264,6 +278,13 @@ export const assistantService = {
         ...(query.pluginKey ? { pluginKey: query.pluginKey } : {}),
         ...(query.userId ? { userId: query.userId } : {}),
       },
+    });
+  },
+
+  /** Every WarpBot tool call of the workspace in [from, to), counted server-side (wave 4). */
+  getWorkspaceToolInsights(workspaceId: string, range: { from: string; to: string }) {
+    return apiClient.get<WorkspaceToolInsightsDto>(API.assistant.workspaceToolInsights(workspaceId), {
+      params: { from: range.from, to: range.to },
     });
   },
 };

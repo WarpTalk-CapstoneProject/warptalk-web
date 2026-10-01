@@ -23,7 +23,7 @@ counts and charts are answered here, on the Tools tab.
 
 Owner and Admin. The route shows a spinner until the workspace role is loaded, then either the page
 or an access-denied notice (same pattern as Plugin activity). The sources it reads (credit history,
-usage by member, the plugin audit log) refuse a member anyway.
+usage by member, the tool-call insights endpoint, the plugin audit log) refuse a member anyway.
 
 ## URL
 
@@ -47,7 +47,11 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | `settings/billing/components/usage-overview.tsx` (`embedded`) | The Usage tab renders the Usage page's `UsageOverview` with `embedded`: no "Usage" h1 and no cycle pill (the tab's caption states the cycle); member filter, refresh and CSV export stay. Default `false` leaves `/settings/billing/usage` unchanged. |
 | `src/hooks/use-workspace-insights.ts` | Overview sources as `InsightsSourceState`s; `INSIGHTS_QUERY_ROOT`; `useInsightsUpdatedAt`. |
 | `src/lib/workspace/insights/overview-metrics.ts` | Pure arithmetic (ledger, meetings, six months, attention, CSV). Tested. |
-| `src/lib/workspace/insights/tool-audits.ts` | Reading and counting the plugin audit log over a window. Tested; shared with the Tools tab. |
+| `src/hooks/use-workspace-tool-insights.ts` | The one tool-call read (`GET /assistant/workspaces/{id}/insights/tools`), shared by Overview and Tools through one query key under `INSIGHTS_QUERY_ROOT`. |
+| `src/lib/workspace/insights/tool-insights.ts` | Tool-call helpers shared by both tabs: 180-day window clamp, response normalising, success rate, "Recording since" notice, comparable previous period, line status, needs-setup plugins, calls by origin. Tested. |
+| `src/lib/workspace/insights/tools-metrics.ts` | Tools tab shaping: day series (+ days still to come), outcomes split, source chips, the tool table and its "who to fix", durations. Tested. |
+| `src/components/workspace/insights/tools/*` | Tools tab pieces: summary line, the two chart panels, the all-tools table, panel chrome, formatters. |
+| `src/types/assistant-tool-insights.ts` | The endpoint's response, field for field. |
 | `messages/{en,vi,ja}/workspaceInsights.json` | Every string. Nav label: `common.sidebar.nav.insights`. |
 
 ## Where every Overview figure comes from
@@ -56,7 +60,7 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 |---|---|---|
 | Credits used (+ previous) | `billingService.getAllCreditHistory` from the previous period's start | Spend = negative amount (Usage page rule), filtered client-side to each window. Paging capped at 10,000 rows: a capped read prints "at least N" and no delta. |
 | Meetings held, Hours translated | `translationRoomService.history` status ENDED, ±7 days slack | A meeting is held in the window when it ENDED and `startedAt` is inside it. Hours from `durationSeconds`, else `endedAt − startedAt`; rooms with neither are counted as meetings and left out of hours (card note says how many). 10 × 100 rows cap → "at least". |
-| Tool calls, Tool success rate | `assistantService.listWorkspacePluginToolAudits`, paged newest-first until a row predates the previous period | No date filter or total on the endpoint. 40 × 50 rows cap; a capped read prints "at least N" and the rate says it is of the newest calls read. No calls = no rate (never 96%). |
+| Tool calls, Tool success rate | `assistantService.getWorkspaceToolInsights(from, to)` → `totals` | Every WarpBot call: built-in, web search, plugin. Rate = `ok / calls`; no calls = no rate (never 96%). The calls delta uses `previousPeriodCalls` (same length, immediately before), and is left out when that period starts before `recordingSince`. The rate has no delta (the server sends no previous rate). |
 | Credits remaining | `getWorkspaceCredits` | 404 = no plan. Amber ≤ 10% left, red ≤ 1% (`decideUsageWarning`). |
 | Runs out in | `projectCycle` (`lib/billing/cycle-projection.ts`) | Says the projection's own reason when it declines. |
 | Plan | `getActiveSubscription` | Renews / ends on the period end. |
@@ -66,33 +70,62 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | Credits, 6 months | `getWorkspaceUsageChart(year)` (one or two years) | A month the chart does not describe is a gap. |
 | Credits per day (combo) | Ledger (columns, left) + held meetings (line, right, integer) | Future days blank; days a capped ledger read does not cover are blank, not 0. |
 | Credits by AI service | Ledger, by `serviceOfTransaction` | Not the breakdown endpoint: it only answers "last N days from now" and cannot describe a past month. |
-| Tool calls by plugin, Recent tool activity | Audit read | Labels from the plugin catalog. |
-| Needs attention | balance, subscription, `getRecurringBilling`, audit read, workspace plugins | Each row links to where it is fixed; a source that did not answer is listed as "Not checked". |
+| Tool calls by source | Tool insights `byTool`, folded by `callsByOrigin` | Built-in tools as one row, web search as one row, each plugin its own row (catalog label). |
+| Recent tool activity | `listWorkspacePluginToolAudits` skip 0 take 4 | A list of the newest plugin calls, never counted; plugin-only by nature (the audit log). |
+| Needs attention | balance, subscription, `getRecurringBilling`, tool insights, workspace plugins | Needs-setup plugins and policy blocks come from the tool insights. Each row links to where it is fixed; a source that did not answer is listed as "Not checked". |
 | Up next | `translationRoomService.list` with `UNFINISHED_ROOM_STATUSES_FILTER` | Dashboard's rule. |
 
 The topbar breadcrumb (`src/app/(app)/layout.tsx`) labels the `insights` segment with
 `sidebar.nav.insights`, the same key the sidebar entry uses.
 
-## Tool outcomes
+## Tools tab and tool outcomes (wave 4, 2026-10-01)
 
-Tool figures read the plugin audit log only (built-in WarpBot tools and web search are not logged
-there yet). Codes are classified once, in `describePluginActivityOutcome`
-(`src/lib/assistant/plugin-activity.ts`), and both tabs follow it: `tool_blocked` (a member's own
-switch) and `access_denied` (a cancelled consent) count as blocked, `api_key_required` /
-`invalid_api_key` as needs setup. The Overview "WarpBot tools" line uses the Tools tab's rule —
-amber for needs-setup **or** failed — and prints the failed count.
+Every tool figure on both tabs comes from one endpoint,
+`GET /api/v1/assistant/workspaces/{workspaceId}/insights/tools?from=ISO&to=ISO` (Owner/Admin, the
+plugin audit log's check). The assistant service records every WarpBot call in
+`assistant.assistant_tool_calls` — built-in tools, web search and plugin tools — with metadata only
+(no argument or result text), and counts them: `totals`, `bySource`, `byDay` (every UTC day of the
+window, zero days included), `byTool`, `previousPeriodCalls` and `recordingSince` (the earliest row
+anywhere). The page no longer pages the plugin audit log to count anything; Settings → Plugin
+activity is still the per-call record and still reads that log.
+
+- **Outcomes** are bucketed by the worker with the web's rules from `plugin-activity.ts`: ok, error,
+  blocked (`permission_denied`, `tool_blocked`, `workspace_tool_blocked`), declined
+  (`access_denied`), needs setup (`missing_scope`, `api_key_required`, …) and awaiting confirmation.
+  The Overview line and the Tools summary line share one rule: amber for needs setup **or** error;
+  policy blocks and declines do not colour it.
+- **Calls per day**: columns stacked by source (built-in `--viz-1`, web search `--viz-2`, plugin
+  `--viz-3`) with the day's success rate (`ok / calls`) as a line on a % axis. Days are the server's
+  UTC dates, plotted as sent; a month or custom range still in progress adds the days still to come,
+  blank. The figure's caption gives the previous period's calls when it is comparable.
+- **Outcomes**: one bar per outcome with its share; the caption is the median call time (web search
+  has none).
+- **All tools**: one row per tool that ran, most called first, with a source chip (built-in, web
+  search, plugin) and filter chips above when more than one source ran. A plugin tool with
+  needs-setup calls says the member fixes it in My connections; one with policy blocks says the
+  Owner can allow it; both link to Plugin activity to see who.
+- **Recording since {date}** shows when the window starts before `recordingSince`, so days before
+  recording do not read as quiet days. The previous-period delta is dropped for the same reason
+  when the previous window starts before it.
+- **180 days at most**: the server refuses longer windows, so a longer period (6 months, a long
+  custom range) is asked for as its last 180 days and the tab says which days it shows.
 
 ## Known limitations
 
-- Days are cut in browser local time (the period bar's calendar); the sources carry instants.
+- Days are cut in browser local time (the period bar's calendar); the sources carry instants. The
+  tool-call days are the server's UTC dates (the chart says so).
+- The tool calls delta compares with the window of the same length immediately before, even when
+  the period bar's caption says "vs the same days last month".
 - Every to-now period refreshes all paged reads once a minute.
 - Period labels and captions come from `lib/admin/insights-period.ts` in English, as on `/admin`.
 
 ## Testing checklist
 
-- `npm run test:workspace-insights` (overview + tool-audit derivations) and
+- `npm run test:workspace-insights` (overview + shared tool-insights helpers) and
   `npm run test:workspace-insights-tools` (Tools tab derivations), both in `test:contracts`.
 - `npm run test:i18n-catalog`, `test:english-ui`, `test:page-ground`, `typecheck`, `lint`.
 - Manual: owner and admin see the page; a member sees the access notice. Switch tabs and periods;
   the URL follows and back/forward restore it. Kill one endpoint (e.g. block the audit log) and
-  confirm only its cards read "Not available yet". Export CSV on Overview.
+  confirm only its cards read "Not available yet". Export CSV on Overview. On Tools: chips filter
+  the table; a period before recording began shows the "Recording since" notice; 6 months shows
+  the 180-day notice.

@@ -1,217 +1,228 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import type { ToolInsightsDayDto, ToolInsightsToolDto, ToolInsightsTotalsDto } from "../../../../types/assistant-tool-insights.ts";
 import {
-  collectAuditWindow,
-  dayKeyInZone,
-  filterToPeriod,
-  outcomeBucket,
-  periodDayAxis,
-  toolsMetrics,
-  topPlugins,
-  type ToolCallLike,
-  type ToolOutcomeTone,
+  addDaysToDayKey,
+  filterToolRows,
+  formatDurationMs,
+  outcomeSplit,
+  sourceChips,
+  toolDaySeries,
+  toolDisplayName,
+  toolSourceKey,
+  toolTableRows,
+  toolsHealth,
 } from "../tools-metrics.ts";
 
-const HCM = "Asia/Ho_Chi_Minh"; // UTC+7, no DST
-
-function call(createdAt: string, pluginKey: string, tone: ToolOutcomeTone, code: string | null = null): ToolCallLike {
-  return { createdAt, pluginKey, pluginLabel: pluginKey.toUpperCase(), outcome: { tone, code } };
+function day(date: string, builtin: number, plugin: number, webSearch: number, ok: number, failed: number): ToolInsightsDayDto {
+  return { date, builtin, plugin, webSearch, ok, failed };
 }
 
-// September 2026 in Ho Chi Minh: [Aug 31 17:00Z, Sep 30 17:00Z); "now" is Sep 3 05:00 local.
-const FROM = new Date("2026-08-31T17:00:00Z");
-const NOW = new Date("2026-09-02T22:00:00Z");
+function tool(partial: Partial<ToolInsightsToolDto> & Pick<ToolInsightsToolDto, "tool" | "source">): ToolInsightsToolDto {
+  return {
+    pluginKey: null,
+    calls: 0,
+    ok: 0,
+    error: 0,
+    blocked: 0,
+    needsSetup: 0,
+    medianDurationMs: null,
+    lastCalledAt: null,
+    ...partial,
+  };
+}
 
-describe("dayKeyInZone", () => {
-  it("cuts the day in the given zone, not in UTC", () => {
-    assert.equal(dayKeyInZone(new Date("2026-08-31T17:30:00Z"), HCM), "2026-09-01");
-    assert.equal(dayKeyInZone(new Date("2026-08-31T17:30:00Z"), "UTC"), "2026-08-31");
+const TOTALS: ToolInsightsTotalsDto = {
+  calls: 20,
+  ok: 14,
+  error: 2,
+  blocked: 1,
+  needsSetup: 2,
+  declined: 0,
+  confirmationRequired: 1,
+  medianDurationMs: 420,
+};
+
+const LABELS = { webSearch: "Web search" };
+
+describe("toolSourceKey", () => {
+  it("maps the server's sources and keeps anything unknown as other", () => {
+    assert.equal(toolSourceKey("builtin"), "builtin");
+    assert.equal(toolSourceKey("web_search"), "webSearch");
+    assert.equal(toolSourceKey("plugin"), "plugin");
+    assert.equal(toolSourceKey("future_source"), "other");
+    assert.equal(toolSourceKey(null), "other");
   });
 });
 
-describe("filterToPeriod", () => {
-  it("keeps [from, to), drops unparseable rows, and orders newest first", () => {
-    const rows = [
-      call("2026-08-31T16:59:59Z", "a", "success"), // before
-      call("2026-08-31T17:00:00Z", "a", "success"), // exactly from: in
-      call("2026-09-02T21:00:00Z", "b", "success"),
-      call("2026-09-02T22:00:00Z", "a", "success"), // exactly to: out
-      call("not a date", "a", "success"),
-    ];
-    const kept = filterToPeriod(rows, FROM, NOW);
-    assert.deepEqual(kept.map((r) => r.createdAt), ["2026-09-02T21:00:00Z", "2026-08-31T17:00:00Z"]);
-  });
-});
-
-describe("periodDayAxis", () => {
-  it("runs the whole month and marks the days after today as still to come", () => {
-    const axis = periodDayAxis({ from: FROM, to: NOW, timeZone: HCM, axisEndDay: "2026-10-01" });
-    assert.equal(axis.length, 30);
-    assert.deepEqual(axis.slice(0, 4), [
-      { key: "2026-09-01", future: false },
-      { key: "2026-09-02", future: false },
-      { key: "2026-09-03", future: false },
-      { key: "2026-09-04", future: true },
+describe("toolDaySeries", () => {
+  it("plots the server's days in date order, stacked by source, with each day's success rate", () => {
+    const days = toolDaySeries([
+      day("2026-09-02", 1, 1, 0, 1, 1),
+      day("2026-09-01", 2, 1, 1, 3, 1),
+      day("2026-09-03", 0, 0, 0, 0, 0),
     ]);
-    assert.deepEqual(axis[29], { key: "2026-09-30", future: true });
+    assert.deepEqual(days.map((d) => d.key), ["2026-09-01", "2026-09-02", "2026-09-03"]);
+    assert.equal(days[0].total, 4);
+    assert.equal(days[0].successRate, 75);
+    assert.equal(days[1].successRate, 50);
   });
 
-  it("stops at today for a to-now preset", () => {
-    const axis = periodDayAxis({ from: FROM, to: NOW, timeZone: HCM, axisEndDay: null });
-    assert.deepEqual(axis.map((d) => d.key), ["2026-09-01", "2026-09-02", "2026-09-03"]);
+  it("keeps a zero day as zero calls and no rate, not a gap", () => {
+    const [zero] = toolDaySeries([day("2026-09-03", 0, 0, 0, 0, 0)]);
+    assert.equal(zero.total, 0);
+    assert.equal(zero.builtin, 0);
+    assert.equal(zero.successRate, null);
+    assert.equal(zero.future, false);
   });
 
-  it("is empty for an empty range", () => {
-    assert.deepEqual(periodDayAxis({ from: NOW, to: NOW, timeZone: HCM }), []);
+  it("adds the days still to come up to the axis end, all blank", () => {
+    const days = toolDaySeries([day("2026-09-29", 1, 0, 0, 1, 0), day("2026-09-30", 0, 0, 0, 0, 0)], "2026-10-03");
+    assert.deepEqual(days.map((d) => [d.key, d.future]), [
+      ["2026-09-29", false],
+      ["2026-09-30", false],
+      ["2026-10-01", true],
+      ["2026-10-02", true],
+    ]);
+    assert.equal(days[3].total, null);
+    assert.equal(days[3].builtin, null);
+    assert.equal(days[3].successRate, null);
+  });
+
+  it("counts a repeated date once and skips malformed dates", () => {
+    const days = toolDaySeries([day("2026-09-01", 1, 0, 0, 1, 0), day("2026-09-01", 9, 0, 0, 9, 0), day("Sep 2", 1, 0, 0, 1, 0)]);
+    assert.equal(days.length, 1);
+    assert.equal(days[0].total, 1);
+  });
+
+  it("draws nothing for an empty response, even with an axis end", () => {
+    assert.deepEqual(toolDaySeries([], "2026-10-03"), []);
+  });
+
+  it("does calendar arithmetic on day keys across a month end", () => {
+    assert.equal(addDaysToDayKey("2026-09-30", 1), "2026-10-01");
   });
 });
 
-describe("outcomeBucket", () => {
-  it("keeps a policy refusal apart from a failure", () => {
-    assert.equal(outcomeBucket({ tone: "success" }), "succeeded");
-    assert.equal(outcomeBucket({ tone: "blocked", code: "permission_denied" }), "blocked");
-    assert.equal(outcomeBucket({ tone: "attention", code: "connection_required" }), "problem");
-    assert.equal(outcomeBucket({ tone: "failed", code: "boom" }), "problem");
+describe("outcomeSplit", () => {
+  it("lists every outcome with calls, in bar order, with its share", () => {
+    const split = outcomeSplit(TOTALS);
+    assert.deepEqual(split.map((row) => row.key), ["ok", "error", "needsSetup", "blocked", "confirmationRequired"]);
+    assert.equal(split[0].share, 70);
+    assert.equal(split.find((row) => row.key === "declined"), undefined);
+  });
+
+  it("is empty with no calls", () => {
+    assert.deepEqual(outcomeSplit({ ...TOTALS, calls: 0, ok: 0, error: 0, blocked: 0, needsSetup: 0, confirmationRequired: 0 }), []);
   });
 });
 
-describe("toolsMetrics", () => {
-  const rows = [
-    call("2026-08-30T10:00:00Z", "notion", "success"), // previous month: out
-    call("2026-08-31T18:00:00Z", "calendar", "success"), // Sep 1 local
-    call("2026-08-31T23:00:00Z", "calendar", "blocked", "permission_denied"), // Sep 1
-    call("2026-09-01T16:59:00Z", "gmail", "attention", "connection_required"), // Sep 1 23:59 local
-    call("2026-09-01T17:01:00Z", "calendar", "success"), // Sep 2 00:01 local
-    call("2026-09-02T20:00:00Z", "notion", "attention", "confirmation_required"), // Sep 3
-    call("2026-09-02T21:00:00Z", "calendar", "failed", "provider_unavailable"), // Sep 3
-  ];
+describe("toolsHealth", () => {
+  it("follows the Overview line's rule", () => {
+    assert.equal(toolsHealth({ calls: 0, needsSetup: 0, error: 0 }), "idle");
+    assert.equal(toolsHealth({ calls: 4, needsSetup: 0, error: 0 }), "healthy");
+    assert.equal(toolsHealth({ calls: 4, needsSetup: 1, error: 0 }), "attention");
+  });
+});
 
-  const metrics = toolsMetrics(rows, { from: FROM, to: NOW, timeZone: HCM, axisEndDay: "2026-10-01" });
-
-  it("counts only the period's calls", () => {
-    assert.equal(metrics.calls, 6);
-    assert.equal(metrics.succeeded, 2);
-    assert.equal(metrics.blocked, 1);
-    assert.equal(metrics.needsSetup, 1);
-    assert.equal(metrics.awaitingConfirmation, 1);
-    assert.equal(metrics.failed, 1);
-    assert.equal(metrics.lastCallAt, "2026-09-02T21:00:00Z");
-    assert.equal(metrics.capped, false);
+describe("sourceChips", () => {
+  it("offers All plus each source that made a call, in source order, with counts", () => {
+    const chips = sourceChips(
+      [
+        { source: "plugin", calls: 5 },
+        { source: "builtin", calls: 12 },
+        { source: "web_search", calls: 0 },
+        { source: "something_new", calls: 1 },
+      ],
+      18,
+    );
+    assert.deepEqual(chips, [
+      { key: "all", calls: 18 },
+      { key: "builtin", calls: 12 },
+      { key: "plugin", calls: 5 },
+    ]);
   });
 
-  it("computes the success rate from the calls themselves", () => {
-    assert.ok(Math.abs((metrics.successRate ?? 0) - (2 / 6) * 100) < 1e-9);
+  it("is only All when nothing ran", () => {
+    assert.deepEqual(sourceChips([], 0), [{ key: "all", calls: 0 }]);
   });
+});
 
-  it("needs attention when anything needs setup or failed", () => {
-    assert.equal(metrics.health, "attention");
-    const ok = toolsMetrics([call("2026-09-01T00:00:00Z", "a", "success"), call("2026-09-01T01:00:00Z", "a", "blocked")], {
-      from: FROM,
-      to: NOW,
-      timeZone: HCM,
-    });
-    assert.equal(ok.health, "healthy");
+describe("toolDisplayName", () => {
+  it("uses the built-in copy, the web search label, the plugin catalog, then the name humanised", () => {
+    assert.equal(toolDisplayName({ tool: "create_meeting", source: "builtin", pluginKey: null }, LABELS), "Create meeting room");
+    assert.equal(toolDisplayName({ tool: "web_search", source: "web_search", pluginKey: null }, LABELS), "Web search");
+    assert.equal(
+      toolDisplayName(
+        { tool: "list_events", source: "plugin", pluginKey: "google_calendar" },
+        { ...LABELS, pluginToolLabel: (key, name) => (key === "google_calendar" && name === "list_events" ? "List events" : null) },
+      ),
+      "List events",
+    );
+    assert.equal(toolDisplayName({ tool: "brand_new_tool", source: "builtin", pluginKey: null }, LABELS), "Brand new tool");
   });
+});
 
-  it("counts per plugin, largest first", () => {
+describe("toolTableRows", () => {
+  const rows = toolTableRows(
+    [
+      tool({ tool: "search_files", source: "plugin", pluginKey: "google_drive", calls: 4, ok: 1, needsSetup: 2, blocked: 1 }),
+      tool({ tool: "create_meeting", source: "builtin", calls: 10, ok: 9, error: 1, medianDurationMs: 800 }),
+      tool({ tool: "web_search", source: "web_search", calls: 3, ok: 3 }),
+      tool({ tool: "list_events", source: "plugin", pluginKey: "google_calendar", calls: 4, ok: 2, blocked: 1 }),
+      tool({ tool: "ask_user", source: "builtin", calls: 2, ok: 1 }),
+      tool({ tool: "never", source: "builtin", calls: 0 }),
+    ],
+    { ...LABELS, pluginLabel: (key) => (key === "google_drive" ? "Google Drive" : null) },
+  );
+
+  it("lists every tool that ran, most called first, with a source chip", () => {
     assert.deepEqual(
-      metrics.byPlugin.map((p) => [p.key, p.label, p.calls, p.succeeded, p.blocked, p.problem]),
+      rows.map((row) => [row.tool, row.source]),
       [
-        ["calendar", "CALENDAR", 4, 2, 1, 1],
-        ["gmail", "GMAIL", 1, 0, 0, 1],
-        ["notion", "NOTION", 1, 0, 0, 1],
+        ["create_meeting", "builtin"],
+        ["list_events", "plugin"],
+        ["search_files", "plugin"],
+        ["web_search", "webSearch"],
+        ["ask_user", "builtin"],
       ],
     );
   });
 
-  it("buckets per local day and leaves the days to come blank", () => {
-    const [sep1, sep2, sep3, sep4] = metrics.days;
-    assert.deepEqual(sep1, { key: "2026-09-01", future: false, succeeded: 1, blocked: 1, problem: 1, total: 3, successRate: (1 / 3) * 100 });
-    assert.deepEqual(sep2, { key: "2026-09-02", future: false, succeeded: 1, blocked: 0, problem: 0, total: 1, successRate: 100 });
-    assert.deepEqual(sep3, { key: "2026-09-03", future: false, succeeded: 0, blocked: 0, problem: 2, total: 2, successRate: 0 });
-    assert.deepEqual(sep4, { key: "2026-09-04", future: true, succeeded: null, blocked: null, problem: null, total: null, successRate: null });
-    assert.equal(metrics.days.length, 30);
+  it("works out each tool's success rate and the calls outside the four columns", () => {
+    const meeting = rows.find((row) => row.tool === "create_meeting")!;
+    assert.equal(meeting.successRate, 90);
+    assert.equal(meeting.medianDurationMs, 800);
+    const ask = rows.find((row) => row.tool === "ask_user")!;
+    assert.equal(ask.other, 1);
   });
 
-  it("never invents a success rate for a period without calls", () => {
-    const empty = toolsMetrics([], { from: FROM, to: NOW, timeZone: HCM, capped: false });
-    assert.equal(empty.calls, 0);
-    assert.equal(empty.successRate, null);
-    assert.equal(empty.lastCallAt, null);
-    assert.equal(empty.health, "idle");
-    assert.deepEqual(empty.byPlugin, []);
-    // A past day with no calls is a real zero, not a gap; only its rate is undefined.
-    assert.deepEqual(empty.days[0], { key: "2026-09-01", future: false, succeeded: 0, blocked: 0, problem: 0, total: 0, successRate: null });
+  it("says who fixes a plugin tool: the member for needs setup, the Owner for a policy block", () => {
+    assert.equal(rows.find((row) => row.tool === "search_files")!.fixer, "member");
+    assert.equal(rows.find((row) => row.tool === "list_events")!.fixer, "owner");
+    assert.equal(rows.find((row) => row.tool === "create_meeting")!.fixer, null);
   });
 
-  it("passes the capped flag through", () => {
-    assert.equal(toolsMetrics(rows, { from: FROM, to: NOW, timeZone: HCM, capped: true }).capped, true);
+  it("labels plugins from the catalog and falls back to the key", () => {
+    assert.equal(rows.find((row) => row.tool === "search_files")!.pluginLabel, "Google Drive");
+    assert.equal(rows.find((row) => row.tool === "list_events")!.pluginLabel, "google_calendar");
+    assert.equal(rows.find((row) => row.tool === "web_search")!.pluginLabel, null);
   });
-});
 
-describe("topPlugins", () => {
-  it("sums the tail into one row so the shares still cover every call", () => {
-    const top = topPlugins(
-      [
-        { key: "a", label: "A", calls: 5, succeeded: 5, blocked: 0, problem: 0 },
-        { key: "b", label: "B", calls: 3, succeeded: 3, blocked: 0, problem: 0 },
-        { key: "c", label: "C", calls: 2, succeeded: 2, blocked: 0, problem: 0 },
-      ],
-      1,
-    );
-    assert.deepEqual(top, [
-      { key: "a", label: "A", calls: 5 },
-      { key: null, label: "", calls: 5 },
-    ]);
+  it("filters by the chosen source chip", () => {
+    assert.deepEqual(filterToolRows(rows, "plugin").map((row) => row.tool), ["list_events", "search_files"]);
+    assert.equal(filterToolRows(rows, "all").length, rows.length);
+    assert.deepEqual(filterToolRows(rows, "webSearch").map((row) => row.tool), ["web_search"]);
   });
 });
 
-describe("collectAuditWindow", () => {
-  // A log of `count` rows, one an hour, newest first from NOW.
-  function log(count: number) {
-    return Array.from({ length: count }, (_, i) => ({ createdAt: new Date(NOW.getTime() - (i + 1) * 3_600_000).toISOString() }));
-  }
-  function pager(rows: { createdAt: string }[]) {
-    const calls: [number, number][] = [];
-    const fetchPage = async (skip: number, take: number) => {
-      calls.push([skip, take]);
-      return rows.slice(skip, skip + take);
-    };
-    return { calls, fetchPage };
-  }
-
-  it("stops at the end of the log", async () => {
-    const { calls, fetchPage } = pager(log(7));
-    const window = await collectAuditWindow(fetchPage, { from: new Date(0), pageSize: 5, maxPages: 20 });
-    assert.equal(window.rows.length, 7);
-    assert.equal(window.capped, false);
-    assert.deepEqual(calls, [[0, 5], [5, 5]]);
-  });
-
-  it("stops once a page reaches back before the period start", async () => {
-    const { calls, fetchPage } = pager(log(100));
-    // 12 hours back: rows 1..11 are inside, row 12 is exactly on the start, row 13 is before it.
-    const from = new Date(NOW.getTime() - 12 * 3_600_000);
-    const window = await collectAuditWindow(fetchPage, { from, pageSize: 5, maxPages: 20 });
-    assert.equal(window.pagesRead, 3);
-    assert.equal(window.capped, false);
-    assert.equal(calls.length, 3);
-  });
-
-  it("is capped when it runs out of pages before reaching the start", async () => {
-    const { fetchPage } = pager(log(100));
-    const window = await collectAuditWindow(fetchPage, { from: new Date(0), pageSize: 5, maxPages: 3 });
-    assert.equal(window.rows.length, 15);
-    assert.equal(window.pagesRead, 3);
-    assert.equal(window.capped, true);
-  });
-
-  it("an exactly full last page before the cap costs one empty read, not a cap", async () => {
-    const { calls, fetchPage } = pager(log(10));
-    const window = await collectAuditWindow(fetchPage, { from: new Date(0), pageSize: 5, maxPages: 3 });
-    assert.equal(window.rows.length, 10);
-    assert.equal(window.capped, false);
-    assert.equal(calls.length, 3);
+describe("formatDurationMs", () => {
+  it("prints milliseconds, seconds and minutes", () => {
+    assert.equal(formatDurationMs(850), "850 ms");
+    assert.equal(formatDurationMs(1250), "1.3 s");
+    assert.equal(formatDurationMs(12_000), "12 s");
+    assert.equal(formatDurationMs(150_000), "2.5 min");
+    assert.equal(formatDurationMs(null), null);
   });
 });
