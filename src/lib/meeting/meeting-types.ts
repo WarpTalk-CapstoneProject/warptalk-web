@@ -1,5 +1,6 @@
 /**
- * The meeting types the create dialog offers.
+ * Every meeting type the app understands. The create dialog offers `CREATABLE_MEETING_TYPES`
+ * (below), which is this list without External Meeting.
  *
  * `value` is what the API stores (TranslationRoomTypes on the backend). `defaults` mirrors
  * TranslationRoomTypePolicy — it is NOT what configures the room, the backend does that from
@@ -89,6 +90,23 @@ export const EXTERNAL_BRIDGE_TYPE = "EXTERNAL_BRIDGE";
 export function isExternalBridge(value?: string | null): boolean {
   return value?.trim().toUpperCase() === EXTERNAL_BRIDGE_TYPE;
 }
+
+/**
+ * The types the Create Room dialog OFFERS — every type except External Meeting.
+ *
+ * External Meeting is no longer something a host picks from the dialog. An EXTERNAL_BRIDGE room is
+ * made where the Google Meet call already is: WarpBot creates one together with the Meet link and
+ * the calendar event, and the desktop app creates one automatically when it sees a Meet URL
+ * (`bridge-auto-room.ts`). Picking it in the dialog produced a room with no Meet link behind it.
+ *
+ * `MEETING_TYPES` itself still carries EXTERNAL_BRIDGE on purpose: `meetingTypeByValue` must keep
+ * resolving it, so an existing bridge room (and the ones WarpBot and the desktop create) still
+ * shows its name — "External Meeting" — on the room page, the schedules list and anywhere else a
+ * stored type is displayed. Only the offer is narrowed, not what the app understands.
+ */
+export const CREATABLE_MEETING_TYPES: MeetingType[] = MEETING_TYPES.filter(
+  (type) => !isExternalBridge(type.value),
+);
 
 const BY_LABEL = new Map(MEETING_TYPES.map((type) => [type.label, type]));
 
