@@ -59,6 +59,7 @@ import EgressHelper from "@livekit/egress-sdk";
 
 import { isRecordableParticipant, resolveEgressDisplayName } from "@/lib/meeting/egress-participants";
 import { getInitials } from "@/lib/meeting/participant-identity";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Tile {
   identity: string;
@@ -71,6 +72,27 @@ interface ParticipantOverlay {
   name: string;
   micMuted: boolean;
   camMuted: boolean;
+  /** From the participant's LiveKit metadata (`{"avatarUrl": "https://…"}`), when the client set one. */
+  avatarUrl?: string;
+}
+
+/** Only a Google-hosted or WarpTalk avatar https URL is drawn; anything else falls back to initials. */
+function readAvatarUrl(metadata: string | undefined): string | undefined {
+  if (!metadata) return undefined;
+  try {
+    const url = (JSON.parse(metadata) as { avatarUrl?: unknown }).avatarUrl;
+    if (typeof url !== "string") return undefined;
+    // Any participant can set their own metadata, and this page fetches whatever it names, so the
+    // host is checked: Google-hosted pictures, or the API's own avatar route. The API origin is not
+    // known to this page, so the route is matched by path.
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return undefined;
+    const googleHost = parsed.hostname.endsWith(".googleusercontent.com");
+    const ownRoute = parsed.pathname.startsWith("/api/v1/auth/profile/avatar/");
+    return googleHost || ownRoute ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function readOverlay(participant: RemoteParticipant): ParticipantOverlay {
@@ -80,6 +102,7 @@ function readOverlay(participant: RemoteParticipant): ParticipantOverlay {
     // draws on in the live meeting UI — a published, unmuted track publication for that source.
     micMuted: !participant.isMicrophoneEnabled,
     camMuted: !participant.isCameraEnabled,
+    avatarUrl: readAvatarUrl(participant.metadata),
   };
 }
 
@@ -144,6 +167,10 @@ export default function EgressCompositePage() {
       // toggle also (un)subscribes a track.
       .on(RoomEvent.TrackMuted, handleMuteChange)
       .on(RoomEvent.TrackUnmuted, handleMuteChange)
+      .on(RoomEvent.ParticipantMetadataChanged, (_metadata, participant) => {
+        // The recorder is the only local participant and is never drawn; refreshOverlay filters it.
+        refreshOverlay(participant as RemoteParticipant);
+      })
       .on(RoomEvent.ParticipantDisconnected, (participant) => dropOverlay(participant.identity))
       .on(RoomEvent.Disconnected, () => {
         // The recorder finalises the file on this, so it must fire on a normal room close as well
@@ -211,7 +238,7 @@ export default function EgressCompositePage() {
         width: "100vw",
         height: "100vh",
         margin: 0,
-        background: "#000",
+        background: STAGE_BG,
         display: "grid",
         // A square-ish grid that grows with the room participants (including camera-off participants).
         gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(Math.sqrt(participantIdentities.length || 1)))}, 1fr)`,
@@ -235,7 +262,6 @@ export default function EgressCompositePage() {
         return (
           <ParticipantGridCell
             key={identity}
-            identity={identity}
             overlay={overlay}
             videoTile={videoTile}
             audioTile={audioTile}
@@ -246,22 +272,16 @@ export default function EgressCompositePage() {
   );
 }
 
-const AVATAR_BG_COLORS = [
-  "#6a1b38", // dark pink/red (matches real meeting UI)
-  "#451a11", // dark brown (matches real meeting UI)
-  "#1e293b", // dark navy
-  "#2c3b28", // dark olive
-  "#3b1d50", // dark purple
-  "#1a3636", // dark teal
-];
-
-function getParticipantBgColor(identity: string): string {
-  let hash = 0;
-  for (let i = 0; i < identity.length; i++) {
-    hash = identity.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_BG_COLORS[Math.abs(hash) % AVATAR_BG_COLORS.length]!;
-}
+/* The live meeting's own tokens (globals.css, light theme), copied as literals because this page has
+   no stylesheet and must read nothing from the app. The camera-off tile in the recording is the
+   camera-off tile in the meeting: white face, grey avatar, grey "Camera is off" pill. */
+const TILE_BG = "#ffffff";
+const STAGE_BG = "#f0f1f4";
+const AVATAR_BG = "#e4e6ea";
+const INK = "#111214";
+const INK_MUTED = "#5e6470";
+const HAIRLINE = "#e3e5e9";
+const FONT = "Inter, system-ui, -apple-system, sans-serif";
 
 /**
  * One participant cell in the recording grid.
@@ -271,17 +291,16 @@ function getParticipantBgColor(identity: string): string {
  * Always mounts the audio element in the DOM so Chrome captures audio for all recordable participants.
  */
 function ParticipantGridCell({
-  identity,
   overlay,
   videoTile,
   audioTile,
 }: {
-  identity: string;
   overlay: ParticipantOverlay;
   videoTile?: Tile;
   audioTile?: Tile;
 }) {
   const videoHolderRef = useRef<HTMLDivElement | null>(null);
+  const hasVideo = Boolean(videoTile && !overlay.camMuted);
   const audioHolderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -291,7 +310,11 @@ function ParticipantGridCell({
     return () => {
       if (videoTile.element.parentElement === holder) holder.removeChild(videoTile.element);
     };
-  }, [videoTile]);
+    // `hasVideo` is a dependency because the holder <div> only exists while it is true. The track
+    // subscribes before or after the camera-enabled flag settles, and a camera switched off and on
+    // remounts the holder: an effect keyed on the tile alone ran once, found no holder, and never
+    // ran again, so a camera that was on recorded as an empty tile.
+  }, [videoTile, hasVideo]);
 
   useEffect(() => {
     const holder = audioHolderRef.current;
@@ -303,8 +326,7 @@ function ParticipantGridCell({
   }, [audioTile]);
 
   const initials = getInitials(overlay.name);
-  const hasVideo = Boolean(videoTile && !overlay.camMuted);
-  const tileBgColor = hasVideo ? "#1c1c1e" : getParticipantBgColor(identity);
+  const tileBgColor = hasVideo ? "#1c1c1e" : TILE_BG;
 
   return (
     <div
@@ -313,7 +335,8 @@ function ParticipantGridCell({
         width: "100%",
         height: "100%",
         background: tileBgColor,
-        borderRadius: "14px",
+        border: hasVideo ? "none" : `1px solid ${HAIRLINE}`,
+        borderRadius: "12px",
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
@@ -329,7 +352,7 @@ function ParticipantGridCell({
       {hasVideo ? (
         <div ref={videoHolderRef} style={{ width: "100%", height: "100%" }} />
       ) : (
-        /* Camera-Off Placeholder Tile matching real meeting UI */
+        /* Camera-off tile, as the live meeting draws it: avatar, then a "Camera is off" pill. */
         <div
           style={{
             display: "flex",
@@ -339,26 +362,35 @@ function ParticipantGridCell({
             gap: "12px",
           }}
         >
+          {/* Through the app's AvatarImage like every other face (check-avatar-everywhere-contract):
+              it resolves the src, and the fallback shows initials until the photo loads or when it
+              fails, so a moved Google URL never records as a broken-image box. */}
+          <Avatar style={{ width: "80px", height: "80px" }}>
+            {overlay.avatarUrl ? <AvatarImage src={overlay.avatarUrl} alt="" /> : null}
+            <AvatarFallback
+              style={{
+                background: AVATAR_BG,
+                color: INK,
+                fontSize: "24px",
+                fontWeight: 600,
+                fontFamily: FONT,
+              }}
+            >
+              {initials}
+            </AvatarFallback>
+          </Avatar>
           <div
             style={{
-              width: "96px",
-              height: "96px",
-              borderRadius: "50%",
-              background: "rgba(255, 255, 255, 0.18)",
-              backdropFilter: "blur(4px)",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "36px",
-              fontWeight: 600,
-              fontFamily: "sans-serif",
-              userSelect: "none",
-              border: "2px solid rgba(255, 255, 255, 0.25)",
-              boxShadow: "0 8px 16px rgba(0,0,0,0.25)",
+              padding: "2px 10px",
+              borderRadius: "999px",
+              background: STAGE_BG,
+              color: INK_MUTED,
+              fontFamily: FONT,
+              fontSize: "12px",
+              fontWeight: 500,
             }}
           >
-            {initials}
+            Camera is off
           </div>
         </div>
       )}
@@ -372,9 +404,9 @@ function ParticipantGridCell({
           maxWidth: "calc(100% - 24px)",
           padding: "5px 12px",
           borderRadius: "999px",
-          background: "rgba(17,17,20,0.72)",
+          background: "rgba(0,0,0,0.55)",
           color: "#fff",
-          fontFamily: "sans-serif",
+          fontFamily: FONT,
           fontSize: "14px",
           fontWeight: 600,
           overflow: "hidden",
@@ -385,49 +417,39 @@ function ParticipantGridCell({
         {overlay.name}
       </div>
 
-      {/* Mute Badges (Top-right) */}
-      {overlay.micMuted || overlay.camMuted ? (
-        <div style={{ position: "absolute", right: "10px", top: "10px", display: "flex", gap: "6px" }}>
-          {overlay.micMuted ? <MuteBadge label="Microphone muted" icon="mic" /> : null}
-          {overlay.camMuted ? <MuteBadge label="Camera off" icon="camera" /> : null}
-        </div>
-      ) : null}
+      {/* Status cluster (top-right). The mic badge is always drawn, as in the live tile: an icon
+          that disappears when live cannot be told from one that failed to render. */}
+      <div style={{ position: "absolute", right: "12px", top: "12px", display: "flex", gap: "6px" }}>
+        <MicBadge muted={overlay.micMuted} />
+      </div>
     </div>
   );
 }
 
-/** A small filled circle carrying one static glyph — no animation, matches the mockup's badges. */
-function MuteBadge({ label, icon }: { label: string; icon: "mic" | "camera" }) {
+/** The live tile's mic badge: a small white square, red icon when muted. No animation. */
+function MicBadge({ muted }: { muted: boolean }) {
+  const colour = muted ? "#e5484d" : INK_MUTED;
   return (
     <div
       role="img"
-      aria-label={label}
-      title={label}
+      aria-label={muted ? "Microphone muted" : "Microphone on"}
       style={{
-        width: "26px",
-        height: "26px",
-        borderRadius: "50%",
-        background: "#dc2626",
+        width: "24px",
+        height: "24px",
+        borderRadius: "6px",
+        background: "rgba(255,255,255,0.9)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
       }}
     >
-      {icon === "mic" ? (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6" />
-          <path d="M17 11a5 5 0 0 1-8.9 3.1M5 5l14 14" />
-          <path d="M12 19v3" />
-        </svg>
-      ) : (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 10l6-3v10l-6-3" />
-          <rect x="3" y="7" width="12" height="10" rx="2" />
-          <path d="M4 5l16 14" />
-        </svg>
-      )}
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colour} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+        {muted ? <path d="M4 4l16 16" /> : null}
+      </svg>
     </div>
   );
 }
-
