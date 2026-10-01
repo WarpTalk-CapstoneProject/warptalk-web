@@ -88,12 +88,20 @@ export function shouldConnectMeeting({
   hasToken,
   canConnectRoom,
   idleReaped,
+  displaced = false,
 }: {
   hasToken: boolean;
   canConnectRoom: boolean;
   idleReaped: boolean;
+  /**
+   * The same account joined this meeting from another device or tab and this session was evicted
+   * (see session-displacement.ts). Connecting again would evict the other one, which would
+   * reconnect and evict this one: the loop that kept media from ever settling. Only an explicit
+   * "use this device" clears it.
+   */
+  displaced?: boolean;
 }): boolean {
-  return hasToken && canConnectRoom && !idleReaped;
+  return hasToken && canConnectRoom && !idleReaped && !displaced;
 }
 
 /**
