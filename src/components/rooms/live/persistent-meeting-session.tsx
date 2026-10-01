@@ -45,6 +45,7 @@ import {
   useSetNoiseReduction,
   useSetVoiceCloneConsent,
   useTranslationRoom,
+  translationRoomQueryKey,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
   useJoinLanguagePolicy,
@@ -54,6 +55,10 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { getLanguageName } from "@/lib/language/languages";
 import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import {
+  applyRoomLanguages,
+  parseRoomLanguages,
+} from "@/lib/meeting/room-languages-changed";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -89,6 +94,7 @@ import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
@@ -3069,6 +3075,27 @@ export function PersistentMeetingSession({
         });
       },
     );
+
+    // WT-709: the host added a language to the running meeting. The picker's options come from the
+    // room query, and the hub now refuses any language outside the meeting's set — so without this
+    // the new language is one the server would accept and the menu does not offer until the next
+    // room fetch. Patched into the cache rather than refetched: the payload is the whole set.
+    //
+    // Reaches the lobby too (the Gateway sends it to both groups, and a knocking connection sits in
+    // the lobby one), so somebody still at the door sees it before they are let in.
+    connection.on("RoomLanguagesChanged", (payload: unknown) => {
+      const languages = parseRoomLanguages(payload);
+      if (!languages) {
+        // Not the shape the backend sends. Never write that over the room's languages — ask for
+        // the room again instead, which is what would have shown the change anyway.
+        void queryClient.invalidateQueries({ queryKey: translationRoomQueryKey(roomId) });
+        return;
+      }
+      queryClient.setQueryData<TranslationRoomDto>(
+        translationRoomQueryKey(roomId),
+        (current) => (current ? applyRoomLanguages(current, languages) : current),
+      );
+    });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
