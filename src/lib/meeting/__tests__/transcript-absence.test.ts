@@ -83,6 +83,8 @@ describe("WT-516 — what each state says", () => {
   test("the withheld message names who can grant access", () => {
     const message = transcriptAbsenceMessage("withheld");
     assert.match(message, /host/i);
+    // WT-653: access follows the record's sharing, not attendance — never blame the attendance list.
+    assert.doesNotMatch(message, /took part|attended|participants? only/i);
     // Must not tell the reader the meeting produced nothing.
     assert.doesNotMatch(message, /no transcript was captured/i);
   });

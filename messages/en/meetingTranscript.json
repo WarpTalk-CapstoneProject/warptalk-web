@@ -1,6 +1,6 @@
 {
   "absence": {
-    "withheld": "This meeting has a transcript, but it is not shared with you. Only the people who took part can read it — ask the host if you need access.",
+    "withheld": "This meeting has a transcript, but it is not shared with you. The host decides who can read it — ask them if you need access.",
     "unavailable": "The transcript could not be loaded right now. Refresh to try again.",
     "notYet": "The transcript is saved here as the meeting is transcribed.",
     "notKept": "This meeting was set not to keep a transcript. Subtitles and translation ran live, but nothing was saved, so there is no transcript, AI summary or minutes.",
