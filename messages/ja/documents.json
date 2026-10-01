@@ -18,6 +18,29 @@
   "new": "新規",
   "gridView": "グリッド表示",
   "listView": "リスト表示",
+  "listOptions": {
+    "fileType": "ファイルの種類",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "スプレッドシート",
+      "text": "テキスト・Markdown",
+      "image": "画像",
+      "other": "その他"
+    },
+    "mineOnly": "自分がアップロード",
+    "clearFilters": "フィルターをクリア",
+    "layout": "レイアウト",
+    "orderBy": "並び替え",
+    "sort": {
+      "modified": "最終更新",
+      "name": "名前",
+      "size": "サイズ"
+    },
+    "ascending": "昇順",
+    "descending": "降順",
+    "resetDisplay": "既定に戻す"
+  },
   "empty": {
     "title": "ドキュメントが見つかりません",
     "descriptionCanUpload": "上の「新規」から参照ドキュメントをアップロードしてください。",

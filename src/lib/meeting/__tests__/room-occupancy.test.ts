@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   PRESENCE_LABELS,
+  discountBridgeStandIn,
   SEAT_HOLDING_STATUSES,
   holdsSeat,
   isInLobby,
@@ -223,4 +224,30 @@ test("a live room still reports occupancy out of capacity", () => {
     });
     assert.equal(occupancy.label, "1/100", `${status} should report live occupancy`);
   }
+});
+
+test("WT-904: the Google Meet stand-in is neither a seat-holder nor an attendee", () => {
+  const host = { userId: "host-1", status: "connected" };
+  const standIn = { userId: "00000000-0000-0000-0000-00000000b21d", status: "connected" };
+
+  const live = discountBridgeStandIn({ roster: [host, standIn], capacity: 2, attendedCount: 2 });
+  assert.equal(live.standIn, standIn);
+  assert.deepEqual(live.roster, [host]);
+  const occupancy = roomOccupancy({ capacity: live.capacity, participants: live.roster, status: "in_progress" });
+  assert.equal(occupancy.label, "1/1", "was 2/2 with the stand-in counted");
+
+  const ended = roomOccupancy({
+    capacity: live.capacity,
+    participants: live.roster,
+    status: "ended",
+    attendedCount: live.attendedCount,
+  });
+  assert.equal(ended.label, "1");
+
+  // Every other room passes through untouched.
+  const plain = discountBridgeStandIn({ roster: [host], capacity: 100, attendedCount: 3 });
+  assert.equal(plain.standIn, null);
+  assert.equal(plain.capacity, 100);
+  assert.equal(plain.attendedCount, 3);
+  assert.equal(discountBridgeStandIn({ roster: null, capacity: 2 }).capacity, 2);
 });

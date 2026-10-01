@@ -108,3 +108,19 @@ export function meetingMsFromRecordingSeconds(
 export function canAlignToRecording(sources: SeekSources): boolean {
   return toTime(sources.timelineAnchorAt) !== null && toTime(sources.recordingStartedAt) !== null;
 }
+
+/**
+ * WT-896 — how far into the meeting the recording began, in meeting milliseconds.
+ *
+ * Null when the recording started at or before the first transcribed word (nothing was missed at
+ * the front), or when the two clocks cannot be reconciled at all. The room page uses it to say WHY
+ * the early timestamps do not open the recording: "Test meeting script flow 2" was recorded from
+ * 22:25 in, and every line before that offered a play button that silently did nothing.
+ */
+export function recordingLeadInMs(sources: SeekSources): number | null {
+  const anchor = toTime(sources.timelineAnchorAt);
+  const recordingStart = toTime(sources.recordingStartedAt);
+  if (anchor === null || recordingStart === null) return null;
+  const leadIn = recordingStart - anchor;
+  return leadIn > 0 ? leadIn : null;
+}

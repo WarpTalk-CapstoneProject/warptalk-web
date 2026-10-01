@@ -367,9 +367,14 @@ export const translationRoomService = {
     // means "unrestricted from this source" and pre-intersecting would make either empty read as
     // "offer nothing". Optional in the type so a web build in front of an older backend degrades to
     // the previous behaviour instead of offering an empty picker.
+    //
+    // WT-866: `roomEnded` is true when the code belongs to a meeting that is over (ended,
+    // cancelled or expired). Optional for the same reason: an older backend never sends it, and
+    // absent reads as "not known to be over", which is the previous behaviour.
     const response = await apiClient.get<{
       allowedTargetLanguages: string[];
       roomLanguages?: string[];
+      roomEnded?: boolean;
     }>(API.translationRooms.joinLanguagePolicy(code));
     return response.data;
   },

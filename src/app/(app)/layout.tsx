@@ -706,8 +706,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       }
                     }
                   } else if (feature === "insights") {
-                    // WT-878: the workspace Insights page, named as the settings nav names it.
-                    parts.push({ label: t("sidebar.settingsNav.insights") });
+                    // WT-878: the workspace Insights page, named as the main nav names it.
+                    parts.push({ label: t("sidebar.nav.insights") });
+                  } else if (feature === "tools") {
+                    parts.push({ label: t("sidebar.nav.tools") });
                   } else if (feature === "billing") {
                     parts.push({ label: t("sidebar.settingsNav.billing") });
                   } else if (feature === "payment") {

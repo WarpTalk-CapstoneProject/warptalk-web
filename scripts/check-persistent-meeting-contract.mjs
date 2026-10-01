@@ -155,8 +155,27 @@ assert.match(
 );
 assert.match(
   lifecycle,
-  /return hasToken && canConnectRoom && !idleReaped;/,
-  "the connect rule itself must stay all three conditions",
+  /return hasToken && canConnectRoom && !idleReaped && !displaced;/,
+  "the connect rule itself must keep all of its conditions",
+);
+// --- Same account on two devices: the evicted session stops instead of evicting back -------
+// LiveKit allows one connection per identity and the hub one connection per (room, user). The
+// evicted tab used to reconnect on its next render and evict the other one, forever, while the
+// stage said "Could not reach the media server" (prod, 1 Oct 2026). See session-displacement.ts.
+assert.match(
+  meetingSession,
+  /idleReaped: meetingIsIdleReaped,\s*\n?\s*displaced: sessionDisplaced,/,
+  "a displaced session must not be allowed to connect LiveKit again until it takes over",
+);
+assert.match(
+  meetingSession,
+  /onDisconnected=\{\(reason\) => \{\s*\n?\s*if \(isDuplicateIdentityDisconnect\(reason\)\) markSessionDisplaced\(\);/,
+  "LiveKit's DUPLICATE_IDENTITY eviction must mark the session displaced",
+);
+assert.match(
+  meetingSession,
+  /connection\.on\("ForceDisconnected"[\s\S]{0,600}?isDisplacedHubReason\(reason\)[\s\S]{0,200}?markSessionDisplaced\(\)[\s\S]{0,40}?return;/,
+  "the hub's 'joined from another device' kick must displace the session, not close the meeting",
 );
 // The LiveKit disconnect alone is not the finish line: an abandoned tab that keeps polling
 // still burns the gateway's 100-req/min/IP budget, whose rejections are bodyless 503s that

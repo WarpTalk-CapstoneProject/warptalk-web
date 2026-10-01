@@ -56,7 +56,6 @@ import { Markdown } from "tiptap-markdown";
 import { Button } from "@/components/ui/button";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
-import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -81,7 +80,7 @@ import {
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
-import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
+import { findSegmentAtMs, formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   isRetryableRenderingError,
   normalizeRenderingLanguage,
@@ -113,6 +112,7 @@ import {
 } from "@/lib/meeting/moment-link";
 import {
   canAlignToRecording,
+  recordingLeadInMs,
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
@@ -151,6 +151,8 @@ import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
 } from "@/lib/meeting/translation-room-access";
+import { isExternalBridge, isExternalBridgeStandIn } from "@/lib/meeting/meeting-types";
+import { GoogleMeetMark } from "@/components/meeting/google-meet-mark";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -349,6 +351,13 @@ export default function RoomInformationPage() {
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
+  // WT-904: an external meeting's Google Meet stand-in ("External Meeting") is a connection that
+  // carries everyone on the far side, not a person. It is listed apart, never as a participant.
+  const bridgeStandIn =
+    apiParticipants.find((participant) => isExternalBridgeStandIn(participant.userId)) ?? null;
+  const peopleParticipants = bridgeStandIn
+    ? apiParticipants.filter((participant) => participant !== bridgeStandIn)
+    : apiParticipants;
   const apiInvitations = invitationsQuery.data ?? [];
   const { data: workspaces } = useWorkspaces();
   const validWorkspaceId =
@@ -608,6 +617,36 @@ export default function RoomInformationPage() {
     () => buildRecordingMarks(transcriptRows, seekSources),
     [transcriptRows, seekSources],
   );
+
+  /**
+   * WT-896 — whether one moment is inside the recording, by the same arithmetic requestSeek uses.
+   *
+   * The meeting-wide gate above (`canSeekToRecording`) only asks whether the two clocks can be
+   * reconciled at all. A meeting recorded from 22 minutes in passes it, and every line from those
+   * first 22 minutes then drew a play button whose click seekTargetSeconds refused in silence —
+   * the report was "play does nothing on the old lines". Those timestamps now stay plain text.
+   */
+  const canSeekAt = useCallback(
+    (atMs: number) => seekTargetSeconds(seekSources, atMs) !== null,
+    [seekSources],
+  );
+  /**
+   * The line above the transcript that says why some timestamps are not clickable. Undefined when
+   * every line is in the recording (or nothing can be seeked, which seekUnavailableReason covers);
+   * a number when the recording started late; null when it is partial for another reason — it
+   * stopped before the meeting did, which is only known once the file's length has loaded.
+   */
+  const recordingCoverageGapMs = useMemo(() => {
+    if (!canSeekToRecording) return undefined;
+    if (!transcriptRows.some((row) => !canSeekAt(row.startTimeMs))) return undefined;
+    return recordingLeadInMs(seekSources);
+  }, [canSeekToRecording, transcriptRows, canSeekAt, seekSources]);
+  const seekCoverageNote =
+    recordingCoverageGapMs === undefined
+      ? null
+      : recordingCoverageGapMs === null
+        ? t("record.seekCoverage.partial")
+        : t("record.seekCoverage.lateStart", { time: formatCitationTime(recordingCoverageGapMs) });
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -924,6 +963,9 @@ export default function RoomInformationPage() {
     // WT-341: a meeting that does not require the host's approval can be opened by anyone
     // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
     requiresApproval: room.settings?.requiresApproval,
+    // WT-904: a non-host's way into an external meeting is the Meet link, not WarpTalk's room.
+    isExternalBridge: isExternalBridge(room.translationRoomType),
+    externalMeetingUrl: room.externalMeetingUrl,
   });
 
   async function handleRoomEntry() {
@@ -961,6 +1003,10 @@ export default function RoomInformationPage() {
       case "join":
         useUIStore.getState().setSetupRoomId(roomId);
         useUIStore.getState().setSetupRoomModalOpen(true);
+        return;
+      case "external_meeting":
+        if (entryIntent.href) window.open(entryIntent.href, "_blank", "noopener,noreferrer");
+        return;
     }
   }
 
@@ -977,7 +1023,7 @@ export default function RoomInformationPage() {
 
   const participants = buildUserList(
     room,
-    apiParticipants,
+    peopleParticipants,
     apiInvitations,
     membersArray,
     user,
@@ -1082,7 +1128,7 @@ export default function RoomInformationPage() {
                   ) : null}
                   <MeetingPropertiesPills
                     room={room}
-                    apiParticipants={apiParticipants}
+                    apiParticipants={peopleParticipants}
                     occupancyLabel={occupancy.label}
                     occupancyNoun={
                       isFinishedStatus(room.status)
@@ -1222,6 +1268,7 @@ export default function RoomInformationPage() {
                 marks={recordingMarks}
                 onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
+                seekCoverageNote={seekCoverageNote}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
@@ -1235,6 +1282,7 @@ export default function RoomInformationPage() {
                     // means every offset is measured against the wrong file half the time, and the
                     // notice above the transcript now says why the timestamps went quiet.
                     onSeekToRecording={canSeekToRecording ? requestSeek : undefined}
+                    canSeekAt={canSeekAt}
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -1312,6 +1360,12 @@ export default function RoomInformationPage() {
               <p className="mb-2 text-[12px] text-muted-foreground">
                 {t("people.participantsCount", { label: occupancy.label })}
               </p>
+              {bridgeStandIn ? (
+                <div className="mb-2 flex items-start gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground">
+                  <GoogleMeetMark size={14} className="mt-px" />
+                  <span>{t("people.bridgeConnection")}</span>
+                </div>
+              ) : null}
 
               {rosterGroups.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">
@@ -1439,6 +1493,7 @@ function MeetingRecordSection({
   onDurationSeconds,
   onJumpToMoment,
   seekUnavailableReason,
+  seekCoverageNote,
   recordingUnavailableReason,
   recordingFailure,
   speakerDirectory,
@@ -1512,6 +1567,8 @@ function MeetingRecordSection({
    * gets a plain reading page, not a notice about a feature it never had.
    */
   seekUnavailableReason?: "unalignable" | "multiple" | null;
+  /** WT-896: why SOME timestamps do not open the recording (it covers part of the meeting). */
+  seekCoverageNote?: string | null;
   /** Passed straight to the player. The union is meeting-record-panels'. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
   /** rec-loss: a recording that produced no file — derived on the page beside the reason above. */
@@ -2015,6 +2072,10 @@ function MeetingRecordSection({
       {activeTab === "recap" && seekUnavailableReason ? (
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
           {seekUnavailableMessages[seekUnavailableReason]}
+        </div>
+      ) : activeTab === "recap" && seekCoverageNote ? (
+        <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+          {seekCoverageNote}
         </div>
       ) : null}
       {/* rec-loss: beside the seek line and styled like it — both are "about the recording, above

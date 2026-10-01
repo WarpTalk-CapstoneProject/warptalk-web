@@ -39,6 +39,7 @@ export function ArtifactRecordHeader({
   workspaceSlug,
   onDrawUpMinutes,
   drawingUpMinutes = false,
+  showKindSwitcher = true,
 }: {
   group: MeetingRecordGroup;
   entry: LibraryEntry;
@@ -46,6 +47,8 @@ export function ArtifactRecordHeader({
   workspaceSlug: string;
   onDrawUpMinutes?: () => void;
   drawingUpMinutes?: boolean;
+  /** False when the reader already chose a kind (arrived with `?kind=`); the tab bar is redundant. */
+  showKindSwitcher?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -192,37 +195,39 @@ export function ArtifactRecordHeader({
       </div>
 
       {/* Record Kind Switcher Tabs Bar */}
-      <div
-        role="tablist"
-        aria-label="Records from this meeting"
-        className="mt-1 flex items-center gap-1.5 pt-1"
-      >
-        {group.entries.map((candidate) => {
-          const active = candidate.id === entry.id;
-          const Icon = KIND_ICONS[candidate.kind];
-          const readable = Boolean(candidate.body);
-          return (
-            <button
-              key={candidate.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onSelectKind(candidate.kind)}
-              title={readable ? undefined : describeAbsence(candidate.absence ?? "unavailable", candidate.kind)}
-              className={cn(
-                "flex min-w-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
-                active
-                  ? "border-ink bg-ink text-surface-1 shadow-sm"
-                  : "border-border bg-surface-2 text-ink-muted hover:border-ink-subtle hover:text-ink",
-              )}
-            >
-              <Icon size={12} weight={active ? "bold" : "regular"} className="shrink-0" />
-              <span className="truncate">{KIND_LABELS[candidate.kind]}</span>
-              {readable ? null : <LockSimple size={10} className="shrink-0 text-ink-subtle" />}
-            </button>
-          );
-        })}
-      </div>
+      {showKindSwitcher ? (
+        <div
+          role="tablist"
+          aria-label="Records from this meeting"
+          className="mt-1 flex items-center gap-1.5 pt-1"
+        >
+          {group.entries.map((candidate) => {
+            const active = candidate.id === entry.id;
+            const Icon = KIND_ICONS[candidate.kind];
+            const readable = Boolean(candidate.body);
+            return (
+              <button
+                key={candidate.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onSelectKind(candidate.kind)}
+                title={readable ? undefined : describeAbsence(candidate.absence ?? "unavailable", candidate.kind)}
+                className={cn(
+                  "flex min-w-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                  active
+                    ? "border-ink bg-ink text-surface-1 shadow-sm"
+                    : "border-border bg-surface-2 text-ink-muted hover:border-ink-subtle hover:text-ink",
+                )}
+              >
+                <Icon size={12} weight={active ? "bold" : "regular"} className="shrink-0" />
+                <span className="truncate">{KIND_LABELS[candidate.kind]}</span>
+                {readable ? null : <LockSimple size={10} className="shrink-0 text-ink-subtle" />}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </header>
   );
 }

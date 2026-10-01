@@ -110,10 +110,7 @@
       "people": "参加者"
     },
     "language": {
-      "heading": "ミーティング言語",
-      "blocked": "ブロック中",
-      "blockedReason": "{language}はこのワークスペースの言語ポリシーで許可されていません。",
-      "blockedFooter": "ブロックされている言語は、このワークスペースの言語ポリシーで許可されていません。ワークスペース管理者がワークスペース設定で変更できます。"
+      "heading": "ミーティング言語"
     },
     "options": {
       "dateAndTime": "日時",

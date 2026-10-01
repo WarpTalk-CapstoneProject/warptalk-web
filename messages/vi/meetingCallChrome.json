@@ -22,5 +22,10 @@
       "reconnecting": "Đang kết nối lại…",
       "waiting": "Đang chờ LiveKit"
     }
+  },
+  "displaced": {
+    "title": "Bạn đã tham gia cuộc họp này từ thiết bị hoặc tab khác.",
+    "description": "Tài khoản này đang ở trong cuộc họp ở nơi khác, nên cửa sổ này đã ngừng kết nối để không đẩy phiên kia ra. Hãy tiếp tục ở nơi kia, hoặc chuyển cuộc họp về đây.",
+    "takeOver": "Dùng thiết bị này"
   }
 }

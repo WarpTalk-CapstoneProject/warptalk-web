@@ -51,6 +51,7 @@
     "panelTitle": "参加者",
     "participantsCount": "参加者: {label}",
     "noneInvited": "まだ他に招待された人はいません。",
+    "bridgeConnection": "Google Meet 通話の音声です。Meet 側の参加者全員の音声はこの接続を通して届きます。参加者ではありません。",
     "groupCount": "{label}: {count}",
     "groups": {
       "waitingToBeAdmitted": "入室許可待ち",
@@ -105,6 +106,10 @@
       "toastKeptPrivate": "記録を非公開のままにしました。ミーティング終了時にも共有されません。",
       "toastPublished": "記録を公開しました。参加した全員が読めます。",
       "toastShareChangeFailed": "この記録の共有設定を変更できませんでした。"
+    },
+    "seekCoverage": {
+      "lateStart": "録画は会議開始から {time} の時点で始まりました。それより前の発言は録画に含まれないため、そのタイムスタンプから録画は開けません。",
+      "partial": "録画は会議の一部のみを含みます。録画の範囲外のタイムスタンプからは録画を開けません。"
     },
     "seekUnavailable": {
       "unalignable": "この録画は視聴できますが、特定の時点にジャンプすることはできません — このミーティングは、WarpTalkが動画の開始位置を記録するようになる前に文字起こしされたものです。",
