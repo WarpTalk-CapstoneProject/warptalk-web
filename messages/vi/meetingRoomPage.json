@@ -106,6 +106,10 @@
       "toastPublished": "Đã công bố hồ sơ. Mọi người đã tham dự đều có thể đọc được.",
       "toastShareChangeFailed": "Không thể thay đổi ai được chia sẻ hồ sơ này."
     },
+    "seekCoverage": {
+      "lateStart": "Bản ghi bắt đầu từ phút {time} của cuộc họp. Các câu nói trước thời điểm đó không có trong bản ghi nên mốc thời gian của chúng không mở được bản ghi.",
+      "partial": "Bản ghi chỉ bao gồm một phần cuộc họp. Các mốc thời gian nằm ngoài bản ghi không mở được bản ghi."
+    },
     "seekUnavailable": {
       "unalignable": "Bạn vẫn xem được bản ghi hình này, nhưng chưa thể nhảy đến một thời điểm cụ thể — cuộc họp này được ghi âm trước khi WarpTalk bắt đầu lưu mốc thời gian bắt đầu của video.",
       "multiple": "Cuộc họp này có nhiều hơn một bản ghi hình, nên việc nhảy đến một thời điểm cụ thể hiện chưa khả dụng — không thể khớp mốc thời gian với đúng tệp."
