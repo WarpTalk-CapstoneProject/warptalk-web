@@ -10,16 +10,20 @@ import type {
   AssistantSkillDto,
   CreateAssistantConversationOptions,
   CreatePrivatePluginRequest,
+  PluginConnectRequest,
   PluginConnectResultDto,
   PluginToolPolicy,
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
+  UpdateWorkspaceToolPolicyRequest,
+  WarpBotToolsDto,
   WorkspacePluginItemDto,
   WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
   WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
   WorkspacePluginToolAuditQuery,
+  WorkspaceToolPoliciesDto,
 } from "@/types/assistant";
 
 export const assistantService = {
@@ -108,6 +112,15 @@ export const assistantService = {
   },
 
   /**
+   * What WarpBot is offered right now for the caller in this workspace: the worker's built-in tools
+   * (platform-staff ones already filtered by the server), web search state, and the plugin tools
+   * the orchestrator would send the worker. Any workspace member; a non-member gets 403.
+   */
+  getWarpBotTools(workspaceId: string) {
+    return apiClient.get<WarpBotToolsDto>(API.assistant.tools, { params: { workspaceId } });
+  },
+
+  /**
    * WT-646 — `workspaceId` is optional at the endpoint and it changes what comes back, not which
    * rows come back: supplied, every row carries that workspace's verdict in
    * `workspacePolicyBlockReason`; omitted, no workspace policy is applied at all and the field is
@@ -139,9 +152,21 @@ export const assistantService = {
   /**
    * Connects a plugin. When the provider's grant already covers it the server connects it on the
    * spot and answers `connected: true` without a URL; otherwise it answers with the consent URL.
+   *
+   * `alsoConnect` (GMCAL1001) folds same-provider siblings into the same call: the server connects
+   * those its grant already covers and returns one consent URL for the rest. Omitted or empty sends
+   * no body, which is the old single-plugin behaviour.
    */
-  connectPlugin(pluginKey: string, client?: string, workspaceId?: string | null) {
-    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
+  connectPlugin(
+    pluginKey: string,
+    client?: string,
+    workspaceId?: string | null,
+    alsoConnect?: readonly string[],
+  ) {
+    const body: PluginConnectRequest | undefined = alsoConnect?.length
+      ? { alsoConnect: [...alsoConnect] }
+      : undefined;
+    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), body, {
       params: workspaceId ? { workspaceId } : undefined,
     });
   },
@@ -185,6 +210,19 @@ export const assistantService = {
   /** Members who connected the plugin, most recently used first. Owner or Admin. */
   listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
     return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
+  },
+
+  /** The plugin's tools with the workspace Owner's rule for each. Owner or Admin; `canManage` is the Owner's. */
+  getWorkspaceToolPolicies(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspaceToolPoliciesDto>(API.assistant.workspacePlugins.toolPolicies(workspaceId, pluginKey));
+  },
+
+  /** Sets or clears (`policy: null`) one tool's workspace rule. Owner. Answers with the whole list. */
+  setWorkspaceToolPolicy(workspaceId: string, pluginKey: string, request: UpdateWorkspaceToolPolicyRequest) {
+    return apiClient.put<WorkspaceToolPoliciesDto>(
+      API.assistant.workspacePlugins.toolPolicies(workspaceId, pluginKey),
+      request,
+    );
   },
 
   createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {

@@ -80,6 +80,10 @@
     "couldNotFinishRemoving": "Could not finish removing {label}."
   },
   "permissionList": {
+    "workspaceLock": "Set by workspace Owner",
+    "workspaceLockHint": "WarpBot follows the stricter of your choice and the workspace's. You can't loosen this one.",
+    "workspaceApproval": "Ask every time",
+    "workspaceBlocked": "Blocked",
     "empty": "This plugin publishes its permissions when you connect. The provider's consent screen lists exactly what it is asking for before you approve.",
     "heading": "Authorizing allows this plugin to"
   },
@@ -120,5 +124,15 @@
     "optional": "Optional",
     "reasonPlaceholder": "e.g. Use {label} with meeting action items",
     "sendRequest": "Send request"
+  },
+  "siblingPrompt": {
+    "title": "Connect your other {provider} plugins too?",
+    "titleNoProvider": "Connect the related plugins too?",
+    "body": "{label} is connected. These plugins use the same sign-in, so you can connect them now as well.",
+    "connectAll": "Connect all",
+    "notNow": "Not now",
+    "closeAria": "Close",
+    "connected": "{labels} connected",
+    "couldNotConnect": "Could not connect {labels}."
   }
 }

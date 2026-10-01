@@ -79,6 +79,7 @@ const NAMESPACES = [
   "workspaceInsights",
   "workspaceInsightsUsage",
   "workspaceInsightsTools",
+  "warpbotTools",
 ] as const;
 
 async function loadMessages(locale: string): Promise<Messages> {

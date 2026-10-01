@@ -5,9 +5,15 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { ASSISTANT_KEYS } from "@/hooks/use-assistant";
 import { collectMemberNames, collectMemberProfiles } from "@/lib/assistant/plugin-availability";
+import { withWorkspaceToolRule } from "@/lib/assistant/tool-policy";
 import { assistantService } from "@/services/assistant.service";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { CreatePrivatePluginRequest, UpdatePrivatePluginRequest } from "@/types/assistant";
+import type {
+  CreatePrivatePluginRequest,
+  UpdatePrivatePluginRequest,
+  WorkspaceToolPoliciesDto,
+  WorkspaceToolRule,
+} from "@/types/assistant";
 
 /**
  * The workspace half of the plugin marketplace (2026-09-17): what a workspace has, private MCP
@@ -22,6 +28,8 @@ export const WORKSPACE_PLUGIN_KEYS = {
     ["assistant", "workspace-plugins", workspaceId ?? null, "overview"] as const,
   members: (workspaceId: string | null | undefined, pluginKey: string | null | undefined) =>
     ["assistant", "workspace-plugins", workspaceId ?? null, "members", pluginKey ?? null] as const,
+  toolPolicies: (workspaceId: string | null | undefined, pluginKey: string | null | undefined) =>
+    ["assistant", "workspace-plugins", workspaceId ?? null, "tool-policies", pluginKey ?? null] as const,
 };
 
 function useInvalidateWorkspacePlugins() {
@@ -188,5 +196,59 @@ export function useWorkspaceMemberProfiles(
     enabled: enabled && !!workspaceId && idsKey.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
+  });
+}
+
+/**
+ * The plugin's tools with the workspace Owner's rule for each (wave 2). Owner or Admin: pass
+ * `enabled: false` for anyone else, whose request is a guaranteed 403.
+ */
+export function useWorkspaceToolPolicies(
+  workspaceId: string | null | undefined,
+  pluginKey: string | null | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: WORKSPACE_PLUGIN_KEYS.toolPolicies(workspaceId, pluginKey),
+    queryFn: async () => {
+      const { data } = await assistantService.getWorkspaceToolPolicies(workspaceId!, pluginKey!);
+      return data;
+    },
+    enabled: enabled && !!workspaceId && !!pluginKey,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Sets or clears one tool's workspace rule. Owner. Optimistic: the row moves at once and moves back
+ * if the server refuses, so the caller only has to say so (a toast). The member catalog is
+ * invalidated on success because every member's tools carry `workspacePolicy`.
+ */
+export function useSetWorkspaceToolPolicy(
+  workspaceId: string | null | undefined,
+  pluginKey: string | null | undefined,
+) {
+  const queryClient = useQueryClient();
+  const queryKey = WORKSPACE_PLUGIN_KEYS.toolPolicies(workspaceId, pluginKey);
+  return useMutation({
+    mutationFn: async ({ toolName, policy }: { toolName: string; policy: WorkspaceToolRule | null }) => {
+      const { data } = await assistantService.setWorkspaceToolPolicy(workspaceId!, pluginKey!, { toolName, policy });
+      return data;
+    },
+    onMutate: async ({ toolName, policy }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<WorkspaceToolPoliciesDto>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<WorkspaceToolPoliciesDto>(queryKey, withWorkspaceToolRule(previous, toolName, policy));
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKey, data);
+      void queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
   });
 }

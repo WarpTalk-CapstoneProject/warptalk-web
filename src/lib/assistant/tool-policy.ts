@@ -1,4 +1,9 @@
-import type { McpToolDescriptorDto, PluginToolPolicy } from "../../types/assistant.ts";
+import type {
+  McpToolDescriptorDto,
+  PluginToolPolicy,
+  WorkspaceToolPoliciesDto,
+  WorkspaceToolRule,
+} from "../../types/assistant.ts";
 
 /* ---------------------------------------------------------------------------------------------
  * PER-TOOL CHOICES (WT-687)
@@ -86,6 +91,71 @@ export function summarizeToolPolicies(
   return `${counts.allow} ${allowed} · ${counts.approval} ${ask} · ${counts.blocked} ${blocked}`;
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * WORKSPACE RULES (wave 2: workspace tool policy)
+ *
+ *   A workspace Owner can set one tool to "Ask every time" (`approval`) or "Blocked" for everyone
+ *   in the workspace. No rule is "member's choice". WarpBot gets the stricter of the member's own
+ *   choice and the rule — the same order the server uses (allow < approval < blocked) — so a rule
+ *   can only tighten, and there is no workspace "allow".
+ * ------------------------------------------------------------------------------------------- */
+
+const POLICY_RANK: Record<PluginToolPolicy, number> = { allow: 0, approval: 1, blocked: 2 };
+
+/** The Owner's choices, in the order the control shows them; null is "member's choice". */
+export const WORKSPACE_TOOL_RULE_OPTIONS: readonly (WorkspaceToolRule | null)[] = [null, "approval", "blocked"];
+
+/** The workspace rule on a catalog tool, or null. An unknown value is ignored, as the server does. */
+export function workspaceRuleOf(tool: Pick<McpToolDescriptorDto, "workspacePolicy">): WorkspaceToolRule | null {
+  return tool.workspacePolicy === "approval" || tool.workspacePolicy === "blocked" ? tool.workspacePolicy : null;
+}
+
+/** The stricter of a member's choice and a workspace rule. */
+export function strictestToolPolicy(member: PluginToolPolicy, rule: WorkspaceToolRule | null): PluginToolPolicy {
+  return rule && POLICY_RANK[rule] > POLICY_RANK[member] ? rule : member;
+}
+
+/** What WarpBot will actually do with the tool for this member in this workspace. */
+export function effectiveToolPolicyOf(tool: McpToolDescriptorDto): PluginToolPolicy {
+  return strictestToolPolicy(toolPolicyOf(tool), workspaceRuleOf(tool));
+}
+
+/**
+ * Whether a member's choice is open to them under the workspace rule: anything at least as strict
+ * as the rule. Under `blocked` only Blocked is; under `approval` Allow is not.
+ */
+export function memberCanChooseToolPolicy(policy: PluginToolPolicy, rule: WorkspaceToolRule | null): boolean {
+  return !rule || POLICY_RANK[policy] >= POLICY_RANK[rule];
+}
+
+/** The Owner's list with one tool's rule replaced — the optimistic write before the server answers. */
+export function withWorkspaceToolRule(
+  dto: WorkspaceToolPoliciesDto,
+  toolName: string,
+  rule: WorkspaceToolRule | null,
+): WorkspaceToolPoliciesDto {
+  return {
+    ...dto,
+    tools: dto.tools.map((tool) => (tool.name === toolName ? { ...tool, workspacePolicy: rule } : tool)),
+  };
+}
+
+/** Write tools the member can still loosen: no workspace rule sits on them. */
+function adjustableWriteTools(tools: readonly McpToolDescriptorDto[]): McpToolDescriptorDto[] {
+  return tools.filter((tool) => tool.effect === "write" && workspaceRuleOf(tool) === null);
+}
+
+/**
+ * How the workspace's rules bear on a plugin's write tools: `all` when every write tool carries a
+ * rule (the member has nothing left to allow), `some` when only part do, null when none do.
+ */
+export function workspaceWriteLock(tools: readonly McpToolDescriptorDto[]): "all" | "some" | null {
+  const writes = tools.filter((tool) => tool.effect === "write");
+  const ruled = writes.filter((tool) => workspaceRuleOf(tool) !== null);
+  if (ruled.length === 0) return null;
+  return ruled.length === writes.length ? "all" : "some";
+}
+
 /** Whether a user trusts a write tool to run without asking — the choice the dialog warns about. */
 export function trustsAWriteTool(tools: readonly McpToolDescriptorDto[]): boolean {
   return tools.some((tool) => tool.effect === "write" && toolPolicyOf(tool) === "allow");
@@ -94,20 +164,30 @@ export function trustsAWriteTool(tools: readonly McpToolDescriptorDto[]): boolea
 /**
  * The WarpBot chat's one per-plugin permission: whether this plugin's write tools run without the
  * Allow / Always allow card. Null when the plugin has no write tools, so there is nothing to ask.
+ *
+ * Write tools under a workspace rule are left out: the member cannot allow them, so they neither
+ * hold the box unticked nor get ticked by it. When every write tool has a rule the answer is false
+ * — nothing runs without asking — and the chat shows the box locked (`workspaceWriteLock`).
  */
 export function pluginWritesAlwaysAllowed(tools: readonly McpToolDescriptorDto[]): boolean | null {
   const writes = tools.filter((tool) => tool.effect === "write");
   if (writes.length === 0) return null;
-  return writes.every((tool) => toolPolicyOf(tool) === "allow");
+  const adjustable = adjustableWriteTools(tools);
+  if (adjustable.length === 0) return false;
+  return adjustable.every((tool) => toolPolicyOf(tool) === "allow");
 }
 
-/** The tool-policy update that sets every write tool to allow, or back to asking. */
+/**
+ * The tool-policy update that sets every write tool to allow, or back to asking. A write tool under
+ * a workspace rule is not touched: allowing it would change nothing WarpBot does and would read as
+ * a choice the member made.
+ */
 export function writeToolPolicyUpdate(
   tools: readonly McpToolDescriptorDto[],
   alwaysAllow: boolean,
 ): Record<string, PluginToolPolicy> {
   const policy: PluginToolPolicy = alwaysAllow ? "allow" : "approval";
-  return Object.fromEntries(tools.filter((tool) => tool.effect === "write").map((tool) => [tool.name, policy]));
+  return Object.fromEntries(adjustableWriteTools(tools).map((tool) => [tool.name, policy]));
 }
 
 /* ---------------------------------------------------------------------------------------------

@@ -35,6 +35,8 @@
     "succeeded": "成功",
     "blocked": "ブロック",
     "blockedHint": "このワークスペースではこのプラグインが許可されていません。ワークスペースのプラグインページで追加してください。",
+    "workspaceToolBlocked": "ワークスペースがブロック",
+    "workspaceToolBlockedHint": "ワークスペースのオーナーがこのツールを WarpBot に対してブロックしました。再び許可できるのはオーナーだけで、ワークスペースのプラグインページから行います。",
     "turnedOff": "メンバーがオフ",
     "turnedOffHint": "メンバーがこのツールを WarpBot に対してオフにしました。オンに戻せるのは本人だけです。",
     "declined": "辞退",

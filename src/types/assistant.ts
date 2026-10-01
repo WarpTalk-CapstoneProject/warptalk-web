@@ -99,6 +99,95 @@ export interface McpToolDescriptorDto {
    * than the setting sends nothing; `toolPolicyOf` falls back to the effect in that case.
    */
   policy?: PluginToolPolicy;
+  /**
+   * The workspace Owner's rule for this tool, beside the member's own `policy` (wave 2). Present
+   * only on a catalog read with a workspace; absent or null is "member's choice". WarpBot gets the
+   * stricter of the two, so `policy` stays what the member chose and this is what they cannot loosen.
+   */
+  workspacePolicy?: WorkspaceToolRule | null;
+}
+
+/**
+ * What a workspace Owner may set for one tool across the workspace: ask every time, or never.
+ * There is no workspace "allow" — it would overrule a member who blocked the tool themselves.
+ * No rule (null) is "member's choice".
+ */
+export type WorkspaceToolRule = "approval" | "blocked";
+
+/** One tool of a plugin with the workspace's rule for it. Mirrors `WorkspaceToolPolicyItemDto`. */
+export interface WorkspaceToolPolicyItemDto {
+  name: string;
+  label: string;
+  description: string;
+  effect: "read" | "write";
+  workspacePolicy: WorkspaceToolRule | null;
+}
+
+/**
+ * GET/PUT /assistant/workspaces/{id}/plugins/{key}/tool-policies — Owner or Admin read; `canManage`
+ * is true for the Owner only. PUT answers with the whole list again.
+ */
+export interface WorkspaceToolPoliciesDto {
+  pluginKey: string;
+  pluginLabel: string;
+  canManage: boolean;
+  tools: WorkspaceToolPolicyItemDto[];
+}
+
+/** PUT body. A null `policy` clears the rule back to "member's choice". */
+export interface UpdateWorkspaceToolPolicyRequest {
+  toolName: string;
+  policy: WorkspaceToolRule | null;
+}
+
+/**
+ * GET /assistant/tools?workspaceId= — what WarpBot is offered right now, for the caller, in that
+ * workspace (/{slug}/tools). Built-in rows come from the AI worker's own tool registry (its manifest
+ * in Redis, served by AssistantService); `platform_staff` rows are already filtered out server-side
+ * for everyone else.
+ */
+export type WarpBotToolEffect = "read" | "write";
+export type WarpBotToolAudience = "member" | "host" | "platform_staff";
+
+export interface WarpBotBuiltInToolDto {
+  name: string;
+  /** One of the web's category ids (warpbot-tools-catalog.ts); anything else is shown as "other". */
+  category: string;
+  effect: WarpBotToolEffect;
+  audience: WarpBotToolAudience;
+  /** English one-liner from the tool schema. */
+  description: string;
+}
+
+/**
+ * `on`/`off`: the worker can search and a platform setting says whether it may. `unavailable`: the
+ * worker has no web search configured. `unknown`: no manifest to tell.
+ */
+export type WarpBotWebSearchState = "on" | "off" | "unavailable" | "unknown";
+
+export interface WarpBotPluginToolDto {
+  name: string;
+  label: string;
+  description: string;
+  effect: WarpBotToolEffect;
+  /** The member's own choice. Never `blocked` here: blocked tools are not offered. */
+  policy: PluginToolPolicy;
+  /** The workspace Owner's rule; always present, null when there is none. */
+  workspacePolicy: WorkspaceToolRule | null;
+}
+
+export interface WarpBotPluginToolsDto {
+  pluginKey: string;
+  label: string;
+  tools: WarpBotPluginToolDto[];
+}
+
+export interface WarpBotToolsDto {
+  manifestAvailable: boolean;
+  manifestGeneratedAt: string | null;
+  builtIn: WarpBotBuiltInToolDto[];
+  webSearch: { state: WarpBotWebSearchState };
+  plugins: WarpBotPluginToolsDto[];
 }
 
 /**
@@ -315,12 +404,24 @@ export interface UpdatePrivatePluginRequest {
  * `connected: true` means the provider's existing grant already covered the plugin, so the server
  * connected it on the spot and there is no consent page to open (`url` is null). Otherwise `url`
  * is the provider's consent page.
+ *
+ * GMCAL1001: a call that also names `alsoConnect` siblings can answer `connected: true` AND a `url`
+ * — the clicked plugin connected on the spot, the siblings still need consent, and the one URL
+ * covers all of them. `connected` is about the clicked plugin only.
  */
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
   /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
   apiKeyRequired?: boolean;
+  /** Plugins this call connected on the spot (the clicked one and/or `alsoConnect` siblings). */
+  connectedPluginKeys?: string[] | null;
+}
+
+/** Optional body of POST `/assistant/plugins/{key}/connect` (GMCAL1001). No body = old behaviour. */
+export interface PluginConnectRequest {
+  /** Sibling plugin keys of the same provider to fold into the same consent. */
+  alsoConnect?: string[];
 }
 
 /**
