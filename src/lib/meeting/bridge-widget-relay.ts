@@ -123,7 +123,8 @@ export type BridgeWidgetSnapshot = {
   /**
    * Whether sound is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). The popup is
    * where the user is looking when the far side is not being transcribed — they are in Meet — so
-   * "no-signal" has to be said there, not only in a main window hidden behind the call.
+   * "no-signal" ("No sound from Meet yet": nothing heard since the capture started) has to be said
+   * there, not only in a main window hidden behind the call.
    */
   inboundHealth?: InboundHealth;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */

@@ -21,7 +21,8 @@ const SAMPLE_INTERVAL_MS = 250;
  *   An AudioContext created without a user gesture can start "suspended", and a suspended graph
  *   reads as exact zeros — the very thing the health rules call a broken cable. So samples are only
  *   reported while the context is running; a context the browser never lets run leaves the health
- *   "unknown" instead of raising a false alarm about the user's cable.
+ *   "unknown" instead of raising a false alarm about the user's cable. The reducer's grace period
+ *   starts at the first sample reported here, so time spent suspended never ages it either.
  *
  * Never stops the track: the publisher owns it.
  */

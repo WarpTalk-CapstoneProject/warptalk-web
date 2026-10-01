@@ -5,7 +5,7 @@
  *
  *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  [End · t3] ┐
  *   ├ consent, only while the main window is asking ───────────────────────────────┤
- *   ├ "No sound from Meet", only while the main window hears digital silence ─────┤
+ *   ├ "No sound from Meet yet", only before the main window has heard anything ───┤
  *   │                                                                               │
  *   │   TranscriptPane (t2)   or   WarpBotPane (t5)                                 │
  *   │                                                                               │
@@ -34,7 +34,7 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { inboundNoSignalHint } from "@/lib/audio/bridge-inbound-health";
+import { INBOUND_NO_SIGNAL_TITLE, inboundNoSignalHint } from "@/lib/audio/bridge-inbound-health";
 import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { cn } from "@/lib/utils";
 
@@ -85,11 +85,13 @@ export function WidgetShell() {
 // ── inbound health, under the consent question ──────────────────────────────
 
 /**
- * The main window hears only exact digital silence from Meet (lib/audio/bridge-inbound-health).
+ * The main window has heard nothing at all from Meet yet (lib/audio/bridge-inbound-health).
  *
  * Here and not only in the main window, because this is where the user is looking when it
  * matters: they are in Meet, the far side is talking, and the transcript under this line stays
- * empty. The fix is one setting in Meet or one in Windows, so the note names both. It has no
+ * empty. Worded as "yet" and conditioned on someone talking, because a healthy cable in a call
+ * where nobody has spoken reads exactly the same — the note must stay true then. The fix, when
+ * there is one, is one setting in Meet or one in Windows, so the note names both. It has no
  * button — the device wizard lives in the main window — and draws nothing in every other state,
  * including against a main window old enough not to send the field.
  */
@@ -105,7 +107,7 @@ function InboundNoSignalNotice() {
       role="status"
       className="shrink-0 border-b border-border bg-status-waiting/15 px-3.5 py-2 text-[11px] leading-snug text-ink"
     >
-      <span className="font-semibold">No sound from Meet.</span>{" "}
+      <span className="font-semibold">{INBOUND_NO_SIGNAL_TITLE}.</span>{" "}
       {inboundNoSignalHint(currentBridgeDeviceLabels())}
     </div>
   );

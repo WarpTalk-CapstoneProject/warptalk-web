@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  INBOUND_NO_SIGNAL_TITLE,
   LISTENING_HOLD_MS,
-  NO_SIGNAL_AFTER_HEARD_MS,
   NO_SIGNAL_AFTER_OPEN_MS,
   classifyLevel,
   createInboundHealthState,
@@ -43,7 +43,7 @@ test("exact zeros are digital zero; a noise floor is quiet, not zero; speech is 
 });
 
 test("a device capture that has carried only zeros is unknown until 50 s, then no-signal", () => {
-  let state = createInboundHealthState(0);
+  let state = createInboundHealthState();
   state = run(state, ZERO, 0, NO_SIGNAL_AFTER_OPEN_MS - 250);
   assert.equal(state.health, "unknown");
   state = reduceInboundHealth(state, ZERO, NO_SIGNAL_AFTER_OPEN_MS, { path: "device" });
@@ -51,13 +51,13 @@ test("a device capture that has carried only zeros is unknown until 50 s, then n
 });
 
 test("a noise floor alone is proof the cable carries: quiet never becomes no-signal", () => {
-  let state = createInboundHealthState(0);
+  let state = createInboundHealthState();
   state = run(state, QUIET, 0, 10 * 60_000);
   assert.equal(state.health, "quiet");
 });
 
 test("speech is listening, held briefly across pauses, then quiet", () => {
-  let state = createInboundHealthState(0);
+  let state = createInboundHealthState();
   state = reduceInboundHealth(state, SPEECH, 1_000, { path: "device" });
   assert.equal(state.health, "listening");
   state = reduceInboundHealth(state, QUIET, 1_000 + LISTENING_HOLD_MS - 250, { path: "device" });
@@ -66,27 +66,26 @@ test("speech is listening, held briefly across pauses, then quiet", () => {
   assert.equal(state.health, "quiet");
 });
 
-test("after signal was heard, zeros warn only after 5 minutes unbroken", () => {
-  let state = createInboundHealthState(0);
+test("after signal was heard, zeros alone never warn: a healthy cable in a silent call is all zeros", () => {
+  let state = createInboundHealthState();
   state = reduceInboundHealth(state, SPEECH, 0, { path: "device" });
-  const zerosFrom = 1_000;
-  state = run(state, ZERO, zerosFrom, zerosFrom + NO_SIGNAL_AFTER_HEARD_MS - 250);
+  state = run(state, ZERO, 1_000, 30 * 60_000);
   assert.equal(state.health, "quiet");
-  state = reduceInboundHealth(state, ZERO, zerosFrom + NO_SIGNAL_AFTER_HEARD_MS, { path: "device" });
+});
+
+test("the grace period starts at the first sample, not when the capture opened", () => {
+  // The probe reports nothing while its AudioContext is suspended, so a capture whose first sample
+  // arrives two minutes after open must still get the full grace from that sample.
+  let state = createInboundHealthState();
+  const firstSample = 2 * 60_000;
+  state = run(state, ZERO, firstSample, firstSample + NO_SIGNAL_AFTER_OPEN_MS - 250);
+  assert.equal(state.health, "unknown");
+  state = reduceInboundHealth(state, ZERO, firstSample + NO_SIGNAL_AFTER_OPEN_MS, { path: "device" });
   assert.equal(state.health, "no-signal");
 });
 
-test("one non-zero block breaks the zero run and restarts the 5 minute clock", () => {
-  let state = createInboundHealthState(0);
-  state = reduceInboundHealth(state, SPEECH, 0, { path: "device" });
-  state = run(state, ZERO, 1_000, 4 * 60_000);
-  state = reduceInboundHealth(state, QUIET, 4 * 60_000 + 250, { path: "device" });
-  state = run(state, ZERO, 4 * 60_000 + 500, 8 * 60_000);
-  assert.notEqual(state.health, "no-signal");
-});
-
 test("no-signal clears as soon as sound arrives", () => {
-  let state = createInboundHealthState(0);
+  let state = createInboundHealthState();
   state = run(state, ZERO, 0, NO_SIGNAL_AFTER_OPEN_MS);
   assert.equal(state.health, "no-signal");
   state = reduceInboundHealth(state, SPEECH, NO_SIGNAL_AFTER_OPEN_MS + 250, { path: "device" });
@@ -94,7 +93,7 @@ test("no-signal clears as soon as sound arrives", () => {
 });
 
 test("the loopback path never reports no-signal: its zeros are silence", () => {
-  let state = createInboundHealthState(0);
+  let state = createInboundHealthState();
   state = run(state, ZERO, 0, NO_SIGNAL_AFTER_OPEN_MS - 250, "loopback");
   assert.equal(state.health, "unknown");
   state = run(state, ZERO, NO_SIGNAL_AFTER_OPEN_MS, 20 * 60_000, "loopback");
@@ -107,7 +106,7 @@ test("the loopback path never reports no-signal: its zeros are silence", () => {
 });
 
 test("the reducer does not mutate the state it is given", () => {
-  const state = createInboundHealthState(0);
+  const state = createInboundHealthState();
   const snapshot = { ...state };
   reduceInboundHealth(state, SPEECH, 100, { path: "device" });
   assert.deepEqual(state, snapshot);
@@ -119,7 +118,8 @@ test("the no-signal hint names Meet's speaker, and the format fix only where the
     inboundCapture: "Hi-Fi Cable Output",
     platform: "windows",
   });
-  assert.match(windows, /Speakers to “Hi-Fi Cable Input”/);
+  assert.match(windows, /^If someone is talking in Meet, /);
+  assert.match(windows, /Speakers are set to “Hi-Fi Cable Input”/);
   assert.match(windows, /Hi-Fi Cable Input and Hi-Fi Cable Output the same format \(24-bit, 48000 Hz\)/);
 
   const mac = inboundNoSignalHint({
@@ -129,4 +129,8 @@ test("the no-signal hint names Meet's speaker, and the format fix only where the
   });
   assert.match(mac, /WarpTalk Speaker/);
   assert.doesNotMatch(mac, /format/);
+});
+
+test("the no-signal title says \"yet\": it is shown before anything was heard, never as a fault", () => {
+  assert.equal(INBOUND_NO_SIGNAL_TITLE, "No sound from Meet yet");
 });

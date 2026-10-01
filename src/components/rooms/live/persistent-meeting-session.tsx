@@ -127,6 +127,7 @@ import {
   clampMeetingAudioLevel,
   farSideMonitorGain,
   shouldMonitorFarSide,
+  shouldShowMeetSpeakerResetNotice,
   startFarSideMonitor,
   type FarSideMonitor,
 } from "@/lib/audio/bridge-far-side-monitor";
@@ -1155,7 +1156,9 @@ export function PersistentMeetingSession({
         // start leaves the health "unknown", never the bridge down.
         const healthPath: InboundCapturePath =
           inbound.source.kind === "device" ? "device" : "loopback";
-        let health = createInboundHealthState(Date.now());
+        // Its clock starts at the first sample the probe takes, not here: a context the browser
+        // holds suspended reports nothing, and that wait must not count as zeros heard.
+        let health = createInboundHealthState();
         setInboundHealth(health.health);
         try {
           stopProbe = startInboundLevelProbe(handles.track, (sample) => {
@@ -3725,6 +3728,9 @@ export function PersistentMeetingSession({
             bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
             inboundPath={bridgeInboundPath}
             inboundHealth={inboundHealth}
+            meetSpeakerResetNotice={
+              isHost && shouldShowMeetSpeakerResetNotice(bridgeInboundPath, Boolean(bridgeInboundDeviceId))
+            }
             idleDisconnected={meetingIsIdleReaped}
             onRejoin={() => {
               markMeetingInteraction();

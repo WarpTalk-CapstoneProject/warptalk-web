@@ -10,12 +10,17 @@
  *   have not said anything yet" rather than as a broken bridge — until someone notices ten minutes
  *   in. The widget can only say so if something measures the track.
  *
- * WHY "DIGITAL ZERO" AND NOT "QUIET"
- *   A real capture of a real room is never exactly zero: even a muted Meet call through a working
- *   cable carries dither and noise floor. Every sample being exactly 0.0 is what a disconnected or
- *   mis-clocked cable produces. So the warning keys on exact zeros, and a merely quiet signal — a
- *   meeting where nobody is talking — never warns. Warning on quiet would fire in every pause and
- *   teach the user to ignore the one warning that matters.
+ * WHY ZEROS ARE ONLY EVER A SOFT "NOT YET"
+ *   Exact digital zeros are what a disconnected or mis-clocked cable produces — but they are ALSO
+ *   what a perfectly healthy cable carries while Meet is playing nothing. A virtual cable has no
+ *   analogue stage and so no noise floor: a host alone in the call waiting for the other side, or a
+ *   far side that joined muted, reads as an unbroken run of 0.0 through a working bridge. So zeros
+ *   alone can never prove the bridge is broken. What they can say, before anything has ever come
+ *   through, is "nothing from Meet yet" — worded as a question the user can answer ("is anyone
+ *   talking?"), not as a fault. Once something HAS come through, the bridge demonstrably carried,
+ *   and zeros afterwards are a meeting gone quiet: the state stays "quiet" however long they last.
+ *   A merely quiet (non-zero) signal never warns at all; warning on quiet would fire in every pause
+ *   and teach the user to ignore the note that matters.
  *
  * WHY THE LOOPBACK PATH NEVER WARNS
  *   Windows process loopback (`WindowsLoopbackPcmTrackBridge`) produces exact zeros legitimately
@@ -48,17 +53,13 @@ export interface InboundLevelSample {
 /** Below this the block counts as quiet, not as someone talking. Room tone through a cable sits well under it. */
 export const QUIET_THRESHOLD_DBFS = -60;
 /**
- * How long a freshly opened capture may carry nothing but exact zeros before the widget says so.
- * Long enough to cover joining the call and the first silence before anyone speaks — a working
- * cable still carries a noise floor in that time, so waiting costs nothing on a healthy bridge.
+ * How long a fresh capture may carry nothing but exact zeros before the widget says "No sound from
+ * Meet yet". Long enough to cover joining the call and the first silence before anyone speaks.
+ * Measured from the first sample the probe actually took (see `firstSampleAtMs`), not from open:
+ * a context the browser kept suspended measured nothing, and time it spent measuring nothing must
+ * not count as time spent hearing silence.
  */
 export const NO_SIGNAL_AFTER_OPEN_MS = 50_000;
-/**
- * Once something HAS come through, the bridge demonstrably worked. Going back to exact zeros is
- * then far more likely to be the user changing Meet's speaker, or Meet ending, than a broken
- * cable — so the bar for saying so is much higher.
- */
-export const NO_SIGNAL_AFTER_HEARD_MS = 5 * 60_000;
 /**
  * How long "Listening" is held after the last block with signal. Speech is full of gaps a quarter
  * of a second long; without the hold the detail would flicker between Listening and Quiet on
@@ -74,8 +75,13 @@ export function classifyLevel(sample: InboundLevelSample): InboundLevelClass {
 
 export interface InboundHealthState {
   health: InboundHealth;
-  /** When this capture opened. Every timing rule is measured from here or from a later event. */
-  openedAtMs: number;
+  /**
+   * When the first sample of this capture was reduced, or null before any. The probe reports only
+   * while its AudioContext is running, so this is the first moment anything was actually measured —
+   * the grace period starts here and a capture held suspended for a minute does not arrive at its
+   * first real sample already "overdue".
+   */
+  firstSampleAtMs: number | null;
   /** Any block that was not exact zeros — quiet counts: a noise floor proves the cable carries. */
   heardAnything: boolean;
   /** Last block loud enough to count as signal, for the Listening hold. */
@@ -84,11 +90,11 @@ export interface InboundHealthState {
   zeroSinceMs: number | null;
 }
 
-/** A fresh state for a capture that opened at `openedAtMs`. One per capture: a new device starts over. */
-export function createInboundHealthState(openedAtMs: number): InboundHealthState {
+/** A fresh state for a capture. One per capture: a new device, or a reopened one, starts over. */
+export function createInboundHealthState(): InboundHealthState {
   return {
     health: "unknown",
-    openedAtMs,
+    firstSampleAtMs: null,
     heardAnything: false,
     lastSignalAtMs: null,
     zeroSinceMs: null,
@@ -105,20 +111,19 @@ export function reduceInboundHealth(
   const heardAnything = state.heardAnything || level !== "digital-zero";
   const lastSignalAtMs = level === "signal" ? nowMs : state.lastSignalAtMs;
   const zeroSinceMs = level === "digital-zero" ? (state.zeroSinceMs ?? nowMs) : null;
+  const firstSampleAtMs = state.firstSampleAtMs ?? nowMs;
+  const graceOver = nowMs - firstSampleAtMs >= NO_SIGNAL_AFTER_OPEN_MS;
 
   let health: InboundHealth;
-  const noSignal =
-    options.path === "device" &&
-    (heardAnything
-      ? zeroSinceMs !== null && nowMs - zeroSinceMs >= NO_SIGNAL_AFTER_HEARD_MS
-      : nowMs - state.openedAtMs >= NO_SIGNAL_AFTER_OPEN_MS);
+  // Only before anything was ever heard (see the header): after that, zeros are a quiet meeting.
+  const noSignal = options.path === "device" && !heardAnything && graceOver;
   if (noSignal) {
     health = "no-signal";
   } else if (lastSignalAtMs !== null && nowMs - lastSignalAtMs < LISTENING_HOLD_MS) {
     health = "listening";
   } else if (heardAnything) {
     health = "quiet";
-  } else if (options.path === "loopback" && nowMs - state.openedAtMs >= NO_SIGNAL_AFTER_OPEN_MS) {
+  } else if (options.path === "loopback" && graceOver) {
     // Loopback zeros are silence, not a fault (see header): after the same grace a device gets,
     // call it what it is instead of leaving the row undecided for the whole meeting.
     health = "quiet";
@@ -126,12 +131,22 @@ export function reduceInboundHealth(
     health = "unknown";
   }
 
-  return { health, openedAtMs: state.openedAtMs, heardAnything, lastSignalAtMs, zeroSinceMs };
+  return { health, firstSampleAtMs, heardAnything, lastSignalAtMs, zeroSinceMs };
 }
+
+/**
+ * The lead of the "no-signal" note, shared by the in-app widget and the popup. "Yet", because
+ * no-signal only exists before anything was heard and a healthy cable in an empty call reads the
+ * same (see the header): the copy has to stay true when nothing is wrong.
+ */
+export const INBOUND_NO_SIGNAL_TITLE = "No sound from Meet yet";
 
 /**
  * What to tell the user when the device path reports "no-signal". Shared by the in-app widget and
  * the popup so the two never give different advice for the same fault.
+ *
+ * Opens with the condition under which the advice applies — someone actually talking in Meet —
+ * because the same zeros come from a call where nobody has spoken, and that user has nothing to fix.
  *
  * Names the two settings that cause it, both outside WarpTalk, rather than "check your audio": the
  * user is looking at Meet's settings when they read this and needs the exact entry to pick. The
@@ -143,7 +158,10 @@ export function inboundNoSignalHint(
   labels: Pick<BridgeDeviceLabels, "meetSpeaker" | "inboundCapture" | "platform">,
 ): string {
   const speaker = labels.meetSpeaker ?? labels.inboundCapture;
-  const pick = speaker ? `In Meet, set Speakers to “${speaker}”.` : "Check Meet's Speakers setting.";
+  const lead = "If someone is talking in Meet, ";
+  const pick = speaker
+    ? `${lead}check that Meet's Speakers are set to “${speaker}”.`
+    : `${lead}check Meet's Speakers setting.`;
   if (labels.platform !== "windows" || !labels.meetSpeaker || !labels.inboundCapture) return pick;
   return `${pick} In Windows sound settings, give ${labels.meetSpeaker} and ${labels.inboundCapture} the same format (24-bit, 48000 Hz).`;
 }

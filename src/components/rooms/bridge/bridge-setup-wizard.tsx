@@ -45,6 +45,10 @@ import {
 } from "@/lib/desktop/hifi-format";
 import { canCaptureBrowserLoopback, selectBridgeInboundSource } from "@/lib/desktop/bridge-tiers";
 import {
+  MEET_SPEAKER_RESET_NOTICE,
+  shouldShowMeetSpeakerResetNotice,
+} from "@/lib/audio/bridge-far-side-monitor";
+import {
   checkVirtualBridge,
   currentBridgeDeviceLabels,
   WINDOWS_CABLES_DOWNLOAD_PAGE,
@@ -283,6 +287,10 @@ export function BridgeSetupWizard({
   // carry, and where there is no path at all the cable is the only way in — step 1 says to get it.
   const speakerToSet = labels?.meetSpeaker && inboundPath !== "loopback" ? labels.meetSpeaker : null;
   const formatMismatch = hifiFormatMismatch(status);
+  // WT-898 review: the old version of this very step told Hi-Fi users to point Meet's Speakers at
+  // the cable. On the loopback path nothing plays the call back from there, so the step now says
+  // to undo it — the same words the widget shows (bridge-far-side-monitor).
+  const speakerResetNotice = shouldShowMeetSpeakerResetNotice(inboundPath, inboundViaDevice);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
@@ -474,6 +482,14 @@ export function BridgeSetupWizard({
                 WarpTalk hears everything this browser plays — pause other tabs with sound during
                 the call.
               </span>
+              {speakerResetNotice && (
+                <span
+                  data-bridge-meet-speaker-reset
+                  className="mt-1 block text-xs text-amber-600 dark:text-amber-400"
+                >
+                  {MEET_SPEAKER_RESET_NOTICE}
+                </span>
+              )}
             </li>
           )}
           {/*

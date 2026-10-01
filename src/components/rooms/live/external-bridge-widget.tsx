@@ -5,14 +5,23 @@ import {
   Check,
   CircleCheck,
   ExternalLink,
+  Headphones,
+  Info,
   Mic,
   MicOff,
   Play,
   SlidersHorizontal,
   Square,
+  X,
 } from "lucide-react";
+import { useState } from "react";
 
-import { inboundNoSignalHint, type InboundHealth } from "@/lib/audio/bridge-inbound-health";
+import { MEET_SPEAKER_RESET_NOTICE } from "@/lib/audio/bridge-far-side-monitor";
+import {
+  INBOUND_NO_SIGNAL_TITLE,
+  inboundNoSignalHint,
+  type InboundHealth,
+} from "@/lib/audio/bridge-inbound-health";
 import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openInSystemBrowser } from "@/lib/desktop/bridge";
 import type { BridgeInboundPath } from "@/lib/desktop/bridge-tiers";
@@ -29,6 +38,7 @@ export function ExternalBridgeWidget({
   bridgeOutboundReady,
   inboundPath,
   inboundHealth,
+  meetSpeakerResetNotice,
   idleDisconnected,
   onRejoin,
   onToggleMicrophone,
@@ -58,6 +68,12 @@ export function ExternalBridgeWidget({
   inboundPath: BridgeInboundPath | null;
   /** Whether sound is actually arriving from Meet; see lib/audio/bridge-inbound-health. */
   inboundHealth: InboundHealth;
+  /**
+   * WT-898 review: listening to the browser while Hi-Fi Cable is still installed
+   * (shouldShowMeetSpeakerResetNotice). The host may still have Meet's Speakers on the cable from
+   * the old wizard, and on this path nothing plays the call back to them. Dismissible per room.
+   */
+  meetSpeakerResetNotice: boolean;
   /**
    * The idle reaper let go of this meeting: no Meet window and no speech for 15 minutes.
    *
@@ -89,6 +105,15 @@ export function ExternalBridgeWidget({
    */
   const needsSetup = !translationStarted && !bridgeOutboundReady;
 
+  // Once per room, not once per mount: the widget remounts with the meeting window, and a note the
+  // host already dismissed coming back every time is a note they learn to dismiss unread. React
+  // state answers within this mount; sessionStorage carries it across remounts of the same tab.
+  const [speakerNoticeDismissedFor, setSpeakerNoticeDismissedFor] = useState<string | null>(null);
+  const showSpeakerNotice =
+    meetSpeakerResetNotice &&
+    speakerNoticeDismissedFor !== room.id &&
+    !readSpeakerNoticeDismissed(room.id);
+
   // The inbound row answers two questions in one line: is there a way in at all, and is anything
   // coming through it. The second only has an answer while a capture is running; before that the
   // row names the mechanism, as it always did.
@@ -101,7 +126,7 @@ export function ExternalBridgeWidget({
       : inboundHealth === "quiet"
         ? "Quiet"
         : inboundHealth === "no-signal"
-          ? "No sound from Meet"
+          ? INBOUND_NO_SIGNAL_TITLE
           : inboundPath === "loopback"
             ? "Meet window capture"
             : "Virtual speaker";
@@ -160,20 +185,49 @@ export function ExternalBridgeWidget({
           />
 
           {/*
-            Only for "no-signal", which only the virtual-device path can reach: a capture that has
-            carried exact digital zeros since it opened. That is never a quiet meeting — a working
-            cable carries a noise floor — and it is almost always one of these two settings, both
-            of which live outside WarpTalk, so the hint names them rather than saying "check your
-            audio". The Device settings button right below is the action.
+            Only for "no-signal", which only the virtual-device path can reach, and only before
+            anything has come through: a capture that has carried exact digital zeros since its
+            first sample. A healthy cable in a call where nobody has spoken yet reads the same, so
+            this is a soft note, not a warning — "yet", and conditioned on someone talking. When
+            someone IS talking it is almost always one of two settings outside WarpTalk, so the
+            hint names them rather than saying "check your audio". The Device settings button
+            right below is the action.
           */}
           {inboundNoSignal ? (
             <div
               data-bridge-inbound-no-signal
               role="status"
-              className="flex gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/8 p-2 text-[10.5px] leading-relaxed text-ink-muted"
+              className="flex gap-1.5 rounded-md border border-border/60 bg-surface-1 p-2 text-[10.5px] leading-relaxed text-ink-muted"
             >
-              <AlertTriangle className="mt-0.5 size-3 shrink-0 text-amber-600" aria-hidden="true" />
+              <Info className="mt-0.5 size-3 shrink-0 text-ink-muted" aria-hidden="true" />
               <p>{inboundNoSignalHint(currentBridgeDeviceLabels())}</p>
+            </div>
+          ) : null}
+
+          {/*
+            WT-898 review. Non-blocking and dismissible: it is advice about a setting WarpTalk
+            cannot read, so it may well be moot for this host — but for one who followed the old
+            wizard it is the difference between hearing the call and hearing nothing.
+          */}
+          {showSpeakerNotice ? (
+            <div
+              data-bridge-meet-speaker-reset
+              role="status"
+              className="flex gap-1.5 rounded-md border border-primary/30 bg-primary/5 p-2 text-[10.5px] leading-relaxed text-ink-muted"
+            >
+              <Headphones className="mt-0.5 size-3 shrink-0 text-primary" aria-hidden="true" />
+              <p className="min-w-0 flex-1">{MEET_SPEAKER_RESET_NOTICE}</p>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => {
+                  setSpeakerNoticeDismissedFor(room.id);
+                  writeSpeakerNoticeDismissed(room.id);
+                }}
+                className="grid size-4 shrink-0 place-items-center rounded text-ink-muted transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
             </div>
           ) : null}
 
@@ -295,6 +349,27 @@ export function ExternalBridgeWidget({
       </footer>
     </section>
   );
+}
+
+const SPEAKER_NOTICE_KEY_PREFIX = "warptalk:bridge-meet-speaker-reset-dismissed:";
+
+// sessionStorage can be missing or throw (private windows, blocked site data). A failed read means
+// "not dismissed" — the note shows once more — and a failed write leaves the React state to carry
+// the dismissal for this mount. Neither is worth an error.
+function readSpeakerNoticeDismissed(roomId: string): boolean {
+  try {
+    return window.sessionStorage.getItem(SPEAKER_NOTICE_KEY_PREFIX + roomId) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSpeakerNoticeDismissed(roomId: string): void {
+  try {
+    window.sessionStorage.setItem(SPEAKER_NOTICE_KEY_PREFIX + roomId, "1");
+  } catch {
+    // See above.
+  }
 }
 
 function StatusRow({
