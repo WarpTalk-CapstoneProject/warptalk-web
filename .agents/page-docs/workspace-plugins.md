@@ -57,6 +57,30 @@ endpoints answer `Conflict("…")` and friends as `text/plain`, which `getErrorM
 read — a 409 showed the caller's generic sentence and a 503 showed "Too many requests", the
 opposite of what the server said. Both pages report through it.
 
+### Offering the provider's other plugins after one connects (GMCAL1001)
+
+Connect asks the provider for the clicked plugin's scopes only (backend GMCAL1001), so a user who
+wants Drive, Calendar and Meet would sign in three times. After a plugin connects, the member page
+shows **"Connect your other Google plugins too?"** (`SiblingConnectPrompt` in `plugins-page.tsx`,
+copy under `pluginsPage.siblingPrompt`): each sibling's glyph, name and description, and
+**Connect all** / **Not now**. Opt-in only — nothing is connected until Connect all.
+
+- Siblings are `pluginSiblingsToOffer(plugin, catalog)` (`src/lib/assistant/plugin-connect-siblings.ts`,
+  node test `test:plugin-connect-siblings`): same `pluginConnectionGroupKey`, the member action is
+  `connect` (never Request/Add), not workspace-blocked or `platform_disabled`, not `api_key`, and not
+  effectively connected. None → no prompt.
+- It is offered on all three success paths: connected on the spot in `continueToProvider`, the
+  original tab settling on focus (`settleConsent`), and the tab the callback redirected
+  (`?status=connected`). It replaces the connect dialog rather than stacking on it.
+- **Connect all** installs any not-yet-installed sibling, then makes ONE connect call naming the
+  FIRST sibling with the rest in `alsoConnect` (`connectAllRequest`) — never the just-connected
+  plugin, which the server would reconnect. A `url` goes through `openProviderConsent` + the consent
+  notice as usual; otherwise the catalog is refetched and `connectedPluginKeys` names what connected.
+- Either answer is remembered per provider group in `sessionStorage`
+  (`siblingPromptDismissedKey`), wrapped in try/catch, so it is not offered again this session.
+- Not verified in a browser. After a Connect-all consent, only the first sibling is settled/announced
+  by the original tab; the others show up in the refetched catalog.
+
 ## Backend contract (warptalk-backend PR #436, fixed)
 
 The pages read exactly these names; renaming one here without the server is a silent breakage,
