@@ -158,6 +158,26 @@ still carries the original English at it. That is the general repair pattern; se
 - [ ] Manual: a 409 `workspace_plugin_list_changed` surfaces the server's own sentence, not the
       "Could not add {label}." fallback.
 
+## Plugin activity (`/{slug}/settings/plugin-activity`)
+
+A read-only record for Owner and Admin: one row per plugin tool call WarpBot made in this
+workspace — time, member, plugin, tool, outcome, the provider's resource id. Never the arguments.
+Filters by plugin and member use the audit endpoint's own `pluginKey` / `userId` parameters.
+
+It is a record, not a control panel. Each outcome carries `fixer` (`owner` | `member` | `platform`
+| `nobody`) from `describePluginActivityOutcome`:
+
+- only `permission_denied` (the workspace does not allow the plugin, from `WorkspacePluginGuard`)
+  links to the workspace plugin page — the one thing an Owner fixes;
+- a member's connection, scopes, API key, tool switch (`tool_blocked`) and pending confirmation are
+  theirs, so those rows offer **Copy link for member** (`/settings/plugins`) instead;
+- `provider_configuration` is a platform admin's; provider outages and `tool_error` need nothing.
+
+Trends and counts live on Insights → Tools, linked from the toolbar. A dashboard that #608 put on
+top of this list (credits, "avg cost per meeting" over a constant 12 meetings, seeded charts) was
+removed on 2026-10-01 together with `workspace-telemetry-dashboard.tsx`,
+`workspace-currency-config-modal.tsx` and `lib/billing/workspace-telemetry.ts`.
+
 ## Notes for future maintainers
 
 - Adding a string to the owner page means adding it to **all three** catalogs;
@@ -178,3 +198,5 @@ still carries the original English at it. That is the general repair pattern; se
 - `src/i18n/request.ts`, `messages/{en,vi,ja}/workspacePlugins.json`,
   `messages/{en,vi,ja}/pluginsPage.json`
 - `scripts/check-plugin-marketplace-contract.mjs`
+- `src/app/(app)/[workspaceSlug]/settings/plugin-activity/page.tsx`, `src/lib/assistant/plugin-activity.ts`,
+  `messages/{en,vi,ja}/settingsPluginActivity.json`

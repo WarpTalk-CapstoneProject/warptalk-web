@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { ArtifactRecordView } from "@/components/artifacts/artifact-reader";
 import { useArtifactLibrary, useDrawUpMinutes } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { groupEntriesByMeeting, preferredEntry } from "@/lib/meeting/artifact-library";
+import { groupEntriesByMeeting, parseKindParam, preferredEntry } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
 import { recordsPath } from "@/lib/workspace/workspace-routes";
 import { useAuthStore } from "@/stores/auth-store";
@@ -41,8 +41,10 @@ export default function RecordDetailPage({ params }: PageProps) {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const viewerId = useAuthStore((state) => state.user?.id ?? null);
 
-  const initialKind = searchParams.get("kind") as ArtifactKind | null;
+  const initialKind = parseKindParam(searchParams.get("kind"));
   const [kind, setKind] = useState<ArtifactKind | null>(initialKind);
+  // Arrived with a kind already chosen on the list: no second tab bar. Deep links without one keep it.
+  const showKindSwitcher = initialKind === null;
 
   const library = useArtifactLibrary(activeWorkspaceId, { viewerId });
   const group =
@@ -97,6 +99,7 @@ export default function RecordDetailPage({ params }: PageProps) {
             entry={entry}
             onSelectKind={handleSelectKind}
             workspaceSlug={workspaceSlug}
+            showKindSwitcher={showKindSwitcher}
             onDrawUpMinutes={
               canDrawUpMinutes
                 ? () =>

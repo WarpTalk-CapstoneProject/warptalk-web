@@ -5,6 +5,7 @@ import {
   DOCUMENT_TAB,
   DUPLICATE_ERROR_CODE,
   canUploadRevision,
+  documentFileRevision,
   documentMatchesTab,
   historyActionLabel,
   isDecisionAction,
@@ -176,4 +177,18 @@ test("the three decisions are the ones the history emphasises", () => {
   assert.equal(isDecisionAction("Reuploaded"), true);
   assert.equal(isDecisionAction("UploadDocument"), false);
   assert.equal(isDecisionAction("GetDocumentDetails"), false);
+});
+
+test("a file replaced in place is a new preview revision (WT-854, WT-857)", () => {
+  const original = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:04:29Z" });
+  const sameFileAgain = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:04:29Z" });
+  assert.equal(documentFileRevision(original), documentFileRevision(sameFileAgain));
+
+  // A corrected version of another format: the old bytes must not reach the new format's reader.
+  const asWorkbook = doc({ fileName: "report.xlsx", fileExtension: ".xlsx", sizeBytes: 9000, updatedAt: "2026-09-26T14:05:14Z" });
+  assert.notEqual(documentFileRevision(original), documentFileRevision(asWorkbook));
+
+  // Same name and size is still a different file once it was replaced.
+  const sameShapeNewBytes = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:05:14Z" });
+  assert.notEqual(documentFileRevision(original), documentFileRevision(sameShapeNewBytes));
 });

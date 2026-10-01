@@ -273,6 +273,7 @@ function ToolsLine({ model, nowMs, locale, href }: { model: OverviewModel; nowMs
           current.successRate === null ? null : t("toolLine.success", { percent: formatInsightValue(current.successRate, "percent") }),
           current.blocked > 0 ? t("toolLine.blocked", { count: current.blocked }) : null,
           current.needsSetup > 0 ? t("toolLine.needsSetup", { count: current.needsSetup }) : null,
+          current.failed > 0 ? t("toolLine.failed", { count: current.failed }) : null,
         ];
   if (lastCallAt) parts.push(t("toolLine.lastCall", { time: relativeTime(lastCallAt, nowMs, locale) }));
 

@@ -8,10 +8,16 @@ beside every figure. It is the workspace-scoped twin of the platform Insights pa
 uses the same grammar: a period bar in the URL, period cards with a delta, "right now" snapshot
 cards, charts that lead with their total, and lists that link to where a thing is fixed.
 
-The older pages that answered parts of this — `/{slug}/dashboard`, Settings → Usage
-(`settings/billing/usage`) and Settings → Plugin activity (`settings/plugin-activity`, with
-`workspace-telemetry-dashboard.tsx`) — are **unchanged and still in the nav**. Retiring them is a
-later decision (see the approved mockup's notes).
+Since 2026-10-01 Insights is in the **main** sidebar, first in the Workspace group, where
+Dashboard was (owner's call): two owner overviews of the same credits, meetings and spend read as
+two places. `/{slug}/dashboard` still exists — sign-in lands there — and sends an Owner/Admin on to
+`/insights` with `router.replace`; a member keeps its refusal. Deleting the Dashboard page is a
+later decision. Insights is no longer in the Settings sidebar and no longer keeps the Settings
+chrome.
+
+Settings → Plugin activity is the per-call record again: the telemetry dashboard #608 put on top of
+it (`workspace-telemetry-dashboard.tsx`) was built from placeholder figures and was removed. Its
+counts and charts are answered here, on the Tools tab.
 
 ## Who can see it
 
@@ -42,7 +48,7 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | `src/hooks/use-workspace-insights.ts` | Overview sources as `InsightsSourceState`s; `INSIGHTS_QUERY_ROOT`; `useInsightsUpdatedAt`. |
 | `src/lib/workspace/insights/overview-metrics.ts` | Pure arithmetic (ledger, meetings, six months, attention, CSV). Tested. |
 | `src/lib/workspace/insights/tool-audits.ts` | Reading and counting the plugin audit log over a window. Tested; shared with the Tools tab. |
-| `messages/{en,vi,ja}/workspaceInsights.json` | Every string. Nav label: `common.sidebar.settingsNav.insights`. |
+| `messages/{en,vi,ja}/workspaceInsights.json` | Every string. Nav label: `common.sidebar.nav.insights`. |
 
 ## Where every Overview figure comes from
 
@@ -65,7 +71,16 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | Up next | `translationRoomService.list` with `UNFINISHED_ROOM_STATUSES_FILTER` | Dashboard's rule. |
 
 The topbar breadcrumb (`src/app/(app)/layout.tsx`) labels the `insights` segment with
-`sidebar.settingsNav.insights`, the same key the sidebar entry uses.
+`sidebar.nav.insights`, the same key the sidebar entry uses.
+
+## Tool outcomes
+
+Tool figures read the plugin audit log only (built-in WarpBot tools and web search are not logged
+there yet). Codes are classified once, in `describePluginActivityOutcome`
+(`src/lib/assistant/plugin-activity.ts`), and both tabs follow it: `tool_blocked` (a member's own
+switch) and `access_denied` (a cancelled consent) count as blocked, `api_key_required` /
+`invalid_api_key` as needs setup. The Overview "WarpBot tools" line uses the Tools tab's rule —
+amber for needs-setup **or** failed — and prints the failed count.
 
 ## Known limitations
 
