@@ -14,6 +14,8 @@
  * WHAT IS HERE, AND WHAT IS NOT
  *   Mic noise filter ›   the caller's own STT denoising (settings/mic-noise-filter-panel.tsx)
  *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx)
+ *   Meet hears you ›     text-only bridge: Translated voice (VB-CABLE) or Your own voice (real mic,
+ *                        text only). Once live only voice → text is offered (audio-mode-choice.tsx).
  *   Device settings      opens the bridge setup wizard IN THE MAIN WINDOW (relay `open-setup`).
  *                        WT-868 removes the main window's own bridge widget, which was the only
  *                        way back into the wizard after the first device check; this is now that
@@ -36,6 +38,7 @@ import {
   GearSix,
   Lightning,
   Microphone,
+  MicrophoneStage,
   SlidersHorizontal,
   SpeakerHigh,
 } from "@phosphor-icons/react/dist/ssr";
@@ -45,6 +48,7 @@ import { useTranslations } from "next-intl";
 import { noiseReductionLabel } from "@/lib/meeting/noise-reduction";
 import { cn } from "@/lib/utils";
 
+import { BridgeAudioModeChoice } from "./audio-mode-choice";
 import { DockIconButton } from "./dock-icon-button";
 import { FlashModeRow } from "./settings/flash-mode-row";
 import { MicNoiseFilterOptions, useMicNoiseFilterMode } from "./settings/mic-noise-filter-panel";
@@ -52,13 +56,13 @@ import { SettingsPanelHeader, SettingsRow } from "./settings/settings-rows";
 import { VoicePanelSlot } from "./settings/voice-panel-slot";
 import { useBridgeWidget } from "./widget-context";
 
-type SettingsSection = "root" | "microphone" | "voice";
+type SettingsSection = "root" | "microphone" | "voice" | "audioMode";
 
 const FLYOUT_LABEL = "Voice & translation settings";
 
 export function SettingsFlyout() {
   const tWidget = useTranslations("rooms.bridgeWidget");
-  const { roomId, isHost, relay, relayConnected } = useBridgeWidget();
+  const { roomId, isHost, relay, relayConnected, audioMode } = useBridgeWidget();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("root");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -177,6 +181,15 @@ export function SettingsFlyout() {
                   onClick={() => setSection("voice")}
                   hasSubmenu
                 />
+                {audioMode ? (
+                  <SettingsRow
+                    label={tWidget("audioMode.settingsRow")}
+                    icon={<MicrophoneStage className="h-4 w-4" />}
+                    value={tWidget(`audioMode.${audioMode}`)}
+                    onClick={() => setSection("audioMode")}
+                    hasSubmenu
+                  />
+                ) : null}
                 <SettingsRow
                   label="Device settings"
                   icon={<SlidersHorizontal className="h-4 w-4" />}
@@ -209,6 +222,17 @@ export function SettingsFlyout() {
                   mode={noiseReductionMode}
                   onPicked={() => close({ returnFocus: true })}
                 />
+              </>
+            ) : null}
+
+            {section === "audioMode" ? (
+              <>
+                <SettingsPanelHeader
+                  ref={backRef}
+                  title={tWidget("audioMode.label")}
+                  onBack={() => setSection("root")}
+                />
+                <BridgeAudioModeChoice compact />
               </>
             ) : null}
 

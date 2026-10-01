@@ -49,6 +49,8 @@
  *                                                                     from the ended screen
  *                    take-over-capture                                W4b: a member's "Capture audio
  *                                                                     on this device" (bridge claim)
+ *                    set-audio-mode           { mode }                text-only bridge: "voice" | "text",
+ *                                                                     how Meet hears this user
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
@@ -56,7 +58,7 @@
  *                                                 creditsSuspended?, creditsSuspendedReason?,
  *                                                 meetingError?, idleReaped?, connection?,
  *                                                 isRoomHost?, roomEnded?, bridgeRole?,
- *                                                 bridgeCapturerAway?, at }
+ *                                                 bridgeCapturerAway?, audioMode?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -88,6 +90,13 @@
  *   WT-901 fields; the popup falls back to the room record for the role, and offers no takeover to
  *   a main window that does not say. The popup's controls are gated on `isRoomHost || capturer`.
  *
+ *   Text-only bridge (PO, 2026-10-01): `audioMode` is this user's bridge audio mode as the main
+ *   window holds it ("voice": Meet's mic is VB-CABLE carrying the dub; "text": Meet keeps the real
+ *   mic, no dub, no cable). `set-audio-mode` asks the main window to switch it — it re-checks the
+ *   one-way rule (never text → voice while translation runs, lib/meeting/bridge-audio-mode) and owns
+ *   the PUT, the store and the routing. Optional and forgiving like the WT-901 fields; the popup
+ *   offers the switch only to a main window whose snapshot carries `audioMode`.
+ *
  *   There is deliberately NO end intent. The popup does not end a bridge meeting (PO, 2026-10-01):
  *   the room ends when its Google Meet conference does. `open-room-record` is how the ended screen
  *   hands the user to the room's record in the main window, where they are signed in.
@@ -108,6 +117,7 @@ import type { InboundHealth } from "../audio/bridge-inbound-health.ts";
 import type { VoiceCloneStateDto } from "../../types/realtime.ts";
 import { applySingleLanguageChoice, describeLanguageChoice } from "./language-choice.ts";
 import { isBridgeRole, type BridgeRole } from "./bridge-capturer.ts";
+import { isBridgeAudioMode, type BridgeAudioMode } from "./bridge-audio-mode.ts";
 
 export const BRIDGE_WIDGET_RELAY_VERSION = 1;
 
@@ -200,6 +210,12 @@ export type BridgeWidgetSnapshot = {
   bridgeRole?: BridgeRole;
   /** W4b: the capturer is somebody else and is not connected — offer the takeover. */
   bridgeCapturerAway?: boolean;
+  /**
+   * Text-only bridge: this user's audio mode as the main window holds it (the claim, a switch, the
+   * participant row). Absent from a main window that predates text-only mode: the popup then offers
+   * no switch and falls back to the participant row.
+   */
+  audioMode?: BridgeAudioMode;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -255,7 +271,8 @@ export type BridgeWidgetIntent =
   | { type: "rejoin" }
   | { type: "open-setup" }
   | { type: "open-room-record" }
-  | { type: "take-over-capture" };
+  | { type: "take-over-capture" }
+  | { type: "set-audio-mode"; mode: BridgeAudioMode };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
 
@@ -299,6 +316,7 @@ const INTENT_TYPES = new Set<string>([
   "open-setup",
   "open-room-record",
   "take-over-capture",
+  "set-audio-mode",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -366,6 +384,7 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
     snapshot.bridgeRole = raw.bridgeRole;
   }
   if (typeof raw.bridgeCapturerAway === "boolean") snapshot.bridgeCapturerAway = raw.bridgeCapturerAway;
+  if (isBridgeAudioMode(raw.audioMode)) snapshot.audioMode = raw.audioMode;
 }
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
@@ -492,6 +511,8 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return { type: "open-room-record" };
     case "take-over-capture":
       return { type: "take-over-capture" };
+    case "set-audio-mode":
+      return isBridgeAudioMode(raw.mode) ? { type: "set-audio-mode", mode: raw.mode } : null;
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -595,6 +616,8 @@ export type BridgeWidgetSnapshotFields = {
   /** W4b: see `BridgeWidgetSnapshot.bridgeRole`. */
   bridgeRole?: BridgeRole;
   bridgeCapturerAway?: boolean;
+  /** Text-only bridge: see `BridgeWidgetSnapshot.audioMode`. */
+  audioMode?: BridgeAudioMode;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -635,6 +658,7 @@ export function buildBridgeWidgetSnapshot(
   if (fields.roomEnded === true) snapshot.roomEnded = true;
   if (fields.bridgeRole) snapshot.bridgeRole = fields.bridgeRole;
   if (fields.bridgeCapturerAway !== undefined) snapshot.bridgeCapturerAway = fields.bridgeCapturerAway;
+  if (fields.audioMode) snapshot.audioMode = fields.audioMode;
   return snapshot;
 }
 
@@ -876,6 +900,26 @@ export function bridgeWidgetBridgeRole(view: BridgeWidgetRelayView, fallback: Br
 export function canOfferCaptureTakeover(view: BridgeWidgetRelayView): boolean {
   const snapshot = liveSnapshot(view);
   return snapshot?.bridgeRole === "member" && snapshot.bridgeCapturerAway === true;
+}
+
+/**
+ * Text-only bridge: this user's audio mode — the main window's when it says (it made the claim and
+ * any switch), the caller's fallback (the participant row) otherwise.
+ */
+export function bridgeWidgetAudioMode(
+  view: BridgeWidgetRelayView,
+  fallback: BridgeAudioMode | null,
+): BridgeAudioMode | null {
+  return liveSnapshot(view)?.audioMode ?? fallback;
+}
+
+/**
+ * Whether the popup may send `set-audio-mode`: only to a main window whose snapshot carries
+ * `audioMode` — the field and the intent arrived together, and an older main window would drop the
+ * intent as an unknown type and leave the chooser waiting on a switch that never comes.
+ */
+export function canRelayAudioMode(view: BridgeWidgetRelayView): boolean {
+  return liveSnapshot(view)?.audioMode !== undefined;
 }
 
 /**

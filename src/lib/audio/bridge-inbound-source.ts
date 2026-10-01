@@ -77,6 +77,11 @@ export async function openLoopbackInboundSource(options: {
   sourceId?: string;
   /** Already-resolved PID, when the caller has one. The desktop side resolves `sourceId` if not. */
   targetProcessId?: number;
+  /**
+   * Text-only bridge (desktop #45): "text-only" lets the desktop start without VB-CABLE, because
+   * nothing is dubbed into Meet. Omitted is voice, the old contract.
+   */
+  mode?: "voice" | "text-only";
 }): Promise<BridgeInboundSourceHandles> {
   const bridge = getDesktopBridge();
   if (!bridge?.startAudioCapture || !bridge.onWindowsLoopbackPcmChunk) {
@@ -101,6 +106,7 @@ export async function openLoopbackInboundSource(options: {
     includeTargetProcessTree: true,
     sourceId: options.sourceId,
     targetProcessId: options.targetProcessId,
+    ...(options.mode ? { mode: options.mode } : {}),
   };
 
   let result;

@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BridgeSetupWizard } from "@/components/rooms/bridge/bridge-setup-wizard";
+import type { BridgeAudioMode } from "@/lib/meeting/bridge-audio-mode";
 
 export function BridgeSetupDialog({
   open,
@@ -43,6 +44,7 @@ export function BridgeSetupDialog({
    * already live.
    */
   translationStarted,
+  audioMode,
   loopbackFailed,
   browserCaptureAnswer,
   onFormatAligned,
@@ -51,6 +53,8 @@ export function BridgeSetupDialog({
   onOpenChange: (open: boolean) => void;
   onReady: () => void;
   translationStarted: boolean;
+  /** Text-only bridge: in "text" mode the wizard asks for no cable and runs no tone test. */
+  audioMode?: BridgeAudioMode;
   /** WT-898: passed through so the wizard's Speakers line follows the meeting's inbound path. */
   loopbackFailed?: boolean;
   browserCaptureAnswer?: boolean | null;
@@ -73,6 +77,7 @@ export function BridgeSetupDialog({
 
         <BridgeSetupWizard
           readyLabel={translationStarted ? "Back to the meeting" : "Start translating"}
+          audioMode={audioMode}
           loopbackFailed={loopbackFailed}
           browserCaptureAnswer={browserCaptureAnswer}
           onFormatAligned={onFormatAligned}
