@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * /{slug}/tools — what WarpBot can do here, in three sections on one page:
+ * /{slug}/tools — what WarpBot can do here, in three sections on one page, all from ONE read:
+ * GET /api/v1/assistant/tools?workspaceId= (`useWarpBotTools`).
  *
- *   Built in           the worker's own tools (static catalog until GET /api/v1/assistant/tools)
- *   Web search         OpenAI's hosted search; its on/off switch is not readable from the client
- *   From your plugins  tools of connected plugins WarpBot is actually offered here
+ *   Built in           `builtIn` — the worker's own registry (its manifest), dressed with copy
+ *   Web search         `webSearch.state` — on / off / unavailable / unknown
+ *   From your plugins  `plugins` — exactly the plugin tools WarpBot is offered right now
  *
- * See .agents/page-docs/warpbot-tools.md.
+ * The server decides who sees what (platform-staff tools, blocked plugin tools); the page only
+ * draws it. See .agents/page-docs/warpbot-tools.md.
  */
 
 import { useId, useMemo, useState, type ReactNode } from "react";
@@ -30,6 +32,7 @@ import {
   Translate,
   Users,
   VideoCamera,
+  Wrench,
   X,
 } from "@phosphor-icons/react";
 
@@ -43,25 +46,22 @@ import {
   WorkspaceSection,
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
-import { useAssistantPlugins } from "@/hooks/use-assistant";
-import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { useStaffAccess } from "@/hooks/use-staff-access";
+import { useAssistantPlugins, useWarpBotTools } from "@/hooks/use-assistant";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { pluginToolsOfferedToWarpBot } from "@/lib/assistant/warpbot-plugin-tools";
-import { toolPolicyOf } from "@/lib/assistant/tool-policy";
+import { strictestToolPolicy } from "@/lib/assistant/tool-policy";
 import {
+  builtInToolsFromManifest,
   filterBuiltInTools,
   foldSearchText,
-  visibleBuiltInTools,
-  visibleToolCategories,
-  WARPBOT_BUILT_IN_TOOLS,
+  toolCategoriesOf,
+  WEB_SEARCH_SAMPLE_PROMPT,
   type WarpBotBuiltInTool,
   type WarpBotToolCategory,
 } from "@/lib/assistant/warpbot-tools-catalog";
 import { cn } from "@/lib/utils";
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { McpToolDescriptorDto } from "@/types/assistant";
+import type { WarpBotPluginToolDto, WarpBotWebSearchState } from "@/types/assistant";
 
 const FOCUS_RING =
   "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1";
@@ -75,6 +75,7 @@ const CATEGORY_ICON: Record<WarpBotToolCategory, typeof VideoCamera> = {
   workspace: Users,
   conversation: ChatsCircle,
   platform: ChartBar,
+  other: Wrench,
 };
 
 function ToolIcon({ children }: { children: ReactNode }) {
@@ -153,38 +154,47 @@ function BuiltInToolRow({ tool }: { tool: WarpBotBuiltInTool }) {
 
       {expanded ? (
         <div id={panelId} className="ml-[52px] mr-2 mb-2 space-y-3 pt-1">
-          <p className="text-[12.5px] leading-relaxed text-ink-muted">{tool.details}</p>
+          {tool.details ? (
+            <p className="text-[12.5px] leading-relaxed text-ink-muted">{tool.details}</p>
+          ) : null}
           {tool.audience === "host" ? (
             <p className="rounded-md bg-surface-2 px-3 py-2 text-[12px] text-ink">{t("row.hostOnly")}</p>
           ) : null}
-          {tool.audience === "platform_admin" ? (
+          {tool.audience === "platform_staff" ? (
             <p className="rounded-md bg-surface-2 px-3 py-2 text-[12px] text-ink">{t("row.platformOnly")}</p>
           ) : null}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle">
-              {t("row.samplePrompts")}
-            </p>
-            <ul className="mt-1.5 space-y-1.5">
-              {tool.samplePrompts.map((prompt) => (
-                <li
-                  key={prompt}
-                  className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span className="text-[12.5px] text-ink">&ldquo;{prompt}&rdquo;</span>
-                  <TryButton prompt={prompt} />
-                </li>
-              ))}
-            </ul>
-          </div>
+          {tool.samplePrompts.length > 0 ? (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle">
+                {t("row.samplePrompts")}
+              </p>
+              <ul className="mt-1.5 space-y-1.5">
+                {tool.samplePrompts.map((prompt) => (
+                  <li
+                    key={prompt}
+                    className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="text-[12.5px] text-ink">&ldquo;{prompt}&rdquo;</span>
+                    <TryButton prompt={prompt} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {!tool.details && tool.samplePrompts.length === 0 && tool.audience === "member" ? (
+            <p className="text-[12px] text-ink-subtle">{t("row.noMoreDetails")}</p>
+          ) : null}
         </div>
       ) : null}
     </li>
   );
 }
 
-function PluginToolRow({ tool }: { tool: McpToolDescriptorDto }) {
+function PluginToolRow({ tool }: { tool: WarpBotPluginToolDto }) {
   const t = useTranslations("warpbotTools.badges");
-  const asksFirst = toolPolicyOf(tool) === "approval";
+  // What WarpBot will do: the stricter of the member's choice and the workspace rule. Blocked
+  // tools never reach this list — the server leaves them out.
+  const asksFirst = strictestToolPolicy(tool.policy, tool.workspacePolicy ?? null) === "approval";
   return (
     <li className="flex items-start gap-3 px-2 py-2">
       <span className="min-w-0 flex-1">
@@ -202,6 +212,55 @@ function PluginToolRow({ tool }: { tool: McpToolDescriptorDto }) {
   );
 }
 
+const WEB_SEARCH_BADGE: Record<Exclude<WarpBotWebSearchState, "unknown">, string> = {
+  on: "border-success/40 bg-success/10 text-success",
+  off: "border-border bg-surface-2 text-ink-muted",
+  unavailable: "border-border bg-surface-2 text-ink-subtle",
+};
+
+function WebSearchStateBadge({ state }: { state: WarpBotWebSearchState }) {
+  const t = useTranslations("warpbotTools.webSearch.state");
+  if (state === "unknown") return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10.5px] font-medium",
+        WEB_SEARCH_BADGE[state],
+      )}
+    >
+      {t(state)}
+    </span>
+  );
+}
+
+function SectionSkeleton({ label }: { label: string }) {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label={label}>
+      <div className="h-12 animate-pulse rounded-lg bg-surface-2" />
+      <div className="h-12 animate-pulse rounded-lg bg-surface-2" />
+    </div>
+  );
+}
+
+function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useTranslations("warpbotTools");
+  return (
+    <div className="flex flex-col items-center gap-2 py-6 text-center">
+      <p className="text-[12.5px] text-ink-muted">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className={cn(
+          "inline-flex h-7 items-center rounded-full border border-border px-3 text-[12px] font-medium text-ink hover:bg-surface-2",
+          FOCUS_RING,
+        )}
+      >
+        {t("plugins.retry")}
+      </button>
+    </div>
+  );
+}
+
 export function WarpBotToolsPage() {
   const t = useTranslations("warpbotTools");
   const params = useParams<{ workspaceSlug: string }>();
@@ -209,39 +268,54 @@ export function WarpBotToolsPage() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const role = useWorkspaceRole();
   const canManagePlugins = role === "owner" || role === "admin";
-  // Platform staff exactly as the /admin portal decides it (admin/layout.tsx): the token's
-  // auth.roles "admin" hint AND staff access confirmed by GET /auth/staff-access. Hidden while
-  // that answer is still loading, so a non-staff viewer never sees the platform tool flash in.
-  const hasStaffHint = useIsSystemAdmin();
-  const staffAccess = useStaffAccess();
-  const isPlatformStaff = hasStaffHint && !staffAccess.isLoading && staffAccess.access.isStaff;
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<WarpBotToolCategory | null>(null);
 
-  const categories = visibleToolCategories({ isPlatformStaff });
+  // One read for all three sections. Platform-staff tools and blocked plugin tools are filtered by
+  // the server, so there is no client-side staff check here.
+  const toolsQuery = useWarpBotTools(workspaceId);
+  const data = toolsQuery.data;
+  const isLoading = !data && (toolsQuery.isLoading || !workspaceId);
+  const isError = !data && toolsQuery.isError;
+  const retry = () => void toolsQuery.refetch();
+
+  const allBuiltIn = useMemo(
+    () => (data?.manifestAvailable ? builtInToolsFromManifest(data.builtIn ?? []) : []),
+    [data],
+  );
+  const categories = useMemo(() => toolCategoriesOf(allBuiltIn), [allBuiltIn]);
   const activeCategory = category && categories.includes(category) ? category : null;
 
   const builtInTools = useMemo(
-    () =>
-      filterBuiltInTools(visibleBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { isPlatformStaff }), {
-        category: activeCategory,
-        query,
-      }),
-    [activeCategory, isPlatformStaff, query],
+    () => filterBuiltInTools(allBuiltIn, { category: activeCategory, query }),
+    [activeCategory, allBuiltIn, query],
   );
 
   const needle = foldSearchText(query);
+  const webSearchState: WarpBotWebSearchState = data?.webSearch?.state ?? "unknown";
   const webSearchMatches =
     !needle ||
     [t("webSearch.name"), t("webSearch.rowDescription"), "web_search", "web search"].some((text) =>
       foldSearchText(text).includes(needle),
     );
 
-  const pluginsQuery = useAssistantPlugins(workspaceId ?? undefined);
+  // Only for each plugin's icon (`avatarUrl`); which plugins and tools are listed comes from
+  // `data.plugins`. Shares the widget's cache; if it fails the glyph falls back to brand/initials.
+  const pluginCatalog = useAssistantPlugins(workspaceId ?? undefined);
+  const avatarByKey = useMemo(
+    () => new Map((pluginCatalog.data ?? []).map((plugin) => [plugin.key, plugin.avatarUrl ?? null])),
+    [pluginCatalog.data],
+  );
   const offeredGroups = useMemo(
-    () => pluginToolsOfferedToWarpBot(pluginsQuery.data ?? []),
-    [pluginsQuery.data],
+    () =>
+      (data?.plugins ?? [])
+        .filter((group) => group.tools.length > 0)
+        .map((group) => ({
+          plugin: { key: group.pluginKey, label: group.label, avatarUrl: avatarByKey.get(group.pluginKey) ?? null },
+          tools: group.tools,
+        })),
+    [avatarByKey, data],
   );
   const visibleGroups = useMemo(() => {
     if (!needle) return offeredGroups;
@@ -313,41 +387,63 @@ export function WarpBotToolsPage() {
 
       <WorkspaceBody className="space-y-4 pt-1">
         <WorkspaceSection title={t("builtIn.title")} description={t("builtIn.description")}>
-          <div
-            role="group"
-            aria-label={t("categoryFilterLabel")}
-            className="-mx-1 mb-2 flex flex-wrap gap-1.5 px-1"
-          >
-            <WorkspaceFilterPill
-              label={t("categories.all")}
-              selected={activeCategory === null}
-              onClick={() => setCategory(null)}
-            />
-            {categories.map((id) => (
-              <WorkspaceFilterPill
-                key={id}
-                label={t(`categories.${id}`)}
-                selected={activeCategory === id}
-                onClick={() => setCategory(id)}
-              />
-            ))}
-          </div>
-          {builtInTools.length > 0 ? (
-            <ul className="divide-y divide-border">
-              {builtInTools.map((tool) => (
-                <BuiltInToolRow key={tool.name} tool={tool} />
-              ))}
-            </ul>
+          {isLoading ? (
+            <SectionSkeleton label={t("builtIn.loading")} />
+          ) : isError ? (
+            <SectionError message={t("builtIn.error")} onRetry={retry} />
+          ) : !data?.manifestAvailable ? (
+            // The worker's manifest is missing (worker down or not yet started). Say so — never
+            // fall back to the copy in warpbot-tools-catalog.ts as if it were the list.
+            <div role="status" className="flex items-start gap-3 rounded-lg bg-surface-2 px-3 py-3">
+              <Wrench className="mt-0.5 size-4 shrink-0 text-ink-subtle" weight="duotone" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-medium text-ink">{t("builtIn.unavailableTitle")}</p>
+                <p className="mt-0.5 text-[12px] text-ink-muted">{t("builtIn.unavailableDescription")}</p>
+              </div>
+            </div>
           ) : (
-            <p className="px-2 py-6 text-center text-[12.5px] text-ink-muted">{t("builtIn.empty")}</p>
+            <>
+              <div
+                role="group"
+                aria-label={t("categoryFilterLabel")}
+                className="-mx-1 mb-2 flex flex-wrap gap-1.5 px-1"
+              >
+                <WorkspaceFilterPill
+                  label={t("categories.all")}
+                  selected={activeCategory === null}
+                  onClick={() => setCategory(null)}
+                />
+                {categories.map((id) => (
+                  <WorkspaceFilterPill
+                    key={id}
+                    label={t(`categories.${id}`)}
+                    selected={activeCategory === id}
+                    onClick={() => setCategory(id)}
+                  />
+                ))}
+              </div>
+              {builtInTools.length > 0 ? (
+                <ul className="divide-y divide-border">
+                  {builtInTools.map((tool) => (
+                    <BuiltInToolRow key={tool.name} tool={tool} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-2 py-6 text-center text-[12.5px] text-ink-muted">
+                  {allBuiltIn.length === 0 ? t("builtIn.none") : t("builtIn.empty")}
+                </p>
+              )}
+            </>
           )}
         </WorkspaceSection>
 
         <WorkspaceSection title={t("webSearch.title")} description={t("webSearch.description")}>
-          {webSearchMatches ? (
-            // The switch is ASSISTANT_CHAT_WEB_SEARCH_ENABLED (deploy) AND the platform flag
-            // flags.warpbot_web_search for this workspace, read by the AI worker per turn. Neither
-            // is exposed to a workspace member's client, so this row never claims On or Off.
+          {isLoading ? (
+            <SectionSkeleton label={t("webSearch.loading")} />
+          ) : webSearchMatches ? (
+            // `webSearch.state` from the server: the worker's own ceiling (provider key + deploy
+            // switch, from its manifest) AND the platform flag flags.warpbot_web_search. `unknown`
+            // (no manifest, or the read failed) keeps the neutral note and claims neither.
             <div className="flex items-start gap-3 px-2 py-2.5">
               <ToolIcon>
                 <Globe className="size-4" weight="duotone" aria-hidden />
@@ -356,9 +452,24 @@ export function WarpBotToolsPage() {
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-[13.5px] font-medium text-ink">{t("webSearch.name")}</span>
                   <code className="font-mono text-[11px] text-ink-subtle">web_search</code>
+                  <WebSearchStateBadge state={webSearchState} />
                 </div>
                 <p className="mt-0.5 text-[12.5px] text-ink-muted">{t("webSearch.rowDescription")}</p>
-                <p className="mt-2 text-[12px] text-ink-subtle">{t("webSearch.unknownNote")}</p>
+                <p className="mt-2 text-[12px] text-ink-subtle">
+                  {webSearchState === "on"
+                    ? t("webSearch.onNote")
+                    : webSearchState === "off"
+                      ? t("webSearch.offNote")
+                      : webSearchState === "unavailable"
+                        ? t("webSearch.unavailableNote")
+                        : t("webSearch.unknownNote")}
+                </p>
+                {webSearchState === "on" ? (
+                  <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-[12.5px] text-ink">&ldquo;{WEB_SEARCH_SAMPLE_PROMPT}&rdquo;</span>
+                    <TryButton prompt={WEB_SEARCH_SAMPLE_PROMPT} />
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -371,25 +482,10 @@ export function WarpBotToolsPage() {
           description={t("plugins.description")}
           actions={manageLink}
         >
-          {pluginsQuery.isLoading ? (
-            <div className="space-y-2" aria-busy="true" aria-label={t("plugins.loading")}>
-              <div className="h-12 animate-pulse rounded-lg bg-surface-2" />
-              <div className="h-12 animate-pulse rounded-lg bg-surface-2" />
-            </div>
-          ) : pluginsQuery.isError ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <p className="text-[12.5px] text-ink-muted">{t("plugins.error")}</p>
-              <button
-                type="button"
-                onClick={() => void pluginsQuery.refetch()}
-                className={cn(
-                  "inline-flex h-7 items-center rounded-full border border-border px-3 text-[12px] font-medium text-ink hover:bg-surface-2",
-                  FOCUS_RING,
-                )}
-              >
-                {t("plugins.retry")}
-              </button>
-            </div>
+          {isLoading ? (
+            <SectionSkeleton label={t("plugins.loading")} />
+          ) : isError ? (
+            <SectionError message={t("plugins.error")} onRetry={retry} />
           ) : offeredGroups.length === 0 ? (
             <WorkspaceEmptyState
               icon={<PuzzlePiece className="size-6" weight="duotone" aria-hidden />}
