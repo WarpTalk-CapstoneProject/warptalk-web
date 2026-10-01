@@ -18,6 +18,29 @@
   "new": "New",
   "gridView": "Grid View",
   "listView": "List View",
+  "listOptions": {
+    "fileType": "File type",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "Spreadsheet",
+      "text": "Text & Markdown",
+      "image": "Image",
+      "other": "Other"
+    },
+    "mineOnly": "Uploaded by me",
+    "clearFilters": "Clear filters",
+    "layout": "Layout",
+    "orderBy": "Order by",
+    "sort": {
+      "modified": "Last modified",
+      "name": "Name",
+      "size": "Size"
+    },
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "resetDisplay": "Reset to default"
+  },
   "empty": {
     "title": "No documents found",
     "descriptionCanUpload": "Use New above to upload a reference document.",
