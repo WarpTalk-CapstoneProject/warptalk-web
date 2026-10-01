@@ -5,7 +5,9 @@
     "pricing": "料金",
     "contact": "お問い合わせ",
     "download": "ダウンロード",
-    "getStarted": "はじめる"
+    "getStarted": "はじめる",
+    "openMenu": "メニューを開く",
+    "closeMenu": "メニューを閉じる"
   },
   "badges": {
     "realtimeTranslation": "リアルタイム翻訳",

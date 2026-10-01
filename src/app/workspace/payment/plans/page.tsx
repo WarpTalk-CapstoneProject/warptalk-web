@@ -49,7 +49,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiErrorCode } from "@/lib/api/errors";
 import { createHubConnection } from "@/lib/realtime/signalr";
-import { buildFeatureList, getPlanDescription } from "@/lib/utils";
+import { buildFeatureList, describePlan } from "@/lib/utils";
 import { checkoutCurrency, yearlySavingPercent } from "@/lib/billing/plan-pricing";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
@@ -356,7 +356,7 @@ export default function PaymentPlansPage() {
                     {planName}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-2 min-h-[40px]">
-                    {getPlanDescription(plan.name)}
+                    {describePlan(plan)}
                   </p>
                   <div className="mt-4 flex items-end gap-1">
                     <span className="text-4xl font-semibold tracking-tight">

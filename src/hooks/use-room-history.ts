@@ -18,6 +18,8 @@ type RoomHistoryOptions = {
   pageSize?: number;
   status?: "ended" | "cancelled";
   search?: string;
+  /** "mine": the caller's own meetings even for an Owner/Admin (the Artifacts library). */
+  scope?: "mine";
 };
 
 /**
@@ -33,7 +35,7 @@ function roomHistoryQuery(workspaceId: string | null, options?: RoomHistoryOptio
     // reads this shape, and the shape is the guarantee — one workspace's history can never
     // be served from another's cache entry. The paging and filter terms are appended AFTER
     // the workspace for the same reason: they narrow a workspace's cache entry, never cross it.
-    queryKey: ["room-history", workspaceId, options?.state ?? "ready", options?.artifactStatus ?? "all", options?.status ?? "all", options?.search?.trim() ?? "", options?.page ?? 1, options?.pageSize ?? ROOM_HISTORY_PAGE_SIZE] as const,
+    queryKey: ["room-history", workspaceId, options?.state ?? "ready", options?.artifactStatus ?? "all", options?.status ?? "all", options?.search?.trim() ?? "", options?.page ?? 1, options?.pageSize ?? ROOM_HISTORY_PAGE_SIZE, options?.scope ?? "workspace"] as const,
     queryFn: () =>
       roomHistoryService.listEndedRooms({
         workspaceId: workspaceId!,
@@ -43,6 +45,7 @@ function roomHistoryQuery(workspaceId: string | null, options?: RoomHistoryOptio
         pageSize: options?.pageSize,
         status: options?.status,
         search: options?.search,
+        scope: options?.scope,
       }),
     // WT-509: the poll belongs to the QUERY, not to one of its two callers.
     //

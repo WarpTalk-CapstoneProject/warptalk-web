@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
 import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
-import { routeRoomAudio } from "@/lib/meeting/room-audio-routing";
+import {
+  dubbedHistoryScope,
+  EMPTY_DUBBED_HISTORY,
+  mergeDubbedHistory,
+  routeRoomAudio,
+} from "@/lib/meeting/room-audio-routing";
 import { BridgeOutboundAudio } from "./bridge-outbound-audio";
 import { HalfDuplexMic } from "./half-duplex-mic";
 
@@ -135,6 +140,14 @@ export function FilteredRoomAudio({
   // In a bridge room it also carries the two rules voiceEnabled must not override: the host's own
   // dub is always kept (it is what the far side hears, through BridgeOutboundAudio below), and the
   // stand-in's raw track is never kept (the host hears the far side in Meet already).
+  //
+  // WT-874: speakers already dubbed to this listener keep their raw mic off while their
+  // interpreter bot is reconnecting after an idle timeout — otherwise every sentence after a
+  // pause was heard as the original and then again as the dub. Held in state and updated during
+  // render (React's "information from previous renders" pattern); mergeDubbedHistory returns the
+  // same object when nothing changed, so this settles after one pass.
+  const [dubbedHistory, setDubbedHistory] = useState(EMPTY_DUBBED_HISTORY);
+  const historyScope = dubbedHistoryScope({ targetLanguageNormalized, translationActive, voiceEnabled });
   const routing = routeRoomAudio({
     identities: trackRefs.map((trackRef) => trackRef.participant.identity),
     targetLanguageNormalized,
@@ -145,7 +158,11 @@ export function FilteredRoomAudio({
     localUserId,
     bridgeOutboundReady: bridgeActive,
     bridgeStandInIdentity,
+    previouslyDubbedSpeakerIds: dubbedHistory.scope === historyScope ? dubbedHistory.ids : undefined,
   });
+  const nextDubbedHistory = mergeDubbedHistory(dubbedHistory, historyScope, routing.dubbedSpeakerIds);
+  if (nextDubbedHistory !== dubbedHistory) setDubbedHistory(nextDubbedHistory);
+  const dubbedHistoryFingerprint = [...nextDubbedHistory.ids].sort().join(",");
   const isWanted = (identity: string) => routing.wanted.has(identity);
 
   // trackRefs is a fresh array every render (useTracks), so the effect below keys on
@@ -168,7 +185,7 @@ export function FilteredRoomAudio({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, localUserId, bridgeActive, bridgeStandInIdentity, trackIdentityFingerprint]);
+  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, localUserId, bridgeActive, bridgeStandInIdentity, trackIdentityFingerprint, dubbedHistoryFingerprint]);
 
   const wantedTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
 

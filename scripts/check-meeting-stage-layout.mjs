@@ -166,20 +166,30 @@ assert.match(
   /<\/section>[\s\S]*subtitlesEnabled[\s\S]*data-meeting-subtitle-lane[\s\S]*<LiveSubtitleOverlay[\s\S]*data-meeting-bottom-dock/,
   "enabled subtitles must render in a reserved lane between camera and controls",
 );
-// Caption scroll-back. Scrolling up in the lane opens its history as a panel that grows UPWARD
-// over the camera view — an overlay, so the video never reflows. Two ways to lose that silently:
-// clip the lane's container (the panel is cut at the lane's own height and the history looks
-// like it is not there), or go back to rendering only the last few lines (the scroll has
-// nowhere to go — the owner's original report).
-assert.doesNotMatch(
+// WT-873 — the caption lane shows the current caption only. It used to open an "Earlier
+// captions" history panel that grew UPWARD over the camera view when the reader scrolled up in
+// it, covering the people speaking and duplicating the Transcript side panel. Pinned three ways:
+// the lane container clips, the overlay renders a bounded window of the newest lines (never a
+// history), and nothing in it scrolls or measures an expanded height.
+assert.match(
   roomPage,
-  /data-meeting-subtitle-lane[\s\S]{0,700}?className="[^"]*overflow-hidden[^"]*"\s*>\s*<LiveSubtitleOverlay/,
-  "the caption lane's container must not clip the expanded caption history",
+  /data-meeting-subtitle-lane[\s\S]{0,400}?className="[^"]*overflow-hidden[^"]*"\s*>\s*<LiveSubtitleOverlay/,
+  "the caption lane's container must clip — nothing in it may grow over the camera view",
 );
 assert.match(
   liveSubtitle,
-  /windowCaptionLines\(/,
-  "the caption lane must render its bounded history, not only the newest lines",
+  /liveCaptionLines\(/,
+  "the caption lane must render only the newest lines (liveCaptionLines), not a scrollable history",
+);
+assert.doesNotMatch(
+  liveSubtitle,
+  /caption-scrollback|windowCaptionLines|measureExpandedHeight|earlierCaptions|overflow-y-auto|onScroll=/,
+  "the caption lane must not scroll back through history or expand over the video (WT-873)",
+);
+assert.match(
+  liveSubtitle,
+  /data-caption-lane[\s\S]{0,1500}?role="region"[\s\S]{0,200}?text-center/,
+  "live captions must be centred like subtitles, not left-aligned like a chat thread",
 );
 assert.match(
   roomPage,

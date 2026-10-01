@@ -14,6 +14,20 @@ import { CinematicAuthShell, InputGroup } from "@/components/auth/cinematic-auth
 
 type FormData = { password: string; confirmPassword: string };
 
+function Footer({ t }: { t: ReturnType<typeof useTranslations<"auth.resetPassword">> }) {
+  return (
+    <p className="text-center text-xs text-white/30">
+      <Link href="/terms" className="hover:text-white/60 hover:underline">
+        {t("termsOfUse")}
+      </Link>
+      <span className="mx-2">|</span>
+      <Link href="/privacy" className="hover:text-white/60 hover:underline">
+        {t("privacyPolicy")}
+      </Link>
+    </p>
+  );
+}
+
 function ResetPasswordForm() {
   const t = useTranslations("auth.resetPassword");
   const tv = useTranslations("validation");
@@ -42,6 +56,27 @@ function ResetPasswordForm() {
     }
   };
 
+  // WT-833: a missing token used to fall through to this same form with the submit button quietly
+  // disabled — nothing told the visitor the link itself was the problem. Checked after the hooks
+  // above (not as an early return before them) so they run in the same order every render.
+  if (!token) {
+    return (
+      <CinematicAuthShell>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-medium tracking-tight">{t("invalidLinkHeading")}</h1>
+          <p className="text-sm text-white/40">{t("invalidLinkDetail")}</p>
+        </div>
+        <Link
+          href="/forgot-password"
+          className="flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98]"
+        >
+          {t("requestNewLink")}
+        </Link>
+        <Footer t={t} />
+      </CinematicAuthShell>
+    );
+  }
+
   return (
     <CinematicAuthShell>
       <div className="space-y-2">
@@ -58,6 +93,7 @@ function ResetPasswordForm() {
         </button>
       </form>
       <Link href="/login" className="text-center text-sm text-white/50 hover:text-white">{t("backToLogin")}</Link>
+      <Footer t={t} />
     </CinematicAuthShell>
   );
 }

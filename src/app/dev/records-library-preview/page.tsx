@@ -22,7 +22,9 @@ import { useState } from "react";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
 import { ArtifactRecordView } from "@/components/artifacts/artifact-reader";
 import {
+  LIBRARY_KINDS,
   groupEntriesByMeeting,
+  listLibrary,
   preferredEntry,
 } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind, LibraryEntry } from "@/lib/meeting/artifact-library";
@@ -172,14 +174,18 @@ export default function RecordsLibraryPreviewPage() {
           </p>
         </div>
 
-        {/* The real list page's grid: one column, cards are links. */}
-        <section aria-label="Meeting records">
-          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {groups.map((group) => (
-              <ArtifactCard key={group.roomId} group={group} workspaceSlug="preview" />
-            ))}
-          </div>
-        </section>
+        {/* The real list page's grid, one row per kind tab: only what the viewer can read, one card
+            per document, the picture being the first page of the .docx it downloads as. */}
+        {LIBRARY_KINDS.map((kindTab) => (
+          <section key={kindTab} aria-label={kindTab} className="space-y-2">
+            <h2 className="text-[12px] font-medium uppercase tracking-wide text-ink-subtle">{kindTab}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {listLibrary(ENTRIES, { kind: kindTab, scope: "all" }).map((item) => (
+                <ArtifactCard key={item.id} entry={item} workspaceSlug="preview" />
+              ))}
+            </div>
+          </section>
+        ))}
 
         {/* What the detail page renders. Driven by a local picker here rather than by the route,
             because a preview has no workspace to route inside. */}

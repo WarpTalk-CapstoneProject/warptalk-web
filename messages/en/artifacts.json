@@ -1,18 +1,27 @@
 {
-  "filterByKindAria": "Filter records by kind",
+  "filterByKindAria": "Document type",
+  "scopeAria": "Whose documents",
   "filters": {
-    "all": "All records",
     "transcript": "Transcripts",
     "summary": "AI summaries",
     "minutes": "Minutes"
   },
-  "meetingsCount": "{count, plural, one {# meeting} other {# meetings}}",
-  "mineOnly": {
-    "on": "Showing meetings you hosted",
-    "off": "Only meetings you hosted"
+  "scopes": {
+    "all": "All",
+    "mine": "Yours",
+    "shared": "Shared with you"
+  },
+  "documentsCount": {
+    "transcript": "{count, plural, one {# transcript} other {# transcripts}}",
+    "summary": "{count, plural, one {# AI summary} other {# AI summaries}}",
+    "minutes": "{count, plural, one {# minutes} other {# minutes}}"
+  },
+  "view": {
+    "grid": "Grid",
+    "list": "List"
   },
   "search": {
-    "placeholder": "Search records, meetings, or what was said"
+    "placeholder": "Search by meeting title or room code"
   },
   "loading": "Loading meeting records",
   "error": {
@@ -20,29 +29,44 @@
     "description": "Check the translation-room service and try again.",
     "retry": "Retry"
   },
+  "edited": "Edited {when}",
+  "host": {
+    "you": "You"
+  },
+  "state": {
+    "writing": "Writing…"
+  },
   "empty": {
-    "noResultsTitle": "No records match this search",
-    "noResultsDescription": "Try a different word, or widen the filter to all records.",
-    "emptyTitle": "No meeting records yet",
-    "emptyDescription": "A transcript and an AI summary are written when a meeting ends. Minutes are drawn up from the meeting's own page.",
-    "footerNote": "Everything WarpTalk writes down will appear here."
+    "noResultsTitle": "No titles match this search",
+    "noResultsDescription": "Search looks at meeting titles and room codes, not at what was said.",
+    "all": {
+      "title": "Nothing to read here yet",
+      "description": {
+        "transcript": "Transcripts appear here after a meeting you hosted or joined ends.",
+        "summary": "AI summaries appear here about a minute after a meeting ends.",
+        "minutes": "Minutes appear here once they are drawn up from a meeting's summary."
+      }
+    },
+    "mine": {
+      "title": "Nothing from meetings you hosted",
+      "description": {
+        "transcript": "Transcripts of meetings you host appear here.",
+        "summary": "AI summaries of meetings you host appear here.",
+        "minutes": "Minutes of meetings you host appear here."
+      }
+    },
+    "shared": {
+      "title": "Nothing shared with you yet",
+      "description": {
+        "transcript": "When a host shares a meeting's transcript with its participants, it appears here.",
+        "summary": "When a host shares a meeting's summary with its participants, it appears here.",
+        "minutes": "Signed minutes of meetings you took part in appear here."
+      }
+    }
   },
   "failedSource": {
     "minutes": "Minutes could not be loaded, so this list may be missing some records.",
     "records": "Meeting records could not be loaded, so this list may be missing transcripts and summaries."
-  },
-  "kindLabels": {
-    "transcript": "Transcript",
-    "summary": "AI summary",
-    "minutes": "Minutes"
-  },
-  "absence": {
-    "withheld": "This output has not been shared with you yet. The meeting host controls who can read it.",
-    "generatingSummary": "The assistant is still writing this summary.",
-    "generatingOther": "This is still being produced.",
-    "emptyMinutes": "Drawn up but not written yet.",
-    "emptyOther": "Nobody spoke, so there was nothing to write down.",
-    "unavailable": "The file behind this is no longer available."
   },
   "relativeTime": {
     "justNow": "just now",
