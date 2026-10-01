@@ -79,7 +79,7 @@ import {
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
-import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
+import { findSegmentAtMs, formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   isRetryableRenderingError,
   normalizeRenderingLanguage,
@@ -111,6 +111,7 @@ import {
 } from "@/lib/meeting/moment-link";
 import {
   canAlignToRecording,
+  recordingLeadInMs,
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
@@ -606,6 +607,36 @@ export default function RoomInformationPage() {
     () => buildRecordingMarks(transcriptRows, seekSources),
     [transcriptRows, seekSources],
   );
+
+  /**
+   * WT-896 — whether one moment is inside the recording, by the same arithmetic requestSeek uses.
+   *
+   * The meeting-wide gate above (`canSeekToRecording`) only asks whether the two clocks can be
+   * reconciled at all. A meeting recorded from 22 minutes in passes it, and every line from those
+   * first 22 minutes then drew a play button whose click seekTargetSeconds refused in silence —
+   * the report was "play does nothing on the old lines". Those timestamps now stay plain text.
+   */
+  const canSeekAt = useCallback(
+    (atMs: number) => seekTargetSeconds(seekSources, atMs) !== null,
+    [seekSources],
+  );
+  /**
+   * The line above the transcript that says why some timestamps are not clickable. Undefined when
+   * every line is in the recording (or nothing can be seeked, which seekUnavailableReason covers);
+   * a number when the recording started late; null when it is partial for another reason — it
+   * stopped before the meeting did, which is only known once the file's length has loaded.
+   */
+  const recordingCoverageGapMs = useMemo(() => {
+    if (!canSeekToRecording) return undefined;
+    if (!transcriptRows.some((row) => !canSeekAt(row.startTimeMs))) return undefined;
+    return recordingLeadInMs(seekSources);
+  }, [canSeekToRecording, transcriptRows, canSeekAt, seekSources]);
+  const seekCoverageNote =
+    recordingCoverageGapMs === undefined
+      ? null
+      : recordingCoverageGapMs === null
+        ? t("record.seekCoverage.partial")
+        : t("record.seekCoverage.lateStart", { time: formatCitationTime(recordingCoverageGapMs) });
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -1209,6 +1240,7 @@ export default function RoomInformationPage() {
                 marks={recordingMarks}
                 onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
+                seekCoverageNote={seekCoverageNote}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
@@ -1222,6 +1254,7 @@ export default function RoomInformationPage() {
                     // means every offset is measured against the wrong file half the time, and the
                     // notice above the transcript now says why the timestamps went quiet.
                     onSeekToRecording={canSeekToRecording ? requestSeek : undefined}
+                    canSeekAt={canSeekAt}
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -1426,6 +1459,7 @@ function MeetingRecordSection({
   onDurationSeconds,
   onJumpToMoment,
   seekUnavailableReason,
+  seekCoverageNote,
   recordingUnavailableReason,
   recordingFailure,
   speakerDirectory,
@@ -1499,6 +1533,8 @@ function MeetingRecordSection({
    * gets a plain reading page, not a notice about a feature it never had.
    */
   seekUnavailableReason?: "unalignable" | "multiple" | null;
+  /** WT-896: why SOME timestamps do not open the recording (it covers part of the meeting). */
+  seekCoverageNote?: string | null;
   /** Passed straight to the player. The union is meeting-record-panels'. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
   /** rec-loss: a recording that produced no file — derived on the page beside the reason above. */
@@ -2002,6 +2038,10 @@ function MeetingRecordSection({
       {activeTab === "recap" && seekUnavailableReason ? (
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
           {seekUnavailableMessages[seekUnavailableReason]}
+        </div>
+      ) : activeTab === "recap" && seekCoverageNote ? (
+        <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+          {seekCoverageNote}
         </div>
       ) : null}
       {/* rec-loss: beside the seek line and styled like it — both are "about the recording, above
