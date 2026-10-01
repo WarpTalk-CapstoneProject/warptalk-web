@@ -2652,7 +2652,7 @@ export function GlobalChatbot() {
                                   onClick={() => setSkillsMenuOpen(false)}
                                   className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
                                 >
-                                  <span>Explore</span>
+                                  <span>{t("exploreTools")}</span>
                                   <ArrowSquareOut size={11} />
                                 </Link>
                               )}
@@ -2695,7 +2695,7 @@ export function GlobalChatbot() {
                                     onClick={() => setSkillsMenuOpen(false)}
                                     className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline pt-0.5"
                                   >
-                                    <span>Browse All 14 WarpBot Tools</span>
+                                    <span>{t("browseAllTools")}</span>
                                     <ArrowSquareOut size={11} />
                                   </Link>
                                 )}

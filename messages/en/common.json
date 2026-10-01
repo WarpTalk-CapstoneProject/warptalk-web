@@ -290,6 +290,8 @@
     "connect": "Connect",
     "useInThisChat": "Use {label} in this chat",
     "noToolsForPage": "No tools for this page. Open a meeting or a document.",
+    "exploreTools": "Explore",
+    "browseAllTools": "Browse WarpBot tools",
     "installPluginsHint": "Install plugins from Personal Settings.",
     "loadingConversations": "Loading conversations…",
     "loadHistoryFailed": "Could not load chat history.",

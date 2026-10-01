@@ -1,0 +1,56 @@
+{
+  "title": "WarpBot ツール",
+  "subtitle": "このワークスペースで WarpBot ができることと、その頼み方。",
+  "searchPlaceholder": "ツールを検索",
+  "clearSearch": "検索をクリア",
+  "categoryFilterLabel": "組み込みツールをカテゴリで絞り込む",
+  "categories": {
+    "all": "すべて",
+    "meetings": "ミーティング",
+    "knowledge": "ナレッジ",
+    "documents": "ドキュメント",
+    "glossary": "用語集",
+    "translation": "翻訳",
+    "workspace": "ワークスペース",
+    "conversation": "会話",
+    "platform": "プラットフォーム"
+  },
+  "badges": {
+    "changesData": "データを変更",
+    "asksFirst": "実行前に確認"
+  },
+  "row": {
+    "hostOnly": "ミーティングのホストのみ。誰でも依頼できますが、議事録を共有できるのはホストだけです。",
+    "platformOnly": "WarpTalk のプラットフォームスタッフにのみ表示されます。",
+    "samplePrompts": "質問の例",
+    "tryInWarpBot": "WarpBot で試す",
+    "tryAria": "WarpBot で試す: {prompt}"
+  },
+  "tryToast": "WarpBot に質問を送りました",
+  "builtIn": {
+    "title": "組み込み",
+    "description": "質問に必要なときに WarpBot が自動で使うツールです。",
+    "empty": "検索に一致する組み込みツールはありません。"
+  },
+  "webSearch": {
+    "title": "ウェブ検索",
+    "description": "公開ウェブから回答し、出典へのリンクを付けます。",
+    "name": "ウェブを検索",
+    "rowDescription": "公開ウェブで調べ、使ったページを引用します。",
+    "unknownNote": "ワークスペースで許可されている場合に利用できます。WarpBot がウェブを検索したときは、回答にその旨とページへのリンクが表示されます。",
+    "empty": "ウェブ検索は検索条件に一致しません。"
+  },
+  "plugins": {
+    "title": "プラグインから",
+    "description": "接続済みで、このワークスペースにあるプラグインのツールです。ブロックしたツールは表示されません。",
+    "loading": "プラグインを読み込み中",
+    "error": "プラグインを読み込めませんでした。",
+    "retry": "再試行",
+    "emptyTitle": "プラグインのツールはまだありません",
+    "emptyDescription": "このワークスペースにあるプラグインを接続すると、WarpBot が使えるツールがここに表示されます。",
+    "openConnections": "マイ接続を開く",
+    "manage": "プラグインを管理",
+    "noMatches": "検索に一致するプラグインのツールはありません。",
+    "toolCount": "{count, plural, other {# 個のツール}}"
+  }
+}
