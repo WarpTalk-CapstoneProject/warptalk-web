@@ -35,6 +35,8 @@
     "succeeded": "Thành công",
     "blocked": "Bị chặn",
     "blockedHint": "Workspace này chưa cho phép plugin này. Thêm plugin ở trang plugin của workspace.",
+    "workspaceToolBlocked": "Workspace đã chặn",
+    "workspaceToolBlockedHint": "Owner của workspace đã chặn công cụ này với WarpBot. Chỉ Owner mới cho phép lại được, ở trang plugin của workspace.",
     "turnedOff": "Thành viên đã tắt",
     "turnedOffHint": "Thành viên đã tắt công cụ này cho WarpBot. Chỉ họ mới bật lại được.",
     "declined": "Đã từ chối",
