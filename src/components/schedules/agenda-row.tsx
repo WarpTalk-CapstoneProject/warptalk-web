@@ -9,6 +9,7 @@ import { UserChip } from "@/components/user/user-chip";
 import { formatLanguageRouteShort } from "@/lib/language/languages";
 import type { TimedMeeting } from "@/lib/meeting/agenda-sections";
 import { meetingDisplayState } from "@/lib/meeting/meeting-display-state";
+import { meetingRelation } from "@/lib/meeting/meeting-relation";
 import { cn } from "@/lib/utils";
 import { intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 
@@ -55,7 +56,15 @@ export function AgendaRow({
   const locale = useLocale();
   const stateLabel = useMeetingStateLabel()(meeting);
   const time = formatTime(meeting.occursAt, locale);
-  const relation = meeting.isHost ? t("relation.youHost") : t("relation.invitedBy", { name: meeting.hostName });
+  // Host, invited, or neither (GMCAL1001): someone on the same Google Meet through the bridge is in
+  // the room without an invitation, and "Invited by" would name a host who never invited them.
+  const relationKind = meetingRelation(meeting);
+  const relation =
+    relationKind === "host"
+      ? t("relation.youHost")
+      : relationKind === "invited"
+        ? t("relation.invitedBy", { name: meeting.hostName })
+        : t("relation.hostedBy", { name: meeting.hostName });
   const onGoogleMeet = isGoogleMeetMeeting(meeting);
   const people = describePeople(meeting.participantCount, t);
   // Short marks, "EN → VI", as the approved design draws them: the full names ("English →
@@ -120,11 +129,13 @@ export function AgendaRow({
         </div>
 
         <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-4 text-ink-muted">
-          {meeting.isHost ? (
+          {relationKind === "host" ? (
             <span className="shrink-0 font-semibold text-ink">{t("relation.youHost")}</span>
           ) : (
             <>
-              <span className="shrink-0">{t("relation.invitedByLabel")}</span>
+              <span className="shrink-0">
+                {relationKind === "invited" ? t("relation.invitedByLabel") : t("relation.hostedByLabel")}
+              </span>
               {/* A person's name opens their card, everywhere it appears (PR #463). The chip
                   swallows its own click, so opening the card does not also open the meeting. */}
               <span className="flex min-w-0 max-w-[45%] shrink-0">

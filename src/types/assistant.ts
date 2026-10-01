@@ -404,12 +404,24 @@ export interface UpdatePrivatePluginRequest {
  * `connected: true` means the provider's existing grant already covered the plugin, so the server
  * connected it on the spot and there is no consent page to open (`url` is null). Otherwise `url`
  * is the provider's consent page.
+ *
+ * GMCAL1001: a call that also names `alsoConnect` siblings can answer `connected: true` AND a `url`
+ * — the clicked plugin connected on the spot, the siblings still need consent, and the one URL
+ * covers all of them. `connected` is about the clicked plugin only.
  */
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
   /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
   apiKeyRequired?: boolean;
+  /** Plugins this call connected on the spot (the clicked one and/or `alsoConnect` siblings). */
+  connectedPluginKeys?: string[] | null;
+}
+
+/** Optional body of POST `/assistant/plugins/{key}/connect` (GMCAL1001). No body = old behaviour. */
+export interface PluginConnectRequest {
+  /** Sibling plugin keys of the same provider to fold into the same consent. */
+  alsoConnect?: string[];
 }
 
 /**

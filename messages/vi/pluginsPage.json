@@ -124,5 +124,15 @@
     "optional": "Không bắt buộc",
     "reasonPlaceholder": "vd. Dùng {label} với các mục hành động cuộc họp",
     "sendRequest": "Gửi yêu cầu"
+  },
+  "siblingPrompt": {
+    "title": "Kết nối luôn các plugin {provider} khác của bạn?",
+    "titleNoProvider": "Kết nối luôn các plugin liên quan?",
+    "body": "{label} đã được kết nối. Các plugin này dùng chung phiên đăng nhập, bạn có thể kết nối chúng ngay bây giờ.",
+    "connectAll": "Kết nối tất cả",
+    "notNow": "Để sau",
+    "closeAria": "Đóng",
+    "connected": "Đã kết nối {labels}",
+    "couldNotConnect": "Không thể kết nối {labels}."
   }
 }
