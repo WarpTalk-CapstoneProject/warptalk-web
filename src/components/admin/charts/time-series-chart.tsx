@@ -104,6 +104,11 @@ export interface TimeSeriesChartProps {
   describeGap?: (index: number) => string;
   /** A secondary line under the tooltip's figures (e.g. "4.5 h translated"). */
   tooltipFooter?: (index: number) => string | null;
+  /**
+   * A horizontal target band behind the marks, on the left axis (e.g. a 95–100% success target).
+   * The scale always reaches `to`, so the band is never cut off. Not drawn on a combo chart.
+   */
+  band?: { from: number; to: number; color?: string };
   ariaLabel: string;
   className?: string;
 }
@@ -154,6 +159,7 @@ export function TimeSeriesChart({
   integerRight = false,
   describeGap = () => "No figure",
   tooltipFooter,
+  band,
   ariaLabel,
   className,
 }: TimeSeriesChartProps) {
@@ -182,11 +188,15 @@ export function TimeSeriesChart({
   const positive = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) || v < 0 ? 0 : v);
   const stackTotal = (index: number) =>
     colored.reduce((sum, s, seriesIndex) => (isCombo && !isBarAt(seriesIndex) ? sum : sum + positive(s.values[index])), 0);
+  const targetBand = !isCombo && band && Number.isFinite(band.from) && Number.isFinite(band.to) && band.to > band.from ? band : null;
   const rawMax = isCombo
     ? 0
-    : isStacked
-    ? Math.max(0, ...labels.map((_, index) => stackTotal(index)))
-    : Math.max(0, ...colored.flatMap((s) => s.values.map((v) => (v === null || !Number.isFinite(v) ? 0 : v))));
+    : Math.max(
+        targetBand?.to ?? 0,
+        isStacked
+          ? Math.max(0, ...labels.map((_, index) => stackTotal(index)))
+          : Math.max(0, ...colored.flatMap((s) => s.values.map((v) => (v === null || !Number.isFinite(v) ? 0 : v)))),
+      );
   const targetTicks = height < 170 ? 3 : 4;
   // Combo: each axis is scaled from its own series only; every other variant has the one scale.
   const comboScales = isCombo
@@ -341,6 +351,17 @@ export function TimeSeriesChart({
             </linearGradient>
           ))}
         </defs>
+
+        {/* The target band, under the grid and the marks. */}
+        {targetBand ? (
+          <rect
+            x={plotLeft}
+            y={y(Math.min(targetBand.to, scale.max))}
+            width={plotWidth}
+            height={Math.max(0, y(Math.max(0, targetBand.from)) - y(Math.min(targetBand.to, scale.max)))}
+            style={{ fill: targetBand.color ?? "color-mix(in srgb, var(--success) 14%, transparent)" }}
+          />
+        ) : null}
 
         {/* Grid: solid hairlines at round ticks; the baseline one step stronger. */}
         {scale.ticks.map((tick, index) => (

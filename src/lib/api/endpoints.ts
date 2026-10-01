@@ -682,6 +682,8 @@ export const API = {
     workspaces: "/admin/workspaces/insights",
     meetings: "/admin/meetings/insights",
     pnl: "/admin/billing/insights/pnl",
+    /** Every WarpBot tool call, platform-wide (assistant service, plugins.read). */
+    warpbotTools: "/assistant/admin/insights/tools",
   },
   /** The USD→VND rate: Stripe's by default, recorded daily, overridable. System admin only. */
   /**

@@ -254,6 +254,18 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "warpbotTools",
+    kind: "page",
+    href: "/admin/warpbot-tools",
+    labelKey: "warpbotTools",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "warpbot", "tools", "tool calls", "web search", "assistant", "usage", "success rate", "tool health",
+      "công cụ", "trợ lý", "tìm kiếm web", "lượt gọi",
+      "ツール", "アシスタント", "ウェブ検索", "呼び出し",
+    ],
+  },
+  {
     id: "globalGlossary",
     kind: "page",
     href: "/admin/global-glossary",

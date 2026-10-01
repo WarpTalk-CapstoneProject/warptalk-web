@@ -564,6 +564,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
           // a SQL job rather than a screen.
           { icon: PlugsConnected, label: t("adminNav.items.plugins"), href: "/admin/plugins" },
+          // Under Plugins, not inside it: its usage counts built-in tools and web search too.
+          { icon: Toolbox, label: t("adminNav.items.warpbotTools"), href: "/admin/warpbot-tools" },
           { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
           { icon: BookOpen, label: t("adminNav.items.glossaryTemplates"), href: "/admin/glossary-templates" },
         ],
