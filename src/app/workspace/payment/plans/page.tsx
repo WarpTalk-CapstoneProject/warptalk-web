@@ -25,6 +25,7 @@ import {
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -46,19 +47,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiErrorCode } from "@/lib/api/errors";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, describePlan } from "@/lib/utils";
-import { checkoutCurrency } from "@/lib/billing/plan-pricing";
+import { checkoutCurrency, yearlySavingPercent } from "@/lib/billing/plan-pricing";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import { formatMoney } from "@/lib/format/currency";
 
+/** The billing service's code for "turning auto-renew on needs a card" (Manage modal, WT-878). */
+const AUTO_RENEW_REQUIRES_CHECKOUT = "BILLING_AUTO_RENEW_REQUIRES_CHECKOUT";
+
 export default function PaymentPlansPage() {
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
+  const tAutoRenew = useTranslations("settingsBilling.autoRenew");
 
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
     "monthly",
@@ -126,24 +132,36 @@ export default function PaymentPlansPage() {
       enabled: !!workspaceId,
     });
 
-  // Cancel mutation
+  /**
+   * Cancel mutation — WT-878: auto-renew off, the same `PUT /auto-renew` call, toasts and query
+   * keys as Billing's Manage modal (settings/billing/components/manage-subscription-modal.tsx).
+   * It used to be `DELETE /subscriptions/workspace/{id}`, which set the row to cancelled at once
+   * and dropped entitlements mid-period. Now the plan runs to its period end.
+   */
   const cancelMutation = useMutation({
-    mutationFn: () =>
-      billingService.cancelSubscription(
-        workspaceId,
-        "User requested cancellation via plan page",
-      ),
-    onSuccess: () => {
+    mutationFn: () => billingService.setAutoRenew(workspaceId, false),
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({
         queryKey: ["subscription", workspaceId],
       });
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
       setCancelDialogOpen(false);
+      const endsAt = updated?.currentPeriodEnd ?? activeSub?.currentPeriodEnd;
       toast.success(
-        "Subscription cancelled. Your plan remains active until the end of the billing period.",
+        tAutoRenew("turnedOff", {
+          date: endsAt
+            ? format(new Date(endsAt), "MMMM dd, yyyy")
+            : "the end of the period",
+        }),
       );
     },
-    onError: () => {
-      toast.error("Failed to cancel subscription. Please try again.");
+    onError: (error) => {
+      if (apiErrorCode(error) === AUTO_RENEW_REQUIRES_CHECKOUT) {
+        setCancelDialogOpen(false);
+        toast.error(tAutoRenew("requiresCheckout"));
+        return;
+      }
+      toast.error(tAutoRenew("toggleFailed"));
     },
   });
 
@@ -279,7 +297,7 @@ export default function PaymentPlansPage() {
                 value="yearly"
                 className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly (Save 20%)
+                Yearly (Save {yearlySavingPercent()}%)
               </TabsTrigger>
             </TabsList>
           </Tabs>

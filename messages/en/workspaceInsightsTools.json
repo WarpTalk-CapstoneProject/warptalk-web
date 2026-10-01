@@ -1,0 +1,59 @@
+{
+  "title": "Tools",
+  "notAvailable": "Not available yet",
+  "retry": "Retry",
+  "summary": {
+    "label": "WarpBot tools",
+    "status": {
+      "idle": "No calls yet",
+      "healthy": "Healthy",
+      "attention": "Needs attention"
+    },
+    "idleHint": "No tool calls in this period. Connect a plugin from Plugins to start.",
+    "calls": "{count, plural, one {# call} other {# calls}}",
+    "callsAtLeast": "at least {count, plural, one {# call} other {# calls}}",
+    "successRate": "{rate} success",
+    "blocked": "{count} blocked by policy",
+    "needsSetup": "{count, plural, one {# needs setup} other {# need setup}}",
+    "failed": "{count} failed",
+    "lastCall": "last call {time}",
+    "pluginsLink": "Plugins"
+  },
+  "figure": {
+    "calls": "{count, plural, one {# call} other {# calls}}",
+    "callsAtLeast": "At least {count, plural, one {# call} other {# calls}}",
+    "cappedCaption": "Newest calls only · {top}"
+  },
+  "byPlugin": {
+    "title": "Tool calls by plugin",
+    "empty": "No tool calls in this period",
+    "other": "Other plugins",
+    "callsSegment": "Calls"
+  },
+  "outcomes": {
+    "title": "Outcomes per day",
+    "aria": "Tool call outcomes per day, with the success rate",
+    "empty": "No tool outcomes recorded in this period",
+    "figure": "{rate} success",
+    "captionBlocked": "{count} blocked by policy",
+    "captionNeedsSetup": "{count, plural, one {# needs setup} other {# need setup}}",
+    "captionFailed": "{count} failed",
+    "captionAwaiting": "{count} awaiting confirmation",
+    "succeeded": "Succeeded",
+    "blocked": "Blocked by policy",
+    "problem": "Failed or needs setup",
+    "successRate": "Success rate",
+    "dayTotal": "{count, plural, one {# call} other {# calls}} that day",
+    "stillToCome": "Still to come",
+    "noCalls": "No calls"
+  },
+  "audit": {
+    "title": "Audit trail",
+    "subtitle": "Every assistant tool call in this period and the policy decision behind it",
+    "empty": "No tool calls in this period",
+    "showing": "Showing {start}–{end} of {total}",
+    "showingAtLeast": "Showing {start}–{end} of at least {total}",
+    "cappedNote": "Only the newest {count} calls were read, so older calls in this period are not listed here.",
+    "openActivity": "Plugin activity"
+  }
+}

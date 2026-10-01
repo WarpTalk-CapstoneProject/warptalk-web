@@ -71,6 +71,30 @@ function hasInstalledOutboundDevice(status: VirtualAudioStatus): boolean {
 }
 
 /**
+ * Can WarpTalk hear Meet by listening to the browser itself (Windows per-process loopback)?
+ *
+ * Rung 2's predicate, named so the inbound source decision below can ask it without going through
+ * `selectBridgeTier` — which answers "full-bridge" on any machine with both cables and so used to
+ * hide a perfectly good loopback path behind the cable. VB-CABLE stays a condition on purpose: the
+ * loopback path only carries the far side IN, and a bridge that hears Meet but cannot speak into
+ * it is not the product this rung promises.
+ *
+ * Capability and runtime are two claims. `processLoopback` says this Windows build could do it
+ * (build 20348 and later); `processLoopbackRuntime` says the capture is actually wired. Treating
+ * the first as the second is how a path gets selected that then produces silence.
+ */
+export function canCaptureBrowserLoopback(status: VirtualAudioStatus | null): boolean {
+  return Boolean(
+    status
+      && status.supported
+      && status.platform === "win32"
+      && status.capabilities?.processLoopback === true
+      && status.capabilities?.processLoopbackRuntime === "available"
+      && hasInstalledOutboundDevice(status),
+  );
+}
+
+/**
  * The rungs, most capable first.
  *
  * Each predicate is deliberately conservative in the same direction: when the desktop app says
@@ -105,14 +129,9 @@ export const BRIDGE_TIERS: readonly BridgeTier[] = [
     speaksIntoMeeting: true,
     hearsFarSide: true,
     needsVirtualDevice: true,
-    // Capability and runtime are two claims. `processLoopback` says this Windows build could do it;
-    // `processLoopbackRuntime` says the capture is actually wired. Treating the first as the second
-    // is how a rung gets selected that then produces silence.
-    isAvailable: (status) =>
-      status.platform === "win32"
-      && status.capabilities?.processLoopback === true
-      && status.capabilities?.processLoopbackRuntime === "available"
-      && hasInstalledOutboundDevice(status),
+    // See canCaptureBrowserLoopback: one predicate, so the rung and the inbound source decision
+    // cannot drift apart on what "loopback works here" means.
+    isAvailable: (status) => canCaptureBrowserLoopback(status),
   },
   {
     id: "outbound-only",
@@ -191,4 +210,139 @@ export function availableBridgeTiers(status: VirtualAudioStatus | null): BridgeT
   if (!status) return [];
   if (!status.supported) return [findBridgeTier("caption-only")];
   return BRIDGE_TIERS.filter((tier) => tier.isAvailable(status));
+}
+
+/**
+ * WT-898 — where the far side's audio comes in from, decided once.
+ *
+ * WHY LOOPBACK FIRST
+ *   The 2026-09-05 bench already chose it, and the code did the opposite: `selectBridgeTier`
+ *   answers "full-bridge" whenever both cables are installed, and the session let the Hi-Fi Cable
+ *   device win over loopback whenever it existed. The cable is the fragile path. It is bit-perfect,
+ *   which means it carries nothing at all when its two sides disagree on format, and it only works
+ *   once the user has pointed Meet's Speakers at "Hi-Fi Cable Input" — the step people get wrong,
+ *   usually by picking "CABLE Input" and looping the call back into Meet. Loopback needs no driver
+ *   and no Meet setting: Windows converts formats itself and Meet keeps the default speakers.
+ *   (Verified 2026-09-30: Chrome's audio service utility process is a child of the main
+ *   chrome.exe, so an include-process-tree capture of the browser does reach Meet's output.)
+ *
+ * THE LADDER
+ *   1  loopback   Windows can capture the browser, the capture has not already failed in this
+ *                 room, and the host has not said no.
+ *   2  device     the Hi-Fi Cable (or BlackHole) endpoint exists.
+ *   3  none       nothing reaches WarpTalk from Meet.
+ *
+ * CONSENT IS PART OF THE DECISION, NOT A GATE AFTER IT
+ *   Loopback takes the whole browser, so it waits for the host's yes. While the question is open
+ *   the answer is still "loopback, not yet" — NOT the cable in the meantime. Quietly running on the
+ *   cable until someone answers would leave an unanswered prompt carrying no weight at all, and the
+ *   wizard would already have told the user to leave Meet's speakers alone, so the cable would be
+ *   carrying silence anyway. A "no" is different: it is a settled answer, and when a cable exists
+ *   the far side can still be heard through it.
+ */
+export type BridgeInboundPath = "loopback" | "device";
+
+export type BridgeInboundReason =
+  /** Loopback, and it may start now. */
+  | "loopback"
+  /** Loopback is the path, but the host has not answered the capture question yet. */
+  | "awaiting-consent"
+  /** Loopback is the path and allowed, but no browser window has been picked to capture yet. */
+  | "awaiting-source"
+  /** The device, because this machine cannot capture the browser. */
+  | "loopback-unavailable"
+  /** The device, because loopback already failed to start in this room. */
+  | "loopback-failed"
+  /** The device, because the host said no to listening to the browser. */
+  | "consent-declined"
+  /** Nothing: no loopback that may run, and no device. */
+  | "no-source";
+
+export interface BridgeInboundDecision {
+  /** The path the far side comes in on, once it can start. Null when there is no way in at all. */
+  path: BridgeInboundPath | null;
+  /** Whether a capture on `path` may be opened right now. */
+  startable: boolean;
+  reason: BridgeInboundReason;
+}
+
+export interface BridgeInboundInput {
+  /** `canCaptureBrowserLoopback(status)`. */
+  loopbackCapable: boolean;
+  /** Loopback failed to start earlier in this room; see `isLoopbackFallbackActive`. */
+  loopbackFailed: boolean;
+  /** The inbound virtual device (Hi-Fi Cable Output, BlackHole 16ch) was found. */
+  hasInboundDevice: boolean;
+  /** What the host said about listening to the browser, for this room. Null while unanswered. */
+  consentAnswer: boolean | null;
+  /** A browser window has been picked for the loopback capture. */
+  hasLoopbackSource: boolean;
+}
+
+export function selectBridgeInboundSource(input: BridgeInboundInput): BridgeInboundDecision {
+  const device = (reason: BridgeInboundReason): BridgeInboundDecision =>
+    input.hasInboundDevice
+      ? { path: "device", startable: true, reason }
+      : { path: null, startable: false, reason: "no-source" };
+
+  if (!input.loopbackCapable) return device("loopback-unavailable");
+  if (input.loopbackFailed) return device("loopback-failed");
+  if (input.consentAnswer === false) return device("consent-declined");
+  if (input.consentAnswer === null) {
+    return { path: "loopback", startable: false, reason: "awaiting-consent" };
+  }
+  if (!input.hasLoopbackSource) {
+    return { path: "loopback", startable: false, reason: "awaiting-source" };
+  }
+  return { path: "loopback", startable: true, reason: "loopback" };
+}
+
+/**
+ * A loopback start that failed, remembered for the room it failed in.
+ *
+ * Stamped with the room AND the inbound device of the moment rather than cleared by an effect: a
+ * different room, or a device list that changed under it (the cable plugged in or out, an id
+ * re-issued), is a new situation in which loopback deserves one more try. Anything else stays on
+ * the device — retrying loopback on every render would flap the stand-in connection between two
+ * paths, each attempt reconnecting to LiveKit and dropping a second of the far side.
+ */
+export interface BridgeLoopbackFallback {
+  roomId: string;
+  inboundDeviceId: string | null;
+  /** Why loopback was given up on, as the desktop side or the error said it. */
+  reason: string;
+}
+
+export function isLoopbackFallbackActive(
+  fallback: BridgeLoopbackFallback | null,
+  current: { roomId: string; inboundDeviceId: string | null },
+): boolean {
+  return (
+    fallback !== null
+    && fallback.roomId === current.roomId
+    && fallback.inboundDeviceId === current.inboundDeviceId
+  );
+}
+
+/**
+ * Why a loopback start failed, in one line for the log.
+ *
+ * Duck-typed rather than `instanceof LoopbackInboundError` so this file stays free of runtime
+ * imports: the refusal from the desktop side carries `riskId` (R5 no consent, R8 no window, R2 not
+ * wired) and `reason`, and those two are the only useful part of it.
+ */
+export function describeLoopbackFailure(error: unknown): string {
+  if (error && typeof error === "object") {
+    const { riskId, reason, message } = error as {
+      riskId?: unknown;
+      reason?: unknown;
+      message?: unknown;
+    };
+    const parts = [riskId, reason].filter(
+      (part): part is string => typeof part === "string" && part.length > 0,
+    );
+    if (parts.length > 0) return parts.join(": ");
+    if (typeof message === "string" && message.length > 0) return message;
+  }
+  return "loopback capture could not be started";
 }

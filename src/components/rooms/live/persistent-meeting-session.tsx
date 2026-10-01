@@ -127,9 +127,17 @@ import {
   clampMeetingAudioLevel,
   farSideMonitorGain,
   shouldMonitorFarSide,
+  shouldShowMeetSpeakerResetNotice,
   startFarSideMonitor,
   type FarSideMonitor,
 } from "@/lib/audio/bridge-far-side-monitor";
+import {
+  createInboundHealthState,
+  reduceInboundHealth,
+  type InboundCapturePath,
+  type InboundHealth,
+} from "@/lib/audio/bridge-inbound-health";
+import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
@@ -145,7 +153,13 @@ import {
 } from "@/lib/desktop/bridge";
 import { bridgeConsentSurface } from "@/lib/meeting/bridge-capture-consent-relay";
 import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
-import { selectBridgeTier } from "@/lib/desktop/bridge-tiers";
+import {
+  canCaptureBrowserLoopback,
+  describeLoopbackFailure,
+  isLoopbackFallbackActive,
+  selectBridgeInboundSource,
+  type BridgeLoopbackFallback,
+} from "@/lib/desktop/bridge-tiers";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -353,8 +367,20 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
-  /** Windows only: the far side can be captured from the browser even with no inbound device. */
+  /**
+   * Windows only: the far side can be captured from the browser itself. WT-898: this is now the
+   * FIRST choice, cable or no cable — see selectBridgeInboundSource.
+   */
   const [bridgeInboundLoopback, setBridgeInboundLoopback] = useState(false);
+  /**
+   * WT-898. A loopback start that failed in this room, so the inbound leg runs on the Hi-Fi Cable
+   * instead of staying silent. Stamped with the room and the inbound device of the moment (see
+   * isLoopbackFallbackActive): the same room on the same devices stays on the cable rather than
+   * flapping back into a loopback that has already refused once.
+   */
+  const [bridgeLoopbackFallback, setBridgeLoopbackFallback] = useState<BridgeLoopbackFallback | null>(
+    null,
+  );
   /**
    * What the user said about listening to their browser, for THIS meeting.
    *
@@ -426,21 +452,45 @@ export function PersistentMeetingSession({
     // difference — a cascading render to reach a state nothing can see.
     if (!isBridgeRoom) return;
     let cancelled = false;
-    void (async () => {
+    // Whether this effect run has resolved successfully once. A later re-resolve that throws
+    // keeps what the first one found: a transient enumerateDevices failure on a devicechange must
+    // not tear down a capture that is working.
+    let resolvedOnce = false;
+    // Serialises runs. devicechange fires in bursts (Windows reports each endpoint of a cable
+    // separately), and two resolves racing each other could land in either order.
+    let latest = 0;
+
+    // A function rather than a one-shot, because the answer changes while the room is open. The
+    // device list is read once on entry, and until now that was the only read: a user who plugged
+    // the cable in, installed it from the wizard, or granted microphone permission after entering
+    // kept the answer from before — no inbound leg, and a wizard telling them to install a device
+    // they had just installed.
+    const resolve = async () => {
+      const run = ++latest;
       try {
-        const { outboundDeviceId, inboundDeviceId } = await findBridgeDeviceIds();
-        if (cancelled) return;
+        const { outboundDeviceId, inboundDeviceId, needsPermission } = await findBridgeDeviceIds();
+        if (cancelled || run !== latest) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
 
-        // Windows has a second way in. Where there is no second virtual device, process loopback
-        // pulls the far side out of the browser itself — so the absence of an inbound device id is
-        // no longer the same thing as no inbound leg. Asked through the tier picker rather than by
-        // re-deriving the rules here: it already owns the question of what this machine can run.
+        // Windows has a second way in: process loopback pulls the far side out of the browser
+        // itself. WT-898: asked as a capability, NOT through the tier picker any more — the picker
+        // answers "full-bridge" on any machine with both cables, and reading loopback off that
+        // answer is what hid the loopback path from exactly the users best placed to run it.
         const status = await readVirtualAudioStatus();
-        if (cancelled) return;
-        setBridgeInboundLoopback(selectBridgeTier(status)?.id === "loopback-bridge");
-        if (!outboundDeviceId) {
+        if (cancelled || run !== latest) return;
+        setBridgeInboundLoopback(canCaptureBrowserLoopback(status));
+        resolvedOnce = true;
+        // Empty labels mean the browser has not been given microphone permission yet, so every
+        // device reads as absent. That is not a missing cable, and telling the user it is sends
+        // them to reinstall a driver that is already there. The permission listener below
+        // resolves again once they allow it, and the real answer is given then.
+        if (needsPermission) return;
+        // Once per room, the toast as well as the wizard. The resolve now reruns on every
+        // devicechange, and a toast that fired on each of those would repeat every time a headset
+        // was plugged in for as long as the cable is missing.
+        if (!outboundDeviceId && bridgeSetupPromptedRef.current !== roomId) {
+          bridgeSetupPromptedRef.current = roomId;
           toast.error("This meeting cannot reach Google Meet yet.", {
             // Named for THIS platform. It used to be the macOS constant unconditionally, so a
             // Windows user missing VB-CABLE was told to install BlackHole — a device that does
@@ -450,20 +500,45 @@ export function PersistentMeetingSession({
           // WT-578: and then the wizard, which is the part that was missing. The toast alone named
           // a device and vanished; it never said where to get one, and the only screen that does
           // was reachable from nowhere in the product.
-          if (bridgeSetupPromptedRef.current !== roomId) {
-            bridgeSetupPromptedRef.current = roomId;
-            setBridgeSetupOpen(true);
-          }
+          setBridgeSetupOpen(true);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && run === latest && !resolvedOnce) {
           setBridgeOutboundDeviceId(null);
           setBridgeInboundDeviceId(null);
         }
       }
+    };
+
+    void resolve();
+
+    const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    const onDeviceChange = () => void resolve();
+    mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
+
+    // Granting the microphone does not fire devicechange, yet it is exactly what turns empty
+    // labels into names. `permissions.query({ name: "microphone" })` is not in every browser (and
+    // not in every TS lib's PermissionName), so both the call and the result are guarded; where it
+    // is missing, devicechange and the next room entry are the fallbacks.
+    let permission: PermissionStatus | null = null;
+    const onPermissionChange = () => {
+      if (permission?.state === "granted") void resolve();
+    };
+    void (async () => {
+      try {
+        const status = await navigator.permissions?.query({ name: "microphone" as PermissionName });
+        if (!status || cancelled) return;
+        permission = status;
+        status.addEventListener("change", onPermissionChange);
+      } catch {
+        // Unsupported permission name. Nothing to listen to.
+      }
     })();
+
     return () => {
       cancelled = true;
+      mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
+      permission?.removeEventListener("change", onPermissionChange);
     };
     // `roomId` is here because the wizard prompt above is remembered per room: a device that is
     // missing is missing for this meeting and for the next one, and the reader of that ref has to
@@ -811,18 +886,45 @@ export function PersistentMeetingSession({
   // wait for Start Translation, which kept every word the far side said before Start out of the
   // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
   const bridgeListening = Boolean(room) && transcriptOpen;
+  const loopbackFallbackActive = isLoopbackFallbackActive(bridgeLoopbackFallback, {
+    roomId,
+    inboundDeviceId: bridgeInboundDeviceId,
+  });
+  // Loopback is still the plan: the machine can capture the browser and it has not already
+  // failed to in this room. Only then is there anything to ask about.
+  const inboundLoopbackWanted = bridgeInboundLoopback && !loopbackFallbackActive;
+  const browserCaptureAnswerForRoom =
+    browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null;
   // Placed here, below `isHost` and `bridgeListening`, because it reads both. The state it
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
     isBridgeRoom,
     isHost,
     meetingOpen: bridgeListening,
-    hasInboundDevice: Boolean(bridgeInboundDeviceId),
-    loopbackAvailable: bridgeInboundLoopback,
-    answer: browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null,
+    // WT-898: an installed Hi-Fi Cable no longer silences the ask. Loopback comes first, so the
+    // device only counts here where loopback is not wanted at all — and there
+    // `loopbackAvailable` is false and nothing is asked anyway. A "no" still lands on the cable,
+    // through selectBridgeInboundSource below, and stays "declined" so it can be asked again.
+    hasInboundDevice: !inboundLoopbackWanted && Boolean(bridgeInboundDeviceId),
+    loopbackAvailable: inboundLoopbackWanted,
+    answer: browserCaptureAnswerForRoom,
   });
   const selectedLoopbackSourceId =
     loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
+  /**
+   * WT-898 — the one answer to "where does the far side come in from". The capture effect, the
+   * widget's "Meet audio to WarpTalk" row, the health probe's path and the wizard's Speakers line
+   * all read it, so none of them can drift back to "the cable wins" on its own.
+   */
+  const bridgeInbound = selectBridgeInboundSource({
+    loopbackCapable: bridgeInboundLoopback,
+    loopbackFailed: loopbackFallbackActive,
+    hasInboundDevice: Boolean(bridgeInboundDeviceId),
+    consentAnswer: browserCaptureAnswerForRoom,
+    hasLoopbackSource: Boolean(selectedLoopbackSourceId),
+  });
+  const bridgeInboundPath = bridgeInbound.path;
+  const bridgeInboundStartable = bridgeInbound.startable;
   // Where the host is actually asked. Reading the desktop bridge during render is safe here only
   // because consent is never "required" during SSR — it needs a loaded room, which no server
   // render has — so this is "none" on the server either way and cannot mismatch on hydration.
@@ -890,7 +992,40 @@ export function PersistentMeetingSession({
   //
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
-  const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  // `key` names what this capture was opened on — "device:<id>" or "loopback" — so a re-resolve
+  // that lands on a different device, or a decision that moves between the two paths (WT-898: a
+  // loopback that failed and fell back to the cable), can tell the running capture is the wrong one.
+  const bridgeInboundRef = useRef<{ stop: () => Promise<void>; key: string } | null>(null);
+  /**
+   * The run of the capture effect that is still connecting, if any.
+   *
+   * Every run connects under the same stand-in identity, and LiveKit evicts the older of two
+   * connections with one identity. Deps changing while run A is still connecting used to start run
+   * B in parallel: one of the two got evicted, the WRONG one's onDisconnected raised "the external
+   * call was disconnected", and the room was left with no leg at all. So a run first waits for the
+   * previous one to finish — including releasing what it opened if it was cancelled — and only
+   * then connects.
+   */
+  const bridgeInboundRunRef = useRef<Promise<void> | null>(null);
+  /**
+   * Bumped to force the inbound capture to reopen on the SAME device, which the capture key alone
+   * cannot express: `device:<id>` is unchanged when the device under it changed.
+   *
+   * Two things do that. Fixing the Hi-Fi Cable format from the wizard reconfigures the endpoint, and
+   * the getUserMedia track opened on the old format ends or goes silent while its id stays the
+   * same — the leg kept publishing nothing until the room was reopened. And a track can end on its
+   * own (driver restart, endpoint reset); that is a reopen, not a dead leg.
+   */
+  const [bridgeCaptureGeneration, setBridgeCaptureGeneration] = useState(0);
+  /** When the last few `ended`-driven reopens happened, so a track that ends on open cannot spin. */
+  const bridgeReopenTimesRef = useRef<number[]>([]);
+  /**
+   * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
+   * the published track, because an open, published leg carrying digital silence looks exactly
+   * like a working one to everything else in the app. Back to "unknown" whenever the capture is
+   * released, so a new capture is judged on its own samples and never inherits the last one's.
+   */
+  const [inboundHealth, setInboundHealth] = useState<InboundHealth>("unknown");
   // The host's own ear on the far side, on the virtual-device path only: once Meet's speaker points
   // at a cable, Meet plays nothing to the host. The gain lives in a ref because `voiceEnabled` is
   // declared far below this effect; see the effect beside it.
@@ -902,12 +1037,21 @@ export function PersistentMeetingSession({
   const [farSideMonitorLevel, setFarSideMonitorLevel] = useState(FAR_SIDE_MONITOR_UNDER_DUB);
 
   useEffect(() => {
-    // A device endpoint may start straight away; the loopback path may not start until the user has
-    // actually said yes. `mayCaptureBrowser` is checked rather than "not declined" because on the
-    // render before the answer arrives those two differ, and one of them starts listening.
+    // WT-898: which path is selectBridgeInboundSource's call, not this effect's. A device endpoint
+    // may start straight away; the loopback path may not start until the user has actually said
+    // yes. `mayCaptureBrowser` is checked on top of the decision rather than trusted from it,
+    // because on the render before the answer arrives those two can differ, and one of them starts
+    // listening to the whole browser.
+    const inboundPath = bridgeInboundPath;
+    const inboundDeviceId = inboundPath === "device" ? bridgeInboundDeviceId : null;
     const hasInboundSource =
-      Boolean(bridgeInboundDeviceId) ||
-      (bridgeInboundLoopback && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
+      bridgeInboundStartable &&
+      (inboundPath === "device"
+        ? Boolean(inboundDeviceId)
+        : inboundPath === "loopback" && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
+    // The generation is part of the key so that a reopen on the same device or path is a different
+    // capture to the check below (see bridgeCaptureGeneration).
+    const captureKey = `${inboundPath === "device" ? `device:${inboundDeviceId}` : "loopback"}#${bridgeCaptureGeneration}`;
     // Not while idle-reaped. This is a SECOND LiveKit connection, which `connect` on <LiveKitRoom>
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
@@ -920,11 +1064,30 @@ export function PersistentMeetingSession({
       bridgeInboundRef.current = null;
       return;
     }
-    if (bridgeInboundRef.current) return;
+    // A capture already running on the path the decision names is left alone. One running on a
+    // DIFFERENT device, or on the other path, is replaced: the lookup reruns on devicechange and on
+    // the microphone permission being granted, so the device can change under a live capture, and
+    // a failed loopback moves the leg onto the cable. Keeping the old capture would leave the leg
+    // somewhere the decision no longer names, which is how a bridge ends up publishing silence
+    // while every row says it is fine. A cable plugged in under a running LOOPBACK capture changes
+    // nothing: loopback still wins, and the key says so.
+    const running = bridgeInboundRef.current;
+    if (running && running.key === captureKey) return;
+    bridgeInboundRef.current = null;
 
     let cancelled = false;
-    void (async () => {
+    const previousRun = bridgeInboundRunRef.current;
+    const thisRun = (async () => {
+      // A run still connecting holds the stand-in identity too (see bridgeInboundRunRef). It has
+      // been cancelled by now — this effect's cleanup ran before this body — so waiting for it is
+      // waiting for it to release what it opened, never for a leg that will stay up.
+      if (previousRun) await previousRun.catch(() => undefined);
       try {
+        // Awaited, unlike the teardown above: the replacement connects under the same stand-in
+        // identity, and LiveKit evicts the older of two connections with one identity — which
+        // would be the new one if the old one were still finishing its disconnect.
+        if (running) await running.stop();
+        if (cancelled) return;
         const { data } = await meetingService.bridgeToken(roomId);
         // Before the cancellation check and before publishing: which identity is the far side is a
         // fact about the room, and it has to be in place before the first frame of that track can
@@ -936,26 +1099,61 @@ export function PersistentMeetingSession({
         );
         if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
 
-        // A device id wins when there is one: it is the path both platforms share, and the one the
-        // user can point at in a settings dialog. Loopback is the answer only where no second
-        // virtual device exists.
-        const inbound = bridgeInboundDeviceId
-          ? deviceInboundSource(bridgeInboundDeviceId)
-          : await openLoopbackInboundSource({
+        // WT-898: loopback first, the cable only as the way back — decided by
+        // selectBridgeInboundSource above. The loopback start is the one that can refuse (no
+        // window, a desktop build that is not wired, an OS that says no), and a refusal is not the
+        // end of the leg when a cable exists: it is remembered for this room and devices, and the
+        // decision moves to the device on the next render instead of leaving the far side silent.
+        let inbound;
+        if (inboundPath === "device" && inboundDeviceId) {
+          inbound = deviceInboundSource(inboundDeviceId);
+        } else {
+          try {
+            inbound = await openLoopbackInboundSource({
               consentGranted: true,
               sourceId: selectedLoopbackSourceId ?? undefined,
             });
+          } catch (loopbackError) {
+            if (cancelled) return;
+            const reason = describeLoopbackFailure(loopbackError);
+            if (bridgeInboundDeviceId) {
+              // Logged, not toasted: the leg is about to come back up on the cable, and a red
+              // "cannot hear the external call" for a leg that is working a second later is the
+              // cry-wolf toast people learn to ignore. The reason is kept for whoever debugs it.
+              console.warn(
+                `[bridge] Listening to the browser failed (${reason}); falling back to the virtual speaker.`,
+              );
+              setBridgeLoopbackFallback({ roomId, inboundDeviceId: bridgeInboundDeviceId, reason });
+              return;
+            }
+            console.warn(`[bridge] Listening to the browser failed (${reason}); no virtual speaker to fall back to.`);
+            // Remembered even with nothing to fall back to, so the effect does not retry a refused
+            // start on every render. A device appearing later clears it (see
+            // isLoopbackFallbackActive), and that is the moment worth one more try.
+            setBridgeLoopbackFallback({ roomId, inboundDeviceId: null, reason });
+            throw loopbackError;
+          }
+        }
         if (cancelled) {
           await inbound.dispose();
           return;
         }
 
+        // Set once `release` has started. room.disconnect() raises the same Disconnected event a
+        // dropped connection does, and a deliberate release — now including a device switch —
+        // must not be announced to the user as the call having dropped.
+        let released = false;
+        let stopProbe: (() => void) | null = null;
         const handles = await openBridgeInbound({
           serverUrl,
           token: data.token,
           source: inbound.source,
           onDisconnected: () => {
+            if (released) return;
             bridgeInboundRef.current = null;
+            stopProbe?.();
+            stopProbe = null;
+            setInboundHealth("unknown");
             void farSideMonitorRef.current?.stop();
             farSideMonitorRef.current = null;
             setFarSideMonitoring(false);
@@ -982,7 +1180,55 @@ export function PersistentMeetingSession({
           }
         }
 
+        // Health is metered on both paths but judged differently: on the loopback path exact zeros
+        // are what "nothing is playing" looks like, so only the device path can report no-signal
+        // (see lib/audio/bridge-inbound-health). Best effort like the monitor: a meter that cannot
+        // start leaves the health "unknown", never the bridge down.
+        const healthPath: InboundCapturePath =
+          inbound.source.kind === "device" ? "device" : "loopback";
+        // Its clock starts at the first sample the probe takes, not here: a context the browser
+        // holds suspended reports nothing, and that wait must not count as zeros heard.
+        let health = createInboundHealthState();
+        setInboundHealth(health.health);
+        try {
+          stopProbe = startInboundLevelProbe(handles.track, (sample) => {
+            health = reduceInboundHealth(health, sample, Date.now(), { path: healthPath });
+            // Same value bails out of the render, so four calls a second cost nothing while the
+            // state holds.
+            setInboundHealth(health.health);
+          });
+        } catch {
+          stopProbe = null;
+        }
+
+        // A track that ends under a live leg — the format fix reconfiguring the cable, a driver
+        // restart — is reopened rather than left publishing nothing. At most three times a minute:
+        // a device that ends its track as soon as it is opened would otherwise reconnect the
+        // stand-in in a tight loop, and past that it is a broken device for the wizard, not this.
+        const onTrackEnded = () => {
+          // Not `cancelled`: a capture outlives the effect run that opened it whenever a later run
+          // finds the same key, so only its own release says it is no longer wanted.
+          if (released) return;
+          const now = Date.now();
+          const recent = bridgeReopenTimesRef.current.filter((at) => now - at < 60_000);
+          if (recent.length >= 3) {
+            bridgeReopenTimesRef.current = recent;
+            console.warn("[bridge] The inbound track keeps ending; not reopening it again for now.");
+            return;
+          }
+          bridgeReopenTimesRef.current = [...recent, now];
+          setBridgeCaptureGeneration((generation) => generation + 1);
+        };
+        handles.track.addEventListener("ended", onTrackEnded);
+        // `ended` does not fire for a track that was already dead when the listener went on.
+        if (handles.track.readyState === "ended") onTrackEnded();
+
         const release = async () => {
+          released = true;
+          handles.track.removeEventListener("ended", onTrackEnded);
+          stopProbe?.();
+          stopProbe = null;
+          setInboundHealth("unknown");
           if (farSideMonitorRef.current === monitor) farSideMonitorRef.current = null;
           if (monitor) setFarSideMonitoring(false);
           await monitor?.stop();
@@ -992,12 +1238,13 @@ export function PersistentMeetingSession({
 
         // The effect can be torn down while connect() is in flight. Without this the handles
         // would be unreachable and the second connection would stay in the room, publishing a
-        // device nobody is releasing.
+        // device nobody is releasing. Awaited: the next run waits on this one (bridgeInboundRunRef)
+        // precisely so it does not connect before this connection is gone.
         if (cancelled) {
-          void release();
+          await release();
           return;
         }
-        bridgeInboundRef.current = { stop: release };
+        bridgeInboundRef.current = { stop: release, key: captureKey };
         farSideMonitorRef.current = monitor;
         if (monitor) setFarSideMonitoring(true);
       } catch (error) {
@@ -1009,17 +1256,24 @@ export function PersistentMeetingSession({
         // second virtual device carries it there is a device to name; where process loopback does,
         // there is no device at all and naming one would send the user hunting for a picker entry
         // that is not there.
+        // Keyed on the path that actually failed (WT-898): with loopback first, a machine that has
+        // the cable installed can still fail on the loopback path, and naming the cable then would
+        // send the user to fix a device that was never in use.
         const { inboundCapture } = currentBridgeDeviceLabels();
         toast.error("WarpTalk cannot hear the external call.", {
           description: getErrorMessage(
             error,
-            inboundCapture
+            inboundCapture && inboundPath === "device"
               ? `${inboundCapture} could not be opened, so the other side will not be translated.`
               : "WarpTalk could not capture the meeting's audio from your browser, so the other side will not be translated.",
           ),
         });
       }
     })();
+    bridgeInboundRunRef.current = thisRun;
+    void thisRun.finally(() => {
+      if (bridgeInboundRunRef.current === thisRun) bridgeInboundRunRef.current = null;
+    });
 
     return () => {
       cancelled = true;
@@ -1029,11 +1283,13 @@ export function PersistentMeetingSession({
     isHost,
     bridgeListening,
     bridgeInboundDeviceId,
-    bridgeInboundLoopback,
+    bridgeInboundPath,
+    bridgeInboundStartable,
     consentState,
     roomId,
     selectedLoopbackSourceId,
     meetingIsIdleReaped,
+    bridgeCaptureGeneration,
   ]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
@@ -2304,6 +2560,7 @@ export function PersistentMeetingSession({
       cloneCapture: cloneCaptureState,
       meetingAudioLevel: farSideMonitoring ? farSideMonitorLevel : null,
     },
+    inboundHealth,
     onSetLanguage: (language) =>
       applyRelayedLanguagePick(language, {
         onChangeSpeakLanguage: handleChangeSpeakLanguage,
@@ -3494,7 +3751,11 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
-          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          // Only the host feeds the cable: they are the one sitting in the Meet call with it as
+          // their microphone. Anyone else in the room playing dubs or their own mic into a device of
+          // the same name would be feeding a cable no Meet of theirs is listening to — or, on a
+          // shared machine, a second voice into the same call.
+          bridgeOutboundDeviceId={isBridgeRoom && isHost ? bridgeOutboundDeviceId : null}
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
         />
@@ -3528,7 +3789,11 @@ export function PersistentMeetingSession({
             microphoneEnabled={microphoneEnabled}
             translationStarted={translationStarted}
             bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
-            bridgeInboundLoopback={bridgeInboundLoopback}
+            inboundPath={bridgeInboundPath}
+            inboundHealth={inboundHealth}
+            meetSpeakerResetNotice={
+              isHost && shouldShowMeetSpeakerResetNotice(bridgeInboundPath, Boolean(bridgeInboundDeviceId))
+            }
             idleDisconnected={meetingIsIdleReaped}
             onRejoin={() => {
               markMeetingInteraction();
@@ -4079,6 +4344,13 @@ export function PersistentMeetingSession({
           open={bridgeSetupOpen}
           onOpenChange={setBridgeSetupOpen}
           translationStarted={translationStarted}
+          loopbackFailed={loopbackFallbackActive}
+          browserCaptureAnswer={browserCaptureAnswerForRoom}
+          onFormatAligned={() => {
+            // The cable was reconfigured under a running capture, whose track is now dead or silent
+            // on the old format. Only the device path rides the cable; a loopback leg is untouched.
+            if (bridgeInboundPath === "device") setBridgeCaptureGeneration((generation) => generation + 1);
+          }}
           onReady={() => {
             // Finishing the wizard before translation starts IS the start: the user has just
             // confirmed every leg works, and sending them back to press one more button is how a

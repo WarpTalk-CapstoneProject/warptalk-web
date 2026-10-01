@@ -58,13 +58,37 @@ type Purchase =
   | { kind: "pack"; pack: CatalogCreditPackDto }
   | { kind: "addon"; addon: CatalogAddonDto };
 
-export function CatalogSection({ workspaceId }: { workspaceId: string }) {
+/**
+ * Whether the catalog has anything to show at all — the same test `CatalogSection` uses to render
+ * nothing. The Billing page asks it so it can leave the Extras column out instead of drawing an
+ * empty 340px pane. Same query key as the section, so it costs no extra request.
+ */
+export function useHasCatalogExtras(workspaceId: string): boolean {
+  const catalog = useBillingCatalog(workspaceId).data;
+  if (!catalog) return false;
+  const packs = catalog.hasActivePlan ? catalog.creditPacks : [];
+  return packs.length > 0 || catalog.addons.length > 0 || catalog.activeAddons.length > 0;
+}
+
+/**
+ * `stacked` is the original layout: packs then add-ons, each a full-width row. `panel` is the
+ * Billing page's Extras column (WT-878): the same two lists behind "Credit packs" / "Add-ons"
+ * tabs, one card per row so they fit a 340px pane. Content, purchase flow and dialogs are shared.
+ */
+export function CatalogSection({
+  workspaceId,
+  variant = "stacked",
+}: {
+  workspaceId: string;
+  variant?: "stacked" | "panel";
+}) {
   const t = useTranslations("settingsBillingCatalog");
   const catalogQuery = useBillingCatalog(workspaceId);
   const cancelAddon = useCancelWorkspaceAddon(workspaceId);
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [cancelling, setCancelling] = useState<WorkspaceAddonDto | null>(null);
+  const [pickedTab, setPickedTab] = useState<"packs" | "addons" | null>(null);
 
   const catalog = catalogQuery.data;
   // backend#467: a credit pack is sold only on top of a live plan — the server's hasActivePlan,
@@ -75,14 +99,58 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
     return null;
   }
 
+  const isPanel = variant === "panel";
+  // Until somebody picks, open on whichever tab has something in it.
+  const tab = pickedTab ?? (packs.length > 0 ? "packs" : "addons");
+  const blockClass = isPanel ? "px-4 py-4" : "border-b border-border px-4 py-4";
+  const gridClass = isPanel
+    ? "mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 min-[1000px]:grid-cols-1"
+    : "mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3";
+
   const workspaceCurrency = catalog.currency;
 
   return (
     <>
-      {packs.length > 0 ? (
-        <div className="border-b border-border px-4 py-4">
+      {isPanel ? (
+        <div role="tablist" aria-label={t("panel.ariaLabel")} className="flex">
+          {(["packs", "addons"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              id={`extras-tab-${value}`}
+              aria-selected={tab === value}
+              aria-controls="extras-tabpanel"
+              onClick={() => setPickedTab(value)}
+              className={cn(
+                "h-10 flex-1 cursor-pointer border-b border-r border-hairline text-[13px] font-medium outline-none last:border-r-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors motion-safe:duration-150",
+                tab === value
+                  ? "border-b-2 border-b-primary text-ink"
+                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+              )}
+            >
+              {t(`${value}.title`)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div
+        role={isPanel ? "tabpanel" : undefined}
+        id={isPanel ? "extras-tabpanel" : undefined}
+        aria-labelledby={isPanel ? `extras-tab-${tab}` : undefined}
+      >
+      {isPanel && tab === "packs" && packs.length === 0 ? (
+        <p className="px-4 py-4 text-[12px] text-ink-muted">{t("panel.emptyPacks")}</p>
+      ) : null}
+      {isPanel && tab === "addons" && catalog.addons.length === 0 && catalog.activeAddons.length === 0 ? (
+        <p className="px-4 py-4 text-[12px] text-ink-muted">{t("panel.emptyAddons")}</p>
+      ) : null}
+
+      {packs.length > 0 && (!isPanel || tab === "packs") ? (
+        <div className={blockClass}>
           <Heading title={t("packs.title")} description={t("packs.description")} />
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={gridClass}>
             {packs.map((pack) => {
               const currency = displayCurrency(pack.prices, workspaceCurrency);
               const price = currency ? priceFor(pack.prices, currency) : null;
@@ -109,8 +177,8 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : null}
 
-      {catalog.addons.length > 0 || catalog.activeAddons.length > 0 ? (
-        <div className="border-b border-border px-4 py-4">
+      {(catalog.addons.length > 0 || catalog.activeAddons.length > 0) && (!isPanel || tab === "addons") ? (
+        <div className={blockClass}>
           <div className="flex flex-wrap items-end justify-between gap-2">
             <Heading title={t("addons.title")} description={t("addons.description")} />
             <div role="radiogroup" aria-label={t("addons.cycle")} className="inline-flex rounded-full border border-border p-0.5">
@@ -122,7 +190,7 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
                   aria-checked={cycle === value}
                   onClick={() => setCycle(value)}
                   className={cn(
-                    "rounded-full px-3 py-1 text-[12px] transition-colors",
+                    "rounded-full px-3 py-1 text-[12px] motion-safe:transition-colors motion-safe:duration-150",
                     cycle === value ? "bg-foreground text-background" : "text-ink-muted hover:text-ink",
                   )}
                 >
@@ -174,7 +242,7 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
           {!catalog.hasActivePlan ? (
             <p className="mt-3 text-[12px] text-ink-muted">{t("addons.needsPlan")}</p>
           ) : (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={gridClass}>
               {catalog.addons.map((addon) => {
                 const currency = displayCurrency(addon.prices.filter((p) => p.billingCycle === cycle), workspaceCurrency);
                 const price = currency ? priceFor(addon.prices, currency, cycle) : null;
@@ -208,6 +276,8 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
           )}
         </div>
       ) : null}
+
+      </div>
 
       <PurchaseDialog
         workspaceId={workspaceId}

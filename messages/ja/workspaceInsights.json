@@ -1,0 +1,237 @@
+{
+  "title": "インサイト",
+  "accessDenied": {
+    "title": "インサイトはオーナーと管理者のみが閲覧できます",
+    "description": "これらの数値が必要な場合は、このワークスペースのオーナーまたは管理者に依頼してください。"
+  },
+  "tabs": {
+    "label": "インサイトのセクション",
+    "overview": "概要",
+    "usage": "使用量",
+    "tools": "ツール"
+  },
+  "common": {
+    "updated": "{time} に更新",
+    "loading": "読み込み中…",
+    "notAvailable": "まだ利用できません",
+    "atLeast": "{value} 以上"
+  },
+  "delta": {
+    "noFigure": "前期間の数値なし",
+    "noChange": "変化なし",
+    "fromZero": "{arrow} 0 から",
+    "change": "{arrow} {percent}%"
+  },
+  "periodBar": {
+    "groupLabel": "期間",
+    "today": "今日",
+    "days7": "7日間",
+    "previousMonth": "前月",
+    "nextMonth": "翌月",
+    "currentMonthTitle": "現在の月です",
+    "months6": "6か月",
+    "custom": "カスタム",
+    "export": "エクスポート",
+    "from": "開始日",
+    "to": "終了日（当日を含む）",
+    "showRange": "この期間を表示"
+  },
+  "periodCards": {
+    "creditsUsed": "使用クレジット",
+    "meetingsHeld": "開催した会議",
+    "hoursTranslated": "翻訳時間",
+    "toolCalls": "ツール呼び出し",
+    "toolSuccessRate": "ツール成功率",
+    "lastPeriod": "前期間 {value}",
+    "floorNote": "上限まで読み込みました。実際の数値はこれより多い可能性があります",
+    "withoutDuration": "{count, plural, other {# 件の会議は所要時間が記録されていないため含まれていません}}",
+    "hoursNote": "この期間に開催された会議の開始から終了までの時間",
+    "successNote": "読み込んだ最新 {count, plural, other {# 件}}の呼び出しに基づきます。期間内のそれより古い呼び出しは読み込んでいません",
+    "noCalls": "この期間の呼び出しはありません"
+  },
+  "snapshot": {
+    "creditsRemaining": "残りクレジット",
+    "percentLeft": "{available} のうち {percent}% 残り",
+    "noPlan": "プランなし",
+    "noPlanSub": "クレジットを得るにはプランを選択してください",
+    "runsOutIn": "枯渇まで",
+    "days": "{count, plural, other {# 日}}",
+    "runsOutSub": "1日あたり {rate} クレジット · サイクル終了まで {days, plural, other {# 日}}",
+    "lastsCycle": "サイクル終了まで足ります",
+    "lastsSub": "更新時に約 {credits} 残る見込み",
+    "reasonNoDates": "このサイクルには日付がありません",
+    "reasonTooEarly": "サイクルの開始直後のため、消費ペースを予測できません",
+    "reasonNothingUsed": "このサイクルではまだ何も使用していません",
+    "plan": "プラン",
+    "renewsOn": "{date} に更新",
+    "endsOn": "{date} に終了し、更新されません",
+    "activeMembers": "アクティブなメンバー",
+    "activeMembersSub": "この期間にクレジットを使用(全 {total, plural, other {# 人}}中)",
+    "activeMembersSubNoTotal": "この期間にクレジットを使用"
+  },
+  "more": {
+    "show": "さらに {count} 件の指標を表示",
+    "hide": "{count} 件の指標を隠す",
+    "avgCreditsPerMeeting": "会議あたりの平均クレジット",
+    "avgCreditsPerMeetingSub": "この期間の {count, plural, other {# 件}}の会議",
+    "noMeetings": "この期間の会議はありません",
+    "creditsPerActiveMember": "アクティブメンバーあたりのクレジット",
+    "creditsPerActiveMemberSub": "アクティブメンバー {count, plural, other {# 人}}",
+    "noActiveMembers": "この期間にクレジットを使用したメンバーはいません",
+    "connectedPlugins": "接続済みプラグイン",
+    "connectedPluginsSub": "このワークスペースのプラグイン",
+    "pendingApprovals": "承認待ち",
+    "pendingApprovalsSub": "回答を待っているプラグインのリクエスト"
+  },
+  "toolLine": {
+    "title": "WarpBot ツール",
+    "status": {
+      "needsAttention": "対応が必要",
+      "healthy": "正常",
+      "noCalls": "呼び出しなし"
+    },
+    "noCallsHint": "この期間のプラグイン呼び出しはありません",
+    "calls": "この期間 {count, plural, other {{value} 件}}の呼び出し",
+    "callsAtLeast": "この期間 {count, plural, other {{value} 件}}以上の呼び出し",
+    "success": "成功率 {percent}",
+    "blocked": "ポリシーによるブロック {count} 件",
+    "needsSetup": "設定が必要 {count} 件",
+    "lastCall": "最終呼び出し {time}"
+  },
+  "links": {
+    "billing": "請求",
+    "usage": "使用量",
+    "meetings": "会議",
+    "tools": "ツール",
+    "schedules": "スケジュール"
+  },
+  "charts": {
+    "sixMonthsTitle": "クレジット(6か月)",
+    "sixMonthsSubtitle": "月ごとの使用クレジット",
+    "sixMonthsEmpty": "この期間の使用記録はありません",
+    "sixMonthsAria": "6か月間の月ごとの使用クレジット",
+    "creditsValue": "{value} クレジット",
+    "creditsSeries": "クレジット",
+    "meetingsSeries": "会議",
+    "callsSeries": "呼び出し",
+    "noFigure": "数値なし",
+    "stillToCome": "未到来",
+    "noDays": "この期間に日がありません",
+    "perDayTitle": "1日あたりのクレジット",
+    "perDaySubtitle": "棒がクレジット、線が会議数",
+    "perDaySubtitleBlank": "棒がクレジット、線が会議数。これからの日は 0 ではなく空白のままです",
+    "perDayAria": "1日あたりのクレジットと会議",
+    "byServiceTitle": "AI サービス別のクレジット",
+    "byServiceCaption": "使用クレジット · {period}",
+    "byServiceAria": "AI サービス別の使用クレジット",
+    "noCreditsUsed": "この期間に使用したクレジットはありません",
+    "otherService": "その他",
+    "meetingsTitle": "1日あたりの会議",
+    "meetingsValue": "{count, plural, other {# 件の会議}}",
+    "meetingsAria": "1日あたりの開催会議数",
+    "hoursCaption": "{hours} を翻訳",
+    "hoursUnknown": "時間は利用できません",
+    "hoursSuffix": "{hours} を翻訳",
+    "pluginsTitle": "プラグイン別のツール呼び出し",
+    "pluginsCaption": "WarpBot の呼び出し · {period}",
+    "pluginsAria": "プラグイン別の WarpBot ツール呼び出し",
+    "noToolCalls": "この期間のプラグイン呼び出しはありません",
+    "callsValue": "{count, plural, other {{value} 件の呼び出し}}"
+  },
+  "attention": {
+    "title": "要対応",
+    "subtitle": "オーナーまたは管理者が対応すべきこと",
+    "nothingNow": "現在、対応が必要なものはありません",
+    "nothingAnswered": "応答したソースには問題が見つかりませんでした",
+    "notChecked": "未確認: {sources}",
+    "sources": {
+      "billing": "クレジット残高",
+      "payments": "支払い",
+      "toolAudit": "WarpBot ツールのログ",
+      "plugins": "プラグインのリクエスト"
+    },
+    "tags": {
+      "plan": "プラン",
+      "payment": "支払い",
+      "billing": "請求",
+      "needsSetup": "設定が必要",
+      "policy": "ポリシー",
+      "requests": "リクエスト"
+    },
+    "noPlan": {
+      "title": "このワークスペースにはプランがありません",
+      "detail": "プランを選ぶまで、会議でクレジットを使用できません"
+    },
+    "paymentFailed": {
+      "title": "直近の更新時の支払いに失敗しました",
+      "detail": "請求で支払い方法を更新してください",
+      "detailGrace": "{date} までに支払い方法を更新してください"
+    },
+    "lowCredits": {
+      "title": "このサイクルのクレジット残り {percent}%",
+      "detail": "残り {credits} クレジット"
+    },
+    "planEnding": {
+      "title": "プランは更新されません",
+      "detail": "{plan} は {date} に終了します"
+    },
+    "pluginsNeedSetup": {
+      "title": "{count, plural, other {# 件のプラグインで設定が必要}}"
+    },
+    "policyBlocks": {
+      "title": "{count, plural, other {# 件の呼び出しがポリシーでブロック}}",
+      "titleAtLeast": "{count, plural, other {# 件}}以上の呼び出しがポリシーでブロック",
+      "detail": "このワークスペースのプラグインのルールにより WarpBot が拒否されました"
+    },
+    "pendingRequests": {
+      "title": "{count, plural, other {# 件のプラグインのリクエストが保留中}}",
+      "detail": "このワークスペースにないプラグインがメンバーから要望されています"
+    }
+  },
+  "members": {
+    "title": "クレジット使用量の多いメンバー",
+    "empty": "この期間にクレジットを使用したメンバーはいません",
+    "formerMember": "元メンバー"
+  },
+  "upNext": {
+    "title": "今後の予定",
+    "subtitle": "進行中またはこれからの会議",
+    "empty": "予定されている会議はありません",
+    "runningNow": "進行中",
+    "openNow": "開催中",
+    "noTimeSet": "時間未設定",
+    "tagLive": "ライブ",
+    "tagWaiting": "待機中",
+    "tagScheduled": "予定"
+  },
+  "activity": {
+    "title": "最近のツールのアクティビティ",
+    "subtitle": "WarpBot のプラグイン呼び出しとポリシーの判断",
+    "empty": "ツールのアクティビティはまだありません",
+    "formerMember": "元メンバー",
+    "outcome": {
+      "succeeded": "成功",
+      "blocked": "ブロック",
+      "blockedHint": "ポリシーによりブロックされたか、確認が拒否されました。プラグイン設定で権限を確認してください。",
+      "awaitingConfirmation": "確認待ち",
+      "awaitingConfirmationHint": "続行する前に WarpBot でユーザーの確認が必要です。",
+      "needsSetup": "設定が必要",
+      "needsSetupHint": "プラグインの接続または設定がありません。設定 > プラグインで再接続してください。",
+      "providerError": "プロバイダーのエラー",
+      "providerErrorHint": "プロバイダーがエラーを返しました。サービスの状態または API の上限を確認してください。",
+      "failed": "失敗"
+    }
+  },
+  "usageLabels": {
+    "translation": "ライブ翻訳",
+    "dubbing": "音声吹き替え",
+    "cloneDubbing": "クローン音声での吹き替え",
+    "transcription": "文字起こし",
+    "assistant": "AI アシスタント",
+    "summary": "会議の要約",
+    "voiceCloning": "音声クローン",
+    "documentTranslation": "ドキュメント翻訳",
+    "adjustment": "クレジットの調整",
+    "otherUsage": "その他の使用"
+  }
+}

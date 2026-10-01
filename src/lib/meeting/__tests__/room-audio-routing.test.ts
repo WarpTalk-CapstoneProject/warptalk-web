@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  dubbedHistoryScope,
+  EMPTY_DUBBED_HISTORY,
   findOutboundDubIdentity,
+  mergeDubbedHistory,
+  outboundDubHistoryScope,
   routeRoomAudio,
   type RoomAudioRoutingInput,
 } from "../room-audio-routing.ts";
@@ -135,6 +139,140 @@ describe("bridge room: the outbound dub", () => {
   });
 });
 
+describe("bridge room: the host's raw voice into Meet (native listener semantics)", () => {
+  // Host speaks vi, the far side (the stand-in) speaks en. Whatever a native en listener would
+  // hear of the host is what goes into Meet's microphone.
+  const out = (overrides: Partial<RoomAudioRoutingInput> = {}) => {
+    const routing = routeRoomAudio(bridgeRoom(overrides));
+    return { raw: routing.outboundRawMic, dub: routing.outboundIdentity };
+  };
+
+  it("before Start (no translation running) sends the host's raw voice", () => {
+    assert.deepEqual(out({ translationActive: false }), { raw: true, dub: null });
+  });
+
+  it("before Start sends raw even with a lingering bot in the room", () => {
+    // A bot from a previous run is not swept until the next synthesis — it must not be sent, and
+    // it must not hold the raw voice off either.
+    assert.deepEqual(out({ translationActive: false, previouslyDubbedOutbound: true }), {
+      raw: true,
+      dub: null,
+    });
+  });
+
+  it("with the dub on the wire sends the dub only, the raw voice fully off", () => {
+    assert.deepEqual(out(), { raw: false, dub: dub(EN, HOST) });
+  });
+
+  it("the first sentence, before the interpreter bot has ever appeared, fails open to raw", () => {
+    assert.deepEqual(out({ identities: [STAND_IN] }), { raw: true, dub: null });
+  });
+
+  it("between sentences / after the idle reap, once dubbed, sends silence rather than raw (WT-874)", () => {
+    assert.deepEqual(out({ identities: [STAND_IN], previouslyDubbedOutbound: true }), {
+      raw: false,
+      dub: null,
+    });
+  });
+
+  it("sends raw when the host speaks the far side's language, even with history", () => {
+    assert.deepEqual(
+      out({
+        identities: [STAND_IN],
+        speakerLanguageByUserId: { [HOST]: EN, [STAND_IN]: EN },
+        previouslyDubbedOutbound: true,
+      }),
+      { raw: true, dub: null },
+    );
+  });
+
+  it("sends raw when the far side's language is unknown and no dub exists", () => {
+    assert.deepEqual(
+      out({ identities: [], bridgeStandInIdentity: null, previouslyDubbedOutbound: true }),
+      { raw: true, dub: null },
+    );
+    assert.deepEqual(
+      out({ identities: [STAND_IN], speakerLanguageByUserId: { [HOST]: VI } }),
+      { raw: true, dub: null },
+    );
+  });
+
+  it("sends raw when the host's own language is unknown and no dub exists", () => {
+    assert.deepEqual(
+      out({
+        identities: [STAND_IN],
+        speakerLanguageByUserId: { [STAND_IN]: EN },
+        previouslyDubbedOutbound: true,
+      }),
+      { raw: true, dub: null },
+    );
+  });
+
+  it("is independent of what the host chose to hear", () => {
+    for (const translationActive of [true, false]) {
+      for (const identities of [[STAND_IN], [STAND_IN, dub(EN, HOST)]]) {
+        assert.deepEqual(
+          out({ voiceEnabled: false, translationActive, identities }),
+          out({ voiceEnabled: true, translationActive, identities }),
+        );
+      }
+    }
+  });
+
+  it("never plays raw and dub into the device at the same time", () => {
+    for (const translationActive of [true, false]) {
+      for (const previouslyDubbedOutbound of [true, false]) {
+        for (const identities of [[STAND_IN], [STAND_IN, dub(EN, HOST)], [dub(EN, HOST)]]) {
+          const { raw, dub: outbound } = out({ translationActive, previouslyDubbedOutbound, identities });
+          assert.ok(!(raw && outbound), `both with ${JSON.stringify({ translationActive, previouslyDubbedOutbound, identities })}`);
+        }
+      }
+    }
+  });
+
+  it("is never sent without a bridge device, and never in an ordinary room", () => {
+    assert.equal(routeRoomAudio(bridgeRoom({ bridgeOutboundReady: false, translationActive: false })).outboundRawMic, false);
+    assert.equal(routeRoomAudio(ordinaryRoom({ translationActive: false })).outboundRawMic, false);
+    assert.equal(routeRoomAudio(ordinaryRoom()).outboundRawMic, false);
+  });
+
+  it("does not change what the host hears", () => {
+    for (const previouslyDubbedOutbound of [true, false]) {
+      assert.deepEqual(
+        [...routeRoomAudio(bridgeRoom({ previouslyDubbedOutbound })).wanted].sort(),
+        [...routeRoomAudio(bridgeRoom()).wanted].sort(),
+      );
+    }
+  });
+});
+
+describe("bridge room: the outbound dub history scope", () => {
+  const scopeOf = (overrides: Partial<RoomAudioRoutingInput> = {}) => outboundDubHistoryScope(bridgeRoom(overrides));
+
+  it("is the far side's language while translation runs over a bridge device", () => {
+    assert.equal(scopeOf(), EN);
+  });
+
+  it("is not affected by the host's own voice choice", () => {
+    assert.equal(scopeOf({ voiceEnabled: false }), EN);
+  });
+
+  it("is empty — no history applies — when translation stops, there is no device, or the far side is unknown", () => {
+    assert.equal(scopeOf({ translationActive: false }), "");
+    assert.equal(scopeOf({ bridgeOutboundReady: false }), "");
+    assert.equal(scopeOf({ bridgeStandInIdentity: null }), "");
+    assert.equal(scopeOf({ speakerLanguageByUserId: { [HOST]: VI } }), "");
+  });
+
+  it("remembers the host across an idle bot and starts over when the far side's language changes", () => {
+    const first = mergeDubbedHistory(EMPTY_DUBBED_HISTORY, scopeOf(), new Set([HOST]));
+    assert.ok(first.ids.has(HOST));
+    assert.equal(mergeDubbedHistory(first, scopeOf(), new Set()), first);
+    const frScope = scopeOf({ speakerLanguageByUserId: { [HOST]: VI, [STAND_IN]: "fr" } });
+    assert.equal(mergeDubbedHistory(first, frScope, new Set()).ids.size, 0);
+  });
+});
+
 describe("bridge room: the stand-in's raw track", () => {
   it("is never kept, under any combination of voice and translation state", () => {
     for (const voiceEnabled of [true, false]) {
@@ -241,5 +379,71 @@ describe("findOutboundDubIdentity", () => {
       findOutboundDubIdentity({ identities: [HOST], localUserId: HOST, listenerLanguage: VI }),
       null,
     );
+  });
+});
+
+describe("WT-874: a speaker already dubbed stays dubbed across an idle bot", () => {
+  it("fails open on the first utterance, before any dub has existed", () => {
+    // ALICE speaks en, the listener hears vi, and no interpreter bot has joined yet.
+    assert.ok(wanted(ordinaryRoom({ identities: [ALICE, BOB] })).includes(ALICE));
+  });
+
+  it("keeps the raw mic off while the bot reconnects after the 60s idle timeout", () => {
+    // The regression: tts_worker drops the bot after a pause, the raw mic came back, and the next
+    // sentence was heard as the original and then again as the dub.
+    const routing = wanted(
+      ordinaryRoom({ identities: [ALICE, BOB], previouslyDubbedSpeakerIds: new Set([ALICE]) }),
+    );
+    assert.ok(!routing.includes(ALICE));
+    assert.ok(routing.includes(BOB), "a same-language speaker is never affected");
+  });
+
+  it("does not mute a speaker who now speaks the listener's language", () => {
+    const routing = wanted(
+      ordinaryRoom({
+        identities: [ALICE, BOB],
+        speakerLanguageByUserId: { [HOST]: VI, [ALICE]: VI, [BOB]: VI },
+        previouslyDubbedSpeakerIds: new Set([ALICE]),
+      }),
+    );
+    assert.ok(routing.includes(ALICE));
+  });
+
+  it("does not mute anyone once voice is off or translation stops", () => {
+    const history = new Set([ALICE]);
+    assert.ok(
+      wanted(ordinaryRoom({ identities: [ALICE], voiceEnabled: false, previouslyDubbedSpeakerIds: history })).includes(
+        ALICE,
+      ),
+    );
+    assert.ok(
+      wanted(
+        ordinaryRoom({ identities: [ALICE], translationActive: false, previouslyDubbedSpeakerIds: history }),
+      ).includes(ALICE),
+    );
+  });
+
+  it("reports who is dubbed right now", () => {
+    assert.deepEqual([...routeRoomAudio(ordinaryRoom()).dubbedSpeakerIds], [ALICE]);
+  });
+
+  it("grows within a scope and starts over when the listen language changes", () => {
+    const scope = dubbedHistoryScope({ targetLanguageNormalized: VI, translationActive: true, voiceEnabled: true });
+    const first = mergeDubbedHistory(EMPTY_DUBBED_HISTORY, scope, new Set([ALICE]));
+    assert.deepEqual([...first.ids], [ALICE]);
+    // The bot is gone, the memory is not.
+    assert.equal(mergeDubbedHistory(first, scope, new Set()), first);
+
+    const enScope = dubbedHistoryScope({ targetLanguageNormalized: EN, translationActive: true, voiceEnabled: true });
+    assert.deepEqual([...mergeDubbedHistory(first, enScope, new Set()).ids], []);
+  });
+
+  it("clears when voice or translation is off, and is stable so React state settles", () => {
+    const first = mergeDubbedHistory(EMPTY_DUBBED_HISTORY, VI, new Set([ALICE]));
+    const off = dubbedHistoryScope({ targetLanguageNormalized: VI, translationActive: false, voiceEnabled: true });
+    assert.equal(off, "");
+    const cleared = mergeDubbedHistory(first, off, new Set([ALICE]));
+    assert.equal(cleared.ids.size, 0);
+    assert.equal(mergeDubbedHistory(cleared, off, new Set([ALICE])), cleared);
   });
 });

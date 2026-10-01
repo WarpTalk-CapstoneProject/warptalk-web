@@ -128,6 +128,8 @@
       "nextMonth": "Next month",
       "currentMonthTitle": "This is the current month",
       "export": "Export",
+      "exportReport": "Report (.docx)",
+      "exportCsv": "Raw data (.csv)",
       "from": "From",
       "to": "To (inclusive)",
       "showRange": "Show this range"

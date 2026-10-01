@@ -94,6 +94,18 @@ export default function ForgotPasswordPage() {
       </div>
 
       <SocialButton icon={<GoogleAuthIcon />} label={t("google")} />
+
+      {/* WT-837: this page had no way back to the Terms/Privacy the visitor already agreed to at
+          registration — every other auth screen links them, this one silently didn't. */}
+      <p className="text-center text-xs text-white/30">
+        <Link href="/terms" className="hover:text-white/60 hover:underline">
+          {t("termsOfUse")}
+        </Link>
+        <span className="mx-2">|</span>
+        <Link href="/privacy" className="hover:text-white/60 hover:underline">
+          {t("privacyPolicy")}
+        </Link>
+      </p>
     </CinematicAuthShell>
   );
 }

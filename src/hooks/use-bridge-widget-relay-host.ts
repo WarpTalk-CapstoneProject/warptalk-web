@@ -31,6 +31,7 @@
 import { useEffect, useRef } from "react";
 
 import type { BrowserCaptureConsentState } from "@/lib/audio/browser-capture-consent";
+import type { InboundHealth } from "@/lib/audio/bridge-inbound-health";
 import {
   acceptsBrowserCaptureAnswer,
   buildBridgeWidgetSnapshot,
@@ -54,6 +55,8 @@ export type BridgeWidgetRelayHostOptions = {
   selectedLoopbackSourceId?: string | null;
   /** What the popup's Voice panel draws. Omit and the popup asks for this window to be reloaded. */
   voice?: BridgeWidgetVoiceSnapshot;
+  /** Whether sound is reaching WarpTalk from Meet; the popup warns on "no-signal". */
+  inboundHealth?: InboundHealth;
   /** One normalized code. Apply it with `applyRelayedLanguagePick`, as the native picker does. */
   onSetLanguage: (language: string) => void;
   onSetVoiceEnabled: (enabled: boolean) => void;
@@ -81,6 +84,7 @@ export function useBridgeWidgetRelayHost({
   browserCaptureState = "not-required",
   selectedLoopbackSourceId,
   voice,
+  inboundHealth,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -98,6 +102,7 @@ export function useBridgeWidgetRelayHost({
     browserCaptureState,
     selectedLoopbackSourceId,
     voice,
+    inboundHealth,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -139,6 +144,7 @@ export function useBridgeWidgetRelayHost({
       browserCaptureState,
       selectedLoopbackSourceId,
       voice,
+      inboundHealth,
     };
     fieldsRef.current = fields;
     relayRef.current?.send(buildBridgeWidgetSnapshot(fields, Date.now()));
@@ -152,6 +158,7 @@ export function useBridgeWidgetRelayHost({
     browserCaptureState,
     selectedLoopbackSourceId,
     voiceKey,
+    inboundHealth,
   ]);
 
   useEffect(() => {

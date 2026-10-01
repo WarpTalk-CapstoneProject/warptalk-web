@@ -1118,9 +1118,27 @@ function RailSummary({
           without saying so a reader cannot tell whether what they are looking at is the record
           of the meeting or a translation they asked for a moment ago — and the download button
           beside it only ever serves the published one. */}
-      {rendering && !rendering.isCanonical ? (
+      {/* WT-883 — WHILE A RENDERING IS BEING WRITTEN, SAY SO LOUDLY. The published summary stays
+          on screen (blanking it would be worse), so the only thing telling the reader it is NOT
+          the answer to what they just picked is this banner and the dimming of the body below.
+          Shown for any rendering in flight, canonical or not. */}
+      {isRendering ? (
+        <div
+          role="status"
+          data-testid="summary-rendering-banner"
+          className="mx-1 mt-2 flex items-start gap-2 rounded-md border border-accent/40 bg-accent/10 px-2.5 py-2 text-ink"
+        >
+          <SpinnerGap size={14} className="mt-0.5 shrink-0 animate-spin text-accent" />
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium leading-4">{t("rendering.writing")}</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-ink-muted">
+              {t("rendering.previousHint")}
+            </p>
+          </div>
+        </div>
+      ) : rendering && !rendering.isCanonical ? (
         <p className="border-b border-border px-2 pb-2 pt-1.5 text-[11px] leading-4 text-ink-muted">
-          {isRendering ? t("rendering.writing") : t("rendering.ownVersion")}
+          {t("rendering.ownVersion")}
         </p>
       ) : null}
 
@@ -1177,6 +1195,12 @@ function RailSummary({
         </p>
       ) : null}
 
+      {/* WT-883: the stale body is dimmed and inert while its replacement is written. */}
+      <div
+        aria-busy={isRendering}
+        data-rendering={isRendering ? "true" : undefined}
+        className={isRendering ? "pointer-events-none select-none opacity-50 transition-opacity" : "transition-opacity"}
+      >
       {/* The overview, which the rail did not carry at all while the Summary tab existed — the
           reader got the citable points and not the paragraph that says what the meeting was.
 
@@ -1242,6 +1266,7 @@ function RailSummary({
           </p>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

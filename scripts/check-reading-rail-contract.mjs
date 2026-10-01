@@ -347,4 +347,33 @@ assert.match(
   "No room id, no request.",
 );
 
+// ── WT-883: a rendering in flight must be unmistakable ──────────────────────
+
+// The published summary stays on screen while a new rendering is written. Without a prominent
+// banner and a dimmed, inert body, a reader takes the old text for the answer to their choice.
+assert.match(
+  rail,
+  /data-testid="summary-rendering-banner"/,
+  "WT-883: a rendering being written needs its own banner, not a faint line.",
+);
+assert.match(
+  rail,
+  /\{isRendering \? \(\s*<div\s+role="status"[\s\S]*?animate-spin/,
+  "WT-883: the banner is a status region with a spinner, for every rendering in flight.",
+);
+assert.match(
+  rail,
+  /aria-busy=\{isRendering\}/,
+  "WT-883: the stale body is marked busy while its replacement is written.",
+);
+assert.match(
+  rail,
+  /isRendering \? "pointer-events-none select-none opacity-50/,
+  "WT-883: the old summary is dimmed and inert while a new one is written.",
+);
+for (const lang of ["en", "vi", "ja"]) {
+  const messages = JSON.parse(read(`messages/${lang}/meetingSummary.json`));
+  assert.ok(messages.rendering.previousHint, `WT-883: ${lang} needs rendering.previousHint.`);
+}
+
 console.log("Reading rail contract (Option C): PASS");
