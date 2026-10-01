@@ -25,6 +25,10 @@ import { cn } from "@/lib/utils";
  * The kinds look different on purpose: a Google Meet meeting carries Google's mark and a "Join
  * Google Meet" button that leaves WarpTalk; a WarpTalk room carries WarpTalk's label and opens in
  * WarpTalk; the bridge room that translates a Google Meet meeting says so.
+ *
+ * A Google Meet meeting made without Google Calendar connected has no time and no Calendar event:
+ * the card then drops the time line (formatMeetingWhen says nothing, CardTop prints nothing) and
+ * the "Open in Calendar" button, and keeps Join, Copy link and the code.
  */
 export function MeetingLinkCards({
   markdown,

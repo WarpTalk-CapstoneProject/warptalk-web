@@ -1700,7 +1700,7 @@ function WeekCard({
           className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700"
         >
           <GoogleMeetMark size={10} />
-          <span className="truncate">Google Meet</span>
+          <span className="truncate">{t("chip.googleMeet")}</span>
         </a>
       ) : null}
     </div>
