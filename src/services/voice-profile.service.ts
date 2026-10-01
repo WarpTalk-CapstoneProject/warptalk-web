@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { VoiceEnrollmentChallenge } from "@/lib/voice/voice-enrollment-challenge";
 import type {
   VoiceProfileDto,
   CreateVoiceProfileRequest,
@@ -23,6 +24,9 @@ export const VoiceProfileService = {
     if (request.sample) {
       formData.append("sample", request.sample);
     }
+    if (request.challengeId) {
+      formData.append("challengeId", request.challengeId);
+    }
     if (request.ownVoiceConfirmed !== undefined) {
       formData.append("ownVoiceConfirmed", String(request.ownVoiceConfirmed));
     }
@@ -41,6 +45,17 @@ export const VoiceProfileService = {
 
     const { data } = await apiClient.post<VoiceProfileDto>(API.voiceProfiles.create, formData, {
       headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+
+  /**
+   * WT-888 — a phrase to read aloud for a new profile in `language`. Single use, ten minutes; the
+   * recording that answers it goes to `create` with its challengeId.
+   */
+  async issueChallenge(language: string): Promise<VoiceEnrollmentChallenge> {
+    const { data } = await apiClient.post<VoiceEnrollmentChallenge>(API.voiceProfiles.challenges, {
+      language,
     });
     return data;
   },
