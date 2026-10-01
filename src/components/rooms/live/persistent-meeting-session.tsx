@@ -997,6 +997,29 @@ export function PersistentMeetingSession({
   // loopback that failed and fell back to the cable), can tell the running capture is the wrong one.
   const bridgeInboundRef = useRef<{ stop: () => Promise<void>; key: string } | null>(null);
   /**
+   * The run of the capture effect that is still connecting, if any.
+   *
+   * Every run connects under the same stand-in identity, and LiveKit evicts the older of two
+   * connections with one identity. Deps changing while run A is still connecting used to start run
+   * B in parallel: one of the two got evicted, the WRONG one's onDisconnected raised "the external
+   * call was disconnected", and the room was left with no leg at all. So a run first waits for the
+   * previous one to finish — including releasing what it opened if it was cancelled — and only
+   * then connects.
+   */
+  const bridgeInboundRunRef = useRef<Promise<void> | null>(null);
+  /**
+   * Bumped to force the inbound capture to reopen on the SAME device, which the capture key alone
+   * cannot express: `device:<id>` is unchanged when the device under it changed.
+   *
+   * Two things do that. Fixing the Hi-Fi Cable format from the wizard reconfigures the endpoint, and
+   * the getUserMedia track opened on the old format ends or goes silent while its id stays the
+   * same — the leg kept publishing nothing until the room was reopened. And a track can end on its
+   * own (driver restart, endpoint reset); that is a reopen, not a dead leg.
+   */
+  const [bridgeCaptureGeneration, setBridgeCaptureGeneration] = useState(0);
+  /** When the last few `ended`-driven reopens happened, so a track that ends on open cannot spin. */
+  const bridgeReopenTimesRef = useRef<number[]>([]);
+  /**
    * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
    * the published track, because an open, published leg carrying digital silence looks exactly
    * like a working one to everything else in the app. Back to "unknown" whenever the capture is
@@ -1026,7 +1049,9 @@ export function PersistentMeetingSession({
       (inboundPath === "device"
         ? Boolean(inboundDeviceId)
         : inboundPath === "loopback" && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
-    const captureKey = inboundPath === "device" ? `device:${inboundDeviceId}` : "loopback";
+    // The generation is part of the key so that a reopen on the same device or path is a different
+    // capture to the check below (see bridgeCaptureGeneration).
+    const captureKey = `${inboundPath === "device" ? `device:${inboundDeviceId}` : "loopback"}#${bridgeCaptureGeneration}`;
     // Not while idle-reaped. This is a SECOND LiveKit connection, which `connect` on <LiveKitRoom>
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
@@ -1051,7 +1076,12 @@ export function PersistentMeetingSession({
     bridgeInboundRef.current = null;
 
     let cancelled = false;
-    void (async () => {
+    const previousRun = bridgeInboundRunRef.current;
+    const thisRun = (async () => {
+      // A run still connecting holds the stand-in identity too (see bridgeInboundRunRef). It has
+      // been cancelled by now — this effect's cleanup ran before this body — so waiting for it is
+      // waiting for it to release what it opened, never for a leg that will stay up.
+      if (previousRun) await previousRun.catch(() => undefined);
       try {
         // Awaited, unlike the teardown above: the replacement connects under the same stand-in
         // identity, and LiveKit evicts the older of two connections with one identity — which
@@ -1171,8 +1201,31 @@ export function PersistentMeetingSession({
           stopProbe = null;
         }
 
+        // A track that ends under a live leg — the format fix reconfiguring the cable, a driver
+        // restart — is reopened rather than left publishing nothing. At most three times a minute:
+        // a device that ends its track as soon as it is opened would otherwise reconnect the
+        // stand-in in a tight loop, and past that it is a broken device for the wizard, not this.
+        const onTrackEnded = () => {
+          // Not `cancelled`: a capture outlives the effect run that opened it whenever a later run
+          // finds the same key, so only its own release says it is no longer wanted.
+          if (released) return;
+          const now = Date.now();
+          const recent = bridgeReopenTimesRef.current.filter((at) => now - at < 60_000);
+          if (recent.length >= 3) {
+            bridgeReopenTimesRef.current = recent;
+            console.warn("[bridge] The inbound track keeps ending; not reopening it again for now.");
+            return;
+          }
+          bridgeReopenTimesRef.current = [...recent, now];
+          setBridgeCaptureGeneration((generation) => generation + 1);
+        };
+        handles.track.addEventListener("ended", onTrackEnded);
+        // `ended` does not fire for a track that was already dead when the listener went on.
+        if (handles.track.readyState === "ended") onTrackEnded();
+
         const release = async () => {
           released = true;
+          handles.track.removeEventListener("ended", onTrackEnded);
           stopProbe?.();
           stopProbe = null;
           setInboundHealth("unknown");
@@ -1185,9 +1238,10 @@ export function PersistentMeetingSession({
 
         // The effect can be torn down while connect() is in flight. Without this the handles
         // would be unreachable and the second connection would stay in the room, publishing a
-        // device nobody is releasing.
+        // device nobody is releasing. Awaited: the next run waits on this one (bridgeInboundRunRef)
+        // precisely so it does not connect before this connection is gone.
         if (cancelled) {
-          void release();
+          await release();
           return;
         }
         bridgeInboundRef.current = { stop: release, key: captureKey };
@@ -1216,6 +1270,10 @@ export function PersistentMeetingSession({
         });
       }
     })();
+    bridgeInboundRunRef.current = thisRun;
+    void thisRun.finally(() => {
+      if (bridgeInboundRunRef.current === thisRun) bridgeInboundRunRef.current = null;
+    });
 
     return () => {
       cancelled = true;
@@ -1231,6 +1289,7 @@ export function PersistentMeetingSession({
     roomId,
     selectedLoopbackSourceId,
     meetingIsIdleReaped,
+    bridgeCaptureGeneration,
   ]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
@@ -4283,6 +4342,11 @@ export function PersistentMeetingSession({
           translationStarted={translationStarted}
           loopbackFailed={loopbackFallbackActive}
           browserCaptureAnswer={browserCaptureAnswerForRoom}
+          onFormatAligned={() => {
+            // The cable was reconfigured under a running capture, whose track is now dead or silent
+            // on the old format. Only the device path rides the cable; a loopback leg is untouched.
+            if (bridgeInboundPath === "device") setBridgeCaptureGeneration((generation) => generation + 1);
+          }}
           onReady={() => {
             // Finishing the wizard before translation starts IS the start: the user has just
             // confirmed every leg works, and sending them back to press one more button is how a

@@ -154,6 +154,7 @@ export function BridgeSetupWizard({
   readStatus = readVirtualAudioStatus,
   loopbackFailed = false,
   browserCaptureAnswer = null,
+  onFormatAligned,
 }: {
   onReady?: () => void;
   /**
@@ -177,6 +178,12 @@ export function BridgeSetupWizard({
    */
   loopbackFailed?: boolean;
   browserCaptureAnswer?: boolean | null;
+  /**
+   * Called after the desktop app reports the Hi-Fi Cable format fixed. A capture already open on
+   * Hi-Fi Cable Output was opened on the old format and does not recover by itself — its track
+   * ends or goes silent while the device id stays the same — so the meeting has to reopen it.
+   */
+  onFormatAligned?: () => void;
 }) {
   const [result, setResult] = useState<BridgeCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -254,11 +261,14 @@ export function BridgeSetupWizard({
     try {
       const outcome = await alignHiFiCableFormatViaDesktop();
       setAlignOutcome(outcome);
-      if (outcome.kind === "result" && outcome.ok) await check();
+      if (outcome.kind === "result" && outcome.ok) {
+        onFormatAligned?.();
+        await check();
+      }
     } finally {
       setAligning(false);
     }
-  }, [check]);
+  }, [check, onFormatAligned]);
 
   // Run once on open so the common case — everything already installed — needs no clicks.
   useEffect(() => {

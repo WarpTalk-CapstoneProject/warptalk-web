@@ -45,6 +45,7 @@ export function BridgeSetupDialog({
   translationStarted,
   loopbackFailed,
   browserCaptureAnswer,
+  onFormatAligned,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +54,8 @@ export function BridgeSetupDialog({
   /** WT-898: passed through so the wizard's Speakers line follows the meeting's inbound path. */
   loopbackFailed?: boolean;
   browserCaptureAnswer?: boolean | null;
+  /** Passed through: the meeting reopens its Hi-Fi capture after the wizard fixes the format. */
+  onFormatAligned?: () => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,6 +75,7 @@ export function BridgeSetupDialog({
           readyLabel={translationStarted ? "Back to the meeting" : "Start translating"}
           loopbackFailed={loopbackFailed}
           browserCaptureAnswer={browserCaptureAnswer}
+          onFormatAligned={onFormatAligned}
           onReady={() => {
             onOpenChange(false);
             onReady();
