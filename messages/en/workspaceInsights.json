@@ -96,6 +96,7 @@
     "success": "{percent} success",
     "blocked": "{count} blocked by policy",
     "needsSetup": "{count} need setup",
+    "failed": "{count} failed",
     "lastCall": "last call {time}"
   },
   "links": {

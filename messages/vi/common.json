@@ -28,6 +28,8 @@
       "history": "Lịch sử",
       "artifacts": "Bản ghi",
       "voiceProfiles": "Hồ sơ giọng nói",
+      "tools": "Công cụ",
+      "insights": "Thông tin chi tiết",
       "dashboard": "Bảng điều khiển",
       "members": "Thành viên",
       "documents": "Tài liệu",
@@ -219,8 +221,8 @@
         "body": "Ai đang ở trong không gian làm việc này, ai đang chờ tham gia, và mỗi người được phép làm gì."
       },
       "dashboard": {
-        "title": "Bảng điều khiển",
-        "body": "Không gian làm việc này đang tiêu tốn tín dụng nhanh đến mức nào, đang chi cho việc gì, và liệu số dư có đủ đến ngày gia hạn hay không."
+        "title": "Thông tin chi tiết",
+        "body": "Tín dụng, cuộc họp và lượt gọi công cụ của WarpBot trong kỳ bạn chọn, kèm những việc cần bạn xử lý."
       },
       "warpbot": {
         "title": "Hỏi WarpBot",

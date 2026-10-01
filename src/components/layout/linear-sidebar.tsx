@@ -72,6 +72,7 @@ import {
   Sliders,
   SquaresFour,
   Star,
+  Toolbox,
   User,
   Users,
   Waveform,
@@ -325,6 +326,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // MEETINGS, this lists what they wrote down.
     { icon: Files, label: t("nav.artifacts"), href: `/${slug}/artifacts` },
     { icon: Waveform, label: t("nav.voiceProfiles"), href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
+    // What WarpBot can do here: its built-in tools and the plugins this member connected. For every
+    // member, because every member talks to WarpBot. Before this row the page was reachable only
+    // from links inside the WarpBot panel (owner, 2026-10-01).
+    { icon: Toolbox, label: t("nav.tools"), href: `/${slug}/tools` },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -387,14 +392,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const workspaceNav: NavItem[] = [];
   if (isOwnerOrAdmin) {
-    // First, not last. Dashboard is the overview of everything under it, and it was sitting at
-    // the bottom under Settings — the one entry that is not a place in the workspace but a
-    // control panel for it. An overview reads as an overview when it comes before the things it
-    // summarises.
+    // First, not last. The overview of everything under it reads as an overview when it comes
+    // before the things it summarises.
+    //
+    // Insights, where Dashboard was (owner, 2026-10-01). Both were owner overviews of the same
+    // credits, meetings and spend, and two "overview" rows read as two different places. The
+    // Dashboard route stays and sends an Owner/Admin on to Insights; the tour id stays with the row.
     workspaceNav.push({
-      icon: SquaresFour,
-      label: t("nav.dashboard"),
-      href: `/${slug}/dashboard`,
+      icon: ChartBar,
+      label: t("nav.insights"),
+      href: `/${slug}/insights`,
       tourId: "nav-dashboard",
     });
   }
@@ -440,11 +447,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // 2026-09-16. Security lives under /settings, so `includes("/settings")` already covers it —
   // but the line had to go WITH the route: left behind it would have matched nothing, and
   // removed without moving the page it would have dropped the reader out of Settings.
-  const isSettingsPage =
-    pathname.includes("/settings") ||
-    pathname.includes("/payment") ||
-    // WT-878: Insights is listed in the Settings sidebar's Workspace group, so it keeps that chrome.
-    /^\/(?!admin\/)[^/]+\/insights(\/|$)/.test(pathname);
+  // Insights is not here: it moved from the Settings sidebar to the main one (2026-10-01), so it
+  // gets the main chrome like every other place in the workspace.
+  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/payment");
 
   // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
   // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
@@ -768,12 +773,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
-      // WT-878: credits, meetings and WarpBot tools in one page (Overview / Usage / Tools).
-      settingsItems.push({
-        icon: ChartBar,
-        label: t("settingsNav.insights"),
-        href: `/${activeWorkspaceSlug}/insights`,
-      });
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
@@ -988,19 +987,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.workspaceSettingsExpanded")}
-                    </span>
-                  </Link>
-                </div>
-                {/* WT-878: the workspace's Insights page — credits, meetings and WarpBot tools in one
-                    place, with Overview / Usage / Tools tabs. Owner/Admin. */}
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-                  navRowTone(pathname === `/${activeWorkspaceSlug}/insights`)
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/insights`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <ChartBar size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      {t("settingsNav.insights")}
                     </span>
                   </Link>
                 </div>

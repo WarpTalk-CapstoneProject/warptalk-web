@@ -172,11 +172,14 @@ export function lastToolCallAt(read: AuditRead): string | null {
 export type ToolLineStatus = "needsAttention" | "healthy" | "noCalls";
 
 /**
- * The one word in front of the WarpBot tools line. Amber when anything needs setup — that is the
- * one outcome an Owner fixes (reconnect, grant a scope); policy blocks are the workspace's own rule
- * working as intended and do not colour the line.
+ * The one word in front of the WarpBot tools line. Amber when anything needs setup or failed —
+ * the same rule as the Tools tab's health, so the two never disagree about the same calls. Policy
+ * blocks (the workspace's list, a member's own switch) are rules working as intended and do not
+ * colour the line.
  */
-export function toolLineStatus(summary: Pick<ToolCallSummary, "calls" | "needsSetup">): ToolLineStatus {
-  if (summary.needsSetup > 0) return "needsAttention";
+export function toolLineStatus(
+  summary: Pick<ToolCallSummary, "calls" | "needsSetup" | "failed">,
+): ToolLineStatus {
+  if (summary.needsSetup > 0 || summary.failed > 0) return "needsAttention";
   return summary.calls > 0 ? "healthy" : "noCalls";
 }
