@@ -92,6 +92,20 @@ export function isExternalBridge(value?: string | null): boolean {
 }
 
 /**
+ * WT-904 — the user id of the far side's stand-in in an EXTERNAL_BRIDGE room.
+ *
+ * The same fixed id the backend writes (WarpTalk.Shared.ExternalBridgeConstants.ParticipantUserId,
+ * TranslationRoomConstants.ExternalBridgeParticipantUserId). It holds one of the room's two seats
+ * and appears in the roster as "External Meeting", but it is a connection carrying everyone on the
+ * Google Meet side, not a person — so it is neither counted nor listed as one.
+ */
+export const EXTERNAL_BRIDGE_PARTICIPANT_USER_ID = "00000000-0000-0000-0000-00000000b21d";
+
+export function isExternalBridgeStandIn(userId?: string | null): boolean {
+  return userId?.trim().toLowerCase() === EXTERNAL_BRIDGE_PARTICIPANT_USER_ID;
+}
+
+/**
  * The types the Create Room dialog OFFERS — every type except External Meeting.
  *
  * External Meeting is no longer something a host picks from the dialog. An EXTERNAL_BRIDGE room is
