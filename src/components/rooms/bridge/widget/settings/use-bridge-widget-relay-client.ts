@@ -56,6 +56,8 @@ export type BridgeWidgetRelayClient = {
   openRoomRecord: () => boolean;
   /** W4b: a member asks the main window to take the far side's capture over (bridge takeover). */
   takeOverCapture: () => boolean;
+  /** web #646: "Use this device" — the main window takes the meeting back from another login. */
+  takeOverSession: () => boolean;
 };
 
 export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayClient {
@@ -191,6 +193,10 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     () => sendWhenConnected({ type: "take-over-capture" }),
     [sendWhenConnected],
   );
+  const takeOverSession = useCallback(
+    () => sendWhenConnected({ type: "take-over-session" }),
+    [sendWhenConnected],
+  );
 
   // Memoized: the widget context carries this object (WT-901), and a fresh one every render would
   // re-render every slot whenever anything above the provider did.
@@ -210,6 +216,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openSetup,
       openRoomRecord,
       takeOverCapture,
+      takeOverSession,
     }),
     [
       view,
@@ -226,6 +233,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openSetup,
       openRoomRecord,
       takeOverCapture,
+      takeOverSession,
     ],
   );
 }

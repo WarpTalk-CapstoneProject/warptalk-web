@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 
 import { BridgeLanguageMenu, useBridgeLanguagePick } from "./bridge-language-menu";
 import { CaptureTakeoverNotice } from "./capture-takeover-notice";
+import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { useStartBridgeTranslation } from "./dock-session-controls";
 import { RelayCarryNotice } from "./relay-carry-notice";
 import { useBridgeWidget } from "./widget-context";
@@ -52,6 +53,7 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
       </div>
 
       <RelayCarryNotice />
+      <SessionDisplacedNotice />
       <CaptureTakeoverNotice />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">

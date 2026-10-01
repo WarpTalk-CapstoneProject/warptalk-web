@@ -48,6 +48,7 @@ import type { InboundHealth } from "@/lib/audio/bridge-inbound-health";
 import {
   acceptsBrowserCaptureAnswer,
   acceptsRejoin,
+  acceptsSessionTakeOver,
   buildBridgeWidgetSnapshot,
   openBridgeWidgetRelay,
   type BridgeWidgetMeetingConnection,
@@ -132,6 +133,12 @@ export type BridgeWidgetRelayHostOptions = {
   bridgeCapturerAway?: boolean;
   /** "Capture audio on this device" in a member's popup. Absent: answered with a snapshot. */
   onTakeOverCapture?: () => void;
+
+  // ── web #646: another login displaced this session. Optional, like the WT-901 fields. ──
+  /** `sessionDisplaced` — this window stopped connecting so the other login keeps the meeting. */
+  sessionDisplaced?: boolean;
+  /** "Use this device" in the popup. Called only while `sessionDisplaced` is true. */
+  onTakeOverSession?: () => void;
 };
 
 export type BridgeWidgetRelayHost = {
@@ -164,6 +171,7 @@ export function useBridgeWidgetRelayHost({
   isRoomHost,
   bridgeRole,
   bridgeCapturerAway,
+  sessionDisplaced,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -177,6 +185,7 @@ export function useBridgeWidgetRelayHost({
   onSetTranscriptPaused,
   onOpenRoomRecord,
   onTakeOverCapture,
+  onTakeOverSession,
 }: BridgeWidgetRelayHostOptions): BridgeWidgetRelayHost {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
   const fieldsRef = useRef<BridgeWidgetSnapshotFields>({
@@ -198,6 +207,7 @@ export function useBridgeWidgetRelayHost({
     isRoomHost,
     bridgeRole,
     bridgeCapturerAway,
+    sessionDisplaced,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -213,6 +223,7 @@ export function useBridgeWidgetRelayHost({
     onSetTranscriptPaused,
     onOpenRoomRecord,
     onTakeOverCapture,
+    onTakeOverSession,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -232,6 +243,7 @@ export function useBridgeWidgetRelayHost({
       onSetTranscriptPaused,
       onOpenRoomRecord,
       onTakeOverCapture,
+      onTakeOverSession,
     };
   });
 
@@ -267,6 +279,7 @@ export function useBridgeWidgetRelayHost({
       isRoomHost,
       bridgeRole,
       bridgeCapturerAway,
+      sessionDisplaced,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
@@ -295,6 +308,7 @@ export function useBridgeWidgetRelayHost({
     isRoomHost,
     bridgeRole,
     bridgeCapturerAway,
+    sessionDisplaced,
   ]);
 
   useEffect(() => {
@@ -372,6 +386,15 @@ export function useBridgeWidgetRelayHost({
         case "take-over-capture":
           if (handlers.onTakeOverCapture) handlers.onTakeOverCapture();
           else sendSnapshot();
+          break;
+        // web #646. Stale once the session is back (taken over here, or a second press): a take-over
+        // of a working session would evict the other device again for nothing.
+        case "take-over-session":
+          if (handlers.onTakeOverSession && acceptsSessionTakeOver(fieldsRef.current.sessionDisplaced)) {
+            handlers.onTakeOverSession();
+          } else {
+            sendSnapshot();
+          }
           break;
         default:
           // snapshot / host-gone from another main window on the same room (a second tab in a

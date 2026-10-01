@@ -16,6 +16,7 @@ export function bridgeMeetingConnection({
   hasToken,
   canConnectRoom,
   idleReaped,
+  displaced = false,
   reconnecting,
   connected,
 }: {
@@ -25,13 +26,16 @@ export function bridgeMeetingConnection({
   canConnectRoom: boolean;
   /** The idle reaper let go (`isIdleReaped`). */
   idleReaped: boolean;
+  /** Another login of this account took the meeting over (`sessionDisplaced`, web #646). */
+  displaced?: boolean;
   /** SignalR or LiveKit is reconnecting (`isReconnecting` in the session). */
   reconnecting: boolean;
   /** LiveKit reported Connected and has not reported a disconnect since. */
   connected: boolean;
 }): BridgeWidgetMeetingConnection {
-  // Let go on purpose, or the room can no longer be joined: nothing is being attempted.
-  if (idleReaped || !canConnectRoom) return "disconnected";
+  // Let go on purpose, given up to another login, or the room can no longer be joined: nothing is
+  // being attempted, so neither "connecting" nor whatever LiveKit last said is true.
+  if (idleReaped || displaced || !canConnectRoom) return "disconnected";
   // Still joining: no token yet is the first half of connecting, not a failure.
   if (!hasToken) return "connecting";
   if (reconnecting) return "reconnecting";

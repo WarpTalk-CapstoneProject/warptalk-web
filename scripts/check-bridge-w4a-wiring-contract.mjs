@@ -20,6 +20,10 @@
  *   5. The desktop shell is told the sign-in state (`reportSignedIn`), from the root providers.
  *   6. The main window draws no bridge widget; its dock is headless for a bridge.
  *   7. The wizard's Speakers line reads the FINAL inbound path, not `device-while-asking`.
+ *   8. web #646: a displaced session (another login took the meeting) is mirrored to the popup and
+ *      its "Use this device" reaches the native take-over. The in-window card that offered it went
+ *      with the bridge widget (6), and a merge that kept `isBridgeRoom ? null` left the session
+ *      displaced with the gating intact and the button unreachable.
  *
  * Comments are stripped first: the explanations in the files name the very calls being checked.
  */
@@ -66,6 +70,7 @@ const DESKTOP = "src/lib/desktop/bridge.ts";
 const ENDED_HOST = "src/hooks/use-bridge-ended-relay-host.ts";
 const WIZARD = "src/components/rooms/bridge/bridge-setup-wizard.tsx";
 const DOCK = "src/components/rooms/live/mini-meeting-dock.tsx";
+const RELAY_HOST = "src/hooks/use-bridge-widget-relay-host.ts";
 
 const session = code(SESSION);
 const layout = code(LAYOUT);
@@ -178,6 +183,20 @@ expect(code(DOCK), /hidden=\{headless\}/, DOCK, "the headless dock must hide the
 expect(code(WIZARD), /const inboundPath = finalBridgeInboundPath\(\s*selectBridgeInboundSource\(/, WIZARD,
   "the Speakers instruction must come from the final inbound path, not the transient device-while-asking.");
 
+// ── 8. a displaced session can be taken back from the popup ──────────────────
+expect(hostCall, /\n {4}sessionDisplaced,/, SESSION,
+  "useBridgeWidgetRelayHost is not given sessionDisplaced (the popup never shows \"Use this device\").");
+expect(hostCall, /\bonTakeOverSession: takeOverDisplacedSession\b/, SESSION,
+  "the popup's \"Use this device\" must run the native takeOverDisplacedSession.");
+expect(hostCall, /\bdisplaced: sessionDisplaced,/, SESSION,
+  "the popup's connection note must say disconnected, not connecting, while another login has the meeting.");
+expect(
+  code(RELAY_HOST),
+  /case "take-over-session":\s*if \(handlers\.onTakeOverSession && acceptsSessionTakeOver\(fieldsRef\.current\.sessionDisplaced\)\)/,
+  RELAY_HOST,
+  "take-over-session must be acted on only while displaced; a stale one would evict the other login again.",
+);
+
 if (failures.length) {
   console.error(`FAIL bridge W4a wiring (${failures.length}):\n  - ${failures.join("\n  - ")}`);
   process.exit(1);
@@ -186,5 +205,6 @@ console.log(
   "PASS the popup has no End; the session hands the popup its meeting state and the native stop, "
     + "pause, rejoin, wizard and record handlers; an ended bridge room lands on its page with the "
     + "popup told and the shell answering; the desktop is told the sign-in state; no in-window "
-    + "bridge widget; the wizard names the final inbound path",
+    + "bridge widget; the wizard names the final inbound path; a displaced session is taken back from "
+    + "the popup",
 );
