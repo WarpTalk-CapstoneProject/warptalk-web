@@ -39,6 +39,39 @@ describe("WarpBot — meeting cards come from the worker's marker", () => {
     ]);
   });
 
+  test("a Google Meet made without Google Calendar is a card with no time and no calendar event", () => {
+    // Meet is created through the Meet API; only a connected Calendar adds start/end/calendarUrl.
+    const md = `Đã tạo cuộc họp.\n\n${marker({
+      kind: "google_meet",
+      url: MEET_URL,
+      code: "abc-defg-hij",
+      title: "Quick sync",
+    })}`;
+
+    assert.deepEqual(extractMeetingLinks(md), [
+      {
+        kind: "google_meet",
+        url: MEET_URL,
+        id: "abc-defg-hij",
+        code: "abc-defg-hij",
+        title: "Quick sync",
+        start: undefined,
+        end: undefined,
+        calendarUrl: undefined,
+      },
+    ]);
+  });
+
+  test("a Google Meet marker with empty or null calendar fields reads as having none", () => {
+    const [link] = extractMeetingLinks(
+      marker({ kind: "google_meet", url: MEET_URL, start: null, end: "", calendarUrl: "  " }),
+    );
+    assert.equal(link.start, undefined);
+    assert.equal(link.end, undefined);
+    assert.equal(link.calendarUrl, undefined);
+    assert.equal(formatMeetingWhen(link.start, link.end), "");
+  });
+
   test("a room marker keeps its code and its bridge type", () => {
     const md = marker({
       kind: "warptalk_room",
@@ -156,6 +189,9 @@ describe("WarpBot — when a meeting is, in the reader's own time zone", () => {
   test("no start, or an unreadable one, says nothing", () => {
     assert.equal(formatMeetingWhen(undefined, undefined, now), "");
     assert.equal(formatMeetingWhen("not a date", undefined, now), "");
+    // An end with no start is no time either: never a dangling "– 16:10".
+    assert.equal(formatMeetingWhen(undefined, "2026-09-18T16:10:00", now), "");
+    assert.equal(formatMeetingWhen("", "2026-09-18T16:10:00", now), "");
     assert.equal(formatMeetingWhen("2026-09-18T15:40:00", "not a date", now), "Today 15:40");
   });
 });

@@ -34,7 +34,10 @@
     "youHost": "You host",
     "invited": "Invited",
     "invitedBy": "Invited by {name}",
-    "invitedByLabel": "Invited by"
+    "invitedByLabel": "Invited by",
+    "participant": "Participant",
+    "hostedBy": "Hosted by {name}",
+    "hostedByLabel": "Hosted by"
   },
   "monthView": {
     "noMeetingsMatchSearch": "No meetings match this search.",
