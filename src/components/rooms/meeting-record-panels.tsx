@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useReducer } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowsClockwise,
@@ -26,7 +26,12 @@ import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { canDownloadArtifact } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-import type { RecordingMark } from "@/lib/meeting/recording-marks";
+import {
+  clusterMarks,
+  type RecordingMark,
+  type RecordingMarkKind,
+} from "@/lib/meeting/recording-marks";
+import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 
 /**
  * The recording of one meeting, and the download flow behind every file on its record.
@@ -198,6 +203,15 @@ function classifyPlaybackFailure(
   }
 }
 
+/** One colour per kind of summary point; plain points stay neutral. Tokens, so both themes hold. */
+const MARK_KIND_CLASS: Record<RecordingMarkKind, string> = {
+  decision: "bg-success",
+  action: "bg-warning",
+  question: "bg-primary",
+  narrative: "bg-ink-subtle",
+  point: "bg-ink-muted",
+};
+
 export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
@@ -355,9 +369,6 @@ export function MeetingRecordingPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Forces scrubber to rerender when marks change without depending on a new array ref each tick.
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
-  void forceUpdate; // Used implicitly via marks prop change — kept to avoid lint warning.
 
   // Keep fullscreen state in sync with browser events (Esc key exit etc.).
   useEffect(() => {
@@ -441,11 +452,6 @@ export function MeetingRecordingPlayer({
     } else {
       await document.exitFullscreen().catch(() => {});
     }
-  }
-
-  function handleDownloadCurrent() {
-    if (!artifact || !onDownloadRecording) return;
-    onDownloadRecording(artifact);
   }
 
   // Not setState: this drives an external system (the media element) from React state, which is
@@ -599,12 +605,18 @@ export function MeetingRecordingPlayer({
 
   const handleMarkClick = useCallback(
     (mark: RecordingMark) => {
+      // The page's jump seeks the video itself (requestSeek) as well as scrolling and lighting the
+      // transcript and the rail. Seeking here too was a second seek to a slightly different second
+      // (the raw mark vs. the resolved row) on every click.
+      if (onMarkClick) {
+        onMarkClick(mark);
+        return;
+      }
       const video = videoRef.current;
       if (video) {
         video.currentTime = mark.seconds;
         void video.play().catch(() => {});
       }
-      onMarkClick?.(mark);
     },
     [onMarkClick],
   );
@@ -743,7 +755,7 @@ export function MeetingRecordingPlayer({
            renders its menu in the OS locale, which is Vietnamese for most of the team's machines.
            Every control the reader needs is reproduced in the control bar below the frame, in the
            same design tokens and icon set as the rest of the application. */
-        <div ref={containerRef} className="group relative flex flex-col bg-black">
+        <div ref={containerRef} className="group relative flex flex-col gap-1.5 bg-transparent">
           {/* ─── Video element (no controls) ─────────────────────────────── */}
           <video
             ref={videoRef}
@@ -838,14 +850,14 @@ export function MeetingRecordingPlayer({
           {/* ─── WarpTalk Custom Control Bar ─────────────────────────────── */}
           <div
             className={cn(
-              "flex w-full select-none flex-col gap-0 bg-black/90 px-3 pb-2 pt-1 backdrop-blur-sm",
+              "flex w-full select-none flex-col gap-0 rounded-lg border border-border bg-surface-1 px-3 pb-2 pt-1",
               /* In pip/collapsed mode stay slim; at xl it reveals the full bar */
               isPip ? "py-1 xl:pb-2 xl:pt-1" : "",
             )}
             aria-label="Video player controls"
           >
             {/* ── Scrubber row: timeline + turn marks overlay ──────────── */}
-            <div className="relative flex w-full items-center py-1">
+            <div className="group/scrub relative flex w-full items-center py-2">
               {/* Range input — the actual scrubber */}
               <input
                 ref={scrubberRef}
@@ -856,37 +868,57 @@ export function MeetingRecordingPlayer({
                 value={currentTime}
                 onChange={handleScrubberChange}
                 aria-label="Seek recording"
-                className="relative z-10 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20"
+                className="relative z-10 h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-3 transition-all group-hover/scrub:h-[7px] group-focus-within/scrub:h-[7px]"
                 style={{
                   /* tint the filled portion of the scrubber track */
-                  background: `linear-gradient(to right, rgb(var(--color-ink)) ${
+                  background: `linear-gradient(to right, var(--color-ink) ${
                     videoDuration && videoDuration > 0
                       ? Math.min(100, (currentTime / videoDuration) * 100)
                       : 0
-                  }%, rgba(255,255,255,0.2) 0%)`,
+                  }%, var(--surface-3) 0%)`,
                 }}
               />
-              {/* Turn-mark dots drawn on top of the track at their file-second positions */}
+              {/* The summary's points, at the second a click on them lands (recording-marks.ts). Hidden
+                  until the timeline is hovered or focused; points too close to tell apart share
+                  one dot with a count, and its tooltip lists every one of them. */}
               {marks && marks.length > 0 && videoDuration && videoDuration > 0 && (
-                <div
-                  className="pointer-events-none absolute inset-0 z-20"
-                  aria-hidden="true"
-                >
-                  {marks.map((mark, idx) => {
-                    const percent = Math.min(
-                      100,
-                      Math.max(0, (mark.seconds / videoDuration) * 100),
-                    );
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  {clusterMarks(marks, videoDuration).map((cluster) => {
+                    const first = cluster.marks[0]!;
+                    const many = cluster.marks.length > 1;
+                    const percent = Math.min(100, Math.max(0, (cluster.seconds / videoDuration) * 100));
+                    const label = cluster.marks
+                      .map((mark) => `${mark.section} · ${formatCitationTime(mark.atMs)}: ${mark.text}`)
+                      .join("; ");
                     return (
                       <button
-                        key={`${mark.atMs}-${idx}`}
+                        key={first.key}
                         type="button"
-                        onClick={() => handleMarkClick(mark)}
+                        onClick={() => handleMarkClick(first)}
                         style={{ left: `${percent}%`, top: "50%" }}
-                        className="pointer-events-auto absolute z-20 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-amber-400/80 ring-1 ring-amber-300/60 transition-all hover:scale-125 hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                        title={`Jump to turn at ${Math.round(mark.seconds)}s`}
-                        aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
-                      />
+                        className={cn(
+                          "group/mark pointer-events-auto absolute z-20 -translate-x-1/2 -translate-y-1/2 scale-50 rounded-full border-2 border-surface-1 opacity-0 shadow-sm transition-all before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] hover:scale-125 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1 group-hover/scrub:scale-100 group-hover/scrub:opacity-100 group-focus-within/scrub:scale-100 group-focus-within/scrub:opacity-100",
+                          many
+                            ? "grid size-[18px] place-items-center bg-ink font-mono text-[9px] font-semibold leading-none text-surface-1"
+                            : cn("size-[14px]", MARK_KIND_CLASS[first.kind]),
+                        )}
+                        aria-label={label}
+                      >
+                        {many ? cluster.marks.length : null}
+                        <span
+                          role="tooltip"
+                          className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-max max-w-[260px] -translate-x-1/2 whitespace-pre-line rounded-md bg-ink px-2.5 py-1.5 text-left font-sans text-[11.5px] font-normal leading-snug text-surface-1 opacity-0 shadow-md transition-opacity group-hover/mark:visible group-hover/mark:opacity-100 group-focus-visible/mark:visible group-focus-visible/mark:opacity-100"
+                        >
+                          {cluster.marks.map((mark) => (
+                            <span key={mark.key} className="block [&+&]:mt-1.5">
+                              <span className="block text-[10px] uppercase tracking-[0.06em] opacity-70">
+                                {mark.section} · {formatCitationTime(mark.atMs)}
+                              </span>
+                              <span className="line-clamp-3">{mark.text}</span>
+                            </span>
+                          ))}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
@@ -899,7 +931,7 @@ export function MeetingRecordingPlayer({
               <button
                 type="button"
                 onClick={togglePlayPause}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
@@ -913,7 +945,7 @@ export function MeetingRecordingPlayer({
               <button
                 type="button"
                 onClick={toggleMute}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted || volume === 0 ? (
@@ -931,47 +963,29 @@ export function MeetingRecordingPlayer({
                 onChange={handleVolumeChange}
                 aria-label="Volume"
                 className={cn(
-                  "h-1 cursor-pointer appearance-none rounded-full bg-white/20 transition-all",
+                  "h-1 cursor-pointer appearance-none rounded-full bg-surface-3 transition-all",
                   /* hide volume slider in pip-collapsed to save horizontal space */
                   isPip ? "w-0 overflow-hidden xl:w-16" : "w-16",
                 )}
                 style={{
-                  background: `linear-gradient(to right, rgba(255,255,255,0.85) ${
+                  background: `linear-gradient(to right, var(--color-ink) ${
                     (isMuted ? 0 : volume) * 100
-                  }%, rgba(255,255,255,0.2) 0%)`,
+                  }%, var(--surface-3) 0%)`,
                 }}
               />
 
               {/* Time counter: current / duration */}
-              <span className="ml-1 flex-1 font-mono text-[11px] leading-none text-white/60 tabular-nums">
+              <span className="ml-1 flex-1 font-mono text-[11px] leading-none text-ink-muted tabular-nums">
                 {fmtTime(currentTime)}
-                <span className="mx-0.5 text-white/30">/</span>
+                <span className="mx-0.5 text-ink-subtle">/</span>
                 {fmtTime(videoDuration)}
               </span>
-
-              {/* Download button — only shown when download is wired up */}
-              {artifact && onDownloadRecording && (
-                <button
-                  type="button"
-                  onClick={handleDownloadCurrent}
-                  disabled={busyArtifactId === artifact.id}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-white/40"
-                  aria-label="Download recording"
-                  title="Download recording"
-                >
-                  {busyArtifactId === artifact.id ? (
-                    <SpinnerGap size={14} className="animate-spin" />
-                  ) : (
-                    <DownloadSimple size={14} weight="bold" />
-                  )}
-                </button>
-              )}
 
               {/* Fullscreen */}
               <button
                 type="button"
                 onClick={() => void toggleFullscreen()}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                 title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
               >
