@@ -128,8 +128,13 @@ type TranscriptAbsenceTranslator = (key: string) => string;
 const DEFAULT_TRANSCRIPT_ABSENCE_MESSAGES: Record<TranscriptAbsence, string> = {
   // Names who can change it. The flat denial is what sent this reader looking for a broken
   // recorder instead of asking the host.
+  //
+  // WT-653: an ended meeting follows the room's artifact access, not attendance, so the reader
+  // here may well have been at the meeting and be waiting on the host to publish it. Naming
+  // attendance as the reason would be a confident wrong answer; what holds in every case is that
+  // the host decides.
   withheld:
-    "This meeting has a transcript, but it is not shared with you. Only the people who took part can read it — ask the host if you need access.",
+    "This meeting has a transcript, but it is not shared with you. The host decides who can read it — ask them if you need access.",
   // Deliberately does NOT say the meeting had no transcript. We do not know that.
   unavailable: "The transcript could not be loaded right now. Refresh to try again.",
   "not-yet": "The transcript is saved here as the meeting is transcribed.",
