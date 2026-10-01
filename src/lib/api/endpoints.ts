@@ -50,6 +50,11 @@ export const API = {
   voiceProfiles: {
     list: "/auth/voice-profiles",
     create: "/auth/voice-profiles",
+    /**
+     * WT-888 — a random phrase to read aloud for a new profile. The recording must say it, and is
+     * uploaded to `create` with the returned challengeId; nothing else becomes a voice profile.
+     */
+    challenges: "/auth/voice-profiles/challenges",
     delete: (id: string) => `/auth/voice-profiles/${id}`,
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
