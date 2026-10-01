@@ -120,6 +120,7 @@ export function DocumentPreview({
   fileName,
   fileExtension,
   sizeBytes,
+  revision,
   onDownload,
 }: {
   workspaceId: string;
@@ -127,6 +128,8 @@ export function DocumentPreview({
   fileName: string;
   fileExtension: string;
   sizeBytes: number;
+  /** `documentFileRevision(doc)` — which stored file this id points at right now. WT-854. */
+  revision: string;
   onDownload: () => void;
 }) {
   const kind = previewKind(fileExtension);
@@ -139,11 +142,13 @@ export function DocumentPreview({
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workspace-document-preview", workspaceId, documentId],
+    queryKey: ["workspace-document-preview", workspaceId, documentId, revision],
     queryFn: () => WorkspaceService.downloadDocument(workspaceId, documentId),
     enabled: Boolean(workspaceId) && Boolean(documentId) && canPreview,
-    // The bytes of a stored file do not change under us: a document is replaced by uploading a
-    // new one, which is a different id.
+    // The bytes behind one REVISION never change, so they are never re-read. The bytes behind a
+    // document id do: "Upload a corrected version" replaces the file in place (WT-633), and keying
+    // on the id alone kept showing the first file after every replacement and approval (WT-854,
+    // WT-857). The revision is in the key so a replaced file is a different cache entry.
     staleTime: Infinity,
   });
 
