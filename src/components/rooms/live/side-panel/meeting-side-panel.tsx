@@ -394,10 +394,10 @@ function TranscriptPauseControl({
 }) {
   const t = useTranslations("meetingLive");
   const label = pending
-    ? t("sidePanel.transcriptPaused")
+    ? t("sidePanel.transcriptRequestInProgress")
     : paused
-      ? "Resume transcript"
-      : "Pause transcript";
+      ? t("sidePanel.resumeTranscript")
+      : t("sidePanel.pauseTranscript");
 
   return (
     <button

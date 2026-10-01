@@ -13,7 +13,8 @@
     "endForEveryone": "全員に対して終了",
     "failedToEnd": "会議を終了できませんでした",
     "notRecording": "記録していません",
-    "notRecordingTitle": "字幕と翻訳は通常通り動作します。この会議の内容は保存されないため、文字起こし・要約・議事録は残りません。"
+    "notRecordingTitle": "字幕と翻訳は通常通り動作します。この会議の内容は保存されないため、文字起こし・要約・議事録は残りません。",
+    "ending": "終了中…"
   },
   "inviteDialog": {
     "title": "この会議に招待",
@@ -36,7 +37,10 @@
     "transcript": "文字起こし",
     "chat": "チャット",
     "people": "参加者",
-    "transcriptPaused": "文字起こしを一時停止中"
+    "transcriptPaused": "文字起こしを一時停止中",
+    "pauseTranscript": "文字起こしを一時停止",
+    "resumeTranscript": "文字起こしを再開",
+    "transcriptRequestInProgress": "文字起こしのリクエストを処理中"
   },
   "transcriptPanel": {
     "empty": "WarpTalkを開始すると、ここにライブ翻訳が表示されます。"

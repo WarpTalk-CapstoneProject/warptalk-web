@@ -175,7 +175,7 @@ export function MeetingExitControl({
                 }
               }}
             >
-              {endForAll.isPending ? "Ending…" : "End for Everyone"}
+              {endForAll.isPending ? t("exitControl.ending") : t("exitControl.endForEveryone")}
             </Button>
           </DialogFooter>
         </DialogContent>

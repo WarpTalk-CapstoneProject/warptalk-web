@@ -13,7 +13,8 @@
     "endForEveryone": "End for Everyone",
     "failedToEnd": "Failed to end meeting",
     "notRecording": "Not being recorded",
-    "notRecordingTitle": "Subtitles and translation work normally. Nothing from this meeting is saved, so there will be no transcript, summary or minutes afterwards."
+    "notRecordingTitle": "Subtitles and translation work normally. Nothing from this meeting is saved, so there will be no transcript, summary or minutes afterwards.",
+    "ending": "Ending…"
   },
   "inviteDialog": {
     "title": "Invite to this meeting",
@@ -36,7 +37,10 @@
     "transcript": "Transcript",
     "chat": "Chat",
     "people": "People",
-    "transcriptPaused": "Transcript paused"
+    "transcriptPaused": "Transcript paused",
+    "pauseTranscript": "Pause transcript",
+    "resumeTranscript": "Resume transcript",
+    "transcriptRequestInProgress": "Transcript request in progress"
   },
   "transcriptPanel": {
     "empty": "Start WarpTalk to see live translation here."

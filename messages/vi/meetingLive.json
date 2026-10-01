@@ -13,7 +13,8 @@
     "endForEveryone": "Kết thúc cho mọi người",
     "failedToEnd": "Không thể kết thúc cuộc họp",
     "notRecording": "Không ghi lại",
-    "notRecordingTitle": "Phụ đề và dịch vẫn hoạt động bình thường. Không có gì từ cuộc họp này được lưu, nên sẽ không có bản chép, tóm tắt hay biên bản."
+    "notRecordingTitle": "Phụ đề và dịch vẫn hoạt động bình thường. Không có gì từ cuộc họp này được lưu, nên sẽ không có bản chép, tóm tắt hay biên bản.",
+    "ending": "Đang kết thúc…"
   },
   "inviteDialog": {
     "title": "Mời vào cuộc họp này",
@@ -36,7 +37,10 @@
     "transcript": "Bản chép",
     "chat": "Trò chuyện",
     "people": "Mọi người",
-    "transcriptPaused": "Bản chép đang tạm dừng"
+    "transcriptPaused": "Bản chép đang tạm dừng",
+    "pauseTranscript": "Tạm dừng bản chép",
+    "resumeTranscript": "Tiếp tục bản chép",
+    "transcriptRequestInProgress": "Đang xử lý yêu cầu bản chép"
   },
   "transcriptPanel": {
     "empty": "Bật WarpTalk để xem bản dịch trực tiếp ở đây."
