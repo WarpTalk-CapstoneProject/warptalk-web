@@ -22,6 +22,14 @@
   bulk-import dialog beside it. If a future field addition makes either form tall enough to
   genuinely risk overflowing a short viewport, re-add a height cap on the `DialogContent` itself
   (which every dialog on this page already sizes independently) rather than on the form.
+- **2026-10-01 (WT-907):** the bulk-import dialog's `DialogContent` is now capped to the viewport
+  (`max-h-[calc(100dvh-2rem)]`, `sm:max-h-[90dvh]`) with `grid-rows-[auto_minmax(0,1fr)_auto]`
+  and `overflow-hidden`; the CSV/Templates tab body is wrapped in one
+  `min-h-0 overflow-y-auto overscroll-contain` div. Previewing a long template in the Template
+  Catalog used to make the dialog taller than the screen — it is centred with `translate-y`, so
+  it spilled off both edges and the title and Import/Cancel buttons were unreachable without
+  zooming out. Now only the body scrolls; header, tabs, and footer stay pinned. Same fix as the
+  workspace import dialog (see `workspace-glossary.md`).
 
 ## Data and AI Flow
 
@@ -45,6 +53,9 @@
 
 - Create a draft, edit every field, publish it, view its audit history, archive it, and delete it.
 - Bulk-import a CSV containing `Term` and `Translation` headers.
+- WT-907: at a short viewport (e.g. 1280×600) open Bulk import → Templates Catalog, preview a long
+  template, and confirm the dialog stays inside the viewport, the body scrolls, and the
+  Cancel/Import buttons remain visible.
 - Confirm non-system-admin users see the access-required state.
 - Run `npm run test:2807-hotfix`, `npm run typecheck`, and the production build.
 - Real prompt behavior still requires a live meeting/assistant run with published terms; source,

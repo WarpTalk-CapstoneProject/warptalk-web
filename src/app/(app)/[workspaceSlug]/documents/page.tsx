@@ -82,6 +82,7 @@ import {
   DOCUMENT_TAB,
   DUPLICATE_STRATEGY,
   documentMatchesTab,
+  hasPendingRevision,
   parseDuplicateConflict,
   type DocumentTab,
   type DuplicateConflict,
@@ -885,6 +886,13 @@ export default function WorkspaceDocumentsPage() {
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
                           <Info className="h-3 w-3 text-amber-500" />
                           <span>{t("status.pendingApproval")}</span>
+                        </span>
+                      ) : hasPendingRevision(doc) ? (
+                        // WT-854 — still published (readers keep the approved file), but a
+                        // corrected version is waiting for a reviewer.
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                          <Info className="h-3 w-3 text-amber-500" />
+                          <span>{t("status.revisionPending")}</span>
                         </span>
                       ) : !doc.isAiAllowed ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">

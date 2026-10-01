@@ -378,6 +378,10 @@ export const API = {
     documentPublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/publish`,
     /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
     documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
+    // WT-854 — the corrected file awaiting review. `documentDownload` keeps serving the approved
+    // one to everybody else; this is for reviewers and the uploader only.
+    documentPendingRevisionDownload: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/revision/download`,
     /** A document's approval and feedback history, newest first. WT-633. */
     documentHistory: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/history`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
@@ -442,6 +446,13 @@ export const API = {
      * 200 server-side). Not the system-admin audit under `adminPluginCatalog.audits`.
      */
     workspacePluginToolAudits: "/assistant/mcp/tools/audits",
+    /**
+     * Every WarpBot tool call of one workspace over `from`/`to` (ISO, UTC), counted by the
+     * assistant service: totals, by source, by UTC day and by tool (wave 4). Owner/Admin only, the
+     * audit log's check. At most 180 days; the default is the last 30.
+     */
+    workspaceToolInsights: (workspaceId: string) =>
+      `/assistant/workspaces/${encodeURIComponent(workspaceId)}/insights/tools`,
     /**
      * The workspace half of the plugin marketplace (2026-09-17). Its own prefix rather than more
      * literals under `/assistant/plugins`, where every literal beside `{pluginKey}` reserves a key.

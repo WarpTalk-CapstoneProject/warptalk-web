@@ -17,9 +17,18 @@ assert.match(
 
 const page = read("src/app/(app)/[workspaceSlug]/documents/[documentId]/page.tsx");
 assert.match(page, /const fileRevision = documentFileRevision\(doc\);/, "the page must derive the file revision from the document");
+// WT-854 part 2 — while a corrected version awaits review, the preview can show either file. Each
+// has its own revision (the pending one from pendingRevisionFileRevision), and the preview is
+// keyed by whichever is on screen, so neither file's bytes or parsed state can stand in for the
+// other's.
 assert.match(
   page,
-  /<DocumentPreview\s+key=\{fileRevision\}[\s\S]{0,400}revision=\{fileRevision\}/,
+  /const previewRevision =\s+showingPending && pendingFileRevision \? pendingFileRevision : fileRevision;/,
+  "the preview revision must be the approved file's unless the pending revision is being shown",
+);
+assert.match(
+  page,
+  /<DocumentPreview\s+key=\{previewRevision\}[\s\S]{0,500}revision=\{previewRevision\}/,
   "the preview must remount on a new file (parsed Word/sheet state must not outlive it) and receive the revision",
 );
 
