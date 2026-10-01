@@ -50,6 +50,7 @@ import {
   useJoinTranslationRoomByCode,
   useJoinLanguagePolicy,
   useTranslationRoomSessions,
+  useAddRoomLanguage,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
@@ -59,6 +60,16 @@ import {
   applyRoomLanguages,
   parseRoomLanguages,
 } from "@/lib/meeting/room-languages-changed";
+import {
+  classifyLanguageRefusal,
+  describeLanguageRefusal,
+  languageAfterRefusal,
+  languagesHostCanAdd,
+  meetingDeclaredLanguages,
+  meetingPickerLanguages,
+  refusedSides,
+  type LanguageRefusal,
+} from "@/lib/meeting/meeting-language-limit";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -627,6 +638,9 @@ export function PersistentMeetingSession({
   // only by the room host, which is what the server enforces too.
   const { data: flashMode } = useFlashMode(roomId);
   const setFlashMode = useSetFlashMode(roomId);
+  // WT-709: the room host widens the meeting's languages mid-call. Written only by the room host,
+  // which is what the server enforces too.
+  const addRoomLanguage = useAddRoomLanguage(roomId);
   // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
   // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
   // IMicrophoneNoiseReductionService for why gating it would be the bug.
@@ -1995,6 +2009,31 @@ export function PersistentMeetingSession({
   // out still marked the value as applied and the equality guard above swallowed every retry.
   const appliedListenLanguageRef = useRef<string | null>(null);
 
+  /**
+   * WT-709 — what to do when the hub REFUSES a language rather than failing to deliver it.
+   *
+   * backend#512 holds every participant to the meeting's declared languages (and, as before, the
+   * workspace's whitelist) on JoinTranslationRoom and both Set*Language methods, and throws a
+   * HubException whose sentence says which limit refused. The catch blocks below used to print
+   * "Could not update the language you hear." for that and leave the refused pick in state — the
+   * control bar went on naming a language the server never accepted, which is WT-528's silent
+   * drop arriving by a new road. This puts the side back on what the hub last confirmed (or the
+   * meeting's source language), rewrites the remembered pick so a reload does not resurrect it,
+   * and says which limit refused and who can lift it. Returns the language it moved to, or null.
+   *
+   * A ref, filled in further down once the state it needs exists, so the sync effects and the
+   * hub's join loop — registered once — always call the current one without depending on it.
+   */
+  const languageRefusedRef = useRef<
+    | ((side: "speak" | "listen", refused: string, refusal: LanguageRefusal) => string | null)
+    | null
+  >(null);
+  /** The same, for a refused JoinTranslationRoom — which does not say which half it refused. */
+  const joinLanguageRefusedRef = useRef<
+    | ((refusal: LanguageRefusal, sent: { speak: string; listen: string }) => void)
+    | null
+  >(null);
+
   useEffect(() => {
     if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage)
       return;
@@ -2027,7 +2066,13 @@ export function PersistentMeetingSession({
       try {
         await connection.invoke("SetListenLanguage", roomId, listenLanguage);
         if (!cancelled) appliedListenLanguageRef.current = listenLanguage;
-      } catch {
+      } catch (error) {
+        // WT-709: a refusal is the server's answer, not a delivery failure — revert and explain.
+        const refusal = classifyLanguageRefusal(error);
+        if (refusal) {
+          if (!cancelled) languageRefusedRef.current?.("listen", listenLanguage, refusal);
+          return;
+        }
         toast.error("Could not update the language you hear.");
       }
     })();
@@ -2083,7 +2128,13 @@ export function PersistentMeetingSession({
       try {
         await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
         if (!cancelled) appliedSpeakLanguageRef.current = sourceLanguage;
-      } catch {
+      } catch (error) {
+        // WT-709: see the listen effect above.
+        const refusal = classifyLanguageRefusal(error);
+        if (refusal) {
+          if (!cancelled) languageRefusedRef.current?.("speak", sourceLanguage, refusal);
+          return;
+        }
         toast.error("Could not update the language you speak.");
       }
     })();
@@ -2202,50 +2253,46 @@ export function PersistentMeetingSession({
     };
   }, [voicePreference, roomId, hubGeneration]);
 
-  // Choices for the media bar's language dropdown: the room's spoken language plus every
-  // configured target — always includes whatever is currently selected so a value coming
-  // from an older/ad-hoc join config never renders as a dropdown option with no match.
-  // Languages this participant added themselves, beyond the ones the room was configured
-  // with. The room's configuration is what gets OFFERED, not a limit on who may speak: it
-  // was chosen by whoever booked the meeting, before they knew who would turn up. Somebody
-  // who speaks Korean in a Vietnamese/Japanese room adds Korean and is understood.
+  // Languages this participant added themselves, beyond the ones the room was configured with —
+  // kept so a language stays in the menu after they switch off it.
   //
-  // Kept here rather than only in the current selection, so a language stays in the menu
-  // after they switch off it — otherwise adding one, trying another, and going back would
-  // mean finding it in the full list again every time.
+  // WT-709: only consulted where the server sets no meeting-language limit (a bridge room, a room
+  // with no declared set). Everywhere else the meeting's declared languages ARE the menu, because
+  // the hub refuses anything outside them; meetingPickerLanguages ignores this list there.
   const [addedLanguages, setAddedLanguages] = useState<string[]>([]);
 
-  const availableListenLanguages = useMemo(() => {
-    const codes = new Set<string>();
-    if (room?.sourceLanguage)
-      codes.add(normalizeLanguageCode(room.sourceLanguage));
-    room?.targetLanguages?.forEach((language) =>
-      codes.add(normalizeLanguageCode(language)),
-    );
-    addedLanguages.forEach((language) => codes.add(language));
-    codes.add(normalizeLanguageCode(targetLanguage));
+  /**
+   * The meeting's declared languages (L2) as bare codes, or null where the server places no such
+   * limit. Non-null is what turns the bar's "Other languages" disclosure into "ask the host" — and,
+   * for the room host, into the control that adds one.
+   */
+  const declaredLanguages = useMemo(() => meetingDeclaredLanguages(room), [room]);
 
-    // WT-497: the workspace's language policy applies to the menu, not only to room creation.
-    //
-    // These codes come from the room, and a room's languages were checked against the policy
-    // ON THE DAY IT WAS CREATED (WT-271). Tighten the policy afterwards and every existing room
-    // keeps offering what it was created with — the menu was faithfully reflecting the room and
-    // quietly contradicting the workspace. A recurring series makes it worse: the rule outlives
-    // any single policy change.
-    //
-    // Empty means unrestricted, matching the server's own whitelist check — so an absent or
-    // still-loading settings response must NOT be read as "nothing is allowed", or the picker
-    // would empty itself while the query is in flight.
-    const allowed = allowedTargetLanguages;
-    if (!allowed || allowed.length === 0) return Array.from(codes);
+  // Choices for the media bar's language picker, the join-time language modal and the remembered-
+  // profile suggestion — one list, so none of them can offer what the hub would refuse.
+  //
+  // WT-709: the meeting's declared languages, not every language the WORKSPACE allows. WT-497's
+  // rule still holds inside that: the workspace policy narrows the menu too (a room's languages
+  // were checked against it only on the day it was created), an empty or still-loading policy is
+  // unrestricted, and the language this participant is on stays listed even if the policy now
+  // forbids it. See lib/meeting/meeting-language-limit.ts.
+  const availableListenLanguages = useMemo(
+    () =>
+      meetingPickerLanguages({
+        room,
+        allowedTargetLanguages,
+        current: targetLanguage,
+        added: addedLanguages,
+      }),
+    [room, targetLanguage, addedLanguages, allowedTargetLanguages],
+  );
 
-    const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
-    // The language this participant is CURRENTLY on stays, even if the policy now forbids it.
-    // Removing the selected option from its own menu makes the control render blank and gives
-    // them no way to move off it — the policy is enforced by what they can move TO.
-    const current = normalizeLanguageCode(targetLanguage);
-    return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
+  // WT-709: what the room host may add mid-meeting. isRoomHost, not isHost — the endpoint gates on
+  // the room's EFFECTIVE host, and a workspace admin would be offered rows that all answer 403.
+  const addableRoomLanguages = useMemo(
+    () => (isRoomHost ? languagesHostCanAdd({ room, allowedTargetLanguages }) : []),
+    [isRoomHost, room, allowedTargetLanguages],
+  );
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -2357,6 +2404,88 @@ export function PersistentMeetingSession({
     rememberAddedLanguage(normalizedLanguage);
     rememberJoinPreference({ speakLanguage: normalizedLanguage });
   }, [rememberJoinPreference, rememberAddedLanguage]);
+
+  // WT-709 — see languageRefusedRef where it is declared. Assigned in an effect, not during render.
+  useEffect(() => {
+    languageRefusedRef.current = (side, refused, refusal) => {
+      const confirmed =
+        side === "speak" ? appliedSpeakLanguageRef.current : appliedListenLanguageRef.current;
+      const revertedTo = languageAfterRefusal({ refused, confirmed, room });
+
+      if (revertedTo) {
+        // Back to what the server holds — the button then names it — and the remembered pick
+        // with it, or the resolver would hand the refused value straight back on the next render.
+        if (side === "speak") {
+          setSpeakLanguageState(revertedTo);
+          rememberJoinPreference({ speakLanguage: revertedTo });
+        } else {
+          setListenLanguageState(revertedTo);
+          rememberJoinPreference({ listenLanguage: revertedTo });
+        }
+      }
+
+      const message = describeLanguageRefusal({
+        kind: refusal,
+        language: refused,
+        revertedTo,
+        canAddLanguages: isRoomHost && declaredLanguages !== null,
+      });
+      // One toast per refused language. A single pick writes BOTH sides, and both are refused,
+      // so the second call replaces the first instead of stacking a duplicate under it.
+      toast.error(message.title, {
+        id: `language-refused:${normalizeLanguageCode(refused)}`,
+        description: message.description,
+        duration: 10000,
+      });
+      return revertedTo;
+    };
+
+    joinLanguageRefusedRef.current = (refusal, sent) => {
+      const sides = refusedSides({
+        refusal,
+        speak: sent.speak,
+        listen: sent.listen,
+        room,
+        allowedTargetLanguages,
+      });
+      for (const side of sides) {
+        const refused = side === "speak" ? sent.speak : sent.listen;
+        const revertedTo = languageRefusedRef.current?.(side, refused, refusal);
+        if (!revertedTo) continue;
+        // Written straight into the refs the join reads, not left for the next render: the next
+        // attempt is a second away and must carry the pair the hub will accept.
+        if (side === "speak") sourceLanguageRef.current = revertedTo;
+        else targetLanguageRef.current = revertedTo;
+      }
+    };
+  }, [room, isRoomHost, declaredLanguages, rememberJoinPreference, allowedTargetLanguages]);
+
+  /**
+   * WT-709, room host only: add a language to the meeting for everybody.
+   *
+   * Does not change the host's OWN language. The host adds Korean for the guest who needs it; the
+   * guest picks it. The answer patches the room query (useAddRoomLanguage), so the row moves up
+   * into the host's own list at once, and RoomLanguagesChanged grows everyone else's.
+   *
+   * The server's sentence on failure, never a generic one: a 400 here says whether the workspace
+   * forbids the language or the plan's language quota is spent, and those have different owners.
+   */
+  function handleAddRoomLanguage(language: string) {
+    const code = normalizeLanguageCode(language);
+    if (!code || addRoomLanguage.isPending) return;
+    addRoomLanguage.mutate(code, {
+      onSuccess: () => {
+        toast.success(`${getLanguageName(code)} added to the meeting.`, {
+          description: "Everyone in the meeting can pick it now.",
+        });
+      },
+      onError: (error) => {
+        toast.error(`Could not add ${getLanguageName(code)} to the meeting.`, {
+          description: getErrorMessage(error, "Try again in a moment."),
+        });
+      },
+    });
+  }
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
@@ -3285,40 +3414,48 @@ export function PersistentMeetingSession({
         // Displaced: joining would kick the other device's hub connection. Only a take-over may.
         if (cancelled || sessionDisplacedRef.current) return;
         if (delay) await wait(delay);
+        const languages = joinLanguages();
         try {
-          await invokeJoinTranslationRoom();
+          await invokeJoinTranslationRoom(languages);
           return;
-        } catch {
+        } catch (error) {
           // Refused or transport hiccup; the next attempt decides.
+          //
+          // WT-709: except a LANGUAGE refusal, which is a verdict rather than a race. The same
+          // pair is refused on every attempt, and the hub refuses BEFORE it adds this connection
+          // to the room group — so a loop that only retried would leave this person in the
+          // meeting receiving none of it, with nothing on screen saying why. Moving the refused
+          // side onto a meeting language (and saying so) lets the next attempt land.
+          const refusal = classifyLanguageRefusal(error);
+          if (refusal) joinLanguageRefusedRef.current?.(refusal, languages);
         }
       }
     };
-    const invokeJoinTranslationRoom = () =>
-      // targetLanguageRef.current (not the closed-over targetLanguage) so a language
-      // picked via the dropdown before a reconnect (e.g. after a network drop) is what
-      // gets rejoined with, and so this effect's dependency array below doesn't need
-      // targetLanguage — including it there would tear down and recreate this whole
-      // connection (wiping transcriptSegments/chat via resetLiveRoom()) on every language
-      // change instead of just calling SetListenLanguage.
-      connection
-        .invoke(
-          "JoinTranslationRoom",
-          roomId,
-          displayName,
-          // Never the "auto" sentinel. The hub writes this straight into
-          // translationRoom:{id}:speak_languages, where a literal "auto" makes
-          // _language_hint_for_stt return None and lets STT free-run — which is how a
-          // Vietnamese speaker's transcript came back tagged "en". "auto" is not a choice
-          // anyone can make (neither the picker modal nor the media bar offers it), so
-          // sending it asserted a decision the user never took. When nothing is known yet
-          // we send "" — the same "no hint" STT already understands, but without the fake
-          // decision — and the SetSpeakLanguage effect above reconciles the instant a real
-          // language resolves.
-          isResolvedSpeakLanguage(sourceLanguageRef.current)
-            ? sourceLanguageRef.current
-            : "",
-          targetLanguageRef.current,
-        );
+    // targetLanguageRef.current (not the closed-over targetLanguage) so a language picked via the
+    // dropdown before a reconnect (e.g. after a network drop) is what gets rejoined with, and so
+    // this effect's dependency array below doesn't need targetLanguage — including it there would
+    // tear down and recreate this whole connection (wiping transcriptSegments/chat via
+    // resetLiveRoom()) on every language change instead of just calling SetListenLanguage.
+    const joinLanguages = () => ({
+      // Never the "auto" sentinel. The hub writes this straight into
+      // translationRoom:{id}:speak_languages, where a literal "auto" makes
+      // _language_hint_for_stt return None and lets STT free-run — which is how a Vietnamese
+      // speaker's transcript came back tagged "en". "auto" is not a choice anyone can make
+      // (neither the picker modal nor the media bar offers it), so sending it asserted a decision
+      // the user never took. When nothing is known yet we send "" — the same "no hint" STT
+      // already understands, but without the fake decision — and the SetSpeakLanguage effect
+      // above reconciles the instant a real language resolves.
+      speak: isResolvedSpeakLanguage(sourceLanguageRef.current) ? sourceLanguageRef.current : "",
+      listen: targetLanguageRef.current,
+    });
+    const invokeJoinTranslationRoom = (languages: { speak: string; listen: string }) =>
+      connection.invoke(
+        "JoinTranslationRoom",
+        roomId,
+        displayName,
+        languages.speak,
+        languages.listen,
+      );
     rejoinTranslationRoomRef.current = joinCurrentRoom;
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
@@ -4473,6 +4610,16 @@ export function PersistentMeetingSession({
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
                     allowedTargetLanguages={allowedTargetLanguages}
+                    // WT-709: the lists above are the meeting's own languages, and the hub holds
+                    // everyone to them — so the bar offers nothing outside them, and says who can.
+                    languagesLimitedToMeeting={declaredLanguages !== null}
+                    addableLanguages={addableRoomLanguages}
+                    addingRoomLanguage={
+                      addRoomLanguage.isPending ? (addRoomLanguage.variables ?? null) : null
+                    }
+                    // isRoomHost, not isHost, for the reason flash mode below gives: the endpoint
+                    // gates on the room's EFFECTIVE host.
+                    onAddRoomLanguage={isRoomHost ? handleAddRoomLanguage : undefined}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}

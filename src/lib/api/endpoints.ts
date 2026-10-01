@@ -114,6 +114,12 @@ export const API = {
      * room past WAITING and this act only makes sense once the meeting has ended.
      */
     artifactAccess: (id: string) => `/translation-rooms/${id}/artifact-access`,
+    /**
+     * WT-709 — the host adds ONE language to a meeting that is open (WAITING, IN_PROGRESS or
+     * PAUSED). POST to the collection with `{ language }`, never the whole set: the backend keeps
+     * removal inexpressible. Answers the meeting's languages afterwards.
+     */
+    languages: (id: string) => `/translation-rooms/${id}/languages`,
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,

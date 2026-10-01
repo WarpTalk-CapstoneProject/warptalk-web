@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
 import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
+import { applyRoomLanguages } from "@/lib/meeting/room-languages-changed";
 import { SERIES_ROOT_KEY } from "@/hooks/use-series";
 import { endRoomFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { FlashModeState } from "@/services/translation-room.service";
@@ -496,6 +497,26 @@ export function useInviteToRoom(roomId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "invitations"] });
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
+  });
+}
+
+/**
+ * WT-709 — the host adds a language to the running meeting.
+ *
+ * The answer is the meeting's whole set, patched into the room query the picker reads — the same
+ * patch the RoomLanguagesChanged handler applies, so the host's own menu grows the moment the
+ * request succeeds instead of waiting for its own broadcast to come back round.
+ */
+export function useAddRoomLanguage(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (language: string) => translationRoomService.addRoomLanguage(roomId, language),
+    onSuccess: (languages) => {
+      queryClient.setQueryData<TranslationRoomDto>(translationRoomQueryKey(roomId), (room) =>
+        room ? applyRoomLanguages(room, languages) : room,
+      );
     },
   });
 }
