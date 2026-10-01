@@ -29,7 +29,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   ArrowUpRight,
@@ -84,6 +85,16 @@ export default function WorkspaceAdminDashboardPage() {
   const role = useWorkspaceRole();
 
   const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const router = useRouter();
+
+  // Insights replaced this page in the sidebar (owner, 2026-10-01): both were the Owner's overview
+  // of the same credits, meetings and spend. The route stays, because sign-in still lands here and
+  // links already sent point here, and it sends an Owner/Admin on with `replace` so Back does not
+  // bounce them into the redirect again. A member keeps the refusal below, as before.
+  const redirectToInsights = isOwnerOrAdmin && Boolean(activeWorkspaceSlug);
+  useEffect(() => {
+    if (redirectToInsights) router.replace(`/${activeWorkspaceSlug}/insights`);
+  }, [redirectToInsights, activeWorkspaceSlug, router]);
 
   // Read once, at mount. Reading the clock during render is impure — the same render would
   // produce a different projection depending on when React happened to run it — and "coming up"
@@ -92,7 +103,7 @@ export default function WorkspaceAdminDashboardPage() {
   const [breakdownDays, setBreakdownDays] = useState<number>(30);
   const year = new Date(now).getFullYear();
 
-  const enabled = Boolean(activeWorkspaceId) && isOwnerOrAdmin;
+  const enabled = Boolean(activeWorkspaceId) && isOwnerOrAdmin && !redirectToInsights;
 
   const { data: members, isLoading: isLoadingMembers } = useWorkspaceMembers(
     activeWorkspaceId || "",
@@ -147,6 +158,18 @@ export default function WorkspaceAdminDashboardPage() {
     queryFn: () => billingService.getWorkspaceUsageBreakdown(activeWorkspaceId!, breakdownDays),
     enabled,
   });
+
+  if (redirectToInsights) {
+    return (
+      <WorkspacePage>
+        <WorkspaceBody className="pt-6">
+          <div className="flex justify-center py-12">
+            <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+          </div>
+        </WorkspaceBody>
+      </WorkspacePage>
+    );
+  }
 
   if (!isOwnerOrAdmin) {
     return (

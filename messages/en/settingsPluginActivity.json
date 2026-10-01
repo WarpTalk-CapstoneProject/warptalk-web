@@ -34,15 +34,32 @@
   "outcome": {
     "succeeded": "Succeeded",
     "blocked": "Blocked",
-    "blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+    "blockedHint": "This workspace doesn't allow this plugin. Add it on the workspace plugin page.",
+    "turnedOff": "Turned off by member",
+    "turnedOffHint": "The member switched this tool off for WarpBot. Only they can turn it back on.",
+    "declined": "Declined",
+    "declinedHint": "The member cancelled the provider's consent screen.",
     "awaitingConfirmation": "Awaiting confirmation",
-    "awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
+    "awaitingConfirmationHint": "WarpBot asked the member to confirm this action in chat.",
     "needsSetup": "Needs setup",
-    "needsSetupHint": "Plugin connection or configuration missing. Reconnect in Settings > Plugins.",
+    "needsSetupHint": "The member's connection is missing or incomplete. They fix it in My connections.",
     "providerError": "Provider error",
-    "providerErrorHint": "Provider returned an error. Check service status or API quota.",
+    "providerErrorHint": "The provider didn't respond or limited requests. Nothing to fix here; try again later.",
+    "providerConfigurationHint": "WarpTalk's setup for this provider is wrong. A platform admin has to fix it.",
+    "toolError": "Tool error",
+    "toolErrorHint": "The tool ran and refused the request. Asking WarpBot differently may work.",
     "failed": "Failed"
   },
+  "fixer": {
+    "owner": "You can fix",
+    "member": "Member fixes",
+    "platform": "Platform admin fixes",
+    "nobody": "No action needed"
+  },
   "formerMember": "Former member",
-  "managePlugins": "Manage plugins"
+  "managePlugins": "Manage plugins",
+  "copyMemberLink": "Copy link for member",
+  "linkCopied": "Link copied",
+  "copyFailed": "Couldn't copy the link",
+  "trendsInInsights": "Trends in Insights"
 }

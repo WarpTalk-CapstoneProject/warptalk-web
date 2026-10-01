@@ -96,6 +96,7 @@
     "success": "{percent} thành công",
     "blocked": "{count} bị chính sách chặn",
     "needsSetup": "{count} cần thiết lập",
+    "failed": "{count} lỗi",
     "lastCall": "lượt gọi gần nhất {time}"
   },
   "links": {

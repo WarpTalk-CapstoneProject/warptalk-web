@@ -33,16 +33,33 @@
   "next": "次へ",
   "outcome": {
     "succeeded": "成功",
-    "blocked": "ブロック済み",
-    "blockedHint": "ポリシーによりブロックされたか、確認が拒否されました。プラグイン設定で権限を確認してください。",
+    "blocked": "ブロック",
+    "blockedHint": "このワークスペースではこのプラグインが許可されていません。ワークスペースのプラグインページで追加してください。",
+    "turnedOff": "メンバーがオフ",
+    "turnedOffHint": "メンバーがこのツールを WarpBot に対してオフにしました。オンに戻せるのは本人だけです。",
+    "declined": "辞退",
+    "declinedHint": "メンバーがプロバイダーの同意画面でキャンセルしました。",
     "awaitingConfirmation": "確認待ち",
-    "awaitingConfirmationHint": "WarpBotでのユーザー確認が必要です。",
+    "awaitingConfirmationHint": "WarpBot がチャットでこの操作の確認をメンバーに求めました。",
     "needsSetup": "設定が必要",
-    "needsSetupHint": "プラグインの接続または設定がありません。設定 > プラグインで再接続してください。",
+    "needsSetupHint": "メンバーの接続が未設定または不完全です。My connections で本人が修正します。",
     "providerError": "プロバイダーエラー",
-    "providerErrorHint": "プロバイダーがエラーを返しました。サービス状態またはAPI制限を確認してください。",
+    "providerErrorHint": "プロバイダーが応答しないか、リクエストを制限しました。対応は不要です。後で再試行してください。",
+    "providerConfigurationHint": "このプロバイダーに対する WarpTalk の設定が誤っています。プラットフォーム管理者の修正が必要です。",
+    "toolError": "ツールエラー",
+    "toolErrorHint": "ツールは実行されましたがリクエストを拒否しました。WarpBot への頼み方を変えると成功する場合があります。",
     "failed": "失敗"
   },
+  "fixer": {
+    "owner": "あなたが修正可能",
+    "member": "メンバーが修正",
+    "platform": "プラットフォーム管理者が修正",
+    "nobody": "対応不要"
+  },
   "formerMember": "元メンバー",
-  "managePlugins": "プラグインを管理"
+  "managePlugins": "プラグインを管理",
+  "copyMemberLink": "メンバー用リンクをコピー",
+  "linkCopied": "リンクをコピーしました",
+  "copyFailed": "リンクをコピーできませんでした",
+  "trendsInInsights": "Insights で傾向を見る"
 }
