@@ -12,9 +12,10 @@ import {
   Broadcast,
 } from "@phosphor-icons/react/dist/ssr";
 import {
-  MEETING_TYPES,
+  CREATABLE_MEETING_TYPES,
   MEETING_TYPE_I18N_KEYS,
   meetingTypeByValue,
+  type MeetingType,
 } from "@/lib/meeting/meeting-types";
 
 /**
@@ -32,21 +33,21 @@ const ICON_BY_VALUE: Record<string, React.ComponentType<{ weight?: "duotone"; si
 };
 
 /**
- * The list is rendered from `MEETING_TYPES`, not spelled out again here.
+ * The list is rendered from `CREATABLE_MEETING_TYPES`, not spelled out again here.
  *
- * It used to be a second hardcoded copy of the same six labels, and that is exactly why
- * `EXTERNAL_BRIDGE` was invisible for three days: it was added to `meeting-types.ts` (and the
- * backend seeded rooms for it, and the desktop app shipped its half) while this file still
- * listed six items, so nothing in the product could ever select it. Adding a meeting type is
- * now one edit, in the file that already decides what the value means.
+ * It used to be a second hardcoded copy of the same six labels, and that is exactly why a new type
+ * was once invisible for three days: it was added to `meeting-types.ts` while this file still
+ * listed six items. Adding a meeting type is now one edit, in the file that already decides what
+ * the value means.
+ *
+ * External Meeting (EXTERNAL_BRIDGE) is deliberately NOT offered here any more. Such a room is made
+ * where the Google Meet call is — by WarpBot (with the Meet link and calendar event) or by the
+ * desktop app's Meet auto-detect — never from this picker. See `CREATABLE_MEETING_TYPES`.
  */
 export function TemplatePicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const t = useTranslations("rooms.create.templatePicker");
-  // WT-868: External Meeting is no longer offered here, nor in a group of its own. A Google Meet
-  // call is translated from the desktop app, which makes its room when it sees the call; the
-  // type is simply absent from `MEETING_TYPES`, so there is nothing to filter out.
 
-  function renderItem(type: (typeof MEETING_TYPES)[number]) {
+  function renderItem(type: MeetingType) {
     const Icon = ICON_BY_VALUE[type.value] ?? CalendarIcon;
     const label = t(`types.${MEETING_TYPE_I18N_KEYS[type.value]}`);
     return (
@@ -75,7 +76,7 @@ export function TemplatePicker({ value, onChange }: { value: string; onChange: (
         <Command className="bg-transparent">
           <CommandList>
             <CommandGroup heading={t("meetingType")} className="text-[11px] text-ink-muted">
-              {MEETING_TYPES.map(renderItem)}
+              {CREATABLE_MEETING_TYPES.map(renderItem)}
             </CommandGroup>
           </CommandList>
         </Command>

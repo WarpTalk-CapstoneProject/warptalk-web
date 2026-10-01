@@ -1,5 +1,6 @@
 /**
- * The meeting types the create dialog offers.
+ * Every meeting type the app understands. The create dialog offers `CREATABLE_MEETING_TYPES`
+ * (below), which is this list without External Meeting.
  *
  * `value` is what the API stores (TranslationRoomTypes on the backend). `defaults` mirrors
  * TranslationRoomTypePolicy — it is NOT what configures the room, the backend does that from
@@ -51,20 +52,12 @@ export const MEETING_TYPES: MeetingType[] = [
     value: "LIVE_EVENT",
     defaults: { requiresApproval: true, muteOnEntry: true, autoRecord: true, breakoutsEnabled: false, maxParticipants: 1000 },
   },
+  {
+    label: "External Meeting",
+    value: "EXTERNAL_BRIDGE",
+    defaults: { requiresApproval: false, muteOnEntry: false, autoRecord: false, breakoutsEnabled: false, maxParticipants: 2 },
+  },
 ];
-
-/**
- * WT-868. An External Meeting (a Google Meet call WarpTalk translates beside) is a real type the
- * API stores, but it is no longer one the create dialog offers: the only way such a room comes to
- * exist is the desktop app seeing a Meet call and making it (bridge-auto-room). So it is kept out
- * of `MEETING_TYPES`, which is the dialog's list, and kept here so the rooms that already exist
- * still read back as "External Meeting" through `meetingTypeByValue` rather than as unknown.
- */
-const EXTERNAL_BRIDGE_MEETING_TYPE: MeetingType = {
-  label: "External Meeting",
-  value: "EXTERNAL_BRIDGE",
-  defaults: { requiresApproval: false, muteOnEntry: false, autoRecord: false, breakoutsEnabled: false, maxParticipants: 2 },
-};
 
 /**
  * Maps each type's stored `value` to a message key under `rooms.create.templatePicker.types` /
@@ -98,15 +91,30 @@ export function isExternalBridge(value?: string | null): boolean {
   return value?.trim().toUpperCase() === EXTERNAL_BRIDGE_TYPE;
 }
 
+/**
+ * The types the Create Room dialog OFFERS — every type except External Meeting.
+ *
+ * External Meeting is no longer something a host picks from the dialog. An EXTERNAL_BRIDGE room is
+ * made where the Google Meet call already is: WarpBot creates one together with the Meet link and
+ * the calendar event, and the desktop app creates one automatically when it sees a Meet URL
+ * (`bridge-auto-room.ts`). Picking it in the dialog produced a room with no Meet link behind it.
+ *
+ * `MEETING_TYPES` itself still carries EXTERNAL_BRIDGE on purpose: `meetingTypeByValue` must keep
+ * resolving it, so an existing bridge room (and the ones WarpBot and the desktop create) still
+ * shows its name — "External Meeting" — on the room page, the schedules list and anywhere else a
+ * stored type is displayed. Only the offer is narrowed, not what the app understands.
+ */
+export const CREATABLE_MEETING_TYPES: MeetingType[] = MEETING_TYPES.filter(
+  (type) => !isExternalBridge(type.value),
+);
+
 const BY_LABEL = new Map(MEETING_TYPES.map((type) => [type.label, type]));
 
 export function meetingTypeByLabel(label: string): MeetingType {
   return BY_LABEL.get(label) ?? MEETING_TYPES[0];
 }
 
-const BY_VALUE = new Map(
-  [...MEETING_TYPES, EXTERNAL_BRIDGE_MEETING_TYPE].map((type) => [type.value, type]),
-);
+const BY_VALUE = new Map(MEETING_TYPES.map((type) => [type.value, type]));
 
 /**
  * The stored API value ("CHANNEL_MEETING") read back as something a person should see

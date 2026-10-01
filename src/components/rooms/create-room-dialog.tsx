@@ -231,6 +231,11 @@ export function CreateRoomDialog() {
   const effectiveRequiresApproval =
     requiresApproval ?? selectedMeetingType.defaults.requiresApproval;
 
+  // External Meeting (EXTERNAL_BRIDGE) is not offered by this dialog any more — the picker lists
+  // CREATABLE_MEETING_TYPES. A bridge room is created where the Meet call is: by WarpBot (with
+  // the Meet link and calendar event) or by the desktop's Meet auto-detect (bridge-auto-room.ts),
+  // which also plans the far side's language. So there is no bridge branch below.
+
   // An instant meeting: no start time and no repeat rule, i.e. "now". This is the same
   // distinction the server draws at creation — `ScheduledAt.HasValue ? "SCHEDULED" : "WAITING"` —
   // and it is what decides whether submitting this dialog opens the call or books it.
@@ -334,8 +339,6 @@ export function CreateRoomDialog() {
       const languages = Array.from(new Set(meetingLanguages));
       const sourceLanguage = languages[0];
       const targetLanguages = languages;
-      // WT-868: no External Meeting is created here any more, so there is no far side to name.
-      // The desktop's automatic Meet room does that (lib/meeting/bridge-auto-room).
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({

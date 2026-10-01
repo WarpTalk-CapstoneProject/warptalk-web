@@ -9,9 +9,19 @@ This document tracks the Create Room flow at `/rooms/create`.
 - The form captures title, schedule, capacity, language pair, access policy, room options, and transcript retention.
 - The generated preview link opens `/join?code={code}`.
 
+## Create Room dialog: meeting types (2026-10-01)
+
+- The Create Room dialog (`src/components/rooms/create-room-dialog.tsx`, picker in `src/components/rooms/create/template-picker.tsx`) offers `CREATABLE_MEETING_TYPES` — every type except **External Meeting** (`EXTERNAL_BRIDGE`).
+- An External Meeting room is created only where the Google Meet call is: by WarpBot (together with the Meet link and calendar event) or by the desktop app's Meet auto-detect (`src/lib/meeting/bridge-auto-room.ts`). The dialog's bridge notice and far-side language planning were removed with the option.
+- `MEETING_TYPES` still contains `EXTERNAL_BRIDGE` and `rooms.create.templatePicker.types.externalMeeting` is kept, so existing bridge rooms keep their name on the room page (`MeetingPropertiesPills.tsx`).
+- Contract: `npm run test:room-surface` (`scripts/check-room-surface-contract.mjs`).
+
 ## Files Affected
 
 - `src/app/(app)/rooms/create/page.tsx`
+- `src/components/rooms/create-room-dialog.tsx`
+- `src/components/rooms/create/template-picker.tsx`
+- `src/lib/meeting/meeting-types.ts`
 
 ## Template Mapping
 

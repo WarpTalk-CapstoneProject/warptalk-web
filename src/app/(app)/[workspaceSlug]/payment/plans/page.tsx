@@ -39,11 +39,20 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
+import { apiErrorCode } from "@/lib/api/errors";
 import { formatMoney } from "@/lib/format/currency";
-import { checkoutTotal, checkoutCurrency, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
+import {
+  checkoutTotal,
+  checkoutCurrency,
+  monthlyDisplayPrice,
+  readBillingInterval,
+  selectablePlans,
+  yearlySavingPercent,
+} from "@/lib/billing/plan-pricing";
 import { buildFeatureList, describePlan } from "@/lib/billing/plan-copy";
 
 // We fetch plans dynamically now.
@@ -90,11 +99,15 @@ import { buildFeatureList, describePlan } from "@/lib/billing/plan-copy";
 const formatPlanDate = (date: Date) =>
   date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
+/** The billing service's code for "turning auto-renew on needs a card" (Manage modal, WT-878). */
+const AUTO_RENEW_REQUIRES_CHECKOUT = "BILLING_AUTO_RENEW_REQUIRES_CHECKOUT";
+
 export default function WorkspacePlansPage() {
   const router = useRouter();
   const params = useParams();
   const slug = params?.workspaceSlug as string;
   const queryClient = useQueryClient();
+  const tAutoRenew = useTranslations("settingsBilling.autoRenew");
   const { isAuthenticated, user } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
@@ -102,8 +115,11 @@ export default function WorkspacePlansPage() {
   const role = useWorkspaceRole();
   const isRoleLoaded = useWorkspaceRoleLoaded();
 
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
-    "monthly",
+  const searchParams = useSearchParams();
+  // WT-878: Billing links here as `?plan=<slug>&billingCycle=<monthly|yearly>`. The cycle the
+  // owner picked there is the one this page opens on; `plan` is not read here (unchanged).
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(() =>
+    readBillingInterval(searchParams),
   );
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -282,6 +298,16 @@ export default function WorkspacePlansPage() {
     }
   };
 
+  /**
+   * WT-878 — "Cancel renewal" is auto-renew off, the same `PUT /auto-renew` call, toasts and
+   * query keys as Billing's Manage modal (settings/billing/components/manage-subscription-modal.tsx).
+   * It used to be `DELETE /subscriptions/workspace/{id}`, which set the row to cancelled at once:
+   * entitlements dropped mid-period for a period already paid for. Now the plan runs to its
+   * period end and Stripe's cancel_at_period_end moves with it.
+   *
+   * The reason picker stays. `PUT /auto-renew` takes no reason, so the choice is logged to the
+   * console and otherwise unused, as the old endpoint's reason field went unread.
+   */
   const handleCancel = async () => {
     if (!activeWorkspaceId) return;
     const finalReason =
@@ -290,9 +316,13 @@ export default function WorkspacePlansPage() {
         : cancelReason || "User requested cancellation";
     try {
       setIsCancelling(true);
-      await billingService.cancelSubscription(activeWorkspaceId, finalReason);
+      const updated = await billingService.setAutoRenew(activeWorkspaceId, false);
+      console.info("[billing] renewal cancelled", { reason: finalReason });
+      const endsAt = updated?.currentPeriodEnd ?? subscription?.currentPeriodEnd;
       toast.success(
-        "Subscription cancelled. You will retain access until the end of your billing period.",
+        tAutoRenew("turnedOff", {
+          date: endsAt ? formatPlanDate(new Date(endsAt)) : "the end of the period",
+        }),
       );
       // WT-381 — this wrote `null` here, and the page then showed a workspace with no plan at all.
       // The backend had done no such thing: `Cancel()` sets AutoRenew=false and Status=cancelled
@@ -305,8 +335,13 @@ export default function WorkspacePlansPage() {
       setShowCancelDialog(false);
       setCancelReason("");
       setCancelReasonOther("");
-    } catch {
-      toast.error("Failed to cancel subscription. Please try again.");
+    } catch (error) {
+      if (apiErrorCode(error) === AUTO_RENEW_REQUIRES_CHECKOUT) {
+        toast.error(tAutoRenew("requiresCheckout"));
+        setShowCancelDialog(false);
+        return;
+      }
+      toast.error(tAutoRenew("toggleFailed"));
     } finally {
       setIsCancelling(false);
     }
@@ -401,7 +436,7 @@ export default function WorkspacePlansPage() {
                 value="yearly"
                 className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly · save 21%
+                Yearly · save {yearlySavingPercent()}%
               </TabsTrigger>
             </TabsList>
           </Tabs>

@@ -563,30 +563,69 @@ assert.doesNotMatch(
   "overscroll containment would make the roster a scroll trap.",
 );
 
-// WT-868: an External Meeting (Google Meet bridge) is never created or joined in the app. Its
-// room is made by the desktop app when it sees a Meet call (bridge-auto-room) and run from the
-// desktop popup. So the create dialog's list must not offer the type, /live must turn bridge rooms
-// away to their page, and the room page's Start/Join must hand them to the popup instead.
+// ── The Create Room dialog does not offer External Meeting ──────────────────
+
+// An EXTERNAL_BRIDGE room is made where the Google Meet call is — by WarpBot (Meet link + calendar
+// event) or by the desktop's Meet auto-detect — not picked from the dialog, where it produced a
+// room with no Meet behind it. The OFFER is narrowed; the type itself must stay known, so existing
+// bridge rooms (and the ones WarpBot / the desktop create) keep their name wherever it is shown.
 const meetingTypes = read("src/lib/meeting/meeting-types.ts");
-const meetingTypesList = meetingTypes.slice(
-  meetingTypes.indexOf("export const MEETING_TYPES"),
-  meetingTypes.indexOf("];", meetingTypes.indexOf("export const MEETING_TYPES")),
-);
-assert.doesNotMatch(
-  meetingTypesList,
-  /EXTERNAL_BRIDGE/,
-  "MEETING_TYPES (the create dialog's list) must not offer External Meeting (WT-868).",
+const templatePicker = read("src/components/rooms/create/template-picker.tsx");
+const templatePickerCode = stripComments(templatePicker);
+const createRoomDialogCode = stripComments(createRoomDialog);
+
+assert.match(
+  meetingTypes,
+  /export const CREATABLE_MEETING_TYPES: MeetingType\[\] = MEETING_TYPES\.filter\(\s*\(type\) => !isExternalBridge\(type\.value\),?\s*\);/,
+  "CREATABLE_MEETING_TYPES must be MEETING_TYPES without External Meeting.",
 );
 assert.match(
   meetingTypes,
-  /new Map\(\s*\[\.\.\.MEETING_TYPES, EXTERNAL_BRIDGE_MEETING_TYPE\]/,
-  "Existing External Meeting rooms must still read back through meetingTypeByValue (WT-868).",
+  /export const MEETING_TYPES: MeetingType\[\] = \[[\s\S]*?value: "EXTERNAL_BRIDGE"[\s\S]*?\];/,
+  "MEETING_TYPES must still carry EXTERNAL_BRIDGE so meetingTypeByValue names existing bridge rooms.",
+);
+assert.match(
+  meetingTypes,
+  /EXTERNAL_BRIDGE: "externalMeeting"/,
+  "External Meeting must keep its display-name key for rooms that already have the type.",
+);
+assert.match(
+  pills,
+  /meetingTypeByValue\(room\.translationRoomType\)/,
+  "The room page must keep resolving the stored type (including EXTERNAL_BRIDGE) through MEETING_TYPES.",
+);
+assert.match(
+  templatePickerCode,
+  /CREATABLE_MEETING_TYPES\.map\(renderItem\)/,
+  "The create dialog's picker must list CREATABLE_MEETING_TYPES.",
 );
 assert.doesNotMatch(
-  stripComments(createRoomDialog),
-  /isExternalBridge|planBridgeRoomLanguages|externalMeetingLanguage/,
-  "The create dialog must not carry a bridge-room creation path any more (WT-868).",
+  templatePickerCode,
+  /\bMEETING_TYPES\b(?!_I18N_KEYS)|EXTERNAL_BRIDGE|isExternalBridge|translateElsewhere/,
+  "The create dialog's picker must not offer External Meeting, nor list the full MEETING_TYPES registry.",
 );
+assert.doesNotMatch(
+  createRoomDialogCode,
+  /isExternalBridge|bridgeSelected|bridgeNotice|planBridgeRoomLanguages|externalMeetingLanguage/,
+  "The create dialog must not carry an External Meeting branch — it can no longer be selected there.",
+);
+for (const locale of ["en", "vi", "ja"]) {
+  const create = JSON.parse(read(`messages/${locale}/rooms.json`)).create;
+  assert.equal(create.bridgeNotice, undefined, `${locale}: rooms.create.bridgeNotice is dead copy.`);
+  assert.equal(
+    create.templatePicker.translateElsewhere,
+    undefined,
+    `${locale}: rooms.create.templatePicker.translateElsewhere is dead copy.`,
+  );
+  assert.equal(
+    typeof create.templatePicker.types.externalMeeting,
+    "string",
+    `${locale}: the External Meeting display name must stay for existing bridge rooms.`,
+  );
+}
+
+// WT-868: a bridge room is run from the desktop popup, never in-app: /live turns it away to its
+// room page, and the room page's Start/Join hands it to the popup.
 const livePage = stripComments(read("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"));
 assert.match(
   livePage,
@@ -600,5 +639,5 @@ assert.match(
 );
 
 console.log(
-  "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330): PASS",
+  "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330, no External Meeting in create): PASS",
 );

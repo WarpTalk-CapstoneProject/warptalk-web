@@ -1,0 +1,237 @@
+{
+  "title": "Thông tin chi tiết",
+  "accessDenied": {
+    "title": "Trang Thông tin chi tiết chỉ dành cho chủ sở hữu và quản trị viên",
+    "description": "Hãy nhờ chủ sở hữu hoặc quản trị viên của workspace này nếu bạn cần các số liệu này."
+  },
+  "tabs": {
+    "label": "Các mục thông tin chi tiết",
+    "overview": "Tổng quan",
+    "usage": "Sử dụng",
+    "tools": "Công cụ"
+  },
+  "common": {
+    "updated": "Cập nhật lúc {time}",
+    "loading": "Đang tải…",
+    "notAvailable": "Chưa có dữ liệu",
+    "atLeast": "ít nhất {value}"
+  },
+  "delta": {
+    "noFigure": "kỳ trước không có số liệu",
+    "noChange": "không đổi",
+    "fromZero": "{arrow} từ 0",
+    "change": "{arrow} {percent}%"
+  },
+  "periodBar": {
+    "groupLabel": "Khoảng thời gian",
+    "today": "Hôm nay",
+    "days7": "7 ngày",
+    "previousMonth": "Tháng trước",
+    "nextMonth": "Tháng sau",
+    "currentMonthTitle": "Đây là tháng hiện tại",
+    "months6": "6 tháng",
+    "custom": "Tuỳ chỉnh",
+    "export": "Xuất dữ liệu",
+    "from": "Từ ngày",
+    "to": "Đến ngày (bao gồm)",
+    "showRange": "Xem khoảng này"
+  },
+  "periodCards": {
+    "creditsUsed": "Credit đã dùng",
+    "meetingsHeld": "Cuộc họp đã diễn ra",
+    "hoursTranslated": "Giờ đã dịch",
+    "toolCalls": "Lượt gọi công cụ",
+    "toolSuccessRate": "Tỉ lệ gọi thành công",
+    "lastPeriod": "kỳ trước {value}",
+    "floorNote": "Chỉ đọc đến giới hạn; số thật có thể cao hơn",
+    "withoutDuration": "{count, plural, other {# cuộc họp không ghi lại thời lượng nên không được tính}}",
+    "hoursNote": "Thời gian từ lúc bắt đầu đến lúc kết thúc của các cuộc họp trong kỳ",
+    "successNote": "Tính trên {count, plural, other {# lượt gọi}} mới nhất đã đọc; các lượt cũ hơn trong kỳ chưa được đọc",
+    "noCalls": "Không có lượt gọi nào trong kỳ"
+  },
+  "snapshot": {
+    "creditsRemaining": "Credit còn lại",
+    "percentLeft": "còn {percent}% trên {available}",
+    "noPlan": "Chưa có gói",
+    "noPlanSub": "Chọn một gói để có credit",
+    "runsOutIn": "Hết sau",
+    "days": "{count, plural, other {# ngày}}",
+    "runsOutSub": "với {rate} credit mỗi ngày · chu kỳ kết thúc sau {days, plural, other {# ngày}}",
+    "lastsCycle": "Đủ dùng hết chu kỳ",
+    "lastsSub": "còn khoảng {credits} khi gia hạn",
+    "reasonNoDates": "Chu kỳ này không có ngày bắt đầu và kết thúc",
+    "reasonTooEarly": "Chu kỳ mới bắt đầu, chưa đủ để ước tính tốc độ",
+    "reasonNothingUsed": "Chưa dùng gì trong chu kỳ này",
+    "plan": "Gói",
+    "renewsOn": "Gia hạn ngày {date}",
+    "endsOn": "Kết thúc ngày {date} và không gia hạn",
+    "activeMembers": "Thành viên hoạt động",
+    "activeMembersSub": "đã dùng credit trong kỳ, trên tổng {total, plural, other {# thành viên}}",
+    "activeMembersSubNoTotal": "đã dùng credit trong kỳ"
+  },
+  "more": {
+    "show": "Xem thêm {count} chỉ số",
+    "hide": "Ẩn {count} chỉ số",
+    "avgCreditsPerMeeting": "Credit trung bình mỗi cuộc họp",
+    "avgCreditsPerMeetingSub": "trên {count, plural, other {# cuộc họp}} trong kỳ",
+    "noMeetings": "Không có cuộc họp nào trong kỳ",
+    "creditsPerActiveMember": "Credit mỗi thành viên hoạt động",
+    "creditsPerActiveMemberSub": "trên {count, plural, other {# thành viên hoạt động}}",
+    "noActiveMembers": "Chưa thành viên nào dùng credit trong kỳ",
+    "connectedPlugins": "Plugin đã kết nối",
+    "connectedPluginsSub": "Plugin trong workspace này",
+    "pendingApprovals": "Chờ duyệt",
+    "pendingApprovalsSub": "Yêu cầu plugin đang chờ trả lời"
+  },
+  "toolLine": {
+    "title": "Công cụ WarpBot",
+    "status": {
+      "needsAttention": "Cần xử lý",
+      "healthy": "Hoạt động bình thường",
+      "noCalls": "Chưa có lượt gọi"
+    },
+    "noCallsHint": "Không có lượt gọi plugin nào trong kỳ",
+    "calls": "{count, plural, other {{value} lượt gọi}} trong kỳ",
+    "callsAtLeast": "ít nhất {count, plural, other {{value} lượt gọi}} trong kỳ",
+    "success": "{percent} thành công",
+    "blocked": "{count} bị chính sách chặn",
+    "needsSetup": "{count} cần thiết lập",
+    "lastCall": "lượt gọi gần nhất {time}"
+  },
+  "links": {
+    "billing": "Thanh toán",
+    "usage": "Sử dụng",
+    "meetings": "Cuộc họp",
+    "tools": "Công cụ",
+    "schedules": "Lịch"
+  },
+  "charts": {
+    "sixMonthsTitle": "Credit, 6 tháng",
+    "sixMonthsSubtitle": "Credit đã dùng mỗi tháng",
+    "sixMonthsEmpty": "Không có số liệu sử dụng trong các tháng này",
+    "sixMonthsAria": "Credit đã dùng mỗi tháng trong sáu tháng",
+    "creditsValue": "{value} credit",
+    "creditsSeries": "Credit",
+    "meetingsSeries": "Cuộc họp",
+    "callsSeries": "Lượt gọi",
+    "noFigure": "Không có số liệu",
+    "stillToCome": "Chưa tới",
+    "noDays": "Không có ngày nào trong kỳ",
+    "perDayTitle": "Credit mỗi ngày",
+    "perDaySubtitle": "Cột là credit, đường là số cuộc họp",
+    "perDaySubtitleBlank": "Cột là credit, đường là số cuộc họp. Những ngày chưa tới được để trống, không vẽ thành 0",
+    "perDayAria": "Credit và cuộc họp mỗi ngày",
+    "byServiceTitle": "Credit theo dịch vụ AI",
+    "byServiceCaption": "Credit đã dùng · {period}",
+    "byServiceAria": "Credit đã dùng theo dịch vụ AI",
+    "noCreditsUsed": "Không dùng credit nào trong kỳ",
+    "otherService": "Khác",
+    "meetingsTitle": "Cuộc họp mỗi ngày",
+    "meetingsValue": "{count, plural, other {# cuộc họp}}",
+    "meetingsAria": "Số cuộc họp mỗi ngày",
+    "hoursCaption": "{hours} đã dịch",
+    "hoursUnknown": "Chưa có số giờ",
+    "hoursSuffix": "{hours} đã dịch",
+    "pluginsTitle": "Lượt gọi công cụ theo plugin",
+    "pluginsCaption": "Lượt gọi của WarpBot · {period}",
+    "pluginsAria": "Lượt gọi công cụ WarpBot theo plugin",
+    "noToolCalls": "Không có lượt gọi plugin nào trong kỳ",
+    "callsValue": "{count, plural, other {{value} lượt gọi}}"
+  },
+  "attention": {
+    "title": "Cần xử lý",
+    "subtitle": "Những việc chủ sở hữu hoặc quản trị viên nên làm",
+    "nothingNow": "Hiện không có gì cần xử lý",
+    "nothingAnswered": "Không thấy vấn đề nào ở các nguồn đã trả lời",
+    "notChecked": "Chưa kiểm tra được: {sources}",
+    "sources": {
+      "billing": "số dư credit",
+      "payments": "thanh toán",
+      "toolAudit": "nhật ký công cụ WarpBot",
+      "plugins": "yêu cầu plugin"
+    },
+    "tags": {
+      "plan": "Gói",
+      "payment": "Thanh toán",
+      "billing": "Thanh toán",
+      "needsSetup": "Cần thiết lập",
+      "policy": "Chính sách",
+      "requests": "Yêu cầu"
+    },
+    "noPlan": {
+      "title": "Workspace này chưa có gói",
+      "detail": "Cuộc họp chưa thể dùng credit cho đến khi chọn gói"
+    },
+    "paymentFailed": {
+      "title": "Lần thanh toán gia hạn gần nhất bị lỗi",
+      "detail": "Cập nhật phương thức thanh toán trong mục Thanh toán",
+      "detailGrace": "Cập nhật phương thức thanh toán trước ngày {date}"
+    },
+    "lowCredits": {
+      "title": "Còn {percent}% credit của chu kỳ này",
+      "detail": "Còn {credits} credit"
+    },
+    "planEnding": {
+      "title": "Gói sẽ không được gia hạn",
+      "detail": "{plan} kết thúc ngày {date}"
+    },
+    "pluginsNeedSetup": {
+      "title": "{count, plural, other {# plugin cần thiết lập}}"
+    },
+    "policyBlocks": {
+      "title": "{count, plural, other {# lượt gọi bị chính sách chặn}}",
+      "titleAtLeast": "Ít nhất {count, plural, other {# lượt gọi bị chính sách chặn}}",
+      "detail": "WarpBot bị từ chối theo quy định plugin của workspace này"
+    },
+    "pendingRequests": {
+      "title": "{count, plural, other {# yêu cầu plugin đang chờ}}",
+      "detail": "Thành viên đã xin những plugin mà workspace này chưa có"
+    }
+  },
+  "members": {
+    "title": "Thành viên dùng nhiều credit nhất",
+    "empty": "Chưa thành viên nào dùng credit trong kỳ",
+    "formerMember": "Thành viên cũ"
+  },
+  "upNext": {
+    "title": "Sắp diễn ra",
+    "subtitle": "Cuộc họp đang diễn ra hoặc sắp tới",
+    "empty": "Chưa có cuộc họp nào được lên lịch",
+    "runningNow": "Đang diễn ra",
+    "openNow": "Đang mở",
+    "noTimeSet": "Chưa đặt giờ",
+    "tagLive": "Trực tiếp",
+    "tagWaiting": "Đang chờ",
+    "tagScheduled": "Đã lên lịch"
+  },
+  "activity": {
+    "title": "Hoạt động công cụ gần đây",
+    "subtitle": "Lượt gọi plugin của WarpBot và quyết định theo chính sách",
+    "empty": "Chưa có hoạt động công cụ nào",
+    "formerMember": "Thành viên cũ",
+    "outcome": {
+      "succeeded": "Thành công",
+      "blocked": "Bị chặn",
+      "blockedHint": "Bị chặn theo chính sách hoặc xác nhận bị từ chối. Xem lại quyền trong phần cài đặt Plugin.",
+      "awaitingConfirmation": "Chờ xác nhận",
+      "awaitingConfirmationHint": "Thao tác cần người dùng xác nhận trong WarpBot trước khi tiếp tục.",
+      "needsSetup": "Cần thiết lập",
+      "needsSetupHint": "Thiếu kết nối hoặc cấu hình plugin. Kết nối lại trong Cài đặt > Plugin.",
+      "providerError": "Lỗi nhà cung cấp",
+      "providerErrorHint": "Nhà cung cấp trả về lỗi. Kiểm tra trạng thái dịch vụ hoặc hạn mức API.",
+      "failed": "Thất bại"
+    }
+  },
+  "usageLabels": {
+    "translation": "Dịch trực tiếp",
+    "dubbing": "Lồng tiếng",
+    "cloneDubbing": "Lồng tiếng bằng giọng nhân bản",
+    "transcription": "Chép lời",
+    "assistant": "Trợ lý AI",
+    "summary": "Tóm tắt cuộc họp",
+    "voiceCloning": "Nhân bản giọng nói",
+    "documentTranslation": "Dịch tài liệu",
+    "adjustment": "Điều chỉnh credit",
+    "otherUsage": "Sử dụng khác"
+  }
+}
