@@ -98,9 +98,10 @@ test("no calls is no rate — never a made-up 96%", () => {
   assert.equal(toolLineStatus(summary), "noCalls");
 });
 
-test("the line turns amber only for needs-setup, not for policy blocks", () => {
-  assert.equal(toolLineStatus({ calls: 10, needsSetup: 1 }), "needsAttention");
-  assert.equal(toolLineStatus({ calls: 10, needsSetup: 0 }), "healthy");
+test("the line turns amber for needs-setup or failures, not for policy blocks", () => {
+  assert.equal(toolLineStatus({ calls: 10, needsSetup: 1, failed: 0 }), "needsAttention");
+  assert.equal(toolLineStatus({ calls: 10, needsSetup: 0, failed: 2 }), "needsAttention");
+  assert.equal(toolLineStatus({ calls: 10, needsSetup: 0, failed: 0 }), "healthy");
 });
 
 test("the last call is the newest row read, whatever the window", () => {

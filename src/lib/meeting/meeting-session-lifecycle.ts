@@ -88,12 +88,20 @@ export function shouldConnectMeeting({
   hasToken,
   canConnectRoom,
   idleReaped,
+  displaced = false,
 }: {
   hasToken: boolean;
   canConnectRoom: boolean;
   idleReaped: boolean;
+  /**
+   * The same account joined this meeting from another device or tab and this session was evicted
+   * (see session-displacement.ts). Connecting again would evict the other one, which would
+   * reconnect and evict this one: the loop that kept media from ever settling. Only an explicit
+   * "use this device" clears it.
+   */
+  displaced?: boolean;
 }): boolean {
-  return hasToken && canConnectRoom && !idleReaped;
+  return hasToken && canConnectRoom && !idleReaped && !displaced;
 }
 
 /**
@@ -243,4 +251,53 @@ export function isRestoredMeetingStale({
   if (!compact) return false;
   if (roomLoadFailed) return true;
   return hasRoom && !canConnectRoom;
+}
+
+/**
+ * WT-899 — how often the open session re-reads its room, so an end it was never TOLD about still
+ * reaches it.
+ *
+ * TranslationRoomEnded is the normal signal, and it only reaches a client the hub admitted to the
+ * room's group. A person with no participant row is never admitted (WT-699 / TC1806): on an
+ * EXTERNAL_BRIDGE room capped at two seats — the host and the Google Meet stand-in — a second
+ * person's registration fails, they sit on /live behind the "Set up your external meeting" wizard,
+ * and when the host ends the call nothing ever arrives. This poll is the fallback that does.
+ * React Query does not run it in a hidden tab, so an abandoned tab costs nothing.
+ */
+export const ROOM_STATUS_POLL_MS = 20 * 1000;
+
+/**
+ * Whether the room ended under a session that saw it running — the polled twin of
+ * TranslationRoomEnded.
+ *
+ * `sawJoinable` keeps this from firing for a session restored onto a room that was ALREADY over:
+ * that one is isRestoredMeetingStale's, and it closes quietly instead of pulling the person to a
+ * page they did not ask for. `exiting` covers this client's own Leave or End, which owns its own
+ * toast and redirect.
+ */
+export function roomEndedUnderSession({
+  status,
+  sawJoinable,
+  exiting,
+}: {
+  status: string | undefined;
+  sawJoinable: boolean;
+  exiting: boolean;
+}): boolean {
+  if (!status || !sawJoinable || exiting) return false;
+  return TERMINAL_ROOM_STATUSES.includes(status as (typeof TERMINAL_ROOM_STATUSES)[number]);
+}
+
+/**
+ * WT-899 — a Leave the server refuses because there is nothing to leave.
+ *
+ * LeaveRoomAsync answers NOT_FOUND ("Participant not found.") when this person has no participant
+ * row — the bridge case above, where registration was refused for capacity. The person is not in
+ * the room by the server's own account, so the exit must still happen. Treating it as an error
+ * left them in front of the Leave dialog with no way out but closing the tab.
+ *
+ * Takes the code (apiErrorCode) rather than the error, so it stays free of axios and testable.
+ */
+export function leaveFailureMeansAlreadyOut(code: string | number | undefined): boolean {
+  return code === "NOT_FOUND" || code === 404;
 }

@@ -96,6 +96,7 @@
     "success": "成功率 {percent}",
     "blocked": "ポリシーによるブロック {count} 件",
     "needsSetup": "設定が必要 {count} 件",
+    "failed": "失敗 {count} 件",
     "lastCall": "最終呼び出し {time}"
   },
   "links": {

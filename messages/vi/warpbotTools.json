@@ -1,0 +1,56 @@
+{
+  "title": "Công cụ WarpBot",
+  "subtitle": "Những việc WarpBot làm được trong workspace này và cách nhờ nó.",
+  "searchPlaceholder": "Tìm công cụ",
+  "clearSearch": "Xoá tìm kiếm",
+  "categoryFilterLabel": "Lọc công cụ có sẵn theo nhóm",
+  "categories": {
+    "all": "Tất cả",
+    "meetings": "Cuộc họp",
+    "knowledge": "Tri thức",
+    "documents": "Tài liệu",
+    "glossary": "Thuật ngữ",
+    "translation": "Dịch",
+    "workspace": "Workspace",
+    "conversation": "Hội thoại",
+    "platform": "Nền tảng"
+  },
+  "badges": {
+    "changesData": "Thay đổi dữ liệu",
+    "asksFirst": "Hỏi bạn trước"
+  },
+  "row": {
+    "hostOnly": "Chỉ chủ trì cuộc họp. Ai cũng có thể yêu cầu, nhưng chỉ người chủ trì mới chia sẻ được biên bản.",
+    "platformOnly": "Chỉ nhân sự nền tảng WarpTalk nhìn thấy.",
+    "samplePrompts": "Thử hỏi",
+    "tryInWarpBot": "Thử trong WarpBot",
+    "tryAria": "Thử trong WarpBot: {prompt}"
+  },
+  "tryToast": "Đã gửi câu hỏi sang WarpBot",
+  "builtIn": {
+    "title": "Có sẵn",
+    "description": "Công cụ WarpBot tự dùng khi câu hỏi của bạn cần đến.",
+    "empty": "Không có công cụ có sẵn nào khớp với tìm kiếm."
+  },
+  "webSearch": {
+    "title": "Tìm trên web",
+    "description": "Trả lời từ web công khai, kèm liên kết nguồn.",
+    "name": "Tìm trên web",
+    "rowDescription": "Tra cứu trên web công khai và trích dẫn các trang đã dùng.",
+    "unknownNote": "Dùng được khi workspace của bạn cho phép. Khi WarpBot tìm trên web, câu trả lời sẽ ghi rõ và kèm liên kết các trang.",
+    "empty": "Tìm trên web không khớp với tìm kiếm."
+  },
+  "plugins": {
+    "title": "Từ plugin của bạn",
+    "description": "Công cụ từ các plugin bạn đã kết nối và workspace này có. Công cụ bạn đã chặn không được liệt kê.",
+    "loading": "Đang tải plugin của bạn",
+    "error": "Không tải được plugin của bạn.",
+    "retry": "Thử lại",
+    "emptyTitle": "Chưa có công cụ plugin nào",
+    "emptyDescription": "Kết nối một plugin mà workspace này có, các công cụ WarpBot dùng được từ plugin đó sẽ hiện ở đây.",
+    "openConnections": "Mở Kết nối của tôi",
+    "manage": "Quản lý plugin",
+    "noMatches": "Không có công cụ plugin nào khớp với tìm kiếm.",
+    "toolCount": "{count, plural, other {# công cụ}}"
+  }
+}

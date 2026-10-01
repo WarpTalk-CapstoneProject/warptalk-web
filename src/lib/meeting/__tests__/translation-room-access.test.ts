@@ -193,3 +193,36 @@ test("somebody already in an open room is offered the way back, not device setup
   assert.equal(intent.mode, "join");
   assert.equal(intent.label, "Return to meeting");
 });
+
+test("WT-904: a non-host opens an external meeting on Google Meet, not WarpTalk's two-seat room", () => {
+  const base = {
+    status: "in_progress" as const,
+    statusLabel: "In Progress",
+    isExternalBridge: true,
+    externalMeetingUrl: "https://meet.google.com/ffo-iwxx-abc",
+  };
+  const guest = resolveRoomEntryIntent({ ...base, isHost: false });
+  assert.equal(guest.mode, "external_meeting");
+  assert.equal(guest.href, "https://meet.google.com/ffo-iwxx-abc");
+  assert.equal(guest.isActionable, true);
+
+  // Even before the host opened WarpTalk's side: the Meet call does not wait for it.
+  const early = resolveRoomEntryIntent({ ...base, status: "waiting", isHost: false });
+  assert.equal(early.mode, "external_meeting");
+
+  // The host still enters WarpTalk's side — that is where the translation runs.
+  assert.equal(resolveRoomEntryIntent({ ...base, isHost: true }).mode, "join");
+  // A finished meeting has nothing to open.
+  assert.equal(resolveRoomEntryIntent({ ...base, status: "ended", isHost: false }).mode, "unavailable");
+  // No usable link: fall back to the ordinary flow rather than a dead button.
+  assert.equal(resolveRoomEntryIntent({ ...base, externalMeetingUrl: null, isHost: false }).mode, "join");
+  assert.equal(
+    resolveRoomEntryIntent({ ...base, externalMeetingUrl: "javascript:alert(1)", isHost: false }).mode,
+    "join",
+  );
+  // Not a bridge room: unchanged.
+  assert.equal(
+    resolveRoomEntryIntent({ ...base, isExternalBridge: false, isHost: false }).mode,
+    "join",
+  );
+});

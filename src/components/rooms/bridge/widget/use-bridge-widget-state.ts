@@ -14,8 +14,8 @@
  *
  *     - BR-159-014 allows one connection per (room, user). A second join sends the FIRST one
  *       `ForceDisconnected("You have joined from another device.")`, and the main window answers
- *       that by closing the meeting and navigating away — the popup would throw the user out of
- *       the meeting it floats over.
+ *       that by stopping and showing "joined from another device or tab" — the popup would push
+ *       the user out of the meeting it floats over.
  *     - When a joined connection drops, OnDisconnectedAsync treats it as the user leaving: it
  *       publishes participant-offline and deletes their languages, speak language and voice
  *       preference from Redis. Closing this window would take those from the live meeting.

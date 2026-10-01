@@ -31,7 +31,8 @@ for (const locale of ["en", "vi", "ja"]) {
 }
 const sidebar = read("src/components/layout/linear-sidebar.tsx");
 assert.ok(!sidebar.includes('t("settingsNav.plugins")'), 'The sidebar must not label either plugin row "Plugins".');
-assert.equal((sidebar.match(/settingsNav\.myConnections/g) ?? []).length, 2, "Both sidebars name the personal row My connections.");
+// One row, in the main nav for every member (2026-10-01); the Settings sidebars no longer carry it.
+assert.equal((sidebar.match(/settingsNav\.myConnections/g) ?? []).length, 1, "The main nav names the personal row My connections, and Settings does not repeat it.");
 assert.equal((sidebar.match(/settingsNav\.workspacePlugins/g) ?? []).length, 2, "Both sidebars name the workspace row Workspace plugins.");
 const layout = read("src/app/(app)/layout.tsx");
 assert.match(layout, /plugins: "workspacePlugins"/, "The workspace breadcrumb reads Workspace plugins.");

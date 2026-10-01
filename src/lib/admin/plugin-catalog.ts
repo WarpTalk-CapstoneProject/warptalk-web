@@ -574,8 +574,8 @@ export function toCreatePluginRequest(draft: NewPluginDraft): CreateAdminMcpPlug
 // successful call as a failure.
 //
 // Grouped the way the workspace Plugin activity page groups them (WT-646,
-// `describePluginActivityOutcome` in src/lib/assistant/plugin-activity.ts, still on an open PR when
-// this was written), so the two screens agree on what a code means. The admin row keeps the raw code
+// `describePluginActivityOutcome` in src/lib/assistant/plugin-activity.ts), so the two screens agree
+// on what a code means. The admin row keeps the raw code
 // beside the label: the outcome filter matches `result_status` exactly, so the code is what an
 // operator types back in.
 
@@ -591,12 +591,16 @@ export interface PluginToolOutcome {
 }
 
 /** Codes from `PluginConstants.ErrorCodes`, grouped by what someone does about them. */
-const BLOCKED_TOOL_CODES = new Set(["permission_denied", "access_denied"]);
+// `tool_blocked` is a member's own per-tool switch and `access_denied` a cancelled consent screen:
+// decisions, grouped with the refusals. An API key not pasted, or pasted wrong, is setup.
+const BLOCKED_TOOL_CODES = new Set(["permission_denied", "access_denied", "tool_blocked"]);
 const NEEDS_SETUP_TOOL_CODES = new Set([
   "plugin_not_installed",
   "connection_required",
   "missing_scope",
   "provider_account_mismatch",
+  "api_key_required",
+  "invalid_api_key",
 ]);
 const PROVIDER_TOOL_CODES = new Set([
   "provider_rate_limited",
