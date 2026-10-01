@@ -60,6 +60,7 @@ import {
   type MeetingDisplayState,
 } from "@/lib/meeting/meeting-display-state";
 import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
+import { meetingRelation } from "@/lib/meeting/meeting-relation";
 import { dateFnsCalendarLocale, intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
@@ -1700,7 +1701,7 @@ function WeekCard({
           className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700"
         >
           <GoogleMeetMark size={10} />
-          <span className="truncate">Google Meet</span>
+          <span className="truncate">{t("chip.googleMeet")}</span>
         </a>
       ) : null}
     </div>
@@ -2108,9 +2109,15 @@ function isHostedByViewer(meeting: MyMeetingItem) {
 /**
  * The words for the fill — kept beside it, as `meetingStateLabel` sits beside the state rule, so
  * the two cannot drift.
+ *
+ * Three words for two fills: "Invited" needs an invitation (GMCAL1001). Someone in the room with
+ * neither the host seat nor an invitation — the second person on a Google Meet joined through the
+ * bridge — is a "Participant", and keeps the outline, since the meeting is still not theirs to run.
  */
 function relationLabel(meeting: MyMeetingItem, t: ReturnType<typeof useTranslations>) {
-  return isHostedByViewer(meeting) ? t("relation.youHost") : t("relation.invited");
+  const relation = meetingRelation(meeting);
+  if (relation === "host") return t("relation.youHost");
+  return relation === "invited" ? t("relation.invited") : t("relation.participant");
 }
 
 /**

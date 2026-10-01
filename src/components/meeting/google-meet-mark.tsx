@@ -1,19 +1,7 @@
 import { cn } from "@/lib/utils";
 
-/**
- * Whether a meeting happens on Google Meet, as the schedule decides it.
- *
- * Both fields, not the provider alone: the server refuses a provider without a link, so a row that
- * has one without the other is from before that rule, and a mark that opens nothing is worse than
- * no mark. One rule shared by the Agenda row, the Week card and the Month chip, so the three views
- * cannot disagree about the same meeting.
- */
-export function isGoogleMeetMeeting(meeting: {
-  externalProvider?: string | null;
-  externalMeetingUrl?: string | null;
-}): boolean {
-  return meeting.externalProvider?.toUpperCase() === "GOOGLE_MEET" && Boolean(meeting.externalMeetingUrl);
-}
+/** The rule lives in lib/meeting/google-meet-meeting so it can be tested; re-exported for the views. */
+export { isGoogleMeetMeeting } from "@/lib/meeting/google-meet-meeting";
 
 /**
  * Google Meet's logo, drawn inline.

@@ -13,7 +13,8 @@
     "translation": "Dịch",
     "workspace": "Workspace",
     "conversation": "Hội thoại",
-    "platform": "Nền tảng"
+    "platform": "Nền tảng",
+    "other": "Khác"
   },
   "badges": {
     "changesData": "Thay đổi dữ liệu",
@@ -24,13 +25,19 @@
     "platformOnly": "Chỉ nhân sự nền tảng WarpTalk nhìn thấy.",
     "samplePrompts": "Thử hỏi",
     "tryInWarpBot": "Thử trong WarpBot",
-    "tryAria": "Thử trong WarpBot: {prompt}"
+    "tryAria": "Thử trong WarpBot: {prompt}",
+    "noMoreDetails": "Công cụ này chưa có thêm mô tả."
   },
   "tryToast": "Đã gửi câu hỏi sang WarpBot",
   "builtIn": {
     "title": "Có sẵn",
     "description": "Công cụ WarpBot tự dùng khi câu hỏi của bạn cần đến.",
-    "empty": "Không có công cụ có sẵn nào khớp với tìm kiếm."
+    "empty": "Không có công cụ có sẵn nào khớp với tìm kiếm.",
+    "loading": "Đang tải công cụ của WarpBot",
+    "error": "Không tải được công cụ của WarpBot.",
+    "unavailableTitle": "Tạm thời chưa có danh sách công cụ",
+    "unavailableDescription": "WarpBot chưa báo được danh sách công cụ có sẵn lúc này. Các công cụ vẫn dùng được trong chat; vài phút nữa hãy mở lại trang này.",
+    "none": "WarpBot không báo công cụ có sẵn nào."
   },
   "webSearch": {
     "title": "Tìm trên web",
@@ -38,13 +45,22 @@
     "name": "Tìm trên web",
     "rowDescription": "Tra cứu trên web công khai và trích dẫn các trang đã dùng.",
     "unknownNote": "Dùng được khi workspace của bạn cho phép. Khi WarpBot tìm trên web, câu trả lời sẽ ghi rõ và kèm liên kết các trang.",
-    "empty": "Tìm trên web không khớp với tìm kiếm."
+    "empty": "Tìm trên web không khớp với tìm kiếm.",
+    "loading": "Đang tải trạng thái tìm trên web",
+    "onNote": "Đang bật trong workspace này. Khi WarpBot tìm trên web, câu trả lời sẽ ghi rõ và kèm liên kết các trang.",
+    "offNote": "Hiện đang bị một thiết lập của WarpTalk tắt, nên WarpBot trả lời mà không tìm trên web.",
+    "unavailableNote": "Bản triển khai WarpTalk này chưa cấu hình tìm trên web cho WarpBot.",
+    "state": {
+      "on": "Bật",
+      "off": "Tắt",
+      "unavailable": "Không khả dụng"
+    }
   },
   "plugins": {
     "title": "Từ plugin của bạn",
     "description": "Công cụ từ các plugin bạn đã kết nối và workspace này có. Công cụ bạn đã chặn không được liệt kê.",
     "loading": "Đang tải plugin của bạn",
-    "error": "Không tải được plugin của bạn.",
+    "error": "Không tải được công cụ plugin của bạn.",
     "retry": "Thử lại",
     "emptyTitle": "Chưa có công cụ plugin nào",
     "emptyDescription": "Kết nối một plugin mà workspace này có, các công cụ WarpBot dùng được từ plugin đó sẽ hiện ở đây.",

@@ -34,7 +34,10 @@
     "youHost": "Bạn chủ trì",
     "invited": "Được mời",
     "invitedBy": "Được mời bởi {name}",
-    "invitedByLabel": "Được mời bởi"
+    "invitedByLabel": "Được mời bởi",
+    "participant": "Người tham gia",
+    "hostedBy": "Chủ trì bởi {name}",
+    "hostedByLabel": "Chủ trì bởi"
   },
   "monthView": {
     "noMeetingsMatchSearch": "Không có cuộc họp nào khớp với tìm kiếm này.",
