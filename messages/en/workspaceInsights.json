@@ -1,0 +1,237 @@
+{
+  "title": "Insights",
+  "accessDenied": {
+    "title": "Insights are for owners and admins",
+    "description": "Ask an owner or admin of this workspace if you need these figures."
+  },
+  "tabs": {
+    "label": "Insights sections",
+    "overview": "Overview",
+    "usage": "Usage",
+    "tools": "Tools"
+  },
+  "common": {
+    "updated": "Updated {time}",
+    "loading": "Loading…",
+    "notAvailable": "Not available yet",
+    "atLeast": "at least {value}"
+  },
+  "delta": {
+    "noFigure": "no figure last period",
+    "noChange": "no change",
+    "fromZero": "{arrow} from 0",
+    "change": "{arrow} {percent}%"
+  },
+  "periodBar": {
+    "groupLabel": "Period",
+    "today": "Today",
+    "days7": "7 days",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "currentMonthTitle": "This is the current month",
+    "months6": "6 months",
+    "custom": "Custom",
+    "export": "Export",
+    "from": "From",
+    "to": "To (inclusive)",
+    "showRange": "Show this range"
+  },
+  "periodCards": {
+    "creditsUsed": "Credits used",
+    "meetingsHeld": "Meetings held",
+    "hoursTranslated": "Hours translated",
+    "toolCalls": "Tool calls",
+    "toolSuccessRate": "Tool success rate",
+    "lastPeriod": "last period {value}",
+    "floorNote": "Read up to a limit; the real figure may be higher",
+    "withoutDuration": "{count, plural, one {# meeting did not record how long it ran and is left out} other {# meetings did not record how long they ran and are left out}}",
+    "hoursNote": "Time from start to end of the meetings held in this period",
+    "successNote": "Of the newest {count, plural, one {# call} other {# calls}} read; older calls in this period were not read",
+    "noCalls": "No calls this period"
+  },
+  "snapshot": {
+    "creditsRemaining": "Credits remaining",
+    "percentLeft": "{percent}% of {available} left",
+    "noPlan": "No plan",
+    "noPlanSub": "Choose a plan to get credits",
+    "runsOutIn": "Runs out in",
+    "days": "{count, plural, one {# day} other {# days}}",
+    "runsOutSub": "at {rate} credits a day · cycle ends in {days, plural, one {# day} other {# days}}",
+    "lastsCycle": "Lasts the cycle",
+    "lastsSub": "about {credits} left at renewal",
+    "reasonNoDates": "This cycle has no dates on it",
+    "reasonTooEarly": "Too early in the cycle to project a rate",
+    "reasonNothingUsed": "Nothing used yet this cycle",
+    "plan": "Plan",
+    "renewsOn": "Renews {date}",
+    "endsOn": "Ends {date} and will not renew",
+    "activeMembers": "Active members",
+    "activeMembersSub": "spent credits this period, of {total, plural, one {# member} other {# members}}",
+    "activeMembersSubNoTotal": "spent credits this period"
+  },
+  "more": {
+    "show": "Show {count} more metrics",
+    "hide": "Hide {count} metrics",
+    "avgCreditsPerMeeting": "Avg credits per meeting",
+    "avgCreditsPerMeetingSub": "over {count, plural, one {# meeting} other {# meetings}} this period",
+    "noMeetings": "No meetings this period",
+    "creditsPerActiveMember": "Credits per active member",
+    "creditsPerActiveMemberSub": "over {count, plural, one {# active member} other {# active members}}",
+    "noActiveMembers": "No member spent credits this period",
+    "connectedPlugins": "Connected plugins",
+    "connectedPluginsSub": "Plugins in this workspace",
+    "pendingApprovals": "Pending approvals",
+    "pendingApprovalsSub": "Plugin requests waiting for an answer"
+  },
+  "toolLine": {
+    "title": "WarpBot tools",
+    "status": {
+      "needsAttention": "Needs attention",
+      "healthy": "Working",
+      "noCalls": "No calls yet"
+    },
+    "noCallsHint": "No plugin calls in this period",
+    "calls": "{count, plural, one {{value} call} other {{value} calls}} this period",
+    "callsAtLeast": "at least {count, plural, one {{value} call} other {{value} calls}} this period",
+    "success": "{percent} success",
+    "blocked": "{count} blocked by policy",
+    "needsSetup": "{count} need setup",
+    "lastCall": "last call {time}"
+  },
+  "links": {
+    "billing": "Billing",
+    "usage": "Usage",
+    "meetings": "Meetings",
+    "tools": "Tools",
+    "schedules": "Schedules"
+  },
+  "charts": {
+    "sixMonthsTitle": "Credits, 6 months",
+    "sixMonthsSubtitle": "Credits used per month",
+    "sixMonthsEmpty": "No usage recorded in these months",
+    "sixMonthsAria": "Credits used per month over six months",
+    "creditsValue": "{value} credits",
+    "creditsSeries": "Credits",
+    "meetingsSeries": "Meetings",
+    "callsSeries": "Calls",
+    "noFigure": "No figure",
+    "stillToCome": "Still to come",
+    "noDays": "No days in this period",
+    "perDayTitle": "Credits per day",
+    "perDaySubtitle": "Credits as columns, meetings as a line",
+    "perDaySubtitleBlank": "Credits as columns, meetings as a line. Days still to come are left blank, not drawn as 0",
+    "perDayAria": "Credits and meetings per day",
+    "byServiceTitle": "Credits by AI service",
+    "byServiceCaption": "Credits used · {period}",
+    "byServiceAria": "Credits used by AI service",
+    "noCreditsUsed": "No credits used in this period",
+    "otherService": "Other",
+    "meetingsTitle": "Meetings per day",
+    "meetingsValue": "{count, plural, one {# meeting} other {# meetings}}",
+    "meetingsAria": "Meetings held per day",
+    "hoursCaption": "{hours} translated",
+    "hoursUnknown": "Hours not available",
+    "hoursSuffix": "{hours} translated",
+    "pluginsTitle": "Tool calls by plugin",
+    "pluginsCaption": "WarpBot calls · {period}",
+    "pluginsAria": "WarpBot tool calls by plugin",
+    "noToolCalls": "No plugin calls in this period",
+    "callsValue": "{count, plural, one {{value} call} other {{value} calls}}"
+  },
+  "attention": {
+    "title": "Needs attention",
+    "subtitle": "Things an owner or admin should act on",
+    "nothingNow": "Nothing needs attention right now",
+    "nothingAnswered": "Nothing found in the sources that answered",
+    "notChecked": "Not checked: {sources}",
+    "sources": {
+      "billing": "credit balance",
+      "payments": "payments",
+      "toolAudit": "WarpBot tool log",
+      "plugins": "plugin requests"
+    },
+    "tags": {
+      "plan": "Plan",
+      "payment": "Payment",
+      "billing": "Billing",
+      "needsSetup": "Needs setup",
+      "policy": "Policy",
+      "requests": "Requests"
+    },
+    "noPlan": {
+      "title": "This workspace has no plan",
+      "detail": "Meetings cannot spend credits until a plan is chosen"
+    },
+    "paymentFailed": {
+      "title": "The last renewal payment failed",
+      "detail": "Update the payment method in Billing",
+      "detailGrace": "Update the payment method before {date}"
+    },
+    "lowCredits": {
+      "title": "{percent}% of this cycle's credits left",
+      "detail": "{credits} credits remaining"
+    },
+    "planEnding": {
+      "title": "The plan will not renew",
+      "detail": "{plan} ends on {date}"
+    },
+    "pluginsNeedSetup": {
+      "title": "{count, plural, one {# plugin needs setup} other {# plugins need setup}}"
+    },
+    "policyBlocks": {
+      "title": "{count, plural, one {# call blocked by policy} other {# calls blocked by policy}}",
+      "titleAtLeast": "At least {count, plural, one {# call blocked by policy} other {# calls blocked by policy}}",
+      "detail": "WarpBot was refused by this workspace's plugin rules"
+    },
+    "pendingRequests": {
+      "title": "{count, plural, one {# plugin request waiting} other {# plugin requests waiting}}",
+      "detail": "Members asked for plugins this workspace does not have"
+    }
+  },
+  "members": {
+    "title": "Top members by credits",
+    "empty": "No member spent credits in this period",
+    "formerMember": "Former member"
+  },
+  "upNext": {
+    "title": "Up next",
+    "subtitle": "Meetings running now or still to come",
+    "empty": "No meetings scheduled",
+    "runningNow": "Running now",
+    "openNow": "Open now",
+    "noTimeSet": "No time set",
+    "tagLive": "Live",
+    "tagWaiting": "Waiting",
+    "tagScheduled": "Scheduled"
+  },
+  "activity": {
+    "title": "Recent tool activity",
+    "subtitle": "WarpBot plugin calls and policy decisions",
+    "empty": "No tool activity yet",
+    "formerMember": "Former member",
+    "outcome": {
+      "succeeded": "Succeeded",
+      "blocked": "Blocked",
+      "blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+      "awaitingConfirmation": "Awaiting confirmation",
+      "awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
+      "needsSetup": "Needs setup",
+      "needsSetupHint": "Plugin connection or configuration missing. Reconnect in Settings > Plugins.",
+      "providerError": "Provider error",
+      "providerErrorHint": "Provider returned an error. Check service status or API quota.",
+      "failed": "Failed"
+    }
+  },
+  "usageLabels": {
+    "translation": "Live translation",
+    "dubbing": "Voice dubbing",
+    "cloneDubbing": "Cloned-voice dubbing",
+    "transcription": "Transcription",
+    "assistant": "AI assistant",
+    "summary": "Meeting summary",
+    "voiceCloning": "Voice cloning",
+    "documentTranslation": "Document translation",
+    "adjustment": "Credit adjustments",
+    "otherUsage": "Other usage"
+  }
+}

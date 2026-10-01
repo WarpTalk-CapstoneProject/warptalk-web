@@ -78,5 +78,10 @@
     "confirm": "Cancel add-on",
     "done": "The add-on will end at the close of its paid period.",
     "failed": "The add-on could not be cancelled."
+  },
+  "panel": {
+    "ariaLabel": "Extras",
+    "emptyPacks": "No credit packs are available for this workspace right now.",
+    "emptyAddons": "No add-ons are available for this workspace right now."
   }
 }

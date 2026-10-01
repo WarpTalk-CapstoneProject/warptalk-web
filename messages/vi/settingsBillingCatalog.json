@@ -78,5 +78,10 @@
     "confirm": "Huỷ tiện ích",
     "done": "Tiện ích sẽ kết thúc khi hết kỳ đã thanh toán.",
     "failed": "Không huỷ được tiện ích."
+  },
+  "panel": {
+    "ariaLabel": "Mục bổ sung",
+    "emptyPacks": "Hiện không có gói credit nào dành cho workspace này.",
+    "emptyAddons": "Hiện không có tiện ích bổ sung nào dành cho workspace này."
   }
 }

@@ -48,6 +48,7 @@ import {
   CaretLeft,
   Check,
   CreditCard,
+  ChartBar,
   ChartLine,
   Receipt,
   BookOpen,
@@ -441,7 +442,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // removed without moving the page it would have dropped the reader out of Settings.
   const isSettingsPage =
     pathname.includes("/settings") ||
-    pathname.includes("/payment");
+    pathname.includes("/payment") ||
+    // WT-878: Insights is listed in the Settings sidebar's Workspace group, so it keeps that chrome.
+    /^\/(?!admin\/)[^/]+\/insights(\/|$)/.test(pathname);
 
   // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
   // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
@@ -765,6 +768,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
+      // WT-878: credits, meetings and WarpBot tools in one page (Overview / Usage / Tools).
+      settingsItems.push({
+        icon: ChartBar,
+        label: t("settingsNav.insights"),
+        href: `/${activeWorkspaceSlug}/insights`,
+      });
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
@@ -979,6 +988,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.workspaceSettingsExpanded")}
+                    </span>
+                  </Link>
+                </div>
+                {/* WT-878: the workspace's Insights page — credits, meetings and WarpBot tools in one
+                    place, with Overview / Usage / Tools tabs. Owner/Admin. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/insights`)
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/insights`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ChartBar size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      {t("settingsNav.insights")}
                     </span>
                   </Link>
                 </div>
