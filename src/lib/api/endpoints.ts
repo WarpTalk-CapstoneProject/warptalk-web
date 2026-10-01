@@ -443,6 +443,13 @@ export const API = {
      */
     workspacePluginToolAudits: "/assistant/mcp/tools/audits",
     /**
+     * Every WarpBot tool call of one workspace over `from`/`to` (ISO, UTC), counted by the
+     * assistant service: totals, by source, by UTC day and by tool (wave 4). Owner/Admin only, the
+     * audit log's check. At most 180 days; the default is the last 30.
+     */
+    workspaceToolInsights: (workspaceId: string) =>
+      `/assistant/workspaces/${encodeURIComponent(workspaceId)}/insights/tools`,
+    /**
      * The workspace half of the plugin marketplace (2026-09-17). Its own prefix rather than more
      * literals under `/assistant/plugins`, where every literal beside `{pluginKey}` reserves a key.
      * Authorised against the workspace in the path: reads Owner/Admin, writes Owner, requests any

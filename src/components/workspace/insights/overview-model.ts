@@ -19,10 +19,16 @@ import {
   type TimeRange,
 } from "@/lib/workspace/insights/overview-metrics";
 import {
+  callsByOrigin,
+  comparablePreviousCalls,
   lastToolCallAt,
-  summariseToolCalls,
-  type ToolCallSummary,
-} from "@/lib/workspace/insights/tool-audits";
+  needsSetupPlugins,
+  previousWindowStart,
+  toolInsightsWindow,
+  toolSuccessRate,
+  type ToolOriginCount,
+} from "@/lib/workspace/insights/tool-insights";
+import type { ToolInsightsTotalsDto, WorkspaceToolInsightsDto } from "@/types/assistant-tool-insights";
 
 type State<T> = InsightsSourceState<T>;
 
@@ -43,10 +49,15 @@ function nullIsUnavailable(state: State<PeriodFigure>): State<PeriodFigure> {
   return state.status === "ready" && state.data.value === null ? { status: "unavailable" } : state;
 }
 
+/** The period's tool calls, as the server counted them (every source). */
 export interface ToolsModel {
-  current: ToolCallSummary;
-  previous: ToolCallSummary;
+  totals: ToolInsightsTotalsDto;
+  successRate: number | null;
+  /** Null when the previous period was not fully recorded. */
+  previousCalls: number | null;
   lastCallAt: string | null;
+  byOrigin: ToolOriginCount[];
+  needsSetupPlugins: string[];
 }
 
 export interface OverviewModel {
@@ -66,7 +77,11 @@ export interface OverviewModel {
   creditsPerActiveMember: State<number | null>;
 }
 
-export function buildOverviewModel(sources: WorkspaceInsightsOverviewSources, period: ResolvedInsightsPeriod): OverviewModel {
+export function buildOverviewModel(
+  sources: WorkspaceInsightsOverviewSources,
+  toolInsights: State<WorkspaceToolInsightsDto>,
+  period: ResolvedInsightsPeriod,
+): OverviewModel {
   const current = { from: period.from, to: period.to };
   const previous = { from: period.previousFrom, to: period.previousTo };
 
@@ -75,19 +90,17 @@ export function buildOverviewModel(sources: WorkspaceInsightsOverviewSources, pe
   const meetings = mapState(rooms, (figures) => figures.meetings);
   const hours = nullIsUnavailable(mapState(rooms, (figures) => figures.hours));
 
-  const tools = mapState(sources.audits, (read) => ({
-    current: summariseToolCalls(read, current),
-    previous: summariseToolCalls(read, previous),
-    lastCallAt: lastToolCallAt(read),
+  const tools = mapState(toolInsights, (data): ToolsModel => ({
+    totals: data.totals,
+    successRate: toolSuccessRate(data.totals),
+    previousCalls: comparablePreviousCalls(data, previousWindowStart(toolInsightsWindow(period.from, period.to))),
+    lastCallAt: lastToolCallAt(data.byTool),
+    byOrigin: callsByOrigin(data.byTool),
+    needsSetupPlugins: needsSetupPlugins(data.byTool),
   }));
-  const toolCalls = mapState(tools, ({ current: now, previous: before }) =>
-    periodFigure(now.calls, before.complete ? before.calls : null, !now.complete),
-  );
-  // The rate of the calls that were read. When the read stopped at its cap those are the newest
-  // calls of the window, which the card says; it is not scaled or guessed past them.
-  const toolSuccessRate = mapState(tools, ({ current: now, previous: before }) =>
-    periodFigure(now.successRate, before.complete ? before.successRate : null),
-  );
+  const toolCalls = mapState(tools, (model) => periodFigure(model.totals.calls, model.previousCalls));
+  // The server sends the previous period's call count only, so the rate has no comparison.
+  const toolSuccessRateFigure = mapState(tools, (model) => periodFigure(model.successRate, null));
 
   // "Active" = spent credits in the period: the one per-member activity a workspace source reports.
   // The directory only adds the "of N members" beside it, so its failure does not hide the count.
@@ -112,7 +125,7 @@ export function buildOverviewModel(sources: WorkspaceInsightsOverviewSources, pe
     hours,
     meetingsWithoutDuration: rooms.status === "ready" ? rooms.data.withoutDuration : 0,
     toolCalls,
-    toolSuccessRate,
+    toolSuccessRate: toolSuccessRateFigure,
     tools,
     activeMembers,
     avgCreditsPerMeeting,
