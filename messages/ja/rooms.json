@@ -275,5 +275,50 @@
     "subscriptionExpired": "ワークスペースのサブスクリプションの有効期限が切れました — 翻訳を一時停止しています。ワークスペースのオーナーに更新を依頼してください。",
     "suspended": "翻訳を停止しました：このワークスペースの AI サービスは停止中です。ワークスペースのオーナーに請求状況の確認を依頼してください。",
     "restored": "翻訳を再び利用できます — ワークスペースの請求が復旧しました。"
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "WarpTalk に接続しています…",
+      "noHost": "WarpTalk はまだこの会議を実行していません。",
+      "incompatible": "WarpTalk が更新されました。ここで使うには再読み込みしてください。"
+    },
+    "carry": {
+      "asking": "WarpTalk でこの会議を開いています…",
+      "failed": "WarpTalk がこの会議を実行していないため、ここから言語や音声を変更できません。",
+      "incompatible": "WarpTalk が更新されました。これらの操作を使うには WarpTalk ウィンドウを再読み込みしてください。",
+      "show": "WarpTalk を表示"
+    },
+    "language": {
+      "connected": "言語を選択"
+    },
+    "listen": {
+      "label": "聞く内容",
+      "text": "テキスト",
+      "voice": "音声",
+      "textHint": "テキスト: 翻訳を読み、通話はそのまま聞きます。",
+      "voiceHint": "音声: 相手の翻訳音声を聞き、元の音声は小さく流れます。"
+    },
+    "devices": {
+      "hint": "WarpTalk ウィンドウでデバイス設定を開きます"
+    },
+    "startStep": {
+      "title": "この通話を翻訳",
+      "intro": "あなたの言語を選んでください。通話の他の参加者はその言語に翻訳されます。",
+      "start": "翻訳を開始",
+      "pickFirst": "先に言語を選択してください",
+      "waitingForHost": "翻訳は会議のホストまたはこの通話を収録している人が開始します。",
+      "continue": "続ける",
+      "started": "翻訳を開始しました。",
+      "startFailed": "翻訳を開始できませんでした。",
+      "notCarried": "翻訳を開始しましたが、WarpTalk でこの会議を開けませんでした。",
+      "notCarriedDescription": "あなたの音声と吹き替えが届くよう、WarpTalk ウィンドウで会議を開いてください。"
+    },
+    "takeover": {
+      "notice": "この通話の音声を収録していた人が WarpTalk を終了しました。",
+      "action": "このデバイスで音声を収録",
+      "done": "このデバイスが通話の音声を収録しています。",
+      "failed": "このデバイスで通話の音声を収録できませんでした。",
+      "failedDescription": "まだ誰かが収録している可能性があります。詳細は WarpTalk ウィンドウを確認してください。"
+    }
   }
 }

@@ -137,6 +137,8 @@ import {
 } from "@/lib/audio/bridge-inbound-health";
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
+import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
+import { canControlBridge } from "@/lib/meeting/bridge-capturer";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { bridgeMeetingConnection } from "@/lib/meeting/bridge-meeting-connection";
 import {
@@ -921,6 +923,23 @@ export function PersistentMeetingSession({
   // wait for Start Translation, which kept every word the far side said before Start out of the
   // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
   const bridgeListening = Boolean(room) && transcriptOpen;
+  /**
+   * W4b (bridge claim): only the CAPTURER's desktop opens the far side — the stand-in token, the
+   * loopback or cable leg, and the capture consent that comes before them. A MEMBER publishes its
+   * own mic only: two capturers would play the far side twice. A legacy room (no capturer) keeps
+   * the booker doing it, which is the servers' rule too (IsBridgeAudioOwner). The lease hook also
+   * renews the lease while the meeting is open here, and is what the popup's takeover reaches.
+   */
+  const bridgeLease = useBridgeCapturerLease({
+    roomId,
+    enabled: isBridgeRoom,
+    live: bridgeListening && !meetingIsIdleReaped,
+    userId: user?.id,
+    bridgeCapturerUserId: room?.bridgeCapturerUserId,
+    isLegacyOwner: Boolean(room?.isHost || (user?.id && room?.hostId === user.id)),
+    participants: apiParticipants,
+  });
+  const bridgeAudioOwner = isBridgeRoom && bridgeLease.bridgeRole === "capturer";
   const loopbackFallbackActive = isLoopbackFallbackActive(bridgeLoopbackFallback, {
     roomId,
     inboundDeviceId: bridgeInboundDeviceId,
@@ -955,7 +974,7 @@ export function PersistentMeetingSession({
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
     isBridgeRoom,
-    isHost,
+    isHost: bridgeAudioOwner,
     meetingOpen: bridgeListening,
     // WT-898: an installed Hi-Fi Cable no longer silences the ask. Loopback comes first, so the
     // device only counts here where loopback is not wanted at all — and there
@@ -991,7 +1010,7 @@ export function PersistentMeetingSession({
   // WT-900: it also keeps raising a popup that was closed or minimised without an answer, and
   // says when to give up on it — the question then moves to this window's modal.
   const consentFallbackToMain = useBridgeConsentHost({
-    enabled: isBridgeRoom && isHost,
+    enabled: bridgeAudioOwner,
     roomId,
     consent: consentState,
     sources: loopbackSources,
@@ -1136,7 +1155,7 @@ export function PersistentMeetingSession({
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
     const wanted =
-      isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
+      bridgeAudioOwner && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
     if (!wanted) {
       // Covers Stop Translation, an idle reap and leaving the room. Not awaited: teardown is
       // fire-and-forget by nature and an effect cleanup cannot await anyway.
@@ -1362,8 +1381,7 @@ export function PersistentMeetingSession({
       cancelled = true;
     };
   }, [
-    isBridgeRoom,
-    isHost,
+    bridgeAudioOwner,
     bridgeListening,
     bridgeInboundDeviceId,
     bridgeInboundPath,
@@ -2649,6 +2667,7 @@ export function PersistentMeetingSession({
   // the popup offers is dispatched to the handler the native meeting uses for it — stop, the WT-605
   // transcript pause, rejoin after the idle reaper, the device wizard, the room's record — so the
   // host check, the toasts and the wizard are the native ones.
+  const bridgeCanControl = canControlBridge({ isRoomHost, bridgeRole: bridgeLease.bridgeRole });
   const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
     enabled: isBridgeRoom,
@@ -2694,14 +2713,19 @@ export function PersistentMeetingSession({
       connected: liveKitConnected,
     }),
     isRoomHost,
-    // The native Stop, host-only as the native panel offers it (`isRoomHost ? handleStopWarptalk`).
+    // W4b: this desktop's role in the shared room, and whether the capturer looks gone — which is
+    // when a member's popup offers "Capture audio on this device".
+    bridgeRole: isBridgeRoom ? bridgeLease.bridgeRole : undefined,
+    bridgeCapturerAway: bridgeLease.capturerAway ?? undefined,
+    onTakeOverCapture: isBridgeRoom ? () => void bridgeLease.takeOver() : undefined,
+    // The native Stop, for the room host or the bridge capturer (PO, 2026-10-01: canControlBridge).
     // Absent for anybody else, and the hook then answers the popup with a snapshot instead.
-    onStopTranslation: isRoomHost ? handleStopWarptalk : undefined,
+    onStopTranslation: bridgeCanControl ? handleStopWarptalk : undefined,
     // commitTranscriptPause, not handleToggleTranscriptPause: the popup has already asked "are you
     // sure" before a pause, and the native confirmation would be a second one, in a window the
     // host is not looking at. Host-only, as the panel's switch is (TranscriptRecordingService 403s
     // anybody else).
-    onSetTranscriptPaused: isRoomHost ? (paused) => commitTranscriptPause(paused) : undefined,
+    onSetTranscriptPaused: bridgeCanControl ? (paused) => commitTranscriptPause(paused) : undefined,
     // The idle reaper's way back, exactly as the reaped compact view's Rejoin does it.
     onRejoin: () => {
       markMeetingInteraction();

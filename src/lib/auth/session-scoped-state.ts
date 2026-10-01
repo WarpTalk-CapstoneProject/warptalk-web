@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { useActiveMeetingStore } from "../../stores/active-meeting-store.ts";
+import { useBridgeCapturerStore } from "../../stores/bridge-capturer-store.ts";
 import { useMeetingInviteStore } from "../../stores/meeting-invite-store.ts";
 import { useMeetingStartedStore } from "../../stores/meeting-started-store.ts";
 import { useAssistantContextStore } from "../../stores/assistant-context-store.ts";
@@ -89,6 +90,9 @@ function resetSessionScopedStores() {
   useWorkspaceTabsStore.getState().clearAllTabs();
   useTranslationRoomStore.getState().reset();
   useActiveMeetingStore.getState().closeMeeting();
+  // W4b: "this desktop captures that Meet call" was said to the previous account's claim. The
+  // next account claims for itself; a stale "capturer" here would heartbeat a lease it never held.
+  useBridgeCapturerStore.getState().reset();
   // A "join now" button for a meeting the PREVIOUS account was invited to. Leaving it on screen
   // across a sign-in offers the new account a room it may have no business entering.
   useMeetingStartedStore.getState().dismiss();

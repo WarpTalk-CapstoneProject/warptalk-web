@@ -16,6 +16,10 @@
  *
  *   Once the room is ENDED, EndedView (t3) replaces the tabs and the dock.
  *
+ *   W4b: a room whose translation has NEVER run opens on BridgeStartStep instead — the meeting's
+ *   "My language" picker as one compact step with one Start (PO, 2026-10-01). It gives way to the
+ *   tabs and dock once translation has run, or when a member presses Continue.
+ *
  * NO END (PO, 2026-10-01)
  *   The popup does not end a bridge meeting: it ends when the Google Meet conference does, which
  *   the backend learns from Google. The End button that used to sit at the right of the tab row is
@@ -45,13 +49,16 @@ import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
+import { CaptureTakeoverNotice } from "./capture-takeover-notice";
 import { DockFarSideLanguagePill, FarSideLanguageNotice } from "./dock-far-side-language-pill";
 import { DockLanguagePill } from "./dock-language-pill";
 import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetingNotices } from "./meeting-notices";
+import { RelayCarryNotice } from "./relay-carry-notice";
 import { SettingsFlyout } from "./settings-flyout";
+import { BridgeStartStep } from "./start-step";
 import { TranscriptPane } from "./transcript-pane";
 import { WarpBotPane } from "./warpbot-pane";
 import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
@@ -70,22 +77,30 @@ const TABS: ReadonlyArray<{ id: WidgetTab; label: string }> = [
 ];
 
 export function WidgetShell() {
-  const { ended } = useBridgeWidget();
+  const { ended, neverStarted, roomId } = useBridgeWidget();
+  // A member's "Continue" past the language step, for this room only.
+  const [continuedRoomId, setContinuedRoomId] = useState<string | null>(null);
+  const startStep = !ended && neverStarted && continuedRoomId !== roomId;
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-canvas text-ink">
       {ended ? (
         <EndedView />
+      ) : startStep ? (
+        <BridgeStartStep onContinue={() => setContinuedRoomId(roomId)} />
       ) : (
         <WidgetTabs>
+          {/* W4b: nobody is running this room in the main window — said first, with the way out. */}
+          <RelayCarryNotice />
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
+          <CaptureTakeoverNotice />
           <InboundNoSignalNotice />
           <MeetingNotices />
         </WidgetTabs>
       )}
-      {ended ? null : <WidgetDock />}
+      {ended || startStep ? null : <WidgetDock />}
     </main>
   );
 }

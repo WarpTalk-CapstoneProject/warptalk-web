@@ -15,48 +15,48 @@
  *
  * The choice lives in the main window (voiceEnabled in persistent-meeting-session), so a press is
  * relayed and the switch shows what the main window then reports. With no main window to ask, the
- * switch is disabled and says why, like the language pill beside it.
+ * switch is disabled and says why, like the language pill beside it — and the popup has already
+ * asked the main window to carry the room (W4b, use-bridge-widget-state.ts).
  */
 
 import { useId } from "react";
+import { useTranslations } from "next-intl";
 import { SpeakerHigh, TextAa } from "@phosphor-icons/react/dist/ssr";
 
-import type { BridgeWidgetRelayStatus } from "@/lib/meeting/bridge-widget-relay";
 import { cn } from "@/lib/utils";
 
-import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import { useBridgeWidget } from "./widget-context";
 
 const OPTIONS = [
-  { voice: false, label: "Text", icon: TextAa },
-  { voice: true, label: "Voice", icon: SpeakerHigh },
+  { voice: false, key: "text", icon: TextAa },
+  { voice: true, key: "voice", icon: SpeakerHigh },
 ] as const;
 
-const UNAVAILABLE_HINT: Record<Exclude<BridgeWidgetRelayStatus, "connected">, string> = {
-  waiting: "Checking the WarpTalk window…",
-  "no-host": "Open this meeting in the WarpTalk window to change what you hear here.",
-  incompatible: "WarpTalk was updated. Reload it to change what you hear here.",
-};
-
 export function DockListenSwitch() {
-  const { roomId } = useBridgeWidget();
-  const { view, setVoiceEnabled } = useBridgeWidgetRelayClient(roomId);
+  const t = useTranslations("rooms.bridgeWidget");
+  const {
+    relay: { view, setVoiceEnabled },
+  } = useBridgeWidget();
   const hintId = useId();
 
   const connected = view.status === "connected" && view.snapshot !== null;
   const voiceEnabled = view.snapshot?.voiceEnabled ?? false;
   const hint =
-    view.status !== "connected"
-      ? UNAVAILABLE_HINT[view.status]
-      : voiceEnabled
-        ? "Voice: you hear them translated, with the original quieter underneath."
-        : "Text: you read the translation and hear the call as it is.";
+    view.status === "waiting"
+      ? t("relay.waiting")
+      : view.status === "no-host"
+        ? t("relay.noHost")
+        : view.status === "incompatible"
+          ? t("relay.incompatible")
+          : voiceEnabled
+            ? t("listen.voiceHint")
+            : t("listen.textHint");
 
   return (
     <span className="group/listen relative inline-flex shrink-0">
       <span
         role="radiogroup"
-        aria-label="What you hear"
+        aria-label={t("listen.label")}
         aria-describedby={hintId}
         aria-disabled={!connected}
         className={cn(
@@ -69,7 +69,7 @@ export function DockListenSwitch() {
           const Icon = option.icon;
           return (
             <button
-              key={option.label}
+              key={option.key}
               type="button"
               role="radio"
               aria-checked={selected}
@@ -85,7 +85,7 @@ export function DockListenSwitch() {
               )}
             >
               <Icon size={14} weight={selected ? "bold" : "regular"} aria-hidden="true" />
-              {option.label}
+              {t(`listen.${option.key}`)}
             </button>
           );
         })}

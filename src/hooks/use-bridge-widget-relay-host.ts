@@ -23,6 +23,9 @@
  *     to this window's own handlers — so the host check, the toasts and the wizard are the native
  *     ones. Every one of these options is optional: a caller that does not pass one leaves the
  *     popup on REST for it.
+ *   - W4b: says this desktop's bridge role (`bridgeRole`, `bridgeCapturerAway`) and dispatches a
+ *     member's `take-over-capture` to the lease hook (use-bridge-capturer-lease), so the popup can
+ *     gate its controls on host-or-capturer and offer the takeover when the capturer has gone;
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
  *     controls that would reach nobody;
  *   - W4a: `announceEnded()` (returned) says the room ENDED, synchronously, for the moment the
@@ -54,6 +57,7 @@ import {
   type BridgeWidgetTranslationSnapshot,
   type BridgeWidgetVoiceSnapshot,
 } from "@/lib/meeting/bridge-widget-relay";
+import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
 
 export type BridgeWidgetRelayHostOptions = {
   roomId: string;
@@ -120,6 +124,14 @@ export type BridgeWidgetRelayHostOptions = {
    * and bring it up. The popup never ends a meeting; there is no end callback on purpose.
    */
   onOpenRoomRecord?: () => void;
+
+  // ── W4b: bridge claim. Optional, like the WT-901 fields. ──────────────────
+  /** This desktop's role in the shared bridge room (lib/meeting/bridge-capturer). */
+  bridgeRole?: BridgeRole;
+  /** The capturer is somebody else and not connected: the popup offers a member the takeover. */
+  bridgeCapturerAway?: boolean;
+  /** "Capture audio on this device" in a member's popup. Absent: answered with a snapshot. */
+  onTakeOverCapture?: () => void;
 };
 
 export type BridgeWidgetRelayHost = {
@@ -150,6 +162,8 @@ export function useBridgeWidgetRelayHost({
   idleReaped,
   connection,
   isRoomHost,
+  bridgeRole,
+  bridgeCapturerAway,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -162,6 +176,7 @@ export function useBridgeWidgetRelayHost({
   onStopTranslation,
   onSetTranscriptPaused,
   onOpenRoomRecord,
+  onTakeOverCapture,
 }: BridgeWidgetRelayHostOptions): BridgeWidgetRelayHost {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
   const fieldsRef = useRef<BridgeWidgetSnapshotFields>({
@@ -181,6 +196,8 @@ export function useBridgeWidgetRelayHost({
     idleReaped,
     connection,
     isRoomHost,
+    bridgeRole,
+    bridgeCapturerAway,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -195,6 +212,7 @@ export function useBridgeWidgetRelayHost({
     onStopTranslation,
     onSetTranscriptPaused,
     onOpenRoomRecord,
+    onTakeOverCapture,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -213,6 +231,7 @@ export function useBridgeWidgetRelayHost({
       onStopTranslation,
       onSetTranscriptPaused,
       onOpenRoomRecord,
+      onTakeOverCapture,
     };
   });
 
@@ -246,6 +265,8 @@ export function useBridgeWidgetRelayHost({
       idleReaped,
       connection,
       isRoomHost,
+      bridgeRole,
+      bridgeCapturerAway,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
@@ -272,6 +293,8 @@ export function useBridgeWidgetRelayHost({
     idleReaped,
     connection,
     isRoomHost,
+    bridgeRole,
+    bridgeCapturerAway,
   ]);
 
   useEffect(() => {
@@ -344,6 +367,11 @@ export function useBridgeWidgetRelayHost({
           break;
         case "open-room-record":
           handlers.onOpenRoomRecord?.();
+          break;
+        // W4b. The same no-reply rule: a takeover changes `bridgeRole`, and the field effect says so.
+        case "take-over-capture":
+          if (handlers.onTakeOverCapture) handlers.onTakeOverCapture();
+          else sendSnapshot();
           break;
         default:
           // snapshot / host-gone from another main window on the same room (a second tab in a
