@@ -121,6 +121,7 @@ export function DocumentPreview({
   fileExtension,
   sizeBytes,
   revision,
+  source = "approved",
   onDownload,
 }: {
   workspaceId: string;
@@ -130,6 +131,12 @@ export function DocumentPreview({
   sizeBytes: number;
   /** `documentFileRevision(doc)` — which stored file this id points at right now. WT-854. */
   revision: string;
+  /**
+   * WT-854 — which file to show: the approved one everybody reads, or the corrected version
+   * awaiting review (reviewers and the uploader only). Pass `pendingRevisionFileRevision(doc)` as
+   * `revision` with "pending", so the two files can never share a cache entry.
+   */
+  source?: "approved" | "pending";
   onDownload: () => void;
 }) {
   const kind = previewKind(fileExtension);
@@ -143,7 +150,10 @@ export function DocumentPreview({
     isError,
   } = useQuery({
     queryKey: ["workspace-document-preview", workspaceId, documentId, revision],
-    queryFn: () => WorkspaceService.downloadDocument(workspaceId, documentId),
+    queryFn: () =>
+      source === "pending"
+        ? WorkspaceService.downloadPendingRevision(workspaceId, documentId)
+        : WorkspaceService.downloadDocument(workspaceId, documentId),
     enabled: Boolean(workspaceId) && Boolean(documentId) && canPreview,
     // The bytes behind one REVISION never change, so they are never re-read. The bytes behind a
     // document id do: "Upload a corrected version" replaces the file in place (WT-633), and keying

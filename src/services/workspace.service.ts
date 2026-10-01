@@ -455,6 +455,18 @@ export const WorkspaceService = {
     return data;
   },
 
+  /**
+   * WT-854 — the bytes of the corrected version awaiting review (reviewers and the uploader only).
+   * `downloadDocument` is unaffected by it and keeps returning the approved file.
+   */
+  async downloadPendingRevision(workspaceId: string, docId: string): Promise<Blob> {
+    const { data } = await apiClient.get<Blob>(
+      API.workspaces.documentPendingRevisionDownload(workspaceId, docId),
+      { responseType: "blob" },
+    );
+    return data;
+  },
+
   async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {
     const { data } = await apiClient.get<Blob>(API.workspaces.documentDownload(workspaceId, docId), {
       responseType: "blob",

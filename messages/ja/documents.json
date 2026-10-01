@@ -59,6 +59,7 @@
     "rejected": "却下",
     "private": "非公開",
     "pendingApproval": "承認待ち",
+    "revisionPending": "修正版を確認待ち",
     "administrative": "管理用",
     "aiReady": "AI利用可能",
     "aiFailed": "AI失敗",
@@ -155,6 +156,14 @@
     "reject": "却下",
     "rejectTitle": "ドキュメントを却下",
     "download": "ダウンロード",
+    "pendingRevision": {
+      "title": "修正版が確認待ちです",
+      "body": "{fileName}（{date} にアップロード）。確認者が承認するまで、全員が承認済みのファイルを閲覧します。",
+      "note": "アップロード者からのメモ: {note}",
+      "previewLabel": "プレビューするファイル",
+      "showApproved": "承認済みファイル",
+      "showPending": "修正版"
+    },
     "toasts": {
       "downloadSaved": "ファイルを保存しました!",
       "downloadStarted": "ファイルをダウンロード中...",
@@ -164,6 +173,8 @@
       "approveActionFailed": "操作に失敗しました。",
       "revisionSubmitted": "修正版を承認待ちとして送信しました。",
       "revisionFailed": "修正版のアップロードに失敗しました。",
+      "revisionApproved": "修正版を承認しました。これが現在のドキュメントです。",
+      "revisionRejected": "修正版を却下して削除しました。閲覧者には承認済みのファイルが表示されます。",
       "visibilityChangeFailed": "このドキュメントの公開範囲を変更できませんでした。",
       "aiIndexingEnabled": "AIインデックスを有効にしました。ドキュメントは再インデックスされます。",
       "aiIndexingDisabled": "AIインデックスを無効にしました。既存のAI用コピーは削除中です。",

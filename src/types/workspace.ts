@@ -301,6 +301,25 @@ export interface WorkspaceDocumentDto {
    * readable while the answer is under review. Read it together with `status`, never alone.
    */
   rejectionReason?: string | null;
+  /**
+   * WT-854 — a corrected file uploaded for a PUBLISHED document, awaiting a reviewer, or null.
+   * Every other field still describes the APPROVED file, which is what readers download, preview
+   * and what the AI index holds; this is what an approval would replace it with. Its bytes come
+   * from `documentPendingRevisionDownload`, for reviewers and the uploader only.
+   */
+  pendingRevision?: WorkspaceDocumentPendingRevisionDto | null;
+}
+
+/** WT-854 — see `WorkspaceDocumentDto.pendingRevision`. */
+export interface WorkspaceDocumentPendingRevisionDto {
+  name: string;
+  fileName: string;
+  fileExtension: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy?: string | null;
+  uploadedAt: string;
+  note?: string | null;
 }
 
 /**

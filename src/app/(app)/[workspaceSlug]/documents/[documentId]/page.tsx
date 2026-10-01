@@ -20,7 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { WORKSPACE_DOCUMENT_STATUS } from "@/constants/workspace-document";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
 import {
@@ -39,6 +38,9 @@ import { documentActorName } from "@/lib/documents/document-actor";
 import {
   canUploadRevision as canUploadRevisionFor,
   documentFileRevision,
+  hasPendingRevision,
+  isAwaitingReview,
+  pendingRevisionFileRevision,
   shouldShowRejectionFeedback,
 } from "@/lib/documents/document-review";
 import {
@@ -129,13 +131,26 @@ export default function DocumentDetailPage({ params }: PageProps) {
   // The only source of faces and names for a user id on this page; the document DTO carries ids.
   const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  // WT-854 — which file the preview shows while a corrected version waits: the approved one
+  // (what every reader gets) or the pending one (what the reviewer is deciding about).
+  const [previewSource, setPreviewSource] = useState<"approved" | "pending">("approved");
   const doc = documentQuery.data;
   const workspaceMembers = membersQuery.data?.items ?? [];
   const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
-  const isPendingApproval = Boolean(
-    doc?.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-    doc?.status?.toLowerCase().includes("pending"),
+  // WT-854 — a decision is owed either for a new upload (`pending_approval`) or for a corrected
+  // version of a published document, which stays published while it waits.
+  const isPendingApproval = Boolean(doc && isAwaitingReview(doc));
+  const revisionPending = Boolean(doc && hasPendingRevision(doc));
+  const canSeePendingRevision = Boolean(
+    doc &&
+      revisionPending &&
+      (canApproveDocuments ||
+        (currentUser?.id &&
+          (doc.uploadedBy === currentUser.id ||
+            doc.ownerId === currentUser.id ||
+            doc.pendingRevision?.uploadedBy === currentUser.id))),
   );
+  const showingPending = canSeePendingRevision && previewSource === "pending";
 
   useRegisterAssistantContext(
     doc
@@ -181,10 +196,18 @@ export default function DocumentDetailPage({ params }: PageProps) {
    */
   const handleApprove = async (approve: boolean, reason?: string) => {
     try {
+      const decidingRevision = revisionPending;
       await approveMutation.mutateAsync({ docId: documentId, approve, reason });
       setIsRejectDialogOpen(false);
+      setPreviewSource("approved");
       toast.success(
-        approve ? t("toasts.approved") : t("toasts.rejected"),
+        decidingRevision
+          ? approve
+            ? t("toasts.revisionApproved")
+            : t("toasts.revisionRejected")
+          : approve
+            ? t("toasts.approved")
+            : t("toasts.rejected"),
       );
     } catch (err: unknown) {
       const errorMsg =
@@ -280,6 +303,19 @@ export default function DocumentDetailPage({ params }: PageProps) {
   }
 
   const fileRevision = documentFileRevision(doc);
+  // WT-854 — the pending file has its own revision, so it is its own cache entry and its own
+  // reader; switching back to the approved file never shows the pending bytes, or the reverse.
+  const pendingFileRevision = pendingRevisionFileRevision(doc);
+  const previewRevision =
+    showingPending && pendingFileRevision ? pendingFileRevision : fileRevision;
+  const previewFile =
+    showingPending && doc.pendingRevision
+      ? {
+          fileName: doc.pendingRevision.fileName,
+          fileExtension: doc.pendingRevision.fileExtension,
+          sizeBytes: doc.pendingRevision.sizeBytes,
+        }
+      : { fileName: doc.fileName, fileExtension: doc.fileExtension, sizeBytes: doc.sizeBytes };
 
   return (
     /* h-full + min-h-0, not min-h-full: the page owns the viewport and the panes scroll inside
@@ -367,16 +403,56 @@ export default function DocumentDetailPage({ params }: PageProps) {
             panel to the right, which already lists them. */}
         {/* The scroll lives HERE, on the document, not on the page. */}
         <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto lg:h-full">
+          {/* WT-854 — a corrected version is waiting. Readers keep the approved file until a
+              reviewer approves it; reviewers and the uploader can switch the preview to it. */}
+          {revisionPending && doc.pendingRevision ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[12.5px] text-ink">
+              <div className="font-medium">{t("pendingRevision.title")}</div>
+              <div className="text-ink-muted">
+                {t("pendingRevision.body", {
+                  fileName: doc.pendingRevision.fileName,
+                  date: new Date(doc.pendingRevision.uploadedAt).toLocaleString(),
+                })}
+              </div>
+              {doc.pendingRevision.note ? (
+                <div className="text-ink-muted">
+                  {t("pendingRevision.note", { note: doc.pendingRevision.note })}
+                </div>
+              ) : null}
+              {canSeePendingRevision ? (
+                <div className="flex gap-1.5 pt-1" role="group" aria-label={t("pendingRevision.previewLabel")}>
+                  {(["approved", "pending"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setPreviewSource(option)}
+                      aria-pressed={previewSource === option}
+                      className={
+                        previewSource === option
+                          ? "inline-flex h-[26px] items-center rounded-full bg-foreground px-3 text-[12px] font-medium text-background"
+                          : "inline-flex h-[26px] items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[12px] font-medium text-ink hover:bg-surface-2"
+                      }
+                    >
+                      {option === "approved"
+                        ? t("pendingRevision.showApproved")
+                        : t("pendingRevision.showPending")}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {/* Keyed by the file revision so a replaced file starts from a clean reader: the parsed
               Word HTML, sheets and failure flag of the previous file must not outlive it (WT-857). */}
           <DocumentPreview
-            key={fileRevision}
+            key={previewRevision}
             workspaceId={activeWorkspaceId}
             documentId={doc.id}
-            fileName={doc.fileName}
-            fileExtension={doc.fileExtension}
-            sizeBytes={doc.sizeBytes}
-            revision={fileRevision}
+            fileName={previewFile.fileName}
+            fileExtension={previewFile.fileExtension}
+            sizeBytes={previewFile.sizeBytes}
+            revision={previewRevision}
+            source={showingPending ? "pending" : "approved"}
             onDownload={handleDownload}
           />
         </div>
