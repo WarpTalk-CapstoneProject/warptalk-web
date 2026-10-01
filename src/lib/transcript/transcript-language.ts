@@ -21,6 +21,7 @@
 // values, not types, so they survive to runtime and have to resolve there.
 import { normalizeLanguageCode } from "../language/languages.ts";
 import { appendText } from "./transcript-display.ts";
+import { transcriptSpeakerDisplayName, type SpeakerLabels } from "./speaker-identity.ts";
 
 import type { TranscriptTranslationDto } from "@/types/transcript";
 
@@ -378,11 +379,13 @@ export function resolveTranscriptLine(
  * would leave a file that reads as complete and is not.
  */
 export function assembleTranscriptText<
-  T extends TranscriptLine & { speakerName?: string | null },
+  T extends TranscriptLine & { speakerName?: string | null; speakerParticipantId?: string | null },
 >(
   blocks: readonly { sessionNumber: number; segments: readonly T[] }[],
   index: SegmentTranslationIndex,
   displayLanguage: string | null | undefined,
+  /** The reader's words for a line with no name — see transcriptSpeakerDisplayName. */
+  labels?: SpeakerLabels,
 ): string {
   const wanted = requestedLanguage(displayLanguage);
   const showSessionLabels = blocks.length > 1;
@@ -391,7 +394,8 @@ export function assembleTranscriptText<
     .map((block) => {
       const lines = block.segments.map((segment) => {
         const resolved = resolveTranscriptLine(segment, index, displayLanguage);
-        const name = segment.speakerName?.trim() || "Unknown speaker";
+        // The Google Meet stand-in prints the Meet person on the line, never its seat or its id.
+        const name = transcriptSpeakerDisplayName(segment.speakerParticipantId, segment.speakerName, labels);
         const tag =
           resolved.language && resolved.language !== wanted
             ? ` (${resolved.language.toUpperCase()})`

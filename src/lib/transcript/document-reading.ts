@@ -13,6 +13,13 @@
  *   measurements in. Nothing in this file imports React, and nothing in it touches an element.
  */
 
+// Relative, with the extension: the unit tests run under node's strip-types runner.
+import {
+  transcriptSpeakerDisplayName,
+  transcriptSpeakerKey,
+  type SpeakerLabels,
+} from "./speaker-identity.ts";
+
 /**
  * One block of the document, as the reading column laid it out.
  *
@@ -259,7 +266,11 @@ export function shouldShowLanguageChip(
 
 /** One person's share of the talking, as the attendees rail draws it. */
 export type SpeakingShare = {
-  /** Participant id when the transcript recorded one, the display name otherwise. */
+  /**
+   * transcriptSpeakerKey: the participant id when the transcript recorded one, the display name
+   * otherwise — and for the Google Meet stand-in, one key per Meet person, so the people on the
+   * Meet side are counted apart rather than as one speaker with everyone's time.
+   */
   key: string;
   name: string;
   speakingMs: number;
@@ -287,11 +298,13 @@ export function speakingShares(
     startTimeMs: number;
     endTimeMs: number;
   }[],
+  labels?: SpeakerLabels,
 ): SpeakingShare[] {
   const byKey = new Map<string, SpeakingShare>();
+  const unknown = labels?.unknown ?? "Unknown speaker";
 
   for (const line of lines) {
-    const key = line.speakerParticipantId ?? line.speakerName ?? "";
+    const key = transcriptSpeakerKey(line);
     if (!key) continue;
     const durationMs = line.endTimeMs - line.startTimeMs;
     if (!Number.isFinite(durationMs) || durationMs < 0) continue;
@@ -301,14 +314,14 @@ export function speakingShares(
       existing.speakingMs += durationMs;
       // A later line can carry a name the earlier one lacked — the ingress worker learns who is
       // on a track after the first chunks are already transcribed.
-      if (existing.name === "Unknown speaker" && line.speakerName?.trim()) {
-        existing.name = line.speakerName.trim();
+      if (existing.name === unknown && line.speakerName?.trim()) {
+        existing.name = transcriptSpeakerDisplayName(line.speakerParticipantId, line.speakerName, labels);
       }
       continue;
     }
     byKey.set(key, {
       key,
-      name: line.speakerName?.trim() || "Unknown speaker",
+      name: transcriptSpeakerDisplayName(line.speakerParticipantId, line.speakerName, labels),
       speakingMs: durationMs,
       percent: 0,
     });
