@@ -128,6 +128,8 @@
       "nextMonth": "翌月",
       "currentMonthTitle": "現在の月です",
       "export": "エクスポート",
+      "exportReport": "レポート (.docx)",
+      "exportCsv": "生データ (.csv)",
       "from": "開始日",
       "to": "終了日（当日を含む）",
       "showRange": "この期間を表示"
