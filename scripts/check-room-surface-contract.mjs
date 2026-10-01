@@ -563,6 +563,42 @@ assert.doesNotMatch(
   "overscroll containment would make the roster a scroll trap.",
 );
 
+// WT-868: an External Meeting (Google Meet bridge) is never created or joined in the app. Its
+// room is made by the desktop app when it sees a Meet call (bridge-auto-room) and run from the
+// desktop popup. So the create dialog's list must not offer the type, /live must turn bridge rooms
+// away to their page, and the room page's Start/Join must hand them to the popup instead.
+const meetingTypes = read("src/lib/meeting/meeting-types.ts");
+const meetingTypesList = meetingTypes.slice(
+  meetingTypes.indexOf("export const MEETING_TYPES"),
+  meetingTypes.indexOf("];", meetingTypes.indexOf("export const MEETING_TYPES")),
+);
+assert.doesNotMatch(
+  meetingTypesList,
+  /EXTERNAL_BRIDGE/,
+  "MEETING_TYPES (the create dialog's list) must not offer External Meeting (WT-868).",
+);
+assert.match(
+  meetingTypes,
+  /new Map\(\s*\[\.\.\.MEETING_TYPES, EXTERNAL_BRIDGE_MEETING_TYPE\]/,
+  "Existing External Meeting rooms must still read back through meetingTypeByValue (WT-868).",
+);
+assert.doesNotMatch(
+  stripComments(createRoomDialog),
+  /isExternalBridge|planBridgeRoomLanguages|externalMeetingLanguage/,
+  "The create dialog must not carry a bridge-room creation path any more (WT-868).",
+);
+const livePage = stripComments(read("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"));
+assert.match(
+  livePage,
+  /if \(isExternalBridge\(room\.translationRoomType\)\) \{[\s\S]*?router\.replace\(`\/\$\{workspaceSlug\}\/rooms\/\$\{roomId\}`\);[\s\S]*?openDesktopTranscriptWindow\(roomId\)[\s\S]*?return;[\s\S]*?\}[\s\S]*?openMeeting\(roomId\)/,
+  "/live must send an External Meeting to its room page and ask for the desktop popup, before ever opening it in-app (WT-868).",
+);
+assert.match(
+  roomDetail,
+  /isExternalBridge\(room\.translationRoomType\)[\s\S]{0,200}openDesktopTranscriptWindow\(room\.id\)/,
+  "The room page's Start/Join must hand an External Meeting to the desktop popup (WT-868).",
+);
+
 console.log(
   "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330): PASS",
 );

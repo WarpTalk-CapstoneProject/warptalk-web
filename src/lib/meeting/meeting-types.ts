@@ -51,12 +51,20 @@ export const MEETING_TYPES: MeetingType[] = [
     value: "LIVE_EVENT",
     defaults: { requiresApproval: true, muteOnEntry: true, autoRecord: true, breakoutsEnabled: false, maxParticipants: 1000 },
   },
-  {
-    label: "External Meeting",
-    value: "EXTERNAL_BRIDGE",
-    defaults: { requiresApproval: false, muteOnEntry: false, autoRecord: false, breakoutsEnabled: false, maxParticipants: 2 },
-  },
 ];
+
+/**
+ * WT-868. An External Meeting (a Google Meet call WarpTalk translates beside) is a real type the
+ * API stores, but it is no longer one the create dialog offers: the only way such a room comes to
+ * exist is the desktop app seeing a Meet call and making it (bridge-auto-room). So it is kept out
+ * of `MEETING_TYPES`, which is the dialog's list, and kept here so the rooms that already exist
+ * still read back as "External Meeting" through `meetingTypeByValue` rather than as unknown.
+ */
+const EXTERNAL_BRIDGE_MEETING_TYPE: MeetingType = {
+  label: "External Meeting",
+  value: "EXTERNAL_BRIDGE",
+  defaults: { requiresApproval: false, muteOnEntry: false, autoRecord: false, breakoutsEnabled: false, maxParticipants: 2 },
+};
 
 /**
  * Maps each type's stored `value` to a message key under `rooms.create.templatePicker.types` /
@@ -96,7 +104,9 @@ export function meetingTypeByLabel(label: string): MeetingType {
   return BY_LABEL.get(label) ?? MEETING_TYPES[0];
 }
 
-const BY_VALUE = new Map(MEETING_TYPES.map((type) => [type.value, type]));
+const BY_VALUE = new Map(
+  [...MEETING_TYPES, EXTERNAL_BRIDGE_MEETING_TYPE].map((type) => [type.value, type]),
+);
 
 /**
  * The stored API value ("CHANNEL_MEETING") read back as something a person should see
