@@ -58,6 +58,13 @@ export interface TranscriptSegmentDto {
    * language leave the transcript showing two different directions at once.
    */
   translations?: Record<string, string>;
+  /**
+   * Client-only: the translated SENTENCES behind each `translations` entry, by sentence index
+   * (the `-c{n}` suffix of the translation's own segment id). Kept so a sentence that arrives
+   * late, or twice, lands in its own slot instead of being appended after a later one or on top
+   * of itself; `translations[lang]` is these joined in index order.
+   */
+  translationSentences?: Record<string, string[]>;
   confidence: number;
   startTimeMs: number;
   endTimeMs: number;
