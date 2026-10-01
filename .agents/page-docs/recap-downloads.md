@@ -27,8 +27,18 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   That header icon is the **only** recording download. The player's control bar used to carry a
   second one calling the same flow; it was removed (WT-894).
 - **Player** (`MeetingRecordingPlayer`): the video frame is shown as recorded, nothing overlaid. The
-  controls sit on their own light card below it. Turn marks are hidden until the pointer is over the
+  controls sit on their own light card below it. Marks are hidden until the pointer is over the
   timeline (or it has keyboard focus); then the track thickens and the dots appear.
+- **Marks on the timeline** (`recording-marks.ts`, built in `ReadingRail`): one per summary point
+  that carries a moment — decisions (green), action items (amber), open questions and blockers
+  (indigo), narrative sentences of the traceable template (grey), other template sections
+  (neutral). They come from the same points the rail draws, so a reader's own rendering puts its
+  own moments on the bar. A mark sits on the transcript row the jump lands on (the earliest row any
+  of the point's moments resolves to), and clicking it does what clicking the point's time in the
+  rail does. Points closer than 1.5% of the recording share one dot with a count; its tooltip lists
+  each point. No summary, or a summary whose points carry no moments, means no marks — there is no
+  per-turn fallback (a 37-minute meeting used to get several hundred dots). Speaker lanes and
+  user bookmarks are later work.
 - **What the recording itself looks like** (`/egress/composite`, the page LiveKit's recorder opens):
   a camera-off person is drawn like the live meeting's camera-off tile — white tile, grey avatar,
   "Camera is off" pill, mic badge top-right — not a per-person coloured block. The face is the
@@ -115,6 +125,10 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
 - [ ] A meeting with two recordings shows `Recording 1` / `Recording 2` and no player.
 - [ ] The player shows one download (in the pip header), controls below the frame, and no marks
       until the pointer is over the timeline.
+- [ ] Hovering the timeline shows one dot per cited summary point (not per sentence), coloured by
+      kind; points close together show as one numbered dot listing them; clicking seeks the video
+      and lights the same rail point and transcript row a click in the rail would.
+- [ ] A meeting without a summary shows no dots.
 - [ ] In a recording, a person who turned the camera on mid-meeting appears on video; one with the
       camera off shows their avatar (or initials), "Camera is off" and a mic badge.
 - [ ] The record has no Artifacts tab, and nothing links to one.

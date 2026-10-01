@@ -43,7 +43,7 @@
  *   while making every sentence of it answerable.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CaretDown,
   CaretUp,
@@ -97,7 +97,7 @@ import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-displa
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { RecordingMark } from "@/lib/meeting/recording-marks";
+import { buildSummaryMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -181,8 +181,6 @@ export function TranscriptReadingLayout({
   onSelectRendering,
   generatableLanguages,
   speakerDirectory,
-  marks,
-  onMarkClick,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
   transcript: React.ReactNode;
@@ -253,8 +251,6 @@ export function TranscriptReadingLayout({
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
-  marks?: readonly RecordingMark[];
-  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   /** Whether the recording is shown as a picture or folded away to its transport bar. */
   const [pipOpen, setPipOpen] = useState(true);
@@ -304,8 +300,7 @@ export function TranscriptReadingLayout({
           onSelectRendering={onSelectRendering}
           generatableLanguages={generatableLanguages}
           speakerDirectory={speakerDirectory}
-          marks={marks}
-          onMarkClick={onMarkClick}
+          seekSources={seekSources}
         />
       </div>
     </ReadingSyncProvider>
@@ -334,8 +329,7 @@ function ReadingRail({
   onSelectRendering,
   generatableLanguages,
   speakerDirectory,
-  marks,
-  onMarkClick,
+  seekSources,
 }: {
   record: EndedRoomHistoryItem | null;
   meetingTitle?: string | null;
@@ -366,8 +360,9 @@ function ReadingRail({
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
-  marks?: readonly RecordingMark[];
-  onMarkClick?: (mark: RecordingMark) => void;
+  /** Where the recording sits against the transcript — what places a summary point on the
+   *  scrubber. See recording-marks.ts. */
+  seekSources?: SeekSources;
 }) {
   const t = useTranslations("meetingSummary");
   const sync = useReadingSync();
@@ -430,6 +425,22 @@ function ReadingRail({
     }
     return rows;
   }, [sections]);
+
+  /**
+   * The summary's points on the recording's scrubber — the same points, from the same summary, the
+   * rail draws below it. Built here rather than on the page so a reader looking at their own
+   * rendering gets that rendering's moments on the bar too. See recording-marks.ts for why these
+   * and not one per transcript turn.
+   */
+  const marks = useMemo(
+    () => (seekSources ? buildSummaryMarks(claims, segments, seekSources) : []),
+    [claims, segments, seekSources],
+  );
+  /** A mark is a rail point: clicking it does what clicking the point's time in the rail does. */
+  const jumpToMark = useCallback(
+    (mark: RecordingMark) => onJumpToMoment(mark.atMs, mark.alsoAtMs),
+    [onJumpToMoment],
+  );
 
   const uncitedCount = useMemo(
     () => claims.filter((claim) => claim.atMs === null).length,
@@ -583,7 +594,7 @@ function ReadingRail({
               onDurationSeconds={onDurationSeconds}
               onConsentGranted={onConsentGranted}
               marks={marks}
-              onMarkClick={onMarkClick}
+              onMarkClick={jumpToMark}
             />
           ) : null}
         </div>

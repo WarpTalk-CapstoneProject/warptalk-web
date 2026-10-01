@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useReducer } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowsClockwise,
@@ -26,7 +26,12 @@ import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { canDownloadArtifact } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-import type { RecordingMark } from "@/lib/meeting/recording-marks";
+import {
+  clusterMarks,
+  type RecordingMark,
+  type RecordingMarkKind,
+} from "@/lib/meeting/recording-marks";
+import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 
 /**
  * The recording of one meeting, and the download flow behind every file on its record.
@@ -198,6 +203,15 @@ function classifyPlaybackFailure(
   }
 }
 
+/** One colour per kind of summary point; plain points stay neutral. Tokens, so both themes hold. */
+const MARK_KIND_CLASS: Record<RecordingMarkKind, string> = {
+  decision: "bg-success",
+  action: "bg-warning",
+  question: "bg-primary",
+  narrative: "bg-ink-subtle",
+  point: "bg-ink-muted",
+};
+
 export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
@@ -355,9 +369,6 @@ export function MeetingRecordingPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Forces scrubber to rerender when marks change without depending on a new array ref each tick.
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
-  void forceUpdate; // Used implicitly via marks prop change — kept to avoid lint warning.
 
   // Keep fullscreen state in sync with browser events (Esc key exit etc.).
   useEffect(() => {
@@ -594,12 +605,18 @@ export function MeetingRecordingPlayer({
 
   const handleMarkClick = useCallback(
     (mark: RecordingMark) => {
+      // The page's jump seeks the video itself (requestSeek) as well as scrolling and lighting the
+      // transcript and the rail. Seeking here too was a second seek to a slightly different second
+      // (the raw mark vs. the resolved row) on every click.
+      if (onMarkClick) {
+        onMarkClick(mark);
+        return;
+      }
       const video = videoRef.current;
       if (video) {
         video.currentTime = mark.seconds;
         void video.play().catch(() => {});
       }
-      onMarkClick?.(mark);
     },
     [onMarkClick],
   );
@@ -861,27 +878,47 @@ export function MeetingRecordingPlayer({
                   }%, var(--surface-3) 0%)`,
                 }}
               />
-              {/* Turn-mark dots drawn on top of the track at their file-second positions */}
+              {/* The summary's points, at the second a click on them lands (recording-marks.ts). Hidden
+                  until the timeline is hovered or focused; points too close to tell apart share
+                  one dot with a count, and its tooltip lists every one of them. */}
               {marks && marks.length > 0 && videoDuration && videoDuration > 0 && (
-                <div
-                  className="pointer-events-none absolute inset-0 z-20"
-                  aria-hidden="true"
-                >
-                  {marks.map((mark, idx) => {
-                    const percent = Math.min(
-                      100,
-                      Math.max(0, (mark.seconds / videoDuration) * 100),
-                    );
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  {clusterMarks(marks, videoDuration).map((cluster) => {
+                    const first = cluster.marks[0]!;
+                    const many = cluster.marks.length > 1;
+                    const percent = Math.min(100, Math.max(0, (cluster.seconds / videoDuration) * 100));
+                    const label = cluster.marks
+                      .map((mark) => `${mark.section} · ${formatCitationTime(mark.atMs)}: ${mark.text}`)
+                      .join("; ");
                     return (
                       <button
-                        key={`${mark.atMs}-${idx}`}
+                        key={first.key}
                         type="button"
-                        onClick={() => handleMarkClick(mark)}
+                        onClick={() => handleMarkClick(first)}
                         style={{ left: `${percent}%`, top: "50%" }}
-                        className="pointer-events-auto absolute z-20 size-[14px] -translate-x-1/2 -translate-y-1/2 scale-50 rounded-full border-2 border-surface-1 bg-warning opacity-0 shadow-sm transition-all before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] hover:scale-125 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1 group-hover/scrub:scale-100 group-hover/scrub:opacity-100 group-focus-within/scrub:scale-100 group-focus-within/scrub:opacity-100"
-                        title={`Jump to turn at ${Math.round(mark.seconds)}s`}
-                        aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
-                      />
+                        className={cn(
+                          "group/mark pointer-events-auto absolute z-20 -translate-x-1/2 -translate-y-1/2 scale-50 rounded-full border-2 border-surface-1 opacity-0 shadow-sm transition-all before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] hover:scale-125 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1 group-hover/scrub:scale-100 group-hover/scrub:opacity-100 group-focus-within/scrub:scale-100 group-focus-within/scrub:opacity-100",
+                          many
+                            ? "grid size-[18px] place-items-center bg-ink font-mono text-[9px] font-semibold leading-none text-surface-1"
+                            : cn("size-[14px]", MARK_KIND_CLASS[first.kind]),
+                        )}
+                        aria-label={label}
+                      >
+                        {many ? cluster.marks.length : null}
+                        <span
+                          role="tooltip"
+                          className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-max max-w-[260px] -translate-x-1/2 whitespace-pre-line rounded-md bg-ink px-2.5 py-1.5 text-left font-sans text-[11.5px] font-normal leading-snug text-surface-1 opacity-0 shadow-md transition-opacity group-hover/mark:visible group-hover/mark:opacity-100 group-focus-visible/mark:visible group-focus-visible/mark:opacity-100"
+                        >
+                          {cluster.marks.map((mark) => (
+                            <span key={mark.key} className="block [&+&]:mt-1.5">
+                              <span className="block text-[10px] uppercase tracking-[0.06em] opacity-70">
+                                {mark.section} · {formatCitationTime(mark.atMs)}
+                              </span>
+                              <span className="line-clamp-3">{mark.text}</span>
+                            </span>
+                          ))}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
