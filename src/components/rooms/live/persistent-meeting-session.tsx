@@ -140,7 +140,14 @@ import {
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
-import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
+import {
+  browserCaptureAnswerStorage,
+  browserCaptureConsentState,
+  mayCaptureBrowser,
+  readStoredBrowserCaptureAnswer,
+  shouldForgetBrowserCaptureAnswer,
+  writeStoredBrowserCaptureAnswer,
+} from "@/lib/audio/browser-capture-consent";
 import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
 import { BridgeSetupDialog } from "@/components/rooms/bridge/bridge-setup-dialog";
 import {
@@ -151,7 +158,7 @@ import {
   readVirtualAudioStatus,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
-import { bridgeConsentSurface } from "@/lib/meeting/bridge-capture-consent-relay";
+import { bridgeConsentSurface, isCompactConsentAsk } from "@/lib/meeting/bridge-capture-consent-relay";
 import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import {
   canCaptureBrowserLoopback,
@@ -385,7 +392,11 @@ export function PersistentMeetingSession({
    * What the user said about listening to their browser, for THIS meeting.
    *
    * Not remembered across meetings on purpose: what gets captured depends on which tabs they have
-   * open, so a permanent yes would be a promise made for sittings they have not seen yet.
+   * open, so a permanent yes would be a promise made for sittings they have not seen yet. WT-900:
+   * it IS remembered across a reload of the same meeting (sessionStorage, keyed by room, dropped
+   * when the room ends — see browser-capture-consent.ts), because asking again mid-meeting for
+   * the same sitting is a question the host has already answered. `granted: null` is "asked to be
+   * asked again", which must not fall back to the stored answer it just forgot.
    */
   // Stamped with the room it was given for, rather than cleared by an effect when the room
   // changes. A different meeting is a different set of open tabs, so the previous answer says
@@ -393,8 +404,16 @@ export function PersistentMeetingSession({
   // cascading render, and an answer that belongs to another room is simply not this room's answer.
   const [browserCaptureAnswer, setBrowserCaptureAnswer] = useState<{
     roomId: string;
-    granted: boolean;
+    granted: boolean | null;
   } | null>(null);
+  /**
+   * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
+   * the published track, because an open, published leg carrying digital silence looks exactly
+   * like a working one to everything else in the app. Back to "unknown" whenever the capture is
+   * released, so a new capture is judged on its own samples and never inherits the last one's.
+   * Declared up here because the consent relay reads it too (WT-900's compact ask).
+   */
+  const [inboundHealth, setInboundHealth] = useState<InboundHealth>("unknown");
   const [loopbackSources, setLoopbackSources] = useState<WindowsLoopbackSource[]>([]);
   const [loopbackSourcesLoading, setLoopbackSourcesLoading] = useState(false);
   const [loopbackSourceSelection, setLoopbackSourceSelection] = useState<{
@@ -893,8 +912,29 @@ export function PersistentMeetingSession({
   // Loopback is still the plan: the machine can capture the browser and it has not already
   // failed to in this room. Only then is there anything to ask about.
   const inboundLoopbackWanted = bridgeInboundLoopback && !loopbackFallbackActive;
+  // WT-900: what this room's answer was before a reload. Read once per room; every answer given
+  // since lands in state first, so this is only ever the starting point.
+  const storedBrowserCaptureAnswer = useMemo(
+    () => readStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId),
+    [roomId],
+  );
   const browserCaptureAnswerForRoom =
-    browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null;
+    browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : storedBrowserCaptureAnswer;
+  /** Every answer goes through here, so state and the per-room memory cannot disagree. */
+  const answerBrowserCapture = useCallback(
+    (granted: boolean | null) => {
+      setBrowserCaptureAnswer({ roomId, granted });
+      writeStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId, granted);
+    },
+    [roomId],
+  );
+  // A room that is over will not be listened to again: its remembered answer goes with it.
+  const roomStatusForAnswer = room?.status;
+  useEffect(() => {
+    if (shouldForgetBrowserCaptureAnswer(roomStatusForAnswer)) {
+      writeStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId, null);
+    }
+  }, [roomStatusForAnswer, roomId]);
   // Placed here, below `isHost` and `bridgeListening`, because it reads both. The state it
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
@@ -925,31 +965,48 @@ export function PersistentMeetingSession({
   });
   const bridgeInboundPath = bridgeInbound.path;
   const bridgeInboundStartable = bridgeInbound.startable;
-  // Where the host is actually asked. Reading the desktop bridge during render is safe here only
-  // because consent is never "required" during SSR — it needs a loaded room, which no server
-  // render has — so this is "none" on the server either way and cannot mismatch on hydration.
-  const consentSurface = bridgeConsentSurface({
-    consent: consentState,
-    popupAvailable: isBridgeRoom && canOpenTranscriptWindow(),
-  });
+  // Reading the desktop bridge during render is safe here only because consent is never
+  // "required" during SSR — it needs a loaded room, which no server render has — so the surface is
+  // "none" on the server either way and cannot mismatch on hydration.
+  const consentPopupAvailable = isBridgeRoom && canOpenTranscriptWindow();
 
   // The relay to the popup. Main stays the one source of truth: it publishes this state and
   // applies only the intents it has re-checked against it (lib/meeting/bridge-capture-consent-relay).
-  useBridgeConsentHost({
+  // WT-900: it also keeps raising a popup that was closed or minimised without an answer, and
+  // says when to give up on it — the question then moves to this window's modal.
+  const consentFallbackToMain = useBridgeConsentHost({
     enabled: isBridgeRoom && isHost,
     roomId,
     consent: consentState,
     sources: loopbackSources,
     selectedSourceId: selectedLoopbackSourceId,
     loadingSources: loopbackSourcesLoading,
-    surface: consentSurface,
+    popupAvailable: consentPopupAvailable,
+    inboundPath: bridgeInbound.path,
+    inboundReason: bridgeInbound.reason,
+    inboundHealth,
     onSelectSource: (sourceId) => setLoopbackSourceSelection({ roomId, sourceId }),
-    onAnswer: (granted) => setBrowserCaptureAnswer({ roomId, granted }),
-    onReask: () => setBrowserCaptureAnswer(null),
+    onAnswer: (granted) => answerBrowserCapture(granted),
+    onReask: () => answerBrowserCapture(null),
   });
 
+  // Where the host is actually asked.
+  const consentSurface = bridgeConsentSurface({
+    consent: consentState,
+    popupAvailable: consentPopupAvailable && !consentFallbackToMain,
+  });
+  // WT-900: the same quiet/prominent choice the popup makes, for the modal fallback.
+  const consentAskCompact = isCompactConsentAsk({
+    inboundReason: bridgeInbound.reason,
+    inboundHealth,
+  });
+
+  // WT-900: also for a yes remembered across a reload. The selection is not remembered (window ids
+  // do not survive one), and without it a granted loopback waits on "awaiting-source" for ever.
+  const needsLoopbackSources =
+    consentState === "required" || (consentState === "granted" && !selectedLoopbackSourceId);
   useEffect(() => {
-    if (consentState !== "required") return;
+    if (!needsLoopbackSources) return;
 
     let cancelled = false;
     setLoopbackSourcesLoading(true);
@@ -972,7 +1029,7 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [consentState, roomId, selectedLoopbackSourceId]);
+  }, [needsLoopbackSources, roomId, selectedLoopbackSourceId]);
 
   const isHostRef = useRef(isHost);
   useEffect(() => {
@@ -1019,20 +1076,27 @@ export function PersistentMeetingSession({
   const [bridgeCaptureGeneration, setBridgeCaptureGeneration] = useState(0);
   /** When the last few `ended`-driven reopens happened, so a track that ends on open cannot spin. */
   const bridgeReopenTimesRef = useRef<number[]>([]);
-  /**
-   * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
-   * the published track, because an open, published leg carrying digital silence looks exactly
-   * like a working one to everything else in the app. Back to "unknown" whenever the capture is
-   * released, so a new capture is judged on its own samples and never inherits the last one's.
-   */
-  const [inboundHealth, setInboundHealth] = useState<InboundHealth>("unknown");
   // The host's own ear on the far side, on the virtual-device path only: once Meet's speaker points
   // at a cable, Meet plays nothing to the host. The gain lives in a ref because `voiceEnabled` is
   // declared far below this effect; see the effect beside it.
   const farSideMonitorRef = useRef<FarSideMonitor | null>(null);
   const farSideMonitorGainRef = useRef(farSideMonitorGain(false));
+  /** Whether a monitor is running on the current capture. Not the same as audible; see below. */
+  const [farSideMonitorRunning, setFarSideMonitorRunning] = useState(false);
+  /**
+   * WT-900: whether the far side may be played to the host right now. While the cable only stands
+   * in for an unanswered loopback question, Meet may still be on the host's own speakers, so the
+   * copy waits until the cable demonstrably carries Meet (shouldMonitorFarSide). The monitor is
+   * opened with the capture as before and held at zero gain until then — starting and stopping an
+   * audio graph on every health change would be a second lifecycle for the same track.
+   */
+  const farSideMonitorAllowed = shouldMonitorFarSide("device", {
+    reason: bridgeInbound.reason,
+    health: inboundHealth,
+  });
+  const farSideMonitorAllowedRef = useRef(farSideMonitorAllowed);
   /** Whether WarpTalk is playing the far side to the host right now — the popup's Meeting audio row. */
-  const [farSideMonitoring, setFarSideMonitoring] = useState(false);
+  const farSideMonitoring = farSideMonitorRunning && farSideMonitorAllowed;
   /** How loud the original sits under a translation, chosen in the popup's Voice panel. */
   const [farSideMonitorLevel, setFarSideMonitorLevel] = useState(FAR_SIDE_MONITOR_UNDER_DUB);
 
@@ -1156,7 +1220,7 @@ export function PersistentMeetingSession({
             setInboundHealth("unknown");
             void farSideMonitorRef.current?.stop();
             farSideMonitorRef.current = null;
-            setFarSideMonitoring(false);
+            setFarSideMonitorRunning(false);
             void inbound.dispose();
             toast.error("The external call was disconnected.", {
               description: "WarpTalk has stopped hearing the other side of the meeting.",
@@ -1174,7 +1238,10 @@ export function PersistentMeetingSession({
         let monitor: FarSideMonitor | null = null;
         if (shouldMonitorFarSide(inbound.source.kind)) {
           try {
-            monitor = startFarSideMonitor(handles.track, farSideMonitorGainRef.current);
+            monitor = startFarSideMonitor(
+              handles.track,
+              farSideMonitorAllowedRef.current ? farSideMonitorGainRef.current : 0,
+            );
           } catch {
             monitor = null;
           }
@@ -1230,7 +1297,7 @@ export function PersistentMeetingSession({
           stopProbe = null;
           setInboundHealth("unknown");
           if (farSideMonitorRef.current === monitor) farSideMonitorRef.current = null;
-          if (monitor) setFarSideMonitoring(false);
+          if (monitor) setFarSideMonitorRunning(false);
           await monitor?.stop();
           await handles.stop();
           await inbound.dispose();
@@ -1246,7 +1313,7 @@ export function PersistentMeetingSession({
         }
         bridgeInboundRef.current = { stop: release, key: captureKey };
         farSideMonitorRef.current = monitor;
-        if (monitor) setFarSideMonitoring(true);
+        if (monitor) setFarSideMonitorRunning(true);
       } catch (error) {
         if (cancelled) return;
         // Said out loud rather than logged: with the outbound leg working, the far side can hear
@@ -2267,11 +2334,13 @@ export function PersistentMeetingSession({
   // The far side's original sits under the translation while this host hears dubs, and returns to
   // full level when they do not. Written to the ref too, so a monitor started later begins at the
   // current level instead of jumping to it. See lib/audio/bridge-far-side-monitor.
+  // WT-900: held at zero while the monitor is not allowed (see farSideMonitorAllowed).
   useEffect(() => {
     const gain = farSideMonitorGain(voiceEnabled, farSideMonitorLevel);
     farSideMonitorGainRef.current = gain;
-    farSideMonitorRef.current?.setGain(gain);
-  }, [voiceEnabled, farSideMonitorLevel]);
+    farSideMonitorAllowedRef.current = farSideMonitorAllowed;
+    farSideMonitorRef.current?.setGain(farSideMonitorAllowed ? gain : 0);
+  }, [voiceEnabled, farSideMonitorLevel, farSideMonitorAllowed]);
 
   useRegisterAssistantContext(
     room && !compact
@@ -4314,6 +4383,7 @@ export function PersistentMeetingSession({
       */}
       <BrowserCaptureConsentModal
         open={consentSurface === "main"}
+        compact={consentAskCompact}
         sources={loopbackSources}
         selectedSourceId={selectedLoopbackSourceId}
         loadingSources={loopbackSourcesLoading}
@@ -4321,8 +4391,10 @@ export function PersistentMeetingSession({
           setLoopbackSourceSelection({ roomId, sourceId });
         }}
         onDecision={(granted) => {
-          setBrowserCaptureAnswer({ roomId, granted });
-          if (!granted) {
+          answerBrowserCapture(granted);
+          // WT-900: a "no" with the cable standing in keeps the far side on the cable, so it IS
+          // still translated; the notice below is only true where nothing else carries it.
+          if (!granted && bridgeInbound.path !== "device") {
             // Not an error, and not silence either: the far side simply will not be translated,
             // and the meeting continues. The bridge panel's captions button is the way back.
             toast.info("WarpTalk will not listen to your browser.", {

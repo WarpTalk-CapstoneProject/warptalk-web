@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CABLE_WHILE_ASKING_PROMPT } from "@/lib/audio/browser-capture-consent";
 import type { WindowsLoopbackSource } from "@/lib/desktop/bridge";
 import { WINDOWS_CAPTURE_CONSENT } from "@/lib/desktop/virtual-audio";
 
@@ -42,11 +43,19 @@ import { WINDOWS_CAPTURE_CONSENT } from "@/lib/desktop/virtual-audio";
  *   A consent prompt whose refusal breaks the product is not a question, and people learn that
  *   within one meeting.
  *
+ * COMPACT WHILE THE CABLE CARRIES MEET (WT-900)
+ *   Where Hi-Fi Cable exists the far side is heard through it while this is unanswered, and once
+ *   the cable demonstrably carries Meet the question is no longer urgent. `compact` mirrors the
+ *   popup's one-line ask: the same sentence, "Switch" to grant and "Keep cable" to decline, and no
+ *   picker - the likeliest browser is already selected, and Switch waits for one. Dismissing it is
+ *   still "no", which here means "keep the cable", the path that is already working.
+ *
  * The wording lives in `WINDOWS_CAPTURE_CONSENT` rather than here: it is the whole control, it is
  * tested there, and a second copy in JSX is how the tested one stops being the one users read.
  */
 export function BrowserCaptureConsentModal({
   open,
+  compact = false,
   sources,
   selectedSourceId,
   loadingSources,
@@ -54,6 +63,8 @@ export function BrowserCaptureConsentModal({
   onDecision,
 }: {
   open: boolean;
+  /** WT-900: the one-line ask, while the cable stands in and carries Meet (isCompactConsentAsk). */
+  compact?: boolean;
   sources: WindowsLoopbackSource[];
   selectedSourceId: string | null;
   loadingSources: boolean;
@@ -72,62 +83,79 @@ export function BrowserCaptureConsentModal({
         if (!next) onDecision(false);
       }}
     >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{WINDOWS_CAPTURE_CONSENT.title}</DialogTitle>
-          <DialogDescription>{WINDOWS_CAPTURE_CONSENT.body}</DialogDescription>
-        </DialogHeader>
+      {compact ? (
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{WINDOWS_CAPTURE_CONSENT.title}</DialogTitle>
+            <DialogDescription>{CABLE_WHILE_ASKING_PROMPT.text}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => onDecision(false)}>
+              {CABLE_WHILE_ASKING_PROMPT.decline}
+            </Button>
+            <Button disabled={!canConfirm} onClick={() => onDecision(true)}>
+              {CABLE_WHILE_ASKING_PROMPT.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : (
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{WINDOWS_CAPTURE_CONSENT.title}</DialogTitle>
+            <DialogDescription>{WINDOWS_CAPTURE_CONSENT.body}</DialogDescription>
+          </DialogHeader>
 
-        <p className="text-sm font-medium text-foreground">{WINDOWS_CAPTURE_CONSENT.action}</p>
+          <p className="text-sm font-medium text-foreground">{WINDOWS_CAPTURE_CONSENT.action}</p>
 
-        {/*
-          These labels said "window" while the consent paragraph above them says "browser", and the
-          paragraph is the one that is true: picking a window does not narrow the capture. Every
-          window of one browser resolves to the same process, and the capture takes that process and
-          its children — so this control chooses WHICH BROWSER, and nothing finer. Naming it
-          "Meeting window" promised a precision the capture does not have, four lines under a
-          sentence that correctly warns about other tabs.
-        */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="browser-capture-source">
-            Browser to capture
-          </label>
-          <Select
-            value={selectedSourceId ?? ""}
-            onValueChange={(sourceId) => {
-              if (sourceId) onSelectedSourceIdChange(sourceId);
-            }}
-            disabled={loadingSources || sources.length === 0}
-          >
-            <SelectTrigger id="browser-capture-source" className="w-full">
-              <SelectValue
-                placeholder={loadingSources ? "Finding open windows..." : "Choose the browser your meeting is in"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {sources.map((source) => (
-                <SelectItem key={source.id} value={source.id}>
-                  {source.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!loadingSources && sources.length === 0 ? (
-            <p className="text-xs leading-5 text-muted-foreground">
-              Open your meeting in a browser, then start translation again.
-            </p>
-          ) : null}
-        </div>
+          {/*
+            These labels said "window" while the consent paragraph above them says "browser", and the
+            paragraph is the one that is true: picking a window does not narrow the capture. Every
+            window of one browser resolves to the same process, and the capture takes that process and
+            its children — so this control chooses WHICH BROWSER, and nothing finer. Naming it
+            "Meeting window" promised a precision the capture does not have, four lines under a
+            sentence that correctly warns about other tabs.
+          */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="browser-capture-source">
+              Browser to capture
+            </label>
+            <Select
+              value={selectedSourceId ?? ""}
+              onValueChange={(sourceId) => {
+                if (sourceId) onSelectedSourceIdChange(sourceId);
+              }}
+              disabled={loadingSources || sources.length === 0}
+            >
+              <SelectTrigger id="browser-capture-source" className="w-full">
+                <SelectValue
+                  placeholder={loadingSources ? "Finding open windows..." : "Choose the browser your meeting is in"}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {sources.map((source) => (
+                  <SelectItem key={source.id} value={source.id}>
+                    {source.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!loadingSources && sources.length === 0 ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Open your meeting in a browser, then start translation again.
+              </p>
+            ) : null}
+          </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onDecision(false)}>
-            {WINDOWS_CAPTURE_CONSENT.decline}
-          </Button>
-          <Button disabled={!canConfirm} onClick={() => onDecision(true)}>
-            {WINDOWS_CAPTURE_CONSENT.confirm}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => onDecision(false)}>
+              {WINDOWS_CAPTURE_CONSENT.decline}
+            </Button>
+            <Button disabled={!canConfirm} onClick={() => onDecision(true)}>
+              {WINDOWS_CAPTURE_CONSENT.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      )}
     </Dialog>
   );
 }

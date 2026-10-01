@@ -10,8 +10,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  browserCaptureAnswerKey,
+  browserCaptureAnswerStorage,
   browserCaptureConsentState,
   mayCaptureBrowser,
+  readStoredBrowserCaptureAnswer,
+  shouldForgetBrowserCaptureAnswer,
+  writeStoredBrowserCaptureAnswer,
   type BrowserCaptureConsentInput,
 } from "../browser-capture-consent.ts";
 
@@ -78,4 +83,70 @@ test("no loopback path means no ask", () => {
     browserCaptureConsentState(loopbackHost({ loopbackAvailable: false })),
     "not-required",
   );
+});
+
+// WT-900 — the answer survives a reload of the same room, and nothing else.
+
+function memoryStorage(initial: Record<string, string> = {}) {
+  const data = new Map(Object.entries(initial));
+  return {
+    data,
+    getItem: (key: string) => (data.has(key) ? (data.get(key) as string) : null),
+    setItem: (key: string, value: string) => void data.set(key, value),
+    removeItem: (key: string) => void data.delete(key),
+  };
+}
+
+test("an answer is stored per room and read back after a reload", () => {
+  const storage = memoryStorage();
+  writeStoredBrowserCaptureAnswer(storage, "room-a", true);
+  writeStoredBrowserCaptureAnswer(storage, "room-b", false);
+  assert.equal(storage.data.get("warptalk:bridge-capture-answer:room-a"), "granted");
+  assert.equal(readStoredBrowserCaptureAnswer(storage, "room-a"), true);
+  assert.equal(readStoredBrowserCaptureAnswer(storage, "room-b"), false);
+  // Another meeting is another set of open tabs: never inherits an answer.
+  assert.equal(readStoredBrowserCaptureAnswer(storage, "room-c"), null);
+});
+
+test("asking again forgets the stored answer", () => {
+  const storage = memoryStorage();
+  writeStoredBrowserCaptureAnswer(storage, "room-a", false);
+  writeStoredBrowserCaptureAnswer(storage, "room-a", null);
+  assert.equal(readStoredBrowserCaptureAnswer(storage, "room-a"), null);
+  assert.equal(storage.data.size, 0);
+});
+
+test("anything but a value this code wrote reads as unanswered", () => {
+  const storage = memoryStorage({ [browserCaptureAnswerKey("room-a")]: "true" });
+  assert.equal(readStoredBrowserCaptureAnswer(storage, "room-a"), null);
+});
+
+test("missing or throwing storage never throws, and reads as unanswered", () => {
+  assert.equal(readStoredBrowserCaptureAnswer(null, "room-a"), null);
+  writeStoredBrowserCaptureAnswer(null, "room-a", true);
+  const throwing = {
+    getItem: () => {
+      throw new Error("SecurityError");
+    },
+    setItem: () => {
+      throw new Error("QuotaExceededError");
+    },
+    removeItem: () => {
+      throw new Error("SecurityError");
+    },
+  };
+  assert.equal(readStoredBrowserCaptureAnswer(throwing, "room-a"), null);
+  assert.doesNotThrow(() => writeStoredBrowserCaptureAnswer(throwing, "room-a", true));
+  assert.doesNotThrow(() => writeStoredBrowserCaptureAnswer(throwing, "room-a", null));
+  // No window outside a browser.
+  assert.equal(browserCaptureAnswerStorage(), null);
+});
+
+test("the stored answer is dropped when the meeting is over, not when it is paused", () => {
+  for (const status of ["ended", "ENDED", "cancelled", "expired", "failed", "timeout"]) {
+    assert.equal(shouldForgetBrowserCaptureAnswer(status), true, status);
+  }
+  for (const status of ["live", "paused", "waiting", "", null, undefined]) {
+    assert.equal(shouldForgetBrowserCaptureAnswer(status), false, String(status));
+  }
 });
