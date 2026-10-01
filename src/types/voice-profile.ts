@@ -40,6 +40,11 @@ export interface CreateVoiceProfileRequest {
   displayName: string;
   language: string;
   sample?: File | null;
+  /**
+   * WT-888 — the read-aloud phrase this recording answers. Required by the server: a sample
+   * without one is refused as an arbitrary upload.
+   */
+  challengeId?: string | null;
   ownVoiceConfirmed?: boolean;
   aiUseConfirmed?: boolean;
   syntheticVoiceAcknowledged?: boolean;
