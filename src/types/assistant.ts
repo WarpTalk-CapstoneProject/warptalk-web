@@ -141,6 +141,56 @@ export interface UpdateWorkspaceToolPolicyRequest {
 }
 
 /**
+ * GET /assistant/tools?workspaceId= — what WarpBot is offered right now, for the caller, in that
+ * workspace (/{slug}/tools). Built-in rows come from the AI worker's own tool registry (its manifest
+ * in Redis, served by AssistantService); `platform_staff` rows are already filtered out server-side
+ * for everyone else.
+ */
+export type WarpBotToolEffect = "read" | "write";
+export type WarpBotToolAudience = "member" | "host" | "platform_staff";
+
+export interface WarpBotBuiltInToolDto {
+  name: string;
+  /** One of the web's category ids (warpbot-tools-catalog.ts); anything else is shown as "other". */
+  category: string;
+  effect: WarpBotToolEffect;
+  audience: WarpBotToolAudience;
+  /** English one-liner from the tool schema. */
+  description: string;
+}
+
+/**
+ * `on`/`off`: the worker can search and a platform setting says whether it may. `unavailable`: the
+ * worker has no web search configured. `unknown`: no manifest to tell.
+ */
+export type WarpBotWebSearchState = "on" | "off" | "unavailable" | "unknown";
+
+export interface WarpBotPluginToolDto {
+  name: string;
+  label: string;
+  description: string;
+  effect: WarpBotToolEffect;
+  /** The member's own choice. Never `blocked` here: blocked tools are not offered. */
+  policy: PluginToolPolicy;
+  /** The workspace Owner's rule; always present, null when there is none. */
+  workspacePolicy: WorkspaceToolRule | null;
+}
+
+export interface WarpBotPluginToolsDto {
+  pluginKey: string;
+  label: string;
+  tools: WarpBotPluginToolDto[];
+}
+
+export interface WarpBotToolsDto {
+  manifestAvailable: boolean;
+  manifestGeneratedAt: string | null;
+  builtIn: WarpBotBuiltInToolDto[];
+  webSearch: { state: WarpBotWebSearchState };
+  plugins: WarpBotPluginToolsDto[];
+}
+
+/**
  * One recorded plugin tool call in a workspace, as its Owner or Admin sees it. WT-646.
  *
  * Mirrors `PluginToolAuditDto` in the assistant service. Deliberately carries no argument text:

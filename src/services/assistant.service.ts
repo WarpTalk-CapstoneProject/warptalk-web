@@ -15,6 +15,7 @@ import type {
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
   UpdateWorkspaceToolPolicyRequest,
+  WarpBotToolsDto,
   WorkspacePluginItemDto,
   WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
@@ -107,6 +108,15 @@ export const assistantService = {
 
   getSkills() {
     return apiClient.get<AssistantSkillDto[]>(API.assistant.skills);
+  },
+
+  /**
+   * What WarpBot is offered right now for the caller in this workspace: the worker's built-in tools
+   * (platform-staff ones already filtered by the server), web search state, and the plugin tools
+   * the orchestrator would send the worker. Any workspace member; a non-member gets 403.
+   */
+  getWarpBotTools(workspaceId: string) {
+    return apiClient.get<WarpBotToolsDto>(API.assistant.tools, { params: { workspaceId } });
   },
 
   /**

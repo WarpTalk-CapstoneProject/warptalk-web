@@ -398,6 +398,8 @@ export const API = {
       sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
     },
     skills: "/assistant/skills",
+    /** GET ?workspaceId= — WarpBot's built-in tools, web search state and offered plugin tools. */
+    tools: "/assistant/tools",
     plugins: "/assistant/plugins",
     installPlugin: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,

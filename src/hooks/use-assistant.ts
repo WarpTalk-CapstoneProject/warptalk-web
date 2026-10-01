@@ -30,6 +30,11 @@ export const ASSISTANT_KEYS = {
    * one key would show a member the refusal from the workspace they left.
    */
   plugins: (workspaceId?: string | null) => [...PLUGINS_QUERY_ROOT, workspaceId ?? null] as const,
+  /**
+   * Under the plugins root on purpose: every connect/disconnect/policy write already invalidates
+   * that root, and each of them changes which plugin tools this response lists.
+   */
+  warpBotTools: (workspaceId: string) => [...PLUGINS_QUERY_ROOT, "warpbot-tools", workspaceId] as const,
 };
 
 export function useAssistantConversations(workspaceId: string | null) {
@@ -143,6 +148,19 @@ export function useAssistantPlugins(workspaceId?: string | null) {
       const { data } = await assistantService.listPlugins(workspaceId);
       return data;
     },
+    staleTime: 60 * 1000,
+  });
+}
+
+/** /{slug}/tools — GET /assistant/tools for the active workspace. */
+export function useWarpBotTools(workspaceId?: string | null) {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.warpBotTools(workspaceId ?? ""),
+    queryFn: async () => {
+      const { data } = await assistantService.getWarpBotTools(workspaceId!);
+      return data;
+    },
+    enabled: !!workspaceId,
     staleTime: 60 * 1000,
   });
 }
