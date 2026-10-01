@@ -148,7 +148,7 @@
     "test:no-module-side-effects": "node scripts/check-no-module-side-effects.mjs",
     "test:language-profile": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/language-profile.test.ts",
     "test:meeting-day": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-day.test.ts",
-    "test:agenda-sections": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/agenda-sections.test.ts src/lib/meeting/__tests__/google-meet-meeting.test.ts",
+    "test:agenda-sections": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/agenda-sections.test.ts src/lib/meeting/__tests__/google-meet-meeting.test.ts src/lib/meeting/__tests__/meeting-relation.test.ts",
     "test:agenda-navigator": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/agenda-navigator.test.ts",
     "test:meeting-language-set": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/meeting-language-set.test.ts",
     "test:workspace-routes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/workspace-routes.test.ts",

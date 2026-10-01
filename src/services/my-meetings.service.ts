@@ -1,8 +1,9 @@
 import { translationRoomService } from "@/services/translation-room.service";
 import { mapArtifact } from "@/services/room-history.service";
 import { resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
+import { resolveOccursAt } from "@/lib/meeting/meeting-occurs-at";
 import type { MyMeetingItem, MyMeetingsResponse } from "@/types/myMeetings";
-import type { TranslationRoomDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
+import type { TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 
 /*
  * WT-538 — `resolveTimeState(status)` used to live here, and it is gone on purpose.
@@ -14,18 +15,6 @@ import type { TranslationRoomDto, TranslationRoomHistoryItemDto } from "@/types/
  * fetching), and which participant row belongs to the person looking. So the answer is derived
  * where both are known — see the note on `MyMeetingItem` about why there is no `timeState` field.
  */
-
-/**
- * The moment a meeting belongs to on the timeline.
- *
- * Same fallback chain the server sorts by (ScheduledAt ?? StartedAt ?? EndedAt ?? CreatedAt), and
- * it has to stay that way: if the client filed rows under a different timestamp than the server
- * ordered them by, a page boundary would drop meetings out of the middle of a day rather than off
- * the end of the range.
- */
-function resolveOccursAt(room: TranslationRoomDto): string {
-  return room.scheduledAt ?? room.startedAt ?? room.endedAt ?? room.createdAt;
-}
 
 function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
   const room = item.room;

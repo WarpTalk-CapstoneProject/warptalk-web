@@ -60,6 +60,7 @@ import {
   type MeetingDisplayState,
 } from "@/lib/meeting/meeting-display-state";
 import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
+import { meetingRelation } from "@/lib/meeting/meeting-relation";
 import { dateFnsCalendarLocale, intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
@@ -2108,9 +2109,15 @@ function isHostedByViewer(meeting: MyMeetingItem) {
 /**
  * The words for the fill — kept beside it, as `meetingStateLabel` sits beside the state rule, so
  * the two cannot drift.
+ *
+ * Three words for two fills: "Invited" needs an invitation (GMCAL1001). Someone in the room with
+ * neither the host seat nor an invitation — the second person on a Google Meet joined through the
+ * bridge — is a "Participant", and keeps the outline, since the meeting is still not theirs to run.
  */
 function relationLabel(meeting: MyMeetingItem, t: ReturnType<typeof useTranslations>) {
-  return isHostedByViewer(meeting) ? t("relation.youHost") : t("relation.invited");
+  const relation = meetingRelation(meeting);
+  if (relation === "host") return t("relation.youHost");
+  return relation === "invited" ? t("relation.invited") : t("relation.participant");
 }
 
 /**
