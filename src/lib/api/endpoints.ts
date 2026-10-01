@@ -369,6 +369,10 @@ export const API = {
     documentPublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/publish`,
     /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
     documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
+    // WT-854 — the corrected file awaiting review. `documentDownload` keeps serving the approved
+    // one to everybody else; this is for reviewers and the uploader only.
+    documentPendingRevisionDownload: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/revision/download`,
     /** A document's approval and feedback history, newest first. WT-633. */
     documentHistory: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/history`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,

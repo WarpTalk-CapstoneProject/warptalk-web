@@ -59,6 +59,7 @@
     "rejected": "Bị từ chối",
     "private": "Riêng tư",
     "pendingApproval": "Chờ duyệt",
+    "revisionPending": "Bản sửa chờ duyệt",
     "administrative": "Hành chính",
     "aiReady": "AI sẵn sàng",
     "aiFailed": "AI thất bại",
@@ -155,6 +156,14 @@
     "reject": "Từ chối",
     "rejectTitle": "Từ chối tài liệu",
     "download": "Tải xuống",
+    "pendingRevision": {
+      "title": "Một bản đã sửa đang chờ duyệt",
+      "body": "{fileName}, tải lên lúc {date}. Mọi người vẫn đọc bản đã duyệt cho đến khi người duyệt chấp thuận bản này.",
+      "note": "Ghi chú của người tải lên: {note}",
+      "previewLabel": "Chọn tệp để xem trước",
+      "showApproved": "Bản đã duyệt",
+      "showPending": "Bản đã sửa"
+    },
     "toasts": {
       "downloadSaved": "Đã lưu file thành công!",
       "downloadStarted": "Đang tải file xuống...",
@@ -164,6 +173,8 @@
       "approveActionFailed": "Thao tác thất bại.",
       "revisionSubmitted": "Đã gửi phiên bản đã sửa để chờ duyệt.",
       "revisionFailed": "Không thể tải lên phiên bản đã sửa.",
+      "revisionApproved": "Đã duyệt bản sửa. Bản này giờ là tài liệu chính thức.",
+      "revisionRejected": "Đã từ chối và xóa bản sửa. Người đọc vẫn dùng bản đã duyệt.",
       "visibilityChangeFailed": "Không thể thay đổi quyền xem tài liệu này.",
       "aiIndexingEnabled": "Đã bật lập chỉ mục AI. Tài liệu sẽ được lập chỉ mục lại.",
       "aiIndexingDisabled": "Đã tắt lập chỉ mục AI. Các bản sao AI hiện có của tài liệu này đang được xóa.",

@@ -59,6 +59,7 @@
     "rejected": "Rejected",
     "private": "Private",
     "pendingApproval": "Pending Approval",
+    "revisionPending": "Revision pending",
     "administrative": "Administrative",
     "aiReady": "AI Ready",
     "aiFailed": "AI Failed",
@@ -155,6 +156,14 @@
     "reject": "Reject",
     "rejectTitle": "Reject document",
     "download": "Download",
+    "pendingRevision": {
+      "title": "A corrected version is awaiting review",
+      "body": "{fileName}, uploaded {date}. Everyone keeps reading the approved file until a reviewer approves this one.",
+      "note": "Note from the uploader: {note}",
+      "previewLabel": "Which file to preview",
+      "showApproved": "Approved file",
+      "showPending": "Corrected version"
+    },
     "toasts": {
       "downloadSaved": "File saved successfully!",
       "downloadStarted": "Downloading file...",
@@ -164,6 +173,8 @@
       "approveActionFailed": "Action failed.",
       "revisionSubmitted": "Corrected version submitted for approval.",
       "revisionFailed": "Failed to upload the corrected version.",
+      "revisionApproved": "Corrected version approved. It is now the document.",
+      "revisionRejected": "Corrected version rejected and deleted. Readers keep the approved file.",
       "visibilityChangeFailed": "Failed to change who can see this document.",
       "aiIndexingEnabled": "AI indexing enabled. The document will be re-indexed.",
       "aiIndexingDisabled": "AI indexing disabled. Existing AI copies of this document are being deleted.",
