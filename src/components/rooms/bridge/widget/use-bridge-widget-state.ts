@@ -37,6 +37,13 @@
  *       uses. With no broadcast ever arriving, the window list is what answers.
  *   TODO(WT-525 relay / backend): replace the poll with room events once this window can receive
  *   them without joining — a join-free hub method, or the main window's `bridge:session-state`.
+ *
+ * WT-901: THE MAIN WINDOW SAYS IT FIRST
+ *   Translation running, the transcript pause and room-host now also arrive over the relay
+ *   snapshot, the moment the main window's state changes. Where the snapshot carries one, it wins
+ *   over the poll; where it does not (no main window, or one too old to send it), the poll is the
+ *   answer as before. The poll keeps running either way — it is also how the transcript itself is
+ *   read, and it is the fallback the moment the main window goes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -59,6 +66,12 @@ import {
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
 import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language";
+import {
+  bridgeWidgetIsRoomHost,
+  bridgeWidgetMeetingStatus,
+  bridgeWidgetTranscriptPauseState,
+  bridgeWidgetTranslationState,
+} from "@/lib/meeting/bridge-widget-relay";
 import { resolveTranscriptPause } from "@/lib/meeting/transcript-pause";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
@@ -66,6 +79,7 @@ import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { TranscriptCleanSentenceEventDto, TranscriptSegmentDto } from "@/types/realtime";
 
+import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import type {
   BridgeWidgetConnectionState,
   BridgeWidgetState,
@@ -93,23 +107,46 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
 
   // ── room, host, translation ──────────────────────────────────────────────
 
-  const { data: room } = useTranslationRoom(roomId);
+  const relay = useBridgeWidgetRelayClient(roomId);
+  const relayView = relay.view;
+
+  const { data: room, refetch: refetchRoom } = useTranslationRoom(roomId);
   const { data: sessions } = useTranslationRoomSessions(roomId);
-  const translationStarted = (sessions ?? []).some((session) => session.status === "ACTIVE");
+  const polledStarted = (sessions ?? []).some((session) => session.status === "ACTIVE");
+  const translation = bridgeWidgetTranslationState(relayView, { started: polledStarted });
+  const translationStarted = translation.started;
   // `undefined` covers a failed first read too: a sessions request that errored has not told us
-  // translation is ready, it has told us nothing.
-  const translationStatus: BridgeWidgetTranslationStatus = sessions === undefined
-    ? "unknown"
-    : translationStarted
-      ? "translating"
+  // translation is ready, it has told us nothing — unless the main window has.
+  const translationStatus: BridgeWidgetTranslationStatus = translationStarted
+    ? "translating"
+    : sessions === undefined
+      ? translation.mirrored
+        ? "ready"
+        : "unknown"
       : sessions.length > 0
         ? "stopped"
         : "ready";
-  // Both halves, as bridge-overlay-controls and every other host check in the app does it.
-  const isHost = Boolean(user?.id && room?.hostId === user.id) || room?.isHost === true;
+  // Both halves, as bridge-overlay-controls and every other host check in the app does it — or,
+  // better, the main window's `isRoomHost`, which also follows a live host transfer.
+  const isHost = bridgeWidgetIsRoomHost(
+    relayView,
+    Boolean(user?.id && room?.hostId === user.id) || room?.isHost === true,
+  );
+  const meetingStatus = bridgeWidgetMeetingStatus(relayView);
 
-  const [ended, setEnded] = useState(false);
-  const markEnded = useCallback(() => setEnded(true), []);
+  /**
+   * The popup does not end the meeting (PO, 2026-10-01): a bridge room ends when its Google Meet
+   * conference does, which the backend learns from Google, or from the main window's own End. The
+   * popup only notices that it has — the room record says ENDED — and then shows EndedView.
+   *
+   * The room is re-read on the slow tick below only while no main window is connected: one that is
+   * running the meeting says `host-gone` the moment the meeting closes, and that re-reads it at once.
+   */
+  const ended = room?.status === "ended";
+  const relayStatus = relayView.status;
+  useEffect(() => {
+    if (relayStatus === "no-host" && roomId && signedIn) void refetchRoom();
+  }, [relayStatus, roomId, signedIn, refetchRoom]);
 
   // ── hub ──────────────────────────────────────────────────────────────────
 
@@ -211,10 +248,13 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   // ── transcript pause ─────────────────────────────────────────────────────
 
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
-  const transcriptPause = resolveTranscriptPause({
-    windows: pauseWindowsQuery.data,
-    event: transcriptPauseEvent,
-  });
+  const transcriptPause = bridgeWidgetTranscriptPauseState(
+    relayView,
+    resolveTranscriptPause({
+      windows: pauseWindowsQuery.data,
+      event: transcriptPauseEvent,
+    }),
+  );
   useEffect(() => {
     transcriptPausedRef.current = transcriptPause.paused;
   }, [transcriptPause.paused]);
@@ -270,6 +310,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     const tick = () => {
       // Hidden to the tray: nobody is reading, so nothing is worth a request.
       if (document.visibilityState === "hidden") return;
+      if (relayStatus !== "connected") void refetchRoom();
       void refetchPauseWindows();
       if (!savesTranscript) return;
       if (!transcriptId) {
@@ -296,6 +337,8 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     refetchTranslations,
     refetchCleanSentences,
     refetchPauseWindows,
+    refetchRoom,
+    relayStatus,
   ]);
 
   // ── reader language ──────────────────────────────────────────────────────
@@ -371,40 +414,56 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       room,
       isHost,
       translationStarted,
+      translationMirrored: translation.mirrored,
       translationStatus,
       transcriptPaused: transcriptPause.paused,
       transcriptPausedSince: transcriptPause.since,
       transcriptPauseKnown: transcriptPause.known,
+      transcriptPauseMirrored: transcriptPause.mirrored,
       segments,
       cleanSentences,
       connectionState,
       hub,
+      relay,
+      relayConnected: relayView.status === "connected",
+      meetingConnection: meetingStatus.connection,
+      meetingError: meetingStatus.meetingError,
+      idleReaped: meetingStatus.idleReaped,
+      creditsSuspended: meetingStatus.creditsSuspended,
+      creditsSuspendedReason: meetingStatus.creditsSuspendedReason,
       readerLanguage,
       setReaderLanguage,
       farSideLanguage,
       setFarSideLanguage,
       ended,
-      markEnded,
     }),
     [
       roomId,
       room,
       isHost,
       translationStarted,
+      translation.mirrored,
       translationStatus,
       transcriptPause.paused,
       transcriptPause.since,
       transcriptPause.known,
+      transcriptPause.mirrored,
       segments,
       cleanSentences,
       connectionState,
       hub,
+      relay,
+      relayView.status,
+      meetingStatus.connection,
+      meetingStatus.meetingError,
+      meetingStatus.idleReaped,
+      meetingStatus.creditsSuspended,
+      meetingStatus.creditsSuspendedReason,
       readerLanguage,
       setReaderLanguage,
       farSideLanguage,
       setFarSideLanguage,
       ended,
-      markEnded,
     ],
   );
 }

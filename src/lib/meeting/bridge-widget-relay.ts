@@ -39,10 +39,21 @@
  *                    set-voice-clone-consent  { enabled }
  *                    set-meeting-audio-level  { level }               0..1, the original under a dub
  *                    answer-browser-capture   { granted, sourceId? }  the consent modal, answered here
+ *                    stop-translation                                 the dock's Stop (WT-901)
+ *                    set-transcript-paused    { paused }              the dock's Pause/Resume, already
+ *                                                                     confirmed in the popup
+ *                    rejoin                                           after the idle reaper let go
+ *                    open-setup                                       the device setup wizard, which
+ *                                                                     the main window then surfaces
+ *                    open-room-record                                 the room's record (/rooms/{id}),
+ *                                                                     from the ended screen
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
- *                                                 inboundHealth?, at }
+ *                                                 inboundHealth?, translation?, transcriptPause?,
+ *                                                 creditsSuspended?, creditsSuspendedReason?,
+ *                                                 meetingError?, idleReaped?, connection?,
+ *                                                 isRoomHost?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -53,6 +64,23 @@
  *   does not know is dropped rather than failing the whole snapshot. It only ever feeds a warning,
  *   and a newer main window that learns a fifth state must not cost an older popup its language
  *   pill and consent row over a line of status text.
+ *
+ *   WT-901 / WT-868: the fields after `inboundHealth` are the meeting as the main window runs it —
+ *   whether translation is running, whether the transcript is paused, the credits stop, the
+ *   meeting's own error, the idle reaper, the LiveKit connection, and whether this user is the
+ *   room's actual host. Without them the popup learned all of this from a 5–10s REST poll, so a
+ *   Start or Pause made in the main window showed up seconds late; and once the main window stops
+ *   drawing its own bridge UI (WT-868) the popup is the only place any of it can be said. Every one
+ *   of them is optional and forgiving like `inboundHealth`: absent or unreadable means "this main
+ *   window does not say", the popup falls back to what it reads over REST, and nothing else in the
+ *   snapshot is lost over it. The four new intents are acted on by the main window's own handlers,
+ *   so the toasts and the host check are the native ones; a main window that predates them drops
+ *   them as "unknown-type", which is why the popup only sends them to a main window whose snapshot
+ *   carries the matching field.
+ *
+ *   There is deliberately NO end intent. The popup does not end a bridge meeting (PO, 2026-10-01):
+ *   the room ends when its Google Meet conference does. `open-room-record` is how the ended screen
+ *   hands the user to the room's record in the main window, where they are signed in.
  *
  * VERSIONING
  *   `v` changes only when an EXISTING message changes shape. A new message type does not need a
@@ -127,9 +155,41 @@ export type BridgeWidgetSnapshot = {
    * there, not only in a main window hidden behind the call.
    */
   inboundHealth?: InboundHealth;
+  /** Whether a translation session is running, as the main window knows it (instantly). */
+  translation?: BridgeWidgetTranslationSnapshot;
+  /** WT-605: the written transcript's pause, as `resolveTranscriptPause` resolves it there. */
+  transcriptPause?: BridgeWidgetTranscriptPauseSnapshot;
+  /** WT-699: translation was stopped because the workspace cannot pay for it. */
+  creditsSuspended?: boolean;
+  /** The suspension reason billing gave (e.g. "insufficient_credits"), for the right sentence. */
+  creditsSuspendedReason?: string;
+  /** The meeting's own error, already worded for a person, or null when there is none. */
+  meetingError?: string | null;
+  /** The idle reaper let go of this meeting; only "Rejoin meeting" brings it back. */
+  idleReaped?: boolean;
+  /** The main window's connection to the meeting itself (LiveKit), not this relay. */
+  connection?: BridgeWidgetMeetingConnection;
+  /**
+   * Whether this user is the room's ACTUAL host (persistent-meeting-session's `isRoomHost`, which
+   * follows a live host transfer). Start, Stop and Pause are refused by the server for anybody
+   * else, workspace owners included.
+   */
+  isRoomHost?: boolean;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
+
+export type BridgeWidgetTranslationSnapshot = { started: boolean };
+
+export type BridgeWidgetTranscriptPauseSnapshot = {
+  /** False while the main window has not been told either way — "not told" is not "running". */
+  known: boolean;
+  paused: boolean;
+  /** ISO instant the pause in force began, or null. */
+  since: string | null;
+};
+
+export type BridgeWidgetMeetingConnection = "connecting" | "connected" | "reconnecting" | "disconnected";
 
 /**
  * The voice half of the meeting, as the main window's VoicePanel props hold it.
@@ -164,7 +224,12 @@ export type BridgeWidgetIntent =
   | { type: "set-dub-voice"; voiceId: string | null }
   | { type: "set-voice-clone-consent"; enabled: boolean }
   | { type: "set-meeting-audio-level"; level: number }
-  | { type: "answer-browser-capture"; granted: boolean; sourceId?: string };
+  | { type: "answer-browser-capture"; granted: boolean; sourceId?: string }
+  | { type: "stop-translation" }
+  | { type: "set-transcript-paused"; paused: boolean }
+  | { type: "rejoin" }
+  | { type: "open-setup" }
+  | { type: "open-room-record" };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
 
@@ -202,6 +267,11 @@ const INTENT_TYPES = new Set<string>([
   "set-voice-clone-consent",
   "set-meeting-audio-level",
   "answer-browser-capture",
+  "stop-translation",
+  "set-transcript-paused",
+  "rejoin",
+  "open-setup",
+  "open-room-record",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -211,6 +281,58 @@ export function isBridgeWidgetIntent(message: BridgeWidgetMessageBody): message 
 
 const CONSENT_STATES = new Set<string>(["not-required", "required", "granted", "declined"]);
 const INBOUND_HEALTH_STATES = new Set<string>(["unknown", "listening", "quiet", "no-signal"] satisfies InboundHealth[]);
+const MEETING_CONNECTIONS = new Set<string>(
+  ["connecting", "connected", "reconnecting", "disconnected"] satisfies BridgeWidgetMeetingConnection[],
+);
+/** A sentence for a person, from another window: bounded so it cannot flood the popup. */
+const MEETING_ERROR_MAX = 500;
+const CREDITS_REASON_MAX = 64;
+const PAUSE_SINCE_MAX = 64;
+
+function parseTranslation(raw: unknown): BridgeWidgetTranslationSnapshot | null {
+  return isRecord(raw) && typeof raw.started === "boolean" ? { started: raw.started } : null;
+}
+
+function parseTranscriptPause(raw: unknown): BridgeWidgetTranscriptPauseSnapshot | null {
+  if (!isRecord(raw) || typeof raw.known !== "boolean" || typeof raw.paused !== "boolean") return null;
+  let since: string | null = null;
+  if (raw.since !== null && raw.since !== undefined) {
+    if (typeof raw.since !== "string" || raw.since.length === 0 || raw.since.length > PAUSE_SINCE_MAX) {
+      return null;
+    }
+    since = raw.since;
+  }
+  return { known: raw.known, paused: raw.paused, since };
+}
+
+/**
+ * The WT-901 meeting fields, each one dropped on its own when unreadable — see the header. Written
+ * onto `snapshot` in place; a field this returns nothing for is simply absent.
+ */
+function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidgetSnapshot): void {
+  const translation = parseTranslation(raw.translation);
+  if (translation) snapshot.translation = translation;
+  const transcriptPause = parseTranscriptPause(raw.transcriptPause);
+  if (transcriptPause) snapshot.transcriptPause = transcriptPause;
+  if (typeof raw.creditsSuspended === "boolean") snapshot.creditsSuspended = raw.creditsSuspended;
+  if (
+    typeof raw.creditsSuspendedReason === "string"
+    && raw.creditsSuspendedReason.length > 0
+    && raw.creditsSuspendedReason.length <= CREDITS_REASON_MAX
+  ) {
+    snapshot.creditsSuspendedReason = raw.creditsSuspendedReason;
+  }
+  if (raw.meetingError === null) {
+    snapshot.meetingError = null;
+  } else if (typeof raw.meetingError === "string" && raw.meetingError.trim().length > 0) {
+    snapshot.meetingError = raw.meetingError.trim().slice(0, MEETING_ERROR_MAX);
+  }
+  if (typeof raw.idleReaped === "boolean") snapshot.idleReaped = raw.idleReaped;
+  if (typeof raw.connection === "string" && MEETING_CONNECTIONS.has(raw.connection)) {
+    snapshot.connection = raw.connection as BridgeWidgetMeetingConnection;
+  }
+  if (typeof raw.isRoomHost === "boolean") snapshot.isRoomHost = raw.isRoomHost;
+}
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
 function languageCode(value: unknown): string | null {
@@ -322,6 +444,18 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       const sourceId = opaqueId(raw.sourceId);
       return sourceId ? { type: "answer-browser-capture", granted: raw.granted, sourceId } : null;
     }
+    case "stop-translation":
+      return { type: "stop-translation" };
+    case "set-transcript-paused":
+      return typeof raw.paused === "boolean"
+        ? { type: "set-transcript-paused", paused: raw.paused }
+        : null;
+    case "rejoin":
+      return { type: "rejoin" };
+    case "open-setup":
+      return { type: "open-setup" };
+    case "open-room-record":
+      return { type: "open-room-record" };
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -374,6 +508,7 @@ function parseSnapshot(raw: Record<string, unknown>): BridgeWidgetSnapshot | nul
   if (typeof raw.inboundHealth === "string" && INBOUND_HEALTH_STATES.has(raw.inboundHealth)) {
     snapshot.inboundHealth = raw.inboundHealth as InboundHealth;
   }
+  parseMeetingFields(raw, snapshot);
   return snapshot;
 }
 
@@ -410,6 +545,15 @@ export type BridgeWidgetSnapshotFields = {
   selectedLoopbackSourceId?: string | null;
   voice?: BridgeWidgetVoiceSnapshot;
   inboundHealth?: InboundHealth;
+  /** WT-901: each of these is sent only when given; see the header for what absent means. */
+  translation?: BridgeWidgetTranslationSnapshot;
+  transcriptPause?: BridgeWidgetTranscriptPauseSnapshot;
+  creditsSuspended?: boolean;
+  creditsSuspendedReason?: string | null;
+  meetingError?: string | null;
+  idleReaped?: boolean;
+  connection?: BridgeWidgetMeetingConnection;
+  isRoomHost?: boolean;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -432,7 +576,32 @@ export function buildBridgeWidgetSnapshot(
   if (fields.micDeviceId) snapshot.micDeviceId = fields.micDeviceId;
   if (fields.voice) snapshot.voice = fields.voice;
   if (fields.inboundHealth) snapshot.inboundHealth = fields.inboundHealth;
+  if (fields.translation) snapshot.translation = { started: fields.translation.started };
+  if (fields.transcriptPause) {
+    snapshot.transcriptPause = {
+      known: fields.transcriptPause.known,
+      paused: fields.transcriptPause.paused,
+      since: fields.transcriptPause.since || null,
+    };
+  }
+  if (fields.creditsSuspended !== undefined) snapshot.creditsSuspended = fields.creditsSuspended;
+  if (fields.creditsSuspendedReason) snapshot.creditsSuspendedReason = fields.creditsSuspendedReason;
+  // null is a real answer here ("no error"), so only `undefined` leaves the field out.
+  if (fields.meetingError !== undefined) snapshot.meetingError = fields.meetingError || null;
+  if (fields.idleReaped !== undefined) snapshot.idleReaped = fields.idleReaped;
+  if (fields.connection) snapshot.connection = fields.connection;
+  if (fields.isRoomHost !== undefined) snapshot.isRoomHost = fields.isRoomHost;
   return snapshot;
+}
+
+/**
+ * Whether a `rejoin` may be acted on right now: only while the main window says the idle reaper let
+ * go. One that arrives after the meeting is back — the user rejoined in the main window — is stale,
+ * and acting on it would tear down and rebuild a meeting that is working. Rejected, never
+ * reinterpreted, like `acceptsBrowserCaptureAnswer`.
+ */
+export function acceptsRejoin(idleReaped: boolean | undefined): boolean {
+  return idleReaped === true;
 }
 
 /**
@@ -587,6 +756,81 @@ export function bridgeWidgetShownLanguage(
 export function bridgeWidgetReaderLanguage(view: BridgeWidgetRelayView): string | null {
   if (view.pendingLanguage) return view.pendingLanguage.language;
   return view.snapshot?.listenLanguage ?? null;
+}
+
+/**
+ * The main window's snapshot, only while it is still a main window this popup can trust: a
+ * snapshot held over from before a `host-gone` is cleared by the reducer, and one from a view that
+ * is "waiting" or "incompatible" says nothing about now.
+ */
+function liveSnapshot(view: BridgeWidgetRelayView): BridgeWidgetSnapshot | null {
+  return view.status === "connected" ? view.snapshot : null;
+}
+
+/**
+ * Whether translation is running: the main window's answer when it gives one (instant), the
+ * caller's own REST-derived answer otherwise. WT-901.
+ */
+export function bridgeWidgetTranslationState(
+  view: BridgeWidgetRelayView,
+  fallback: BridgeWidgetTranslationSnapshot,
+): BridgeWidgetTranslationSnapshot & { mirrored: boolean } {
+  const relayed = liveSnapshot(view)?.translation;
+  return relayed ? { started: relayed.started, mirrored: true } : { ...fallback, mirrored: false };
+}
+
+/**
+ * The transcript pause: the main window's when it has been told either way, else the fallback.
+ *
+ * A main window that says `known: false` has not been told yet; the popup's own read of the pause
+ * windows may already know, so it is not overruled by an "I don't know".
+ */
+export function bridgeWidgetTranscriptPauseState(
+  view: BridgeWidgetRelayView,
+  fallback: BridgeWidgetTranscriptPauseSnapshot,
+): BridgeWidgetTranscriptPauseSnapshot & { mirrored: boolean } {
+  const relayed = liveSnapshot(view)?.transcriptPause;
+  return relayed?.known ? { ...relayed, mirrored: true } : { ...fallback, mirrored: false };
+}
+
+/** Whether this user is the room's actual host: the main window's answer, else the fallback. */
+export function bridgeWidgetIsRoomHost(view: BridgeWidgetRelayView, fallback: boolean): boolean {
+  const relayed = liveSnapshot(view)?.isRoomHost;
+  return relayed === undefined ? fallback : relayed;
+}
+
+/** What the popup draws about the meeting itself. Nothing is claimed without a live main window. */
+export type BridgeWidgetMeetingStatus = {
+  creditsSuspended: boolean;
+  creditsSuspendedReason: string | null;
+  meetingError: string | null;
+  idleReaped: boolean;
+  connection: BridgeWidgetMeetingConnection | null;
+};
+
+export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWidgetMeetingStatus {
+  const snapshot = liveSnapshot(view);
+  return {
+    creditsSuspended: snapshot?.creditsSuspended === true,
+    creditsSuspendedReason: snapshot?.creditsSuspendedReason ?? null,
+    meetingError: snapshot?.meetingError ?? null,
+    idleReaped: snapshot?.idleReaped === true,
+    connection: snapshot?.connection ?? null,
+  };
+}
+
+/**
+ * Whether the dock may send Stop as a relay intent rather than over REST: only to a main window
+ * whose snapshot carries `translation` — the field and the intent arrived in the same build, and an
+ * older main window would drop the intent as an unknown type and leave the button spinning.
+ */
+export function canRelayStopTranslation(view: BridgeWidgetRelayView): boolean {
+  return liveSnapshot(view)?.translation !== undefined;
+}
+
+/** The same rule for Pause/Resume, keyed on `transcriptPause`. */
+export function canRelayTranscriptPause(view: BridgeWidgetRelayView): boolean {
+  return liveSnapshot(view)?.transcriptPause !== undefined;
 }
 
 // ── transport ────────────────────────────────────────────────────────────────

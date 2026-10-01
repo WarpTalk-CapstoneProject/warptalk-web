@@ -14,7 +14,7 @@
  * widget-context.tsx and use-bridge-widget-state.ts belong to another task.
  */
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import {
   BRIDGE_WIDGET_HOST_ANSWER_TIMEOUT_MS,
@@ -41,6 +41,19 @@ export type BridgeWidgetRelayClient = {
   /** 0..1. */
   setMeetingAudioLevel: (level: number) => void;
   answerBrowserCapture: (answer: { granted: boolean; sourceId?: string }) => void;
+  /**
+   * WT-901 / WT-868. Each returns whether the intent was SENT — false when no main window is
+   * connected, so the caller can fall back (Stop and Pause to REST) or say why nothing happened.
+   * Whether it was APPLIED is read back from the next snapshot, never assumed.
+   */
+  stopTranslation: () => boolean;
+  /** Already confirmed in the popup when pausing; the main window commits it directly. */
+  setTranscriptPaused: (paused: boolean) => boolean;
+  rejoin: () => boolean;
+  /** Ask the main window to open the device setup wizard and come to the front. */
+  openSetup: () => boolean;
+  /** Ask the main window to open this room's record (`/rooms/{roomId}`) and come to the front. */
+  openRoomRecord: () => boolean;
 };
 
 export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayClient {
@@ -93,9 +106,10 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
   }, [roomId]);
 
   /** Every intent after the snapshot request goes only to a main window that has answered. */
-  const sendWhenConnected = useCallback((intent: BridgeWidgetIntent) => {
-    if (viewRef.current.status !== "connected") return;
-    relayRef.current?.send(intent);
+  const sendWhenConnected = useCallback((intent: BridgeWidgetIntent): boolean => {
+    if (viewRef.current.status !== "connected" || !relayRef.current) return false;
+    relayRef.current.send(intent);
+    return true;
   }, []);
 
   const pickLanguage = useCallback(
@@ -116,44 +130,94 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
   );
 
   const setVoiceEnabled = useCallback(
-    (enabled: boolean) => sendWhenConnected({ type: "set-voice-enabled", enabled }),
+    (enabled: boolean) => {
+      sendWhenConnected({ type: "set-voice-enabled", enabled });
+    },
     [sendWhenConnected],
   );
   const setVoicePreference = useCallback(
-    (voiceId: string) => sendWhenConnected({ type: "set-voice-preference", voiceId }),
+    (voiceId: string) => {
+      sendWhenConnected({ type: "set-voice-preference", voiceId });
+    },
     [sendWhenConnected],
   );
   const setDubVoice = useCallback(
-    (voiceId: string | null) => sendWhenConnected({ type: "set-dub-voice", voiceId }),
+    (voiceId: string | null) => {
+      sendWhenConnected({ type: "set-dub-voice", voiceId });
+    },
     [sendWhenConnected],
   );
   const setVoiceCloneConsent = useCallback(
-    (enabled: boolean) => sendWhenConnected({ type: "set-voice-clone-consent", enabled }),
+    (enabled: boolean) => {
+      sendWhenConnected({ type: "set-voice-clone-consent", enabled });
+    },
     [sendWhenConnected],
   );
   const setMeetingAudioLevel = useCallback(
-    (level: number) => sendWhenConnected({ type: "set-meeting-audio-level", level }),
+    (level: number) => {
+      sendWhenConnected({ type: "set-meeting-audio-level", level });
+    },
     [sendWhenConnected],
   );
 
   const answerBrowserCapture = useCallback(
-    (answer: { granted: boolean; sourceId?: string }) =>
+    (answer: { granted: boolean; sourceId?: string }) => {
       sendWhenConnected({
         type: "answer-browser-capture",
         granted: answer.granted,
         ...(answer.sourceId ? { sourceId: answer.sourceId } : {}),
-      }),
+      });
+    },
     [sendWhenConnected],
   );
 
-  return {
-    view,
-    pickLanguage,
-    setVoiceEnabled,
-    setVoicePreference,
-    setDubVoice,
-    setVoiceCloneConsent,
-    setMeetingAudioLevel,
-    answerBrowserCapture,
-  };
+  const stopTranslation = useCallback(
+    () => sendWhenConnected({ type: "stop-translation" }),
+    [sendWhenConnected],
+  );
+  const setTranscriptPaused = useCallback(
+    (paused: boolean) => sendWhenConnected({ type: "set-transcript-paused", paused }),
+    [sendWhenConnected],
+  );
+  const rejoin = useCallback(() => sendWhenConnected({ type: "rejoin" }), [sendWhenConnected]);
+  const openSetup = useCallback(() => sendWhenConnected({ type: "open-setup" }), [sendWhenConnected]);
+  const openRoomRecord = useCallback(
+    () => sendWhenConnected({ type: "open-room-record" }),
+    [sendWhenConnected],
+  );
+
+  // Memoized: the widget context carries this object (WT-901), and a fresh one every render would
+  // re-render every slot whenever anything above the provider did.
+  return useMemo(
+    () => ({
+      view,
+      pickLanguage,
+      setVoiceEnabled,
+      setVoicePreference,
+      setDubVoice,
+      setVoiceCloneConsent,
+      setMeetingAudioLevel,
+      answerBrowserCapture,
+      stopTranslation,
+      setTranscriptPaused,
+      rejoin,
+      openSetup,
+      openRoomRecord,
+    }),
+    [
+      view,
+      pickLanguage,
+      setVoiceEnabled,
+      setVoicePreference,
+      setDubVoice,
+      setVoiceCloneConsent,
+      setMeetingAudioLevel,
+      answerBrowserCapture,
+      stopTranslation,
+      setTranscriptPaused,
+      rejoin,
+      openSetup,
+      openRoomRecord,
+    ],
+  );
 }

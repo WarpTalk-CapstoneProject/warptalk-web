@@ -17,12 +17,29 @@
  *   that exists and refuses reads as broken.
  *
  * WHERE THE STATE COMES FROM
- *   Nothing here holds "is translation running" or "is the transcript paused" in local state. Both
- *   are server facts the context derives from queries (the sessions list, the pause windows), and
- *   every mutation below ends by refetching the query it changed — see `settle` — so the button
- *   flips when the server says so, not when this window guesses. This window never receives the
- *   room's broadcasts (use-bridge-widget-state.ts explains why it must not join the group), so the
- *   refetch is the only way it learns the answer at all.
+ *   Nothing here holds "is translation running" or "is the transcript paused" in local state. The
+ *   context answers both: from the main window's relay snapshot when it sends them (WT-901 —
+ *   instant), else from queries (the sessions list, the pause windows) that every REST mutation
+ *   below refetches — see `settle` — so the button flips when the meeting says so, not when this
+ *   window guesses.
+ *
+ * TWO ROUTES FOR STOP AND PAUSE, ONE FOR START (WT-901)
+ *   - Stop and Pause/Resume go to the main window as relay intents whenever it is running this
+ *     room and its snapshot carries the matching field (canRelayStopTranslation /
+ *     canRelayTranscriptPause). Its own handlers then run — the native host check, request and
+ *     toasts — and the button waits for the snapshot to flip (use-relayed-switch.ts). Without such
+ *     a main window they fall back to the REST mutations below, as before; those are why this file
+ *     still holds useStopTranslation and useSetTranscriptPaused (check-bridge-overlay-contract.mjs).
+ *   - Start always goes through startBridgeTranslation, relay or not: it is what asks the main
+ *     window to carry the room in the first place, so it has to work with no main window answering.
+ *
+ * ERRORS ARE THE SERVER'S WORDS
+ *   `getErrorMessage`, as the native controls do (WT-699): a Start refused because the workspace is
+ *   out of credits must say so, not "Request failed with status code 403".
+ *
+ * THERE IS NO END HERE (PO, 2026-10-01)
+ *   The popup does not end a bridge meeting; it ends when the Google Meet conference does. Only
+ *   translation controls live in this dock.
  */
 
 import { useState } from "react";
@@ -38,12 +55,19 @@ import {
   useStartTranslationRoom,
   useStopTranslation,
 } from "@/hooks/use-translationRooms";
+import { getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import { activateBridgeRoom } from "@/lib/desktop/bridge";
 import { startBridgeTranslation } from "@/lib/meeting/bridge-overlay-start";
+import { canRelayStopTranslation, canRelayTranscriptPause } from "@/lib/meeting/bridge-widget-relay";
 
 import { DockIconButton } from "./dock-icon-button";
+import { useRelayedSwitch } from "./use-relayed-switch";
 import { useBridgeWidget } from "./widget-context";
+
+const STOPPED_TOAST = "Translation stopped. The transcript keeps running.";
+/** The main window refused, or never answered, and said why only where the user cannot see it. */
+const NO_ANSWER_DESCRIPTION = "Check the WarpTalk window for details, then try again.";
 
 /** meeting-control-bar.tsx's size, which dock-icon-button.tsx's header names for every icon. */
 const ICON_SIZE = 17;
@@ -67,8 +91,18 @@ export function DockSessionControls() {
 // ── Start / Stop translation ─────────────────────────────────────────────────
 
 function TranslationToggle() {
-  const { room, translationStarted, translationStatus } = useBridgeWidget();
+  const { room, translationStarted, translationStatus, translationMirrored, relay } =
+    useBridgeWidget();
   const queryClient = useQueryClient();
+  const relayed = useRelayedSwitch(translationStarted, {
+    onConfirmed: (started) => {
+      if (!started) toast.success(STOPPED_TOAST);
+    },
+    onTimeout: (started) => {
+      // A Start that REST already accepted needs no word here; the mirror is only slow.
+      if (!started) toast.error("Could not stop translation.", { description: NO_ANSWER_DESCRIPTION });
+    },
+  });
   const startRoom = useStartTranslationRoom();
   const resumeRoom = useResumeTranslationRoom();
   const stopTranslation = useStopTranslation();
@@ -84,7 +118,11 @@ function TranslationToggle() {
    */
   const [working, setWorking] = useState(false);
   const busy =
-    working || startRoom.isPending || resumeRoom.isPending || stopTranslation.isPending;
+    working
+    || relayed.waiting
+    || startRoom.isPending
+    || resumeRoom.isPending
+    || stopTranslation.isPending;
 
   /** "Unknown" until the sessions list first answers: Start before that may be a lie. */
   const known = room !== undefined && translationStatus !== "unknown";
@@ -103,13 +141,19 @@ function TranslationToggle() {
     setWorking(true);
 
     if (translationStarted) {
+      // The main window's own Stop, when one is running this room: see the header.
+      if (canRelayStopTranslation(relay.view) && relay.stopTranslation()) {
+        relayed.expect(false);
+        setWorking(false);
+        return;
+      }
       // Same mutation and the same two toasts as bridge-overlay-controls.tsx's Stop.
       try {
         await stopTranslation.mutateAsync(room.id);
         await settle(room.id);
-        toast.success("Translation stopped. The transcript keeps running.");
+        toast.success(STOPPED_TOAST);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to stop translation.");
+        toast.error(getErrorMessage(error, "Failed to stop translation."));
       } finally {
         setWorking(false);
       }
@@ -128,6 +172,9 @@ function TranslationToggle() {
         startTranslation: (id) => resumeRoom.mutateAsync(id),
       });
       await settle(room.id);
+      // The mirror can trail the REST answer by a snapshot; hold the spinner until it agrees, so
+      // the button does not flash back to Start.
+      if (translationMirrored) relayed.expect(true);
       if (activated) {
         toast.success("Translation started.");
       } else {
@@ -139,7 +186,8 @@ function TranslationToggle() {
         });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to start translation.");
+      // WT-699: the backend's sentence (out of credits, invoice overdue…), never the status line.
+      toast.error(getErrorMessage(error, "Failed to start translation."));
     } finally {
       setWorking(false);
     }
@@ -181,13 +229,21 @@ function TranslationToggle() {
  * the wording the product owner settled on (2026-09-10) exists once.
  */
 function TranscriptPauseToggle() {
-  const { roomId, transcriptPaused, transcriptPauseKnown } = useBridgeWidget();
+  const { roomId, transcriptPaused, transcriptPauseKnown, relay } = useBridgeWidget();
   const queryClient = useQueryClient();
   const setTranscriptPaused = useSetTranscriptPaused(roomId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** As `working` above: held until the pause windows have been re-read. */
   const [working, setWorking] = useState(false);
-  const busy = working || setTranscriptPaused.isPending;
+  const relayed = useRelayedSwitch(transcriptPaused, {
+    onTimeout: (paused) => {
+      toast.error(paused ? "Could not pause the transcript." : "Could not resume the transcript.", {
+        description: NO_ANSWER_DESCRIPTION,
+      });
+      void queryClient.refetchQueries({ queryKey: transcriptPauseWindowsKey(roomId) });
+    },
+  });
+  const busy = working || relayed.waiting || setTranscriptPaused.isPending;
 
   /**
    * PAUSING ASKS FIRST, RESUMING DOES NOT — persistent-meeting-session's
@@ -211,6 +267,12 @@ function TranscriptPauseToggle() {
    * TranscriptResumed broadcasts never reach it.
    */
   async function commit(nextPaused: boolean) {
+    // The main window's own commit, when one is running this room. The question was already asked
+    // here, so it commits directly — it does not ask a second time in a window behind Meet.
+    if (canRelayTranscriptPause(relay.view) && relay.setTranscriptPaused(nextPaused)) {
+      relayed.expect(nextPaused);
+      return;
+    }
     setWorking(true);
     try {
       await setTranscriptPaused.mutateAsync(nextPaused);
@@ -223,7 +285,10 @@ function TranscriptPauseToggle() {
         );
       } else {
         toast.error(
-          nextPaused ? "Could not pause the transcript." : "Could not resume the transcript.",
+          getErrorMessage(
+            error,
+            nextPaused ? "Could not pause the transcript." : "Could not resume the transcript.",
+          ),
         );
       }
     } finally {
