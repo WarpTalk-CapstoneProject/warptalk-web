@@ -46,7 +46,6 @@
     "floorNote": "Chỉ đọc đến giới hạn; số thật có thể cao hơn",
     "withoutDuration": "{count, plural, other {# cuộc họp không ghi lại thời lượng nên không được tính}}",
     "hoursNote": "Thời gian từ lúc bắt đầu đến lúc kết thúc của các cuộc họp trong kỳ",
-    "successNote": "Tính trên {count, plural, other {# lượt gọi}} mới nhất đã đọc; các lượt cũ hơn trong kỳ chưa được đọc",
     "noCalls": "Không có lượt gọi nào trong kỳ"
   },
   "snapshot": {
@@ -90,9 +89,8 @@
       "healthy": "Hoạt động bình thường",
       "noCalls": "Chưa có lượt gọi"
     },
-    "noCallsHint": "Không có lượt gọi plugin nào trong kỳ",
+    "noCallsHint": "Không có lượt gọi công cụ WarpBot nào trong kỳ",
     "calls": "{count, plural, other {{value} lượt gọi}} trong kỳ",
-    "callsAtLeast": "ít nhất {count, plural, other {{value} lượt gọi}} trong kỳ",
     "success": "{percent} thành công",
     "blocked": "{count} bị chính sách chặn",
     "needsSetup": "{count} cần thiết lập",
@@ -133,10 +131,16 @@
     "hoursCaption": "{hours} đã dịch",
     "hoursUnknown": "Chưa có số giờ",
     "hoursSuffix": "{hours} đã dịch",
-    "pluginsTitle": "Lượt gọi công cụ theo plugin",
-    "pluginsCaption": "Lượt gọi của WarpBot · {period}",
-    "pluginsAria": "Lượt gọi công cụ WarpBot theo plugin",
-    "noToolCalls": "Không có lượt gọi plugin nào trong kỳ",
+    "toolSourcesTitle": "Lượt gọi công cụ theo nguồn",
+    "toolSourcesCaption": "Lượt gọi có sẵn, tìm kiếm web và plugin · {period}",
+    "toolSourcesAria": "Lượt gọi công cụ WarpBot theo nguồn",
+    "toolOrigin": {
+      "builtin": "Công cụ có sẵn",
+      "webSearch": "Tìm kiếm web",
+      "plugin": "Plugin",
+      "other": "Khác"
+    },
+    "noToolCalls": "Không có lượt gọi công cụ nào trong kỳ",
     "callsValue": "{count, plural, other {{value} lượt gọi}}"
   },
   "attention": {
