@@ -96,6 +96,7 @@
     "success": "{percent} success",
     "blocked": "{count} blocked by policy",
     "needsSetup": "{count} need setup",
+    "failed": "{count} failed",
     "lastCall": "last call {time}"
   },
   "links": {
@@ -213,6 +214,8 @@
       "succeeded": "Succeeded",
       "blocked": "Blocked",
       "blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+      "workspaceToolBlocked": "Blocked by workspace",
+      "workspaceToolBlockedHint": "The workspace Owner blocked this tool for WarpBot. Only the Owner can allow it again, on the workspace plugin page.",
       "awaitingConfirmation": "Awaiting confirmation",
       "awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
       "needsSetup": "Needs setup",

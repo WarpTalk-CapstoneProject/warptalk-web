@@ -1,92 +1,173 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import type { AssistantPluginCatalogItemDto, McpToolDescriptorDto } from "../../../types/assistant.ts";
 import {
-  filterWarpBotTools,
-  getWarpBotToolsStats,
-  TOOL_CATEGORIES,
-  WARPBOT_TOOLS_CATALOG,
+  filterBuiltInTools,
+  visibleBuiltInTools,
+  visibleToolCategories,
+  WARPBOT_BUILT_IN_TOOLS,
+  WARPBOT_TOOL_CATEGORIES,
 } from "../warpbot-tools-catalog.ts";
+import { pluginToolsOfferedToWarpBot } from "../warpbot-plugin-tools.ts";
 
-describe("WarpBot Tools Catalog Data & Functions", () => {
-  test("contains exactly 14 tools as specified in data dictionary", () => {
-    assert.equal(WARPBOT_TOOLS_CATALOG.length, 14);
+/** warptalk-ai `ai_assistant_worker/chat_tools.py` TOOLS, origin/development (2026-10-01). */
+const WORKER_TOOL_NAMES = [
+  "ask_user",
+  "create_meeting",
+  "create_action_item",
+  "create_glossary",
+  "add_glossary_term",
+  "share_meeting_minutes",
+  "search_workspace_members",
+  "search_terminology",
+  "list_recent_meetings",
+  "translate_text",
+  "search_facts",
+  "semantic_search",
+  "get_meeting_summary",
+  "get_room_detail",
+  "get_transcript",
+  "search_documents",
+  "get_document",
+  "get_platform_analytics",
+];
+
+const WRITE_TOOL_NAMES = [
+  "create_meeting",
+  "create_action_item",
+  "create_glossary",
+  "add_glossary_term",
+  "share_meeting_minutes",
+];
+
+describe("WarpBot built-in tools catalog", () => {
+  test("lists exactly the worker's 18 tools, once each", () => {
+    const names = WARPBOT_BUILT_IN_TOOLS.map((tool) => tool.name);
+    assert.equal(new Set(names).size, names.length, "duplicate tool name");
+    assert.deepEqual([...names].sort(), [...WORKER_TOOL_NAMES].sort());
   });
 
-  test("all tools have valid fields, non-empty names, descriptions and prompts", () => {
-    const seenIds = new Set<string>();
+  test("marks exactly the five write tools as changing data", () => {
+    const writes = WARPBOT_BUILT_IN_TOOLS.filter((tool) => tool.effect === "write").map((tool) => tool.name);
+    assert.deepEqual(writes.sort(), [...WRITE_TOOL_NAMES].sort());
+  });
 
-    for (const tool of WARPBOT_TOOLS_CATALOG) {
-      assert.ok(tool.id && tool.id.trim().length > 0, "Tool id must not be empty");
-      assert.ok(!seenIds.has(tool.id), `Duplicate tool id detected: ${tool.id}`);
-      seenIds.add(tool.id);
-
-      assert.ok(tool.name && tool.name.trim().length > 0, `Tool ${tool.id} has no name`);
-      assert.ok(tool.shortDescription && tool.shortDescription.length > 10, `Tool ${tool.id} description too short`);
-      assert.ok(tool.detailedDescription && tool.detailedDescription.length > 20, `Tool ${tool.id} detail too short`);
-      assert.ok(tool.samplePrompts.length > 0, `Tool ${tool.id} must have at least one sample prompt`);
-      assert.ok(tool.iconName, `Tool ${tool.id} must have an iconName`);
+  test("every row has copy, a known category and at least one sample prompt", () => {
+    for (const tool of WARPBOT_BUILT_IN_TOOLS) {
+      assert.ok(tool.displayName.trim(), `${tool.name} has no display name`);
+      assert.ok(tool.description.length > 10, `${tool.name} description too short`);
+      assert.ok(tool.details.length > tool.description.length / 2, `${tool.name} details too short`);
+      assert.ok(WARPBOT_TOOL_CATEGORIES.includes(tool.category), `${tool.name} has unknown category`);
+      assert.ok(tool.samplePrompts.length > 0, `${tool.name} has no sample prompt`);
     }
   });
 
-  test("get_platform_analytics is the only tool marked as isAdminOnly", () => {
-    const adminTools = WARPBOT_TOOLS_CATALOG.filter((t) => t.isAdminOnly);
-    assert.equal(adminTools.length, 1);
-    assert.equal(adminTools[0].id, "get_platform_analytics");
-    assert.equal(adminTools[0].scope, "platform_admin");
-    assert.equal(adminTools[0].scopeBadge, "Platform Admin Only");
+  test("audiences: minutes sharing is host-only, analytics is platform-admin-only", () => {
+    const byName = Object.fromEntries(WARPBOT_BUILT_IN_TOOLS.map((tool) => [tool.name, tool]));
+    assert.equal(byName.share_meeting_minutes.audience, "host");
+    assert.equal(byName.get_platform_analytics.audience, "platform_admin");
+    assert.equal(byName.get_platform_analytics.category, "platform");
+    const others = WARPBOT_BUILT_IN_TOOLS.filter(
+      (tool) => !["share_meeting_minutes", "get_platform_analytics"].includes(tool.name),
+    );
+    assert.ok(others.every((tool) => tool.audience === "all"));
   });
 
-  test("filtering by category works correctly", () => {
-    const meetingsTools = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { category: "meetings" });
-    assert.equal(meetingsTools.length, 4);
-    assert.ok(meetingsTools.every((t) => t.category === "meetings"));
+  test("platform analytics and the Platform chip are hidden from everyone but platform staff", () => {
+    const member = visibleBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { isPlatformStaff: false });
+    assert.equal(member.length, 17);
+    assert.ok(!member.some((tool) => tool.name === "get_platform_analytics"));
+    assert.ok(!visibleToolCategories({ isPlatformStaff: false }).includes("platform"));
 
-    const documentTools = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { category: "documents" });
-    assert.equal(documentTools.length, 2);
-    assert.ok(documentTools.every((t) => t.category === "documents"));
+    const staff = visibleBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { isPlatformStaff: true });
+    assert.equal(staff.length, 18);
+    assert.ok(visibleToolCategories({ isPlatformStaff: true }).includes("platform"));
   });
 
-  test("filtering by search query matches title, id, description or prompt", () => {
-    const queryMeeting = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "create_meeting" });
-    assert.equal(queryMeeting.length, 1);
-    assert.equal(queryMeeting[0].id, "create_meeting");
+  test("filters by category and by a search over name, id, copy and prompts", () => {
+    const glossary = filterBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { category: "glossary" });
+    assert.deepEqual(
+      glossary.map((tool) => tool.name).sort(),
+      ["add_glossary_term", "create_glossary", "search_terminology"],
+    );
 
-    const queryGlossary = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "glossary" });
-    assert.ok(queryGlossary.some((t) => t.id === "search_terminology"));
+    assert.deepEqual(
+      filterBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { query: "create_meeting" }).map((tool) => tool.name),
+      ["create_meeting"],
+    );
+    assert.ok(
+      filterBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { query: "  TRANSCRIPT " }).some(
+        (tool) => tool.name === "get_transcript",
+      ),
+    );
+    assert.equal(filterBuiltInTools(WARPBOT_BUILT_IN_TOOLS, { query: "zzzz-nothing" }).length, 0);
+    assert.equal(filterBuiltInTools(WARPBOT_BUILT_IN_TOOLS).length, 18);
+  });
+});
 
-    const queryRevenue = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "revenue" });
-    assert.ok(queryRevenue.some((t) => t.id === "get_platform_analytics"));
+function tool(name: string, overrides: Partial<McpToolDescriptorDto> = {}): McpToolDescriptorDto {
+  return {
+    name,
+    pluginKey: "p",
+    label: name,
+    description: `${name} description`,
+    effect: "read",
+    requiredScopes: [],
+    parameters: {},
+    ...overrides,
+  };
+}
+
+function plugin(overrides: Partial<AssistantPluginCatalogItemDto> = {}): AssistantPluginCatalogItemDto {
+  return {
+    key: "google_drive",
+    label: "Google Drive",
+    description: "Drive",
+    requiredScopes: ["drive"],
+    grantedScopes: ["drive"],
+    installationStatus: "installed",
+    connectionStatus: "connected",
+    tools: [tool("search_files"), tool("create_file", { effect: "write" })],
+    workspaceAvailability: "added",
+    ...overrides,
+  };
+}
+
+describe("plugin tools WarpBot is offered", () => {
+  test("a connected plugin the workspace has lists its tools", () => {
+    const groups = pluginToolsOfferedToWarpBot([plugin()]);
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0].tools.map((t) => t.name), ["search_files", "create_file"]);
   });
 
-  test("scopeFilter accurately isolates admin only or workspace tools", () => {
-    const adminOnly = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { scopeFilter: "admin_only" });
-    assert.equal(adminOnly.length, 1);
-    assert.equal(adminOnly[0].id, "get_platform_analytics");
+  test("a blocked tool is never listed, and a plugin with nothing left is dropped", () => {
+    const partly = pluginToolsOfferedToWarpBot([
+      plugin({ tools: [tool("search_files"), tool("create_file", { effect: "write", policy: "blocked" })] }),
+    ]);
+    assert.deepEqual(partly[0].tools.map((t) => t.name), ["search_files"]);
 
-    const workspaceOnly = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { scopeFilter: "workspace_only" });
-    assert.equal(workspaceOnly.length, 13);
-    assert.ok(workspaceOnly.every((t) => !t.isAdminOnly));
+    const all = pluginToolsOfferedToWarpBot([plugin({ tools: [tool("search_files", { policy: "blocked" })] })]);
+    assert.equal(all.length, 0);
   });
 
-  test("getWarpBotToolsStats calculates accurate totals", () => {
-    const stats = getWarpBotToolsStats(WARPBOT_TOOLS_CATALOG);
-    assert.equal(stats.total, 14);
-    assert.equal(stats.adminOnlyCount, 1);
-    assert.equal(stats.workspaceCount, 13);
-    assert.ok(stats.categoriesCount >= 7);
+  test("not connected, missing scopes, not installed or not in this workspace means nothing is offered", () => {
+    const refused = [
+      plugin({ connectionStatus: "not_connected" }),
+      plugin({ connectionStatus: "expired" }),
+      plugin({ grantedScopes: [] }),
+      plugin({ installationStatus: "disabled" }),
+      plugin({ workspaceAvailability: "not_added" }),
+      plugin({ workspaceAvailability: "platform_disabled" }),
+      plugin({ workspacePolicyBlockReason: "Plugins are off in this workspace" }),
+    ];
+    for (const row of refused) {
+      assert.equal(pluginToolsOfferedToWarpBot([row]).length, 0, JSON.stringify(row));
+    }
   });
 
-  test("TOOL_CATEGORIES contains all required categories", () => {
-    assert.ok(TOOL_CATEGORIES.length >= 8);
-    const categoryIds = TOOL_CATEGORIES.map((c) => c.id);
-    assert.ok(categoryIds.includes("all"));
-    assert.ok(categoryIds.includes("meetings"));
-    assert.ok(categoryIds.includes("transcripts"));
-    assert.ok(categoryIds.includes("knowledge"));
-    assert.ok(categoryIds.includes("documents"));
-    assert.ok(categoryIds.includes("translation"));
-    assert.ok(categoryIds.includes("members"));
-    assert.ok(categoryIds.includes("analytics"));
+  test("a private workspace plugin and a row with no workspace verdict are offered", () => {
+    assert.equal(pluginToolsOfferedToWarpBot([plugin({ workspaceAvailability: "private" })]).length, 1);
+    assert.equal(pluginToolsOfferedToWarpBot([plugin({ workspaceAvailability: undefined })]).length, 1);
   });
 });

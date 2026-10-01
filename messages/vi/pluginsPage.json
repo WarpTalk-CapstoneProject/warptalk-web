@@ -80,6 +80,10 @@
     "couldNotFinishRemoving": "Không thể hoàn tất xóa {label}."
   },
   "permissionList": {
+    "workspaceLock": "Do Owner của workspace đặt",
+    "workspaceLockHint": "WarpBot làm theo lựa chọn chặt hơn giữa lựa chọn của bạn và của workspace. Bạn không nới lỏng được quy tắc này.",
+    "workspaceApproval": "Luôn hỏi",
+    "workspaceBlocked": "Bị chặn",
     "empty": "Plugin này sẽ công bố các quyền của nó khi bạn kết nối. Màn hình chấp thuận của nhà cung cấp liệt kê chính xác những gì nó yêu cầu trước khi bạn phê duyệt.",
     "heading": "Cấp quyền cho phép plugin này"
   },

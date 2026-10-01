@@ -84,8 +84,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "dashboard",
-    title: "Dashboard",
-    body: "How fast this workspace is spending its credits, what it is spending them on, and whether the balance reaches the renewal date.",
+    title: "Insights",
+    body: "Credits, meetings and WarpBot tool calls for the period you pick, with what needs your attention.",
     target: "nav-dashboard",
     placement: "right",
   },

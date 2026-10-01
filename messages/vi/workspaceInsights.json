@@ -96,6 +96,7 @@
     "success": "{percent} thành công",
     "blocked": "{count} bị chính sách chặn",
     "needsSetup": "{count} cần thiết lập",
+    "failed": "{count} lỗi",
     "lastCall": "lượt gọi gần nhất {time}"
   },
   "links": {
@@ -213,6 +214,8 @@
       "succeeded": "Thành công",
       "blocked": "Bị chặn",
       "blockedHint": "Bị chặn theo chính sách hoặc xác nhận bị từ chối. Xem lại quyền trong phần cài đặt Plugin.",
+      "workspaceToolBlocked": "Workspace đã chặn",
+      "workspaceToolBlockedHint": "Owner của workspace đã chặn công cụ này với WarpBot. Chỉ Owner mới cho phép lại được, ở trang plugin của workspace.",
       "awaitingConfirmation": "Chờ xác nhận",
       "awaitingConfirmationHint": "Thao tác cần người dùng xác nhận trong WarpBot trước khi tiếp tục.",
       "needsSetup": "Cần thiết lập",
