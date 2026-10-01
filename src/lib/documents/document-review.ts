@@ -222,3 +222,24 @@ export function isDecisionAction(action: string): boolean {
     action === "PublishDocument"
   );
 }
+
+/**
+ * Which stored file a document currently points at, as far as the API lets the browser tell.
+ * WT-854, WT-857.
+ *
+ * Since WT-633 a document's file can be replaced IN PLACE — same id, new bytes — by "Upload a
+ * corrected version". The preview cached the downloaded bytes by document id forever, so after a
+ * replacement (and after the approval that follows it) the page kept rendering the first file
+ * until a full reload; on desktop, which has no reload, until the app restarted. When the
+ * replacement was a different format, the old bytes were handed to the new format's reader: a
+ * .docx parsed as a workbook is "This workbook has no sheets to show."
+ *
+ * `updatedAt` is in the key because a replacement with the same name and size is still a new
+ * file. It also moves on an approval or a settings change, which costs one re-download — the
+ * cheap direction to be wrong in.
+ */
+export function documentFileRevision(
+  doc: Pick<WorkspaceDocumentDto, "fileName" | "fileExtension" | "sizeBytes" | "updatedAt">,
+): string {
+  return [doc.fileName, doc.fileExtension, String(doc.sizeBytes), doc.updatedAt].join("|");
+}

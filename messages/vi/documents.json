@@ -18,6 +18,29 @@
   "new": "Mới",
   "gridView": "Xem dạng lưới",
   "listView": "Xem dạng danh sách",
+  "listOptions": {
+    "fileType": "Loại tệp",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "Bảng tính",
+      "text": "Văn bản & Markdown",
+      "image": "Hình ảnh",
+      "other": "Khác"
+    },
+    "mineOnly": "Do tôi tải lên",
+    "clearFilters": "Xóa bộ lọc",
+    "layout": "Bố cục",
+    "orderBy": "Sắp xếp theo",
+    "sort": {
+      "modified": "Sửa đổi gần nhất",
+      "name": "Tên",
+      "size": "Kích thước"
+    },
+    "ascending": "Tăng dần",
+    "descending": "Giảm dần",
+    "resetDisplay": "Khôi phục mặc định"
+  },
   "empty": {
     "title": "Không tìm thấy tài liệu",
     "descriptionCanUpload": "Dùng nút Mới ở trên để tải lên một tài liệu tham khảo.",
