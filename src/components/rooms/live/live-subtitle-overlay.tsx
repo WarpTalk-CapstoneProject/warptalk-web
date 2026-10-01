@@ -5,7 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { ListBullets } from "@phosphor-icons/react/dist/ssr";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { identityFor } from "@/lib/meeting/participant-identity";
+import { transcriptIdentityFor } from "@/lib/meeting/participant-identity";
 import {
   captionTextForReader,
   groupTranscriptSegments,
@@ -18,6 +18,10 @@ import {
 import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
 import { liveCaptionLines } from "@/lib/transcript/live-caption-lines";
+import {
+  localizeFarSideSpeakerName,
+  transcriptSpeakerKey,
+} from "@/lib/transcript/speaker-identity";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar } from "./participant-avatar";
 
@@ -228,8 +232,12 @@ export function LiveSubtitleOverlay({
 
 type CaptionLineData = { utterance: GroupedTranscriptSegment; caption: string };
 
-function speakerOfLine(line: CaptionLineData): string | null | undefined {
-  return line.utterance.speakerId ?? line.utterance.speakerName;
+/**
+ * Who opens a speaker run. transcriptSpeakerKey rather than the bare id: everybody on the Google
+ * Meet side shares the stand-in's id, and "Lan" answering "Minh" is a change of speaker.
+ */
+function speakerOfLine(line: CaptionLineData): string {
+  return transcriptSpeakerKey(line.utterance);
 }
 
 const CaptionLine = memo(
@@ -256,8 +264,13 @@ const CaptionLine = memo(
     // `speakerName` was already resolved on arrival by resolveTranscriptSpeakerName, which guards
     // against a roster that hands back a UUID as somebody's display name. Preferring it here keeps
     // that guard; the identity map supplies the face and the language, which it alone knows.
-    const person = identityFor(identities, line.speakerId, line.speakerName);
-    const name = line.speakerName?.trim() || person.name;
+    const t = useTranslations("meetingTranscript");
+    const person = transcriptIdentityFor(identities, line.speakerId, line.speakerName);
+    const name = localizeFarSideSpeakerName(
+      line.speakerId,
+      line.speakerName?.trim() || person.name,
+      t("speaker.googleMeetParticipants"),
+    );
 
     return (
       <motion.p

@@ -94,6 +94,7 @@ import {
 } from "@/lib/transcript/document-reading";
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
+import type { SpeakerLabels } from "@/lib/transcript/speaker-identity";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -370,6 +371,17 @@ function ReadingRail({
   onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingSummary");
+  // The speaker names the talk-time list falls back to, in the reader's language. In a Google Meet
+  // bridge room each Meet person is their own row (transcriptSpeakerKey); the lines the gateway
+  // could not attribute share one row under this label.
+  const tSpeaker = useTranslations("meetingTranscript");
+  const speakerLabels = useMemo<SpeakerLabels>(
+    () => ({
+      farSideFallback: tSpeaker("speaker.googleMeetParticipants"),
+      unknown: tSpeaker("speaker.unknownSpeaker"),
+    }),
+    [tSpeaker],
+  );
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
   /**
@@ -474,8 +486,9 @@ function ReadingRail({
         groupSavedTranscriptSegments(
           [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder),
         ),
+        speakerLabels,
       ),
-    [segments],
+    [segments, speakerLabels],
   );
 
   /**
