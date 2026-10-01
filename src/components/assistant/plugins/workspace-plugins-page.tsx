@@ -24,7 +24,9 @@
  * called it fake. The first change here turns what is carried over into an explicit list.
  *
  * MANAGE shows who in the workspace has the plugin connected — name, face, when they connected and
- * when they last used it here — from the server's member endpoint (connection metadata only).
+ * when they last used it here — from the server's member endpoint (connection metadata only). Below
+ * that, TOOLS: the Owner's per-tool rule for WarpBot across the workspace (Member's choice / Ask
+ * every time / Blocked). WarpBot follows the stricter of that and each member's own choice.
  */
 
 import { useId, useMemo, useState } from "react";
@@ -39,6 +41,7 @@ import {
   Trash,
   UsersThree,
   Warning,
+  Wrench,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -60,11 +63,13 @@ import {
   useCreatePrivatePlugin,
   useDecidePluginRequest,
   useRemoveWorkspacePlugin,
+  useSetWorkspaceToolPolicy,
   useUpdatePrivatePlugin,
   useWorkspaceMemberNames,
   useWorkspaceMemberProfiles,
   useWorkspacePluginMembers,
   useWorkspacePlugins,
+  useWorkspaceToolPolicies,
 } from "@/hooks/use-workspace-plugins";
 import {
   canManageWorkspacePlugins,
@@ -80,10 +85,17 @@ import {
   type PrivatePluginDraftErrors,
 } from "@/lib/assistant/plugin-availability";
 import { pluginErrorMessage } from "@/lib/assistant/plugin-errors";
+import { WORKSPACE_TOOL_RULE_OPTIONS } from "@/lib/assistant/tool-policy";
 import { dateFnsCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { PluginAuthMode, WorkspacePluginItemDto, WorkspacePluginRequestDto } from "@/types/assistant";
+import type {
+  PluginAuthMode,
+  WorkspacePluginItemDto,
+  WorkspacePluginRequestDto,
+  WorkspaceToolPolicyItemDto,
+  WorkspaceToolRule,
+} from "@/types/assistant";
 
 type OpenDialog =
   | { kind: "marketplace" }
@@ -520,6 +532,167 @@ function PluginMembersSection({ workspaceId, pluginKey }: { workspaceId: string 
   );
 }
 
+/** The selected look of each Owner choice. "Member's choice" is neutral: it adds nothing. */
+const WORKSPACE_RULE_TONE: Record<"member" | WorkspaceToolRule, string> = {
+  member: "bg-surface-2 text-ink",
+  approval: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  blocked: "bg-destructive/10 text-destructive",
+};
+
+const WORKSPACE_RULE_LABEL_KEY: Record<"member" | WorkspaceToolRule, string> = {
+  member: "option.memberChoice",
+  approval: "option.approval",
+  blocked: "option.blocked",
+};
+
+/** Member's choice / Ask every time / Blocked for one tool — the same segmented shape WT-687 used. */
+function WorkspaceRuleControl({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: WorkspaceToolRule | null;
+  disabled: boolean;
+  onChange: (rule: WorkspaceToolRule | null) => void;
+}) {
+  const t = useTranslations("workspacePlugins.tools");
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
+    >
+      {WORKSPACE_TOOL_RULE_OPTIONS.map((rule) => {
+        const key = rule ?? "member";
+        const selected = value === rule;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => {
+              if (!selected) onChange(rule);
+            }}
+            className={cn(
+              "border-l border-border px-2 py-1 text-[11px] font-medium transition-colors first:border-l-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+              "disabled:cursor-default",
+              selected ? WORKSPACE_RULE_TONE[key] : "bg-popover text-ink-muted enabled:hover:bg-surface-1 enabled:hover:text-ink",
+              disabled && !selected ? "opacity-60" : null,
+            )}
+          >
+            {t(WORKSPACE_RULE_LABEL_KEY[key])}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * What WarpBot may do with each of the plugin's tools across the workspace (wave 2: workspace tool
+ * policy). The Owner sets a tool to "Ask every time" or "Blocked" for everyone; "Member's choice"
+ * leaves it to each member. WarpBot follows the stricter of the two, so there is no "allow" here.
+ *
+ * Owner and Admin both read it; only the server's `canManage` (the Owner) makes it editable. Each
+ * change saves on its own and moves at once; a refusal puts the row back and says so.
+ */
+function WorkspaceToolPoliciesSection({ workspaceId, plugin }: { workspaceId: string | null; plugin: WorkspacePluginItemDto }) {
+  const t = useTranslations("workspacePlugins.tools");
+  const policiesQuery = useWorkspaceToolPolicies(workspaceId, plugin.key, true);
+  const setRule = useSetWorkspaceToolPolicy(workspaceId, plugin.key);
+  const data = policiesQuery.data;
+  const canManage = data?.canManage === true;
+  // Read tools first and write tools last, as everywhere else a plugin's tools are listed.
+  const tools = useMemo(
+    () => [...(data?.tools ?? [])].sort((a, b) => Number(a.effect === "write") - Number(b.effect === "write")),
+    [data?.tools],
+  );
+
+  function change(tool: WorkspaceToolPolicyItemDto, rule: WorkspaceToolRule | null) {
+    setRule.mutate(
+      { toolName: tool.name, policy: rule },
+      {
+        onError: (error) =>
+          toast.error(pluginErrorMessage(error, t("saveFailed", { label: tool.label || tool.name }))),
+      },
+    );
+  }
+
+  let body: React.ReactNode;
+  if (policiesQuery.isLoading) {
+    body = (
+      <p className="flex items-center gap-2 py-2 text-xs text-ink-muted">
+        <Spinner className="animate-spin" size={14} />
+        {t("loading")}
+      </p>
+    );
+  } else if (policiesQuery.isError || !data) {
+    body = (
+      <div className="flex items-center justify-between gap-3 py-1">
+        <span className="text-xs text-destructive">{t("loadError")}</span>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void policiesQuery.refetch()}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  } else if (tools.length === 0) {
+    body = <p className="py-2 text-xs text-ink-muted">{t("empty")}</p>;
+  } else {
+    body = (
+      <ul className="flex flex-col divide-y divide-hairline" data-testid="workspace-tool-policies">
+        {tools.map((tool) => {
+          const label = tool.label || tool.name;
+          const saving = setRule.isPending && setRule.variables?.toolName === tool.name;
+          return (
+            <li key={tool.name} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm text-ink">{label}</span>
+                  <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-ink-subtle">
+                    {tool.effect === "write" ? t("write") : t("read")}
+                  </span>
+                  {saving ? <Spinner className="shrink-0 animate-spin text-ink-subtle" size={12} /> : null}
+                </div>
+                <div className="truncate font-mono text-[11px] text-ink-subtle">{tool.name}</div>
+              </div>
+              <WorkspaceRuleControl
+                label={t("controlAria", { label })}
+                value={tool.workspacePolicy}
+                disabled={!canManage || saving}
+                onChange={(rule) => change(tool, rule)}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="mt-5 flex flex-col gap-1" aria-label={t("title")}>
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <Wrench size={15} />
+          {t("title")}
+        </h3>
+      </div>
+      <p className="pt-1 text-xs leading-5 text-ink-muted">{t("explainer")}</p>
+      {data && !canManage ? (
+        <p className="flex items-center gap-1.5 text-xs text-ink-muted" data-testid="workspace-tool-policies-read-only">
+          <Lock size={12} className="shrink-0" />
+          {t("readOnly")}
+        </p>
+      ) : null}
+      {body}
+    </section>
+  );
+}
+
 function ManageDialog({
   plugin,
   workspaceId,
@@ -565,6 +738,9 @@ function ManageDialog({
       {/* Owner and Admin both reach this dialog (the page refuses everyone else), and both may see
           who uses a plugin; only the Owner may change it. */}
       <PluginMembersSection workspaceId={workspaceId} pluginKey={plugin.key} />
+
+      {/* The Owner's per-tool rules for WarpBot. An Admin sees them, read-only. */}
+      <WorkspaceToolPoliciesSection workspaceId={workspaceId} plugin={plugin} />
 
       {isPrivate && canManage ? (
         <PrivatePluginForm

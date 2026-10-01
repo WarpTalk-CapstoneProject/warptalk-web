@@ -80,6 +80,10 @@
     "couldNotFinishRemoving": "Could not finish removing {label}."
   },
   "permissionList": {
+    "workspaceLock": "Set by workspace Owner",
+    "workspaceLockHint": "WarpBot follows the stricter of your choice and the workspace's. You can't loosen this one.",
+    "workspaceApproval": "Ask every time",
+    "workspaceBlocked": "Blocked",
     "empty": "This plugin publishes its permissions when you connect. The provider's consent screen lists exactly what it is asking for before you approve.",
     "heading": "Authorizing allows this plugin to"
   },

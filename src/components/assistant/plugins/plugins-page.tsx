@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
 import { getErrorMessage } from "@/lib/api/errors";
 import {
   useAssistantPlugins,
@@ -55,6 +56,7 @@ import {
   providerDisplayName,
   siblingPromptDismissedKey,
 } from "@/lib/assistant/plugin-connect-siblings";
+import { workspaceRuleOf } from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -230,13 +232,17 @@ function ConnectionNotice({
  * An MCP row has an empty tool list until its first successful connect - `tools_json` is a cache
  * of `tools/list` - so there is a real case where this can say nothing, and it says that instead
  * of rendering an empty box.
+ *
+ * A tool the workspace Owner has a rule for (wave 2) carries a lock, "Set by workspace Owner", with
+ * the rule: Blocked, or Ask every time. The member cannot loosen either - WarpBot follows the
+ * stricter of their choice and the Owner's - so the row says so instead of offering a choice.
  */
 function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   const t = useTranslations("pluginsPage");
   const permissions = useMemo(() => {
     const seen = new Set<string>();
     return plugin.tools
-      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect }))
+      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect, rule: workspaceRuleOf(tool) }))
       .filter((permission) => {
         if (seen.has(permission.label)) return false;
         seen.add(permission.label);
@@ -260,9 +266,38 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
       </h3>
       <ul className="flex flex-col gap-2.5">
         {permissions.map((permission) => (
-          <li key={permission.label} className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3">
-            <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
-            <span className="text-sm leading-6 text-ink">{permission.label}</span>
+          <li
+            key={permission.label}
+            className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3"
+            data-workspace-rule={permission.rule ?? undefined}
+          >
+            {permission.rule === "blocked" ? (
+              <Prohibit size={15} weight="bold" className="mt-1 text-destructive" />
+            ) : (
+              <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
+            )}
+            <span className="min-w-0 text-sm leading-6 text-ink">
+              <span className={cn(permission.rule === "blocked" && "text-ink-muted line-through")}>
+                {permission.label}
+              </span>
+              {permission.rule ? (
+                <Tooltip content={t("permissionList.workspaceLockHint")}>
+                  <span
+                    className="mt-0.5 flex w-fit items-center gap-1 text-[11px] leading-4 text-ink-muted"
+                    data-testid="workspace-tool-lock"
+                  >
+                    <Lock size={11} className="shrink-0" />
+                    {t("permissionList.workspaceLock")}
+                    {" · "}
+                    <span className={cn("font-medium", permission.rule === "blocked" ? "text-destructive" : "text-ink")}>
+                      {permission.rule === "blocked"
+                        ? t("permissionList.workspaceBlocked")
+                        : t("permissionList.workspaceApproval")}
+                    </span>
+                  </span>
+                </Tooltip>
+              ) : null}
+            </span>
             <span
               className={cn(
                 "mt-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",

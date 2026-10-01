@@ -131,6 +131,24 @@
       "revoked": "Đã ngắt kết nối"
     }
   },
+  "tools": {
+    "title": "Công cụ",
+    "explainer": "WarpBot làm theo lựa chọn chặt hơn giữa lựa chọn riêng của từng thành viên và lựa chọn của workspace.",
+    "readOnly": "Chỉ Owner của workspace mới đổi được các quy tắc này.",
+    "loading": "Đang tải công cụ…",
+    "loadError": "Không tải được công cụ của plugin này.",
+    "retry": "Thử lại",
+    "empty": "Plugin này chưa có công cụ nào. Plugin MCP chỉ liệt kê công cụ sau khi có thành viên kết nối lần đầu.",
+    "read": "Đọc",
+    "write": "Ghi",
+    "controlAria": "Quy tắc WarpBot cho {label}",
+    "option": {
+      "memberChoice": "Thành viên tự chọn",
+      "approval": "Luôn hỏi",
+      "blocked": "Chặn"
+    },
+    "saveFailed": "Không lưu được quy tắc cho {label}."
+  },
   "disabledByPlatform": {
     "title": "WarpTalk đã tắt",
     "note": "Hiện không dùng được trong workspace này",

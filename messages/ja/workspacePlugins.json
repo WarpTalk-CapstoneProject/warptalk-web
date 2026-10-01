@@ -131,6 +131,24 @@
       "revoked": "切断済み"
     }
   },
+  "tools": {
+    "title": "ツール",
+    "explainer": "WarpBot は、各メンバー自身の選択とワークスペースの選択のうち、より厳しい方に従います。",
+    "readOnly": "これらのルールを変更できるのはワークスペースのオーナーだけです。",
+    "loading": "ツールを読み込み中…",
+    "loadError": "このプラグインのツールを読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "このプラグインにはまだツールがありません。MCP プラグインは、メンバーが初めて接続した後にツールを表示します。",
+    "read": "読み取り",
+    "write": "書き込み",
+    "controlAria": "{label} の WarpBot ルール",
+    "option": {
+      "memberChoice": "メンバーが選択",
+      "approval": "毎回確認",
+      "blocked": "ブロック"
+    },
+    "saveFailed": "{label} のルールを保存できませんでした。"
+  },
   "disabledByPlatform": {
     "title": "WarpTalkがオフにしました",
     "note": "現在このワークスペースでは利用できません",
