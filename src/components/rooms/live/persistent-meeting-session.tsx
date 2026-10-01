@@ -51,6 +51,7 @@ import {
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { getLanguageName } from "@/lib/language/languages";
 import { holdsSeat } from "@/lib/meeting/room-occupancy";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
@@ -3739,6 +3740,7 @@ export function PersistentMeetingSession({
           controlRef={localMediaControlRef}
           onCameraEnabledChange={setCameraEnabled}
           onMicrophoneEnabledChange={setMicrophoneEnabled}
+          avatarUrl={user?.avatarUrl}
         />
 
         <FilteredRoomAudio
@@ -4413,12 +4415,33 @@ function LocalMediaController({
   controlRef,
   onCameraEnabledChange,
   onMicrophoneEnabledChange,
+  avatarUrl,
 }: {
   controlRef: React.RefObject<LocalMediaControl | null>;
   onCameraEnabledChange: (enabled: boolean) => void;
   onMicrophoneEnabledChange: (enabled: boolean) => void;
+  avatarUrl?: string | null;
 }) {
   const room = useRoomContext();
+
+  /* The recorder (/egress/composite) is a headless Chrome with no session and sees only the LiveKit
+     room, so a camera-off tile in the recording can show a face only if the face is published
+     there. Needs `canUpdateOwnMetadata` on the join token. Cosmetic: a refusal leaves initials. */
+  useEffect(() => {
+    const publish = () => {
+      if (room.state !== ConnectionState.Connected) return;
+      const url = resolveAvatarUrl(avatarUrl);
+      if (!url?.startsWith("https://")) return;
+      void room.localParticipant
+        .setMetadata(JSON.stringify({ avatarUrl: url }))
+        .catch(() => {});
+    };
+    publish();
+    room.on(RoomEvent.Connected, publish);
+    return () => {
+      room.off(RoomEvent.Connected, publish);
+    };
+  }, [room, avatarUrl]);
 
   useEffect(() => {
     const localParticipant = room.localParticipant;
