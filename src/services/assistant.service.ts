@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ChatAttachment } from "@/lib/assistant/attachments";
+import type { WorkspaceToolInsightsDto } from "@/types/assistant-tool-insights";
 import type {
   AssistantConversationDetailDto,
   AssistantConversationDto,
@@ -264,6 +265,13 @@ export const assistantService = {
         ...(query.pluginKey ? { pluginKey: query.pluginKey } : {}),
         ...(query.userId ? { userId: query.userId } : {}),
       },
+    });
+  },
+
+  /** Every WarpBot tool call of the workspace in [from, to), counted server-side (wave 4). */
+  getWorkspaceToolInsights(workspaceId: string, range: { from: string; to: string }) {
+    return apiClient.get<WorkspaceToolInsightsDto>(API.assistant.workspaceToolInsights(workspaceId), {
+      params: { from: range.from, to: range.to },
     });
   },
 };

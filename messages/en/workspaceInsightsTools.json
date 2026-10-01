@@ -2,6 +2,16 @@
   "title": "Tools",
   "notAvailable": "Not available yet",
   "retry": "Retry",
+  "sources": {
+    "builtin": "Built-in",
+    "webSearch": "Web search",
+    "plugin": "Plugin",
+    "other": "Other"
+  },
+  "notices": {
+    "recordingSince": "Recording since {date}. WarpBot tool calls before then were not recorded, so earlier days show no calls.",
+    "clamped": "Tool calls can be read for at most {days} days at a time, so this tab shows {from} – {to}."
+  },
   "summary": {
     "label": "WarpBot tools",
     "status": {
@@ -9,51 +19,63 @@
       "healthy": "Healthy",
       "attention": "Needs attention"
     },
-    "idleHint": "No tool calls in this period. Connect a plugin from Plugins to start.",
+    "idleHint": "No WarpBot tool calls in this period.",
     "calls": "{count, plural, one {# call} other {# calls}}",
-    "callsAtLeast": "at least {count, plural, one {# call} other {# calls}}",
     "successRate": "{rate} success",
     "blocked": "{count} blocked by policy",
     "needsSetup": "{count, plural, one {# needs setup} other {# need setup}}",
     "failed": "{count} failed",
+    "medianDuration": "median {duration}",
     "lastCall": "last call {time}",
     "pluginsLink": "Plugins"
   },
-  "figure": {
-    "calls": "{count, plural, one {# call} other {# calls}}",
-    "callsAtLeast": "At least {count, plural, one {# call} other {# calls}}",
-    "cappedCaption": "Newest calls only · {top}"
-  },
-  "byPlugin": {
-    "title": "Tool calls by plugin",
+  "perDay": {
+    "title": "Calls per day",
+    "aria": "WarpBot tool calls per day by source, with the success rate",
     "empty": "No tool calls in this period",
-    "other": "Other plugins",
-    "callsSegment": "Calls"
-  },
-  "outcomes": {
-    "title": "Outcomes per day",
-    "aria": "Tool call outcomes per day, with the success rate",
-    "empty": "No tool outcomes recorded in this period",
-    "figure": "{rate} success",
-    "captionBlocked": "{count} blocked by policy",
-    "captionNeedsSetup": "{count, plural, one {# needs setup} other {# need setup}}",
-    "captionFailed": "{count} failed",
-    "captionAwaiting": "{count} awaiting confirmation",
-    "succeeded": "Succeeded",
-    "blocked": "Blocked by policy",
-    "problem": "Failed or needs setup",
+    "figure": "{count, plural, one {# call} other {# calls}}",
+    "previous": "{count, plural, one {# call} other {# calls}} the period before",
     "successRate": "Success rate",
     "dayTotal": "{count, plural, one {# call} other {# calls}} that day",
     "stillToCome": "Still to come",
-    "noCalls": "No calls"
+    "noCalls": "No calls",
+    "utcNote": "Days are UTC dates"
   },
-  "audit": {
-    "title": "Audit trail",
-    "subtitle": "Every assistant tool call in this period and the policy decision behind it",
+  "outcomes": {
+    "title": "Outcomes",
+    "aria": "WarpBot tool calls by outcome",
+    "empty": "No tool outcomes recorded in this period",
+    "figure": "{rate} success",
+    "medianCaption": "Median call time {duration}",
+    "noMedian": "No call times measured",
+    "callsSegment": "Calls",
+    "ok": "Succeeded",
+    "error": "Failed",
+    "needsSetup": "Needs setup",
+    "blocked": "Blocked by policy",
+    "declined": "Declined",
+    "confirmationRequired": "Awaiting confirmation"
+  },
+  "table": {
+    "title": "All tools",
+    "subtitle": "Every tool WarpBot called in this period: built-in, web search and plugin",
+    "chipsLabel": "Filter by source",
+    "all": "All",
     "empty": "No tool calls in this period",
-    "showing": "Showing {start}–{end} of {total}",
-    "showingAtLeast": "Showing {start}–{end} of at least {total}",
-    "cappedNote": "Only the newest {count} calls were read, so older calls in this period are not listed here.",
+    "columns": {
+      "tool": "Tool",
+      "source": "Source",
+      "calls": "Calls",
+      "success": "Success",
+      "needsSetup": "Needs setup",
+      "blocked": "Blocked",
+      "failed": "Failed",
+      "median": "Median time",
+      "lastCall": "Last call"
+    },
+    "fixMember": "Members fix needs-setup calls in My connections.",
+    "fixOwner": "Blocked by this workspace's policy. The Owner can allow it on the plugin page.",
+    "whoToFix": "See who in Plugin activity",
     "openActivity": "Plugin activity"
   }
 }

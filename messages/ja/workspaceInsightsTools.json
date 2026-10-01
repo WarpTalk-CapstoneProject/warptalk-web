@@ -2,58 +2,80 @@
   "title": "ツール",
   "notAvailable": "まだ利用できません",
   "retry": "再試行",
+  "sources": {
+    "builtin": "組み込み",
+    "webSearch": "ウェブ検索",
+    "plugin": "プラグイン",
+    "other": "その他"
+  },
+  "notices": {
+    "recordingSince": "{date} から記録しています。それ以前の WarpBot ツール呼び出しは記録されていないため、それより前の日は呼び出しなしと表示されます。",
+    "clamped": "ツール呼び出しは一度に最大 {days} 日分まで読み込めるため、このタブには {from} – {to} を表示しています。"
+  },
   "summary": {
     "label": "WarpBot ツール",
     "status": {
-      "idle": "呼び出しなし",
+      "idle": "まだ呼び出しはありません",
       "healthy": "正常",
       "attention": "対応が必要"
     },
-    "idleHint": "この期間のツール呼び出しはありません。プラグインから接続すると始められます。",
+    "idleHint": "この期間の WarpBot ツール呼び出しはありません。",
     "calls": "{count, plural, other {# 件の呼び出し}}",
-    "callsAtLeast": "少なくとも {count, plural, other {# 件の呼び出し}}",
     "successRate": "成功率 {rate}",
     "blocked": "ポリシーでブロック {count} 件",
     "needsSetup": "{count, plural, other {設定が必要 # 件}}",
     "failed": "失敗 {count} 件",
-    "lastCall": "最終呼び出し {time}",
+    "medianDuration": "中央値 {duration}",
+    "lastCall": "最後の呼び出し {time}",
     "pluginsLink": "プラグイン"
   },
-  "figure": {
-    "calls": "{count, plural, other {# 件の呼び出し}}",
-    "callsAtLeast": "少なくとも {count, plural, other {# 件の呼び出し}}",
-    "cappedCaption": "最新の呼び出しのみ · {top}"
-  },
-  "byPlugin": {
-    "title": "プラグイン別のツール呼び出し",
+  "perDay": {
+    "title": "日別の呼び出し",
+    "aria": "ソース別の WarpBot ツール呼び出し（日別）と成功率",
     "empty": "この期間のツール呼び出しはありません",
-    "other": "その他のプラグイン",
-    "callsSegment": "呼び出し"
-  },
-  "outcomes": {
-    "title": "日別の結果",
-    "aria": "日別のツール呼び出し結果と成功率",
-    "empty": "この期間に記録されたツールの結果はありません",
-    "figure": "成功率 {rate}",
-    "captionBlocked": "ポリシーでブロック {count} 件",
-    "captionNeedsSetup": "{count, plural, other {設定が必要 # 件}}",
-    "captionFailed": "失敗 {count} 件",
-    "captionAwaiting": "確認待ち {count} 件",
-    "succeeded": "成功",
-    "blocked": "ポリシーでブロック",
-    "problem": "失敗または設定が必要",
+    "figure": "{count, plural, other {# 件の呼び出し}}",
+    "previous": "前の期間は {count, plural, other {# 件}}",
     "successRate": "成功率",
     "dayTotal": "この日 {count, plural, other {# 件の呼び出し}}",
     "stillToCome": "これから",
-    "noCalls": "呼び出しなし"
+    "noCalls": "呼び出しなし",
+    "utcNote": "日付は UTC です"
   },
-  "audit": {
-    "title": "監査ログ",
-    "subtitle": "この期間のアシスタントによるすべてのツール呼び出しと、その背後にあるポリシー判断",
+  "outcomes": {
+    "title": "結果",
+    "aria": "結果別の WarpBot ツール呼び出し",
+    "empty": "この期間に記録されたツールの結果はありません",
+    "figure": "成功率 {rate}",
+    "medianCaption": "呼び出し時間の中央値 {duration}",
+    "noMedian": "呼び出し時間は計測されていません",
+    "callsSegment": "呼び出し",
+    "ok": "成功",
+    "error": "失敗",
+    "needsSetup": "設定が必要",
+    "blocked": "ポリシーでブロック",
+    "declined": "拒否",
+    "confirmationRequired": "確認待ち"
+  },
+  "table": {
+    "title": "すべてのツール",
+    "subtitle": "この期間に WarpBot が呼び出したすべてのツール（組み込み、ウェブ検索、プラグイン）",
+    "chipsLabel": "ソースで絞り込む",
+    "all": "すべて",
     "empty": "この期間のツール呼び出しはありません",
-    "showing": "{total} 件中 {start}–{end} 件を表示",
-    "showingAtLeast": "少なくとも {total} 件中 {start}–{end} 件を表示",
-    "cappedNote": "最新の {count} 件のみを読み込んだため、この期間の古い呼び出しはここに表示されません。",
-    "openActivity": "プラグインのアクティビティ"
+    "columns": {
+      "tool": "ツール",
+      "source": "ソース",
+      "calls": "呼び出し",
+      "success": "成功率",
+      "needsSetup": "設定が必要",
+      "blocked": "ブロック",
+      "failed": "失敗",
+      "median": "時間の中央値",
+      "lastCall": "最後の呼び出し"
+    },
+    "fixMember": "設定が必要な呼び出しは、メンバーが「マイ接続」で対応します。",
+    "fixOwner": "このワークスペースのポリシーでブロックされています。Owner がプラグインページで許可できます。",
+    "whoToFix": "プラグインアクティビティで確認",
+    "openActivity": "プラグインアクティビティ"
   }
 }

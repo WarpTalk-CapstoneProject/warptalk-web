@@ -2,8 +2,9 @@
 
 /**
  * One line, not a row of cards (like the admin page's Cartesia line): whether WarpBot's tools are
- * healthy this period, and the handful of counts that say why. Amber when anything failed or needs
- * setup — a policy refusal alone is the workspace's own switch working, so it does not turn it amber.
+ * healthy this period, and the handful of counts that say why. Every call counts — built-in, web
+ * search and plugin. Amber when anything failed or needs setup; a policy refusal alone is the
+ * workspace's own switch working, so it does not turn it amber.
  */
 
 import Link from "next/link";
@@ -12,8 +13,10 @@ import type { ReactNode } from "react";
 
 import type { InsightsSourceState } from "@/components/workspace/insights/insights-types";
 import type { ToolsFormatters } from "@/components/workspace/insights/tools/tools-format";
-import type { ToolsMetrics } from "@/lib/workspace/insights/tools-metrics";
+import { lastToolCallAt, toolSuccessRate } from "@/lib/workspace/insights/tool-insights";
+import { toolsHealth } from "@/lib/workspace/insights/tools-metrics";
 import { cn } from "@/lib/utils";
+import type { WorkspaceToolInsightsDto } from "@/types/assistant-tool-insights";
 
 export function ToolsSummaryLine({
   state,
@@ -21,36 +24,41 @@ export function ToolsSummaryLine({
   nowMs,
   pluginsHref,
 }: {
-  state: InsightsSourceState<ToolsMetrics>;
+  state: InsightsSourceState<WorkspaceToolInsightsDto>;
   format: ToolsFormatters;
   nowMs: number;
   pluginsHref: string | null;
 }) {
   const t = useTranslations("workspaceInsightsTools.summary");
   const tRoot = useTranslations("workspaceInsightsTools");
-  const metrics = state.status === "ready" ? state.data : null;
-  const warn = metrics?.health === "attention";
+  const data = state.status === "ready" ? state.data : null;
+  const health = data ? toolsHealth(data.totals) : null;
+  const warn = health === "attention";
 
   let status: string;
   let detail: ReactNode;
   if (state.status === "loading") {
     status = "—";
-    detail = <span aria-hidden className="inline-block h-3.5 w-64 animate-pulse rounded bg-surface-2" />;
-  } else if (state.status === "unavailable" || !metrics) {
+    detail = <span aria-hidden className="inline-block h-3.5 w-64 max-w-full animate-pulse rounded bg-surface-2" />;
+  } else if (!data || !health) {
     status = "—";
     detail = <span className="text-ink-muted">{tRoot("notAvailable")}</span>;
-  } else if (metrics.calls === 0) {
+  } else if (health === "idle") {
     status = t("status.idle");
     detail = <span className="text-ink-muted">{t("idleHint")}</span>;
   } else {
-    status = t(`status.${metrics.health}`);
+    const { totals } = data;
+    const rate = toolSuccessRate(totals);
+    const last = lastToolCallAt(data.byTool);
+    status = t(`status.${health}`);
     const parts = [
-      metrics.capped ? t("callsAtLeast", { count: metrics.calls }) : t("calls", { count: metrics.calls }),
-      metrics.successRate === null ? null : t("successRate", { rate: format.percent(metrics.successRate) }),
-      t("blocked", { count: metrics.blocked }),
-      t("needsSetup", { count: metrics.needsSetup }),
-      metrics.failed > 0 ? t("failed", { count: metrics.failed }) : null,
-      metrics.lastCallAt ? t("lastCall", { time: format.ago(metrics.lastCallAt, nowMs) }) : null,
+      t("calls", { count: totals.calls }),
+      rate === null ? null : t("successRate", { rate: format.percent(rate) }),
+      totals.blocked > 0 ? t("blocked", { count: totals.blocked }) : null,
+      totals.needsSetup > 0 ? t("needsSetup", { count: totals.needsSetup }) : null,
+      totals.error > 0 ? t("failed", { count: totals.error }) : null,
+      totals.medianDurationMs === null ? null : t("medianDuration", { duration: format.duration(totals.medianDurationMs) }),
+      last ? t("lastCall", { time: format.ago(last, nowMs) }) : null,
     ].filter(Boolean);
     detail = <span className="text-ink-muted">{parts.join(" · ")}</span>;
   }
@@ -64,9 +72,7 @@ export function ToolsSummaryLine({
       )}
     >
       <span className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">{t("label")}</span>
-      <span className={cn("font-semibold", warn ? "text-warning" : metrics?.health === "healthy" ? "text-success" : "text-ink")}>
-        {status}
-      </span>
+      <span className={cn("font-semibold", warn ? "text-warning" : health === "healthy" ? "text-success" : "text-ink")}>{status}</span>
       {detail}
       {pluginsHref ? (
         <Link href={pluginsHref} className="ml-auto whitespace-nowrap text-[11px] text-primary hover:underline">
