@@ -13,7 +13,9 @@ import {
   XCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
+import { toast } from "sonner";
 
+import { getErrorMessage } from "@/lib/api/errors";
 import { useAuthStore } from "@/stores/auth-store";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -170,7 +172,17 @@ export default function WorkspaceOnboardingGatePage() {
   }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router, user?.id]);
 
   async function handleAcceptInvitation(invitationId: string) {
-    await acceptInvitation.mutateAsync(invitationId);
+    // WT-624. Acceptance can be refused for reasons the server states plainly — the invitation
+    // has already been used, the workspace's access policy moved, the invitee already holds an
+    // internal seat in another Enterprise workspace. Every one of those arrived here as an
+    // unhandled rejection: nothing was rendered, the button snapped back to "Accept", and the
+    // only trace was `Uncaught (in promise) AxiosError` in the console. The user was told the
+    // click did nothing, which is the one thing that was not true.
+    try {
+      await acceptInvitation.mutateAsync(invitationId);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not accept this invitation. Please try again."));
+    }
   }
 
   async function handleOpenWorkspace(workspaceId: string, workspaceSlug?: string | null) {
