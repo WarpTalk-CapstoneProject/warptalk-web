@@ -112,6 +112,14 @@
       "title": "Ngôn ngữ khác",
       "hint": "Phòng này không cung cấp sẵn, nhưng vẫn được dịch cho bạn.",
       "disclosure": "Ngôn ngữ khác"
+    },
+    "askHost": "Cần ngôn ngữ khác? Hãy nhờ chủ phòng thêm vào cuộc họp.",
+    "addLanguage": {
+      "title": "Thêm vào cuộc họp này",
+      "hint": "Sau khi thêm, mọi người đều chọn được. Ngôn ngữ của bạn giữ nguyên.",
+      "disclosure": "Thêm ngôn ngữ cho cuộc họp",
+      "adding": "Đang thêm…",
+      "none": "Mọi ngôn ngữ workspace cho phép đều đã có trong cuộc họp này."
     }
   },
   "micCheck": {

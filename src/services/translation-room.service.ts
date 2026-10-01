@@ -724,6 +724,23 @@ export const translationRoomService = {
   },
 
   /**
+   * WT-709: the host adds a language to a meeting that is already open, so a participant who
+   * needs it can pick it. Host-only (the room's EFFECTIVE host — 403 otherwise), bounded by the
+   * workspace whitelist and the plan's language quota (400), and only while the meeting is open
+   * (409). A language already declared answers 200 with the set unchanged.
+   *
+   * Answers the meeting's languages afterwards — the same `{ sourceLanguage, targetLanguages }`
+   * the RoomLanguagesChanged broadcast carries — so the caller can repaint without a refetch.
+   */
+  async addRoomLanguage(id: string, language: string) {
+    const { data } = await apiClient.post<{ sourceLanguage: string; targetLanguages: string[] }>(
+      API.translationRooms.languages(id),
+      { language },
+    );
+    return data;
+  },
+
+  /**
    * Accept the invitation addressed to the signed-in account's email.
    *
    * Takes no body: the server matches the row from the caller's own email claim, because
