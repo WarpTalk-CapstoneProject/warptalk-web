@@ -285,6 +285,8 @@
     "connect": "接続",
     "useInThisChat": "このチャットで{label}を使う",
     "noToolsForPage": "このページで使えるツールはありません。ミーティングかドキュメントを開いてください。",
+    "exploreTools": "すべて見る",
+    "browseAllTools": "WarpBot ツールを見る",
     "installPluginsHint": "個人設定からプラグインをインストールしてください。",
     "loadingConversations": "会話を読み込み中…",
     "loadHistoryFailed": "チャット履歴を読み込めませんでした。",
