@@ -13,7 +13,8 @@
     "translation": "Translation",
     "workspace": "Workspace",
     "conversation": "Conversation",
-    "platform": "Platform"
+    "platform": "Platform",
+    "other": "Other"
   },
   "badges": {
     "changesData": "Changes data",
@@ -24,13 +25,19 @@
     "platformOnly": "Visible to WarpTalk platform staff only.",
     "samplePrompts": "Try asking",
     "tryInWarpBot": "Try in WarpBot",
-    "tryAria": "Try in WarpBot: {prompt}"
+    "tryAria": "Try in WarpBot: {prompt}",
+    "noMoreDetails": "No more details for this tool yet."
   },
   "tryToast": "Prompt sent to WarpBot",
   "builtIn": {
     "title": "Built in",
     "description": "Tools WarpBot uses on its own when your question needs them.",
-    "empty": "No built-in tools match your search."
+    "empty": "No built-in tools match your search.",
+    "loading": "Loading WarpBot's tools",
+    "error": "Could not load WarpBot's tools.",
+    "unavailableTitle": "Tool list unavailable right now",
+    "unavailableDescription": "WarpBot could not report its built-in tools just now. They still work in chat; try this page again in a few minutes.",
+    "none": "WarpBot reported no built-in tools."
   },
   "webSearch": {
     "title": "Web search",
@@ -38,13 +45,22 @@
     "name": "Search the web",
     "rowDescription": "Looks things up on the public web and cites the pages it used.",
     "unknownNote": "Available when your workspace allows it. When WarpBot searches the web, its answer says so and links the pages.",
-    "empty": "Web search does not match your search."
+    "empty": "Web search does not match your search.",
+    "loading": "Loading web search status",
+    "onNote": "On in this workspace. When WarpBot searches the web, its answer says so and links the pages.",
+    "offNote": "Turned off by a WarpTalk setting right now, so WarpBot answers without searching the web.",
+    "unavailableNote": "Web search is not set up for WarpBot on this WarpTalk deployment.",
+    "state": {
+      "on": "On",
+      "off": "Off",
+      "unavailable": "Unavailable"
+    }
   },
   "plugins": {
     "title": "From your plugins",
     "description": "Tools from plugins you connected that this workspace has. Tools you blocked are not listed.",
     "loading": "Loading your plugins",
-    "error": "Could not load your plugins.",
+    "error": "Could not load your plugin tools.",
     "retry": "Retry",
     "emptyTitle": "No plugin tools yet",
     "emptyDescription": "Connect a plugin this workspace has, and the tools WarpBot can use from it show up here.",
