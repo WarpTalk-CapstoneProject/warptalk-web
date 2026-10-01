@@ -67,10 +67,6 @@
     "collapse": "Collapse",
     "expand": "Expand",
     "workspaceFallback": "Workspace",
-    "bridgeNotice": {
-      "line1": "Your call runs on <meet>Google Meet</meet>. WarpTalk sits beside it: this room gets two seats — you, and one stand-in for everyone on the other side. <src>Source</src> is the language you speak; <tgt>target</tgt> is what the call hears.",
-      "line2": "Needs the two virtual audio devices installed, and Meet pointed at them. The setup check runs when you open the room."
-    },
     "titlePlaceholder": "Meeting title",
     "descriptionPlaceholder": "Add description...",
     "dailyPill": "Daily {time}",
@@ -158,7 +154,6 @@
     },
     "templatePicker": {
       "meetingType": "Meeting Type",
-      "translateElsewhere": "Translate a call elsewhere",
       "types": {
         "event": "Event",
         "channelMeeting": "Channel Meeting",

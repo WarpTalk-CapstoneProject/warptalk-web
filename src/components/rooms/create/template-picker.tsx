@@ -10,13 +10,10 @@ import {
   UsersThree,
   MicrophoneStage,
   Broadcast,
-  ArrowSquareOut,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   MEETING_TYPES,
   MEETING_TYPE_I18N_KEYS,
-  EXTERNAL_BRIDGE_TYPE,
-  isExternalBridge,
   meetingTypeByValue,
 } from "@/lib/meeting/meeting-types";
 
@@ -32,7 +29,6 @@ const ICON_BY_VALUE: Record<string, React.ComponentType<{ weight?: "duotone"; si
   COMPANY_MEETING: UsersThree,
   VIRTUAL_APPOINTMENT: MicrophoneStage,
   LIVE_EVENT: Broadcast,
-  [EXTERNAL_BRIDGE_TYPE]: ArrowSquareOut,
 };
 
 /**
@@ -46,11 +42,9 @@ const ICON_BY_VALUE: Record<string, React.ComponentType<{ weight?: "duotone"; si
  */
 export function TemplatePicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const t = useTranslations("rooms.create.templatePicker");
-  // External Meeting is separated out. It is the only type whose call does not happen on
-  // WarpTalk — it needs two virtual audio devices and Google Meet pointed at them — so offering
-  // it in the same run as "Webinar" would read as one more room preset, which it is not.
-  const standardTypes = MEETING_TYPES.filter((type) => !isExternalBridge(type.value));
-  const bridgeTypes = MEETING_TYPES.filter((type) => isExternalBridge(type.value));
+  // WT-868: External Meeting is no longer offered here, nor in a group of its own. A Google Meet
+  // call is translated from the desktop app, which makes its room when it sees the call; the
+  // type is simply absent from `MEETING_TYPES`, so there is nothing to filter out.
 
   function renderItem(type: (typeof MEETING_TYPES)[number]) {
     const Icon = ICON_BY_VALUE[type.value] ?? CalendarIcon;
@@ -81,16 +75,8 @@ export function TemplatePicker({ value, onChange }: { value: string; onChange: (
         <Command className="bg-transparent">
           <CommandList>
             <CommandGroup heading={t("meetingType")} className="text-[11px] text-ink-muted">
-              {standardTypes.map(renderItem)}
+              {MEETING_TYPES.map(renderItem)}
             </CommandGroup>
-            {bridgeTypes.length > 0 && (
-              <CommandGroup
-                heading={t("translateElsewhere")}
-                className="text-[11px] text-ink-muted"
-              >
-                {bridgeTypes.map(renderItem)}
-              </CommandGroup>
-            )}
           </CommandList>
         </Command>
       </PopoverContent>

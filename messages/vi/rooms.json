@@ -67,10 +67,6 @@
     "collapse": "Thu gọn",
     "expand": "Mở rộng",
     "workspaceFallback": "Không gian làm việc",
-    "bridgeNotice": {
-      "line1": "Cuộc gọi của bạn diễn ra trên <meet>Google Meet</meet>. WarpTalk sẽ hoạt động song song: phòng này có hai chỗ — bạn, và một chỗ đại diện cho tất cả những người ở phía bên kia. <src>Ngôn ngữ nguồn</src> là ngôn ngữ bạn nói; <tgt>ngôn ngữ đích</tgt> là ngôn ngữ cuộc gọi nghe được.",
-      "line2": "Cần cài hai thiết bị âm thanh ảo và trỏ Meet vào chúng. Việc kiểm tra cấu hình sẽ chạy khi bạn mở phòng."
-    },
     "titlePlaceholder": "Tiêu đề cuộc họp",
     "descriptionPlaceholder": "Thêm mô tả...",
     "dailyPill": "Hằng ngày {time}",
@@ -158,7 +154,6 @@
     },
     "templatePicker": {
       "meetingType": "Loại cuộc họp",
-      "translateElsewhere": "Dịch một cuộc gọi ở nơi khác",
       "types": {
         "event": "Sự kiện",
         "channelMeeting": "Họp theo kênh",
