@@ -72,6 +72,9 @@ import { usageServiceOf } from "@/lib/billing/usage-labels";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatMoney } from "@/lib/format/currency";
 import { downloadBlob } from "@/lib/ui/download-blob";
+import { chartLayout, renderChartPng } from "@/lib/admin/insights-report-charts";
+import { buildInsightsReport, insightsReportFileName } from "@/lib/admin/insights-report";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { AdminMeetingCountsDto } from "@/types/admin-meeting";
 import type { WorkspaceOutboxDeadLetterDto } from "@/types/admin-outbox";
@@ -179,11 +182,13 @@ function monthButtonLabel(month: string): string {
 function PeriodBar({
   period,
   onChoosePeriod,
-  onExport,
+  onExportReport,
+  onExportCsv,
 }: {
   period: ResolvedInsightsPeriod;
   onChoosePeriod: (choice: PeriodChoice) => void;
-  onExport: () => void;
+  onExportReport: () => void;
+  onExportCsv: () => void;
 }) {
   const t = useTranslations("adminOps.insights");
   const [customOpen, setCustomOpen] = useState(period.period === "custom");
@@ -231,14 +236,18 @@ function PeriodBar({
           </button>
         </div>
         <span className="text-[13px] text-ink-muted">{period.caption}</span>
-        <button
-          type="button"
-          onClick={onExport}
-          className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
-        >
-          <DownloadSimple size={14} />
-          {t("periodBar.export")}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
+          >
+            <DownloadSimple size={14} />
+            {t("periodBar.export")}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onExportReport}>{t("periodBar.exportReport")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onExportCsv}>{t("periodBar.exportCsv")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {customOpen ? (
@@ -1067,7 +1076,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       (state) => state.status === "loading",
     ) && attention.items.length === 0;
 
-  const handleExport = () => {
+  const handleExportCsv = () => {
     const csv = insightsCsv({
       billing,
       users: dataOf(props.users),
@@ -1079,6 +1088,33 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       () => new Blob(["﻿", csv], { type: "text/csv;charset=utf-8" }),
       `warptalk-insights-${period.customFrom}-to-${period.customTo}.csv`,
     ).catch(() => undefined);
+  };
+
+  const handleExportReport = () => {
+    // The picker must open inside the click, so the (async) build happens inside the loader.
+    void downloadBlob(async () => {
+      const [{ buildInsightsReportDocx }] = await Promise.all([import("@/lib/admin/insights-report-docx")]);
+      const report = buildInsightsReport(
+        {
+          billing,
+          snapshot,
+          users: dataOf(props.users),
+          workspaces: dataOf(props.workspaces),
+          meetings: meetingsInsights,
+          pnl: props.pnl ? dataOf(props.pnl) : undefined,
+        },
+        period,
+      );
+      const images: Parameters<typeof buildInsightsReportDocx>[1] = {};
+      for (const chart of report.sections.flatMap((section) => section.charts)) {
+        const data = await renderChartPng(chart);
+        if (data) {
+          const { width, height } = chartLayout(chart);
+          images[chart.id] = { data, width, height };
+        }
+      }
+      return buildInsightsReportDocx(report, images);
+    }, insightsReportFileName(period)).catch(() => undefined);
   };
 
   const liveState: SourceState<AdminMeetingCountsDto> =
@@ -1212,7 +1248,8 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         key={`${period.period}:${period.customFrom}:${period.customTo}`}
         period={period}
         onChoosePeriod={props.onChoosePeriod}
-        onExport={handleExport}
+        onExportReport={handleExportReport}
+        onExportCsv={handleExportCsv}
       />
 
       {/* Period cards follow the period bar; the rows under them are "right now". */}
