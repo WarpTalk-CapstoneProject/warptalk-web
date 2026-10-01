@@ -55,6 +55,7 @@ import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -955,6 +956,17 @@ export default function RoomInformationPage() {
 
   async function handleRoomEntry() {
     if (!room) return;
+    // WT-868: an External Meeting is never joined in the app. It runs beside Google Meet in the
+    // desktop popup, whose own Start makes the room active in this window — so neither the host's
+    // Start nor a Join goes through device setup or /live here. On the web there is no popup.
+    if (
+      isExternalBridge(room.translationRoomType) &&
+      (entryIntent.mode === "host_start" || entryIntent.mode === "join")
+    ) {
+      const opened = await openDesktopTranscriptWindow(room.id);
+      if (!opened) toast.info(t("bridgeDesktopOnly"));
+      return;
+    }
     switch (entryIntent.mode) {
       case "unavailable":
         return;

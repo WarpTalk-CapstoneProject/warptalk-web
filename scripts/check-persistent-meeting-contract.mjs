@@ -241,7 +241,9 @@ assert.match(
 }
 assert.match(
   meetingSession,
-  /const wanted =\s*isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
+  // W4b: `bridgeAudioOwner` is isBridgeRoom && (this desktop is the bridge capturer) — the host of a
+  // legacy room, or whoever holds the capturer lease of a claimed one.
+  /const wanted =\s*(?:isBridgeRoom && isHost|bridgeAudioOwner) && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
   "an idle reap must also release the stand-in's second LiveKit connection and its capture",
 );
 // WT-828: the far side is transcribed from the moment the meeting opens. Start Translation controls
@@ -261,10 +263,13 @@ assert.match(
     "the bridge listens exactly while the transcript is open, and never before the room has loaded",
   );
 }
+// W4a: the main window draws no bridge widget any more (WT-868) — the popup over Meet is the only
+// one — so the reaped bridge's Rejoin is the popup's, over the relay: the session must tell it the
+// reaper let go (`idleReaped`) and act on its `rejoin` the way the compact view's Rejoin does.
 assert.match(
   meetingSession,
-  /<ExternalBridgeWidget[\s\S]{0,1200}?idleDisconnected=\{meetingIsIdleReaped\}[\s\S]{0,200}?onRejoin=/,
-  "a reaped bridge must be able to rejoin from its own widget — the compact overlay is never rendered for it",
+  /useBridgeWidgetRelayHost\(\{[\s\S]*?idleReaped: meetingIsIdleReaped,[\s\S]*?onRejoin: \(\) => \{\s*markMeetingInteraction\(\);\s*setIdleDisconnected\(false\);/,
+  "a reaped bridge must be able to rejoin from the popup — the compact overlay is never rendered for it",
 );
 
 // --- WT-303: localParticipant is the only source of truth for mic/camera ------------------

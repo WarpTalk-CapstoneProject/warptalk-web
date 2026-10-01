@@ -973,8 +973,10 @@ function GlobalGlossaryAdmin() {
         {/* WT-879. `sm:` prefix, not bare `max-w-2xl`: the base DialogContent sets `sm:max-w-sm`,
             which beats an unprefixed width at ≥sm and squeezed this dialog to 384px. DialogContent is
             a grid, so every child below also carries `min-w-0` — without it the unbreakable column
-            list and the textarea size the grid track to their own width and spill past the card. */}
-        <DialogContent className="border-hairline bg-surface-1 sm:max-w-2xl">
+            list and the textarea size the grid track to their own width and spill past the card.
+            WT-907: capped to the viewport with a `minmax(0,1fr)` body row so a long template preview
+            scrolls inside the dialog instead of pushing the header and footer off-screen. */}
+        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-hairline bg-surface-1 sm:max-h-[90dvh] sm:max-w-2xl">
           <DialogHeader className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <DialogTitle className="font-bold text-base">
@@ -1014,51 +1016,53 @@ function GlobalGlossaryAdmin() {
             </DialogDescription>
           </DialogHeader>
 
-          {bulkImportTab === "templates" ? (
-            <div className="min-w-0 py-1">
-              <GlossaryTemplateGallery
-                onSelectTemplate={(template) => {
-                  const header = "Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority";
-                  const rows = template.sampleTerms.map((item) => {
-                    const cells = [
-                      `"${item.term.replace(/"/g, '""')}"`,
-                      `"${item.translation.replace(/"/g, '""')}"`,
-                      `"${template.sourceLanguage}"`,
-                      `"${template.targetLanguage}"`,
-                      `"${(item.domain || "").replace(/"/g, '""')}"`,
-                      `"${(item.definition || "").replace(/"/g, '""')}"`,
-                      `"${(item.usageNote || "").replace(/"/g, '""')}"`,
-                      String(item.priority ?? 5),
-                    ];
-                    return cells.join(",");
-                  });
-                  setCsvText([header, ...rows].join("\n"));
-                  setBulkImportTab("csv");
-                  toast.success(`Loaded ${template.sampleTerms.length} rows from template "${template.name}" with standard language and domain configuration`);
-                }}
-              />
-            </div>
-          ) : (
-            <div className="min-w-0">
-              <div className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-ink-muted">
-                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
-                <button
-                  type="button"
-                  onClick={() => setBulkImportTab("templates")}
-                  className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  <Sparkle className="h-3.5 w-3.5" />
-                  Choose from Template Catalog
-                </button>
+          <div className="-mx-4 min-h-0 min-w-0 overflow-y-auto overscroll-contain px-4">
+            {bulkImportTab === "templates" ? (
+              <div className="min-w-0 py-1">
+                <GlossaryTemplateGallery
+                  onSelectTemplate={(template) => {
+                    const header = "Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority";
+                    const rows = template.sampleTerms.map((item) => {
+                      const cells = [
+                        `"${item.term.replace(/"/g, '""')}"`,
+                        `"${item.translation.replace(/"/g, '""')}"`,
+                        `"${template.sourceLanguage}"`,
+                        `"${template.targetLanguage}"`,
+                        `"${(item.domain || "").replace(/"/g, '""')}"`,
+                        `"${(item.definition || "").replace(/"/g, '""')}"`,
+                        `"${(item.usageNote || "").replace(/"/g, '""')}"`,
+                        String(item.priority ?? 5),
+                      ];
+                      return cells.join(",");
+                    });
+                    setCsvText([header, ...rows].join("\n"));
+                    setBulkImportTab("csv");
+                    toast.success(`Loaded ${template.sampleTerms.length} rows from template "${template.name}" with standard language and domain configuration`);
+                  }}
+                />
               </div>
-              <textarea
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-                placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,CI/CD pipeline,en,vi,DevOps,Automated build and deploy process&#10;cache,memory cache,en,vi,IT Support,Temporary data storage for fast access"
-                className="block h-48 w-full min-w-0 resize-y rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
-              />
-            </div>
-          )}
+            ) : (
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-ink-muted">
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
+                  <button
+                    type="button"
+                    onClick={() => setBulkImportTab("templates")}
+                    className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                  >
+                    <Sparkle className="h-3.5 w-3.5" />
+                    Choose from Template Catalog
+                  </button>
+                </div>
+                <textarea
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                  placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,CI/CD pipeline,en,vi,DevOps,Automated build and deploy process&#10;cache,memory cache,en,vi,IT Support,Temporary data storage for fast access"
+                  className="block h-48 w-full min-w-0 resize-y rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
+                />
+              </div>
+            )}
+          </div>
 
           <DialogFooter className="mt-2 flex gap-2">
             <button

@@ -20,25 +20,18 @@
  */
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { VoicePanel } from "@/components/rooms/live/voice-panel";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { clampMeetingAudioLevel } from "@/lib/audio/bridge-far-side-monitor";
-import type { BridgeWidgetRelayStatus } from "@/lib/meeting/bridge-widget-relay";
 import type { VoiceOptionDto } from "@/types/realtime";
 
 import { useBridgeWidget } from "../widget-context";
-import { useBridgeWidgetRelayClient } from "./use-bridge-widget-relay-client";
-
-const UNAVAILABLE: Record<Exclude<BridgeWidgetRelayStatus, "connected">, string> = {
-  waiting: "Checking the WarpTalk window…",
-  "no-host": "Open this meeting in the WarpTalk window to change voices here.",
-  incompatible: "WarpTalk was updated. Reload it to change voices here.",
-};
 
 export function VoicePanelSlot() {
-  const { roomId, hub, connectionState } = useBridgeWidget();
-  const relay = useBridgeWidgetRelayClient(roomId);
+  const t = useTranslations("rooms.bridgeWidget");
+  const { hub, connectionState, relay } = useBridgeWidget();
   const snapshot = relay.view.status === "connected" ? relay.view.snapshot : null;
   const voice = snapshot?.voice;
   const listenLanguage = snapshot?.listenLanguage ?? "";
@@ -82,11 +75,13 @@ export function VoicePanelSlot() {
   if (!snapshot || !voice) {
     return (
       <p className="px-2.5 pb-2 pt-0.5 text-[12px] leading-snug text-ink-muted">
-        {relay.view.status !== "connected"
-          ? UNAVAILABLE[relay.view.status]
-          : // Connected to a main window from before this panel: its snapshot has no voice half,
-            // and every pick made here would be dropped there as an unknown intent.
-            "Reload the WarpTalk window to change voices here."}
+        {relay.view.status === "waiting"
+          ? t("relay.waiting")
+          : relay.view.status === "no-host"
+            ? t("relay.noHost")
+            : // Incompatible, or connected to a main window from before this panel: its snapshot
+              // has no voice half, and every pick made here would be dropped there as unknown.
+              t("relay.incompatible")}
       </p>
     );
   }

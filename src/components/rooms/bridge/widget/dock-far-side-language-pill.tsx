@@ -20,8 +20,9 @@
  *   stand-in's language), and publishes the change that TranslationRoomService persists and
  *   re-routes the audio mesh from.
  *
- * Host only. The gateway refuses anybody else, so offering the control would be a guaranteed error
- * over someone's live call.
+ * Host or bridge capturer only (PO, 2026-10-01: `canControl`). Members never see it. The gateway
+ * gates SetExternalMeetingLanguage on the AUDIO OWNER — the capturer, or the host of a legacy room
+ * with no capturer — so a host who is not the capturer is refused there; see bridge-capturer.ts.
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -62,7 +63,7 @@ export function DockFarSideLanguagePill() {
   const {
     roomId,
     room,
-    isHost,
+    canControl,
     hub,
     connectionState,
     readerLanguage,
@@ -115,7 +116,7 @@ export function DockFarSideLanguagePill() {
     };
   }, [menuOpen]);
 
-  if (!isHost || (room && !isExternalBridge(room.translationRoomType))) return null;
+  if (!canControl || (room && !isExternalBridge(room.translationRoomType))) return null;
 
   function pick(language: string) {
     if (!enabled || !hub) return;
@@ -237,10 +238,10 @@ export function DockFarSideLanguagePill() {
  */
 export function FarSideLanguageNotice() {
   const t = useTranslations("rooms.bridgeFarSide");
-  const { room, isHost, readerLanguage, farSideLanguage } = useBridgeWidget();
+  const { room, canControl, readerLanguage, farSideLanguage } = useBridgeWidget();
   const allowedTargetLanguages = useFarSideLanguagePolicy();
 
-  if (!isHost || (room && !isExternalBridge(room.translationRoomType))) return null;
+  if (!canControl || (room && !isExternalBridge(room.translationRoomType))) return null;
 
   const problem = farSideLanguageProblem({
     hostLanguage: readerLanguage,

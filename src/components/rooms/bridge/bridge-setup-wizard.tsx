@@ -43,7 +43,11 @@ import {
   hifiFormatMismatch,
   type HiFiAlignOutcome,
 } from "@/lib/desktop/hifi-format";
-import { canCaptureBrowserLoopback, selectBridgeInboundSource } from "@/lib/desktop/bridge-tiers";
+import {
+  canCaptureBrowserLoopback,
+  finalBridgeInboundPath,
+  selectBridgeInboundSource,
+} from "@/lib/desktop/bridge-tiers";
 import {
   MEET_SPEAKER_RESET_NOTICE,
   shouldShowMeetSpeakerResetNotice,
@@ -285,14 +289,21 @@ export function BridgeSetupWizard({
   // this an installed Hi-Fi Cable always won, and the wizard sent people into the one Meet setting
   // most of them get wrong, for a path WarpTalk did not need.
   const loopbackCapable = canCaptureBrowserLoopback(status);
-  const inboundPath = selectBridgeInboundSource({
-    loopbackCapable,
-    loopbackFailed,
-    hasInboundDevice: inboundViaDevice,
-    consentAnswer: browserCaptureAnswer,
-    // Which window gets captured is picked in the meeting, not here; it never changes the path.
-    hasLoopbackSource: true,
-  }).path;
+  //
+  // W4a: the FINAL path, not the one of the moment. While the capture question is still open the
+  // meeting listens through an installed cable ("device-while-asking"), but that is a stopgap the
+  // host's yes ends — telling them to point Meet's Speakers at the cable then would be the wrong
+  // setting a minute later. finalBridgeInboundPath reads it as loopback.
+  const inboundPath = finalBridgeInboundPath(
+    selectBridgeInboundSource({
+      loopbackCapable,
+      loopbackFailed,
+      hasInboundDevice: inboundViaDevice,
+      consentAnswer: browserCaptureAnswer,
+      // Which window gets captured is picked in the meeting, not here; it never changes the path.
+      hasLoopbackSource: true,
+    }),
+  );
   // Anything but loopback names the cable: on the device path that is the setting that makes it
   // carry, and where there is no path at all the cable is the only way in — step 1 says to get it.
   const speakerToSet = labels?.meetSpeaker && inboundPath !== "loopback" ? labels.meetSpeaker : null;

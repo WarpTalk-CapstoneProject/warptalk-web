@@ -24,6 +24,7 @@
  */
 
 import type { BridgeInboundSource } from "./bridge-inbound-connection.ts";
+import type { InboundHealth } from "./bridge-inbound-health.ts";
 
 /** Original at full level: nothing is being played over it. */
 export const FAR_SIDE_MONITOR_FULL = 1;
@@ -49,9 +50,25 @@ export function farSideMonitorGain(
   return voiceEnabled ? clampMeetingAudioLevel(underDub) : FAR_SIDE_MONITOR_FULL;
 }
 
-/** Only a device source took the meeting's audio away from the host's own speakers. */
-export function shouldMonitorFarSide(kind: BridgeInboundSource["kind"]): boolean {
-  return kind === "device";
+/**
+ * Whether the far side is played to the host.
+ *
+ * Only a device source took the meeting's audio away from the host's own speakers.
+ *
+ * WT-900: and while the cable is only standing in for an unanswered loopback question
+ * (`device-while-asking`), only once it demonstrably carries Meet. On that path the host may well
+ * have left Meet's Speakers on their headphones — the wizard told loopback users to — and then Meet
+ * is already in their ears; a copy from the cable on top would be the same voice twice. A cable that
+ * is "listening" is proof Meet plays into it and not to the host, so that is when the copy is due.
+ * Called without `inbound` it answers for the source kind alone, as it always did.
+ */
+export function shouldMonitorFarSide(
+  kind: BridgeInboundSource["kind"],
+  inbound?: { reason?: string | null; health?: InboundHealth | null },
+): boolean {
+  if (kind !== "device") return false;
+  if (inbound?.reason === "device-while-asking") return inbound.health === "listening";
+  return true;
 }
 
 /**

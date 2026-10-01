@@ -16,6 +16,7 @@ import {
   availableBridgeTiers,
   canCaptureBrowserLoopback,
   describeLoopbackFailure,
+  finalBridgeInboundPath,
   findBridgeTier,
   isLoopbackFallbackActive,
   selectBridgeInboundSource,
@@ -394,11 +395,51 @@ test("without loopback the device is used, and without either there is nothing",
   );
 });
 
-test("an unanswered consent waits on loopback rather than quietly running on the cable", () => {
-  const decision = selectBridgeInboundSource(inbound({ consentAnswer: null }));
+test("WT-900: an unanswered consent listens through the cable in the meantime", () => {
+  // Waiting on loopback left the far side silent until someone answered — forever, if the popup
+  // was closed without an answer.
+  assert.deepEqual(selectBridgeInboundSource(inbound({ consentAnswer: null })), {
+    path: "device",
+    startable: true,
+    reason: "device-while-asking",
+  });
+  // The cable never stands in for a source the browser capture still needs: no window picked yet
+  // changes nothing while the question is open.
+  assert.equal(
+    selectBridgeInboundSource(inbound({ consentAnswer: null, hasLoopbackSource: false })).reason,
+    "device-while-asking",
+  );
+});
+
+test("an unanswered consent without a cable waits on loopback, and never captures the browser", () => {
+  const decision = selectBridgeInboundSource(
+    inbound({ consentAnswer: null, hasInboundDevice: false }),
+  );
   assert.equal(decision.path, "loopback");
   assert.equal(decision.startable, false, "nothing may capture the browser before a yes");
   assert.equal(decision.reason, "awaiting-consent");
+});
+
+test("WT-900: answering while on the cable moves the leg — yes to loopback, no stays on the cable", () => {
+  const asking = selectBridgeInboundSource(inbound({ consentAnswer: null }));
+  const granted = selectBridgeInboundSource(inbound({ consentAnswer: true }));
+  const declined = selectBridgeInboundSource(inbound({ consentAnswer: false }));
+  assert.equal(asking.path, "device");
+  // A different path is a different capture key, which is what hot-swaps the running capture.
+  assert.deepEqual(granted, { path: "loopback", startable: true, reason: "loopback" });
+  assert.deepEqual(declined, { path: "device", startable: true, reason: "consent-declined" });
+  // And a yes whose loopback then fails lands back on the cable, not on silence.
+  assert.equal(
+    selectBridgeInboundSource(inbound({ consentAnswer: true, loopbackFailed: true })).reason,
+    "loopback-failed",
+  );
+});
+
+test("WT-900: without loopback capability the cable is used and nothing is being asked", () => {
+  assert.equal(
+    selectBridgeInboundSource(inbound({ loopbackCapable: false, consentAnswer: null })).reason,
+    "loopback-unavailable",
+  );
 });
 
 test("a declined consent falls to the cable when there is one, and to nothing when not", () => {
@@ -469,4 +510,30 @@ test("a loopback failure is described by the desktop's risk id and reason when i
   );
   assert.equal(describeLoopbackFailure(new Error("capture failed")), "capture failed");
   assert.equal(describeLoopbackFailure(undefined), "loopback capture could not be started");
+});
+
+test("W4a: the wizard's final path ignores the cable stopgap while the question is open", () => {
+  // device-while-asking is the cable for NOW; the Speakers instruction must name where it settles.
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null }))), "loopback");
+  // Every settled answer is passed through unchanged.
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: true }))), "loopback");
+  assert.equal(finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: false }))), "device");
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null, loopbackFailed: true }))),
+    "device",
+  );
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ loopbackCapable: false }))),
+    "device",
+  );
+  assert.equal(
+    finalBridgeInboundPath(
+      selectBridgeInboundSource(inbound({ loopbackCapable: false, hasInboundDevice: false })),
+    ),
+    null,
+  );
+  assert.equal(
+    finalBridgeInboundPath(selectBridgeInboundSource(inbound({ consentAnswer: null, hasInboundDevice: false }))),
+    "loopback",
+  );
 });

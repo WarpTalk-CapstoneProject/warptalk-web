@@ -56,6 +56,10 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   have to be filed under the same spelling of its name.
   A **recording's** name is the server's, set by `Content-Disposition` on the presigned link, so the
   client sets none.
+- Speaker names in both transcript downloads go through the same `speakerLabels` as the screen
+  (`transcriptSpeakerDisplayName`): a Google Meet bridge line prints the Meet person, or the
+  localized "Google Meet participants", never the stand-in's id or its "External Meeting" seat. Each
+  Meet person is a separate turn. See `transcript-speaker-identity.md`.
 
 ## Files Affected
 

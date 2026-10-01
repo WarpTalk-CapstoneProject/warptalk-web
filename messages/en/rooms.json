@@ -272,5 +272,50 @@
     "subscriptionExpired": "Workspace subscription expired — translation paused. Ask the workspace owner to renew.",
     "suspended": "Translation stopped: this workspace's AI service is suspended. Ask a workspace owner to check billing.",
     "restored": "Translation is available again — the workspace's billing was restored."
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "Connecting to WarpTalk…",
+      "noHost": "WarpTalk isn't running this meeting yet.",
+      "incompatible": "WarpTalk was updated. Reload it to use this here."
+    },
+    "carry": {
+      "asking": "Opening this meeting in WarpTalk…",
+      "failed": "WarpTalk isn't running this meeting, so your language and voice can't be changed from here yet.",
+      "incompatible": "WarpTalk was updated. Reload the WarpTalk window to use these controls.",
+      "show": "Show WarpTalk"
+    },
+    "language": {
+      "connected": "Choose your language"
+    },
+    "listen": {
+      "label": "What you hear",
+      "text": "Text",
+      "voice": "Voice",
+      "textHint": "Text: you read the translation and hear the call as it is.",
+      "voiceHint": "Voice: you hear them translated, with the original quieter underneath."
+    },
+    "devices": {
+      "hint": "Opens device setup in the WarpTalk window"
+    },
+    "startStep": {
+      "title": "Translate this call",
+      "intro": "Pick your language. Everyone else in the call is translated into it for you.",
+      "start": "Start translation",
+      "pickFirst": "Choose your language first",
+      "waitingForHost": "The meeting host or the person capturing this call starts translation.",
+      "continue": "Continue",
+      "started": "Translation started.",
+      "startFailed": "Failed to start translation.",
+      "notCarried": "Translation started, but WarpTalk could not open this meeting.",
+      "notCarriedDescription": "Open it in the WarpTalk window so your voice and the dub are carried."
+    },
+    "takeover": {
+      "notice": "The person capturing this call's audio has left WarpTalk.",
+      "action": "Capture audio on this device",
+      "done": "This device now captures the call's audio.",
+      "failed": "Could not capture the call's audio on this device.",
+      "failedDescription": "Someone may still be capturing it. Check the WarpTalk window for details."
+    }
   }
 }

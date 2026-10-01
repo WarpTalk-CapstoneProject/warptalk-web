@@ -1,6 +1,7 @@
 "use client";
 
 import { useBridgeConsentPrompt } from "@/hooks/use-bridge-consent-prompt";
+import { CABLE_WHILE_ASKING_PROMPT } from "@/lib/audio/browser-capture-consent";
 import { WINDOWS_CAPTURE_CONSENT } from "@/lib/desktop/virtual-audio";
 
 /**
@@ -72,6 +73,39 @@ export function BridgeCaptureConsentPanel({ roomId }: { roomId: string }) {
           Listen to my browser
         </button>
       </p>
+    );
+  }
+
+  if (view.compact) {
+    // WT-900. The far side is already arriving through the cable, so nothing is waiting on this
+    // answer: one line, no frame, no picker (main has already chosen the likeliest browser, and
+    // Switch is offered only for a choice main will honour). Not a prompt that covers the
+    // transcript - the question stays answerable without being in the way.
+    return (
+      <div
+        role="group"
+        aria-label={WINDOWS_CAPTURE_CONSENT.title}
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-ink-muted"
+      >
+        <span className="min-w-0 flex-1">{CABLE_WHILE_ASKING_PROMPT.text}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            disabled={!view.canConfirm}
+            onClick={() => decide(true)}
+            className="h-6 rounded-md bg-primary px-2 text-[11px] font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {CABLE_WHILE_ASKING_PROMPT.confirm}
+          </button>
+          <button
+            type="button"
+            onClick={() => decide(false)}
+            className="h-6 rounded-md border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {CABLE_WHILE_ASKING_PROMPT.decline}
+          </button>
+        </span>
+      </div>
     );
   }
 

@@ -86,6 +86,13 @@ export interface TranslationRoomDto {
   externalMeetingUrl?: string | null;
   externalCalendarEventId?: string | null;
   externalCalendarEventUrl?: string | null;
+  /**
+   * W4b — EXTERNAL_BRIDGE: whose desktop publishes the far side right now (bridge claim). `null` on
+   * a legacy room, where the host holds that authority; absent from an older server.
+   */
+  bridgeCapturerUserId?: string | null;
+  /** W4b — EXTERNAL_BRIDGE: the normalized Google Meet code the room is claimed for, or null. */
+  externalMeetingCode?: string | null;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.

@@ -89,8 +89,22 @@ if (!existsSync(pillPath)) {
         + "re-sends its own language on every reconnect and would undo it.",
     );
   }
-  if (!/useBridgeWidgetRelayClient\(/.test(pill) || !/pickLanguage\(/.test(pill)) {
-    failures.push("dock-language-pill.tsx no longer sends its pick through useBridgeWidgetRelayClient.");
+  // W4b: the pill and the language step share bridge-language-menu.tsx, which owns the relayed pick
+  // (the widget context's relay client → pickLanguage). Either the pill relays itself, or it uses
+  // that hook and the hook relays.
+  const menuPath = join(root, "src/components/rooms/bridge/widget/bridge-language-menu.tsx");
+  const menu = existsSync(menuPath) ? code(menuPath) : "";
+  const pillRelays = /useBridgeWidgetRelayClient\(/.test(pill) && /pickLanguage\(/.test(pill);
+  const pillUsesSharedPick =
+    /\buseBridgeLanguagePick\(/.test(pill) && /\bpickLanguage\(/.test(menu) && /\brelay\b/.test(menu);
+  if (!pillRelays && !pillUsesSharedPick) {
+    failures.push(
+      "dock-language-pill.tsx no longer sends its pick through the relay client "
+        + "(directly, or via useBridgeLanguagePick in bridge-language-menu.tsx).",
+    );
+  }
+  if (/Set(Speak|Listen)Language|\bhub\b[\s\S]{0,40}\.invoke\(/.test(menu)) {
+    failures.push("bridge-language-menu.tsx talks to the hub. A pick must go through the relay.");
   }
 }
 
@@ -124,6 +138,57 @@ for (const file of [...filesUnder("src/components"), ...filesUnder("src/hooks"),
         + "bridgeWidgetRelayChannelName so both windows open the same channel.",
     );
   }
+}
+
+// 5. WT-901 / WT-868: the popup mirrors the meeting and carries what the main window no longer shows.
+//
+//   - Stop and Pause go to the main window only when its snapshot says it understands them
+//     (canRelayStopTranslation / canRelayTranscriptPause): an older main window drops an unknown
+//     intent silently, and the button would spin over a meeting that never changed.
+//   - Errors are the server's words (getErrorMessage), never `error.message` — a refused Start on an
+//     out-of-credits workspace read "Request failed with status code 403" (WT-699).
+//   - The idle reaper's "Rejoin meeting", the credits stop and the meeting error are drawn, and
+//     "Device settings" asks the main window for its wizard — the main window's own bridge widget,
+//     which used to carry all four, is going away.
+const widgetDir = "src/components/rooms/bridge/widget";
+function widgetCode(file) {
+  const full = join(root, widgetDir, file);
+  return existsSync(full) ? code(full) : null;
+}
+const dockCode = widgetCode("dock-session-controls.tsx");
+if (dockCode === null) {
+  failures.push(`${widgetDir}/dock-session-controls.tsx is missing.`);
+} else {
+  if (!/canRelayStopTranslation\(/.test(dockCode) || !/\.stopTranslation\(\)/.test(dockCode)) {
+    failures.push("dock-session-controls.tsx no longer sends Stop through the relay when the main window can take it.");
+  }
+  if (!/canRelayTranscriptPause\(/.test(dockCode) || !/\.setTranscriptPaused\(/.test(dockCode)) {
+    failures.push("dock-session-controls.tsx no longer sends Pause/Resume through the relay when the main window can take it.");
+  }
+  if (/\berror\.message\b/.test(dockCode) || !/getErrorMessage\(/.test(dockCode)) {
+    failures.push(
+      "dock-session-controls.tsx shows `error.message`. Use getErrorMessage so a refused Start says why "
+        + "(out of credits) rather than \"Request failed with status code 403\".",
+    );
+  }
+}
+const noticesCode = widgetCode("meeting-notices.tsx");
+const shellCode = widgetCode("widget-shell.tsx") ?? "";
+if (noticesCode === null || !/<MeetingNotices\b/.test(shellCode)) {
+  failures.push("the widget shell no longer renders MeetingNotices (credits stop, meeting error, Rejoin meeting).");
+} else if (!/\.rejoin\(\)/.test(noticesCode) || !/translationSuspendedNotice\(/.test(noticesCode)) {
+  failures.push("meeting-notices.tsx no longer offers Rejoin meeting or words the credits stop with translationSuspendedNotice.");
+}
+const flyoutCode = widgetCode("settings-flyout.tsx");
+if (flyoutCode !== null && !/\.openSetup\(\)/.test(flyoutCode)) {
+  failures.push("settings-flyout.tsx no longer offers Device settings (relay open-setup).");
+}
+const paneCode = widgetCode("transcript-pane.tsx");
+if (paneCode !== null && !/Translation hasn't started/.test(paneCode)) {
+  failures.push(
+    "transcript-pane.tsx no longer says when translation has not started; an empty popup would again "
+      + "tell the user to wait for speech that will never be translated.",
+  );
 }
 
 if (failures.length) {

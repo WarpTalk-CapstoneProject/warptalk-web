@@ -14,6 +14,10 @@
  * WHAT IS HERE, AND WHAT IS NOT
  *   Mic noise filter ›   the caller's own STT denoising (settings/mic-noise-filter-panel.tsx)
  *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx)
+ *   Device settings      opens the bridge setup wizard IN THE MAIN WINDOW (relay `open-setup`).
+ *                        WT-868 removes the main window's own bridge widget, which was the only
+ *                        way back into the wizard after the first device check; this is now that
+ *                        way. Disabled, saying why, with no main window to ask.
  *   Flash mode           room speed; the host flips it, everyone else reads it
  *
  *   Not "Noise suppression": in a bridge room nobody hears the raw mic, so Krisp only affects
@@ -28,8 +32,15 @@
  */
 
 import { useEffect, useId, useRef, useState } from "react";
-import { GearSix, Lightning, Microphone, SpeakerHigh } from "@phosphor-icons/react/dist/ssr";
+import {
+  GearSix,
+  Lightning,
+  Microphone,
+  SlidersHorizontal,
+  SpeakerHigh,
+} from "@phosphor-icons/react/dist/ssr";
 import { AnimatePresence, motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { noiseReductionLabel } from "@/lib/meeting/noise-reduction";
 import { cn } from "@/lib/utils";
@@ -46,7 +57,8 @@ type SettingsSection = "root" | "microphone" | "voice";
 const FLYOUT_LABEL = "Voice & translation settings";
 
 export function SettingsFlyout() {
-  const { roomId, isHost } = useBridgeWidget();
+  const tWidget = useTranslations("rooms.bridgeWidget");
+  const { roomId, isHost, relay, relayConnected } = useBridgeWidget();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("root");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,6 +176,15 @@ export function SettingsFlyout() {
                   icon={<SpeakerHigh className="h-4 w-4" />}
                   onClick={() => setSection("voice")}
                   hasSubmenu
+                />
+                <SettingsRow
+                  label="Device settings"
+                  icon={<SlidersHorizontal className="h-4 w-4" />}
+                  disabled={!relayConnected}
+                  hint={relayConnected ? tWidget("devices.hint") : tWidget("relay.noHost")}
+                  onClick={() => {
+                    if (relay.openSetup()) close();
+                  }}
                 />
                 {/* Apart from the rows above, with its own heading, as in the meeting: those are
                     about this user; this one changes the room for everybody in it. */}

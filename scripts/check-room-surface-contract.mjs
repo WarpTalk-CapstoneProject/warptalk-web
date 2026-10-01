@@ -624,6 +624,20 @@ for (const locale of ["en", "vi", "ja"]) {
   );
 }
 
+// WT-868: a bridge room is run from the desktop popup, never in-app: /live turns it away to its
+// room page, and the room page's Start/Join hands it to the popup.
+const livePage = stripComments(read("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"));
+assert.match(
+  livePage,
+  /if \(isExternalBridge\(room\.translationRoomType\)\) \{[\s\S]*?router\.replace\(`\/\$\{workspaceSlug\}\/rooms\/\$\{roomId\}`\);[\s\S]*?openDesktopTranscriptWindow\(roomId\)[\s\S]*?return;[\s\S]*?\}[\s\S]*?openMeeting\(roomId\)/,
+  "/live must send an External Meeting to its room page and ask for the desktop popup, before ever opening it in-app (WT-868).",
+);
+assert.match(
+  roomDetail,
+  /isExternalBridge\(room\.translationRoomType\)[\s\S]{0,200}openDesktopTranscriptWindow\(room\.id\)/,
+  "The room page's Start/Join must hand an External Meeting to the desktop popup (WT-868).",
+);
+
 console.log(
   "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330, no External Meeting in create): PASS",
 );
