@@ -3399,18 +3399,18 @@ export function PersistentMeetingSession({
   }
 
   async function handleExit(action: "leave" | "end") {
-    // Displaced: this account is still in the meeting on the other device, and the leave is keyed
-    // by user, so sending it would take THAT session out. Closing this window is the whole leave.
-    if (action === "leave" && sessionDisplacedRef.current) {
-      onMeetingClosed();
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
-      return;
-    }
     // Single-flight: an exit already under way owns the redirect and the toast; a second call
     // (another press, or the end dialog racing the leave menu) is ignored until it settles.
     if (exitInFlightRef.current) return;
     exitInFlightRef.current = true;
     try {
+      // Displaced: this account is still in the meeting on the other device, and the leave is
+      // keyed by user, so sending it would take THAT session out. Closing this window is all of it.
+      if (action === "leave" && sessionDisplacedRef.current) {
+        onMeetingClosed();
+        router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+        return;
+      }
       if (action === "end") {
         // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
         // Redis inside EndTranslationRoomAsync, so the TranslationRoomEnded broadcast can reach
