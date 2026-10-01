@@ -54,6 +54,32 @@ export function shouldMonitorFarSide(kind: BridgeInboundSource["kind"]): boolean
   return kind === "device";
 }
 
+/**
+ * Said once per room to a host whose meeting now listens to the browser but who still has Hi-Fi
+ * Cable installed (WT-898 review).
+ *
+ * Before WT-898 the wizard told every Hi-Fi user to set Meet's Speakers to "Hi-Fi Cable Input",
+ * and WarpTalk played the call back to them through the monitor above. Loopback now wins wherever
+ * it can run, and the monitor only runs on the device path — so a host who followed the old advice
+ * has Meet rendering into a cable nobody plays back, and hears nothing at all. Per-process loopback
+ * may in theory still pick up Meet's render stream on any endpoint, but the host's ears are not
+ * worth that bet. WarpTalk cannot see or change Meet's speaker choice, so all it can do is say so.
+ */
+export const MEET_SPEAKER_RESET_NOTICE =
+  "If you set Google Meet's Speakers to Hi-Fi Cable Input before, set them back to your headphones or speakers — WarpTalk now listens to the browser directly.";
+
+/**
+ * Whether that notice applies: listening to the browser, with the cable the old advice named still
+ * installed. Without the cable the old advice could never have been followed, so there is nothing
+ * to undo; on the device path the monitor plays the call back and the old advice is still right.
+ */
+export function shouldShowMeetSpeakerResetNotice(
+  inboundPath: "device" | "loopback" | null,
+  hasInboundDevice: boolean,
+): boolean {
+  return inboundPath === "loopback" && hasInboundDevice;
+}
+
 export interface FarSideMonitor {
   setGain: (gain: number) => void;
   /** Releases the audio graph. Never stops the track, which the publisher owns. Safe to repeat. */

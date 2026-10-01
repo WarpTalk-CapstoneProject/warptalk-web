@@ -198,11 +198,36 @@ export interface BridgeCheckResult {
   labels?: BridgeDeviceLabels;
 }
 
+/**
+ * Chromium lists two pseudo-devices per kind ahead of the real ones: `default` and, on Windows,
+ * `communications`. Their labels are the real device's label with a prefix ("Default - Hi-Fi
+ * Cable Output (VB-Audio …)"), so a substring match lands on them FIRST. Capturing "default" then
+ * follows whatever the OS default happens to be at that moment — the physical mic the next time
+ * the user plugs in a headset — rather than the cable the bridge was set up on. Only concrete ids
+ * pin the leg to the device the label named.
+ */
+const PSEUDO_DEVICE_IDS = new Set(["default", "communications"]);
+
 function findDeviceId(devices: MediaDeviceInfo[], label: string, kind: MediaDeviceKind): string | null {
   const match = devices.find(
-    (device) => device.kind === kind && device.label.toLowerCase().includes(label.toLowerCase()),
+    (device) =>
+      device.kind === kind &&
+      !PSEUDO_DEVICE_IDS.has(device.deviceId) &&
+      device.label.toLowerCase().includes(label.toLowerCase()),
   );
   return match?.deviceId ?? null;
+}
+
+export interface BridgeDeviceIds {
+  outboundDeviceId: string | null;
+  inboundDeviceId: string | null;
+  /**
+   * Every label came back empty, which is what the browser does before microphone permission has
+   * been granted — NOT evidence that a device is missing. Both ids are null in that case, and a
+   * caller that told the user "CABLE Input is not installed" would be sending them to reinstall a
+   * driver that is sitting right there. Callers wait for permission and look again.
+   */
+  needsPermission: boolean;
 }
 
 /**
@@ -210,8 +235,9 @@ function findDeviceId(devices: MediaDeviceInfo[], label: string, kind: MediaDevi
  *
  * Separate from `checkVirtualBridge` because the two answer different questions and cost very
  * different amounts. This one only reads the device list — cheap enough to run on entering a
- * room. The check plays a tone through each device and listens for it, which takes about a
- * second per leg and holds the devices open, so it belongs to the setup wizard.
+ * room, and again every time the device list or the microphone permission changes. The check
+ * plays a tone through each device and listens for it, which takes about a second per leg and
+ * holds the devices open, so it belongs to the setup wizard.
  *
  * A caller that only needs to ROUTE audio wants this one: routing to a device that is present but
  * silently not carrying is a wizard problem to diagnose, not a reason to refuse to route.
@@ -220,14 +246,16 @@ function findDeviceId(devices: MediaDeviceInfo[], label: string, kind: MediaDevi
  * WarpTalk plays INTO, so it is looked up as an output; the device Meet uses as its SPEAKER is
  * something WarpTalk records FROM, so it is looked up as an input.
  */
-export async function findBridgeDeviceIds(): Promise<{
-  outboundDeviceId: string | null;
-  inboundDeviceId: string | null;
-}> {
+export async function findBridgeDeviceIds(): Promise<BridgeDeviceIds> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
-    return { outboundDeviceId: null, inboundDeviceId: null };
+    return { outboundDeviceId: null, inboundDeviceId: null, needsPermission: false };
   }
   const devices = await navigator.mediaDevices.enumerateDevices();
+  // Same test `checkVirtualBridge` uses. An empty list is not a permission problem — there is
+  // nothing to label — so it falls through to "not found" like any other absence.
+  if (devices.length > 0 && devices.every((device) => device.label === "")) {
+    return { outboundDeviceId: null, inboundDeviceId: null, needsPermission: true };
+  }
   const labels = resolveBridgeDeviceLabels(
     currentBridgeDeviceLabels(),
     devices.map((device) => device.label),
@@ -237,6 +265,7 @@ export async function findBridgeDeviceIds(): Promise<{
     inboundDeviceId: labels.inboundCapture
       ? findDeviceId(devices, labels.inboundCapture, "audioinput")
       : null,
+    needsPermission: false,
   };
 }
 
