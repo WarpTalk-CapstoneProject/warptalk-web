@@ -31,6 +31,78 @@ export function canJoinTranslationRoom(
 }
 
 /**
+ * WT-715: a room's setup (meeting languages, room notes, the title and its edit dialog, the repeat
+ * rule) may only change before the meeting starts. The backend's
+ * `PUT /translation-rooms/{id}/settings` refuses anything else with ErrorSettingsLocked, so offering
+ * those controls on a live or finished room only produced a save the server turned down.
+ *
+ * `open` (WT-612) is included: the backend keeps the settings window open until the meeting
+ * actually starts, and an OPEN room has no session, transcript or artifacts to contradict.
+ *
+ * A positive allowlist on purpose: a status this build does not know is not editable.
+ */
+const SETUP_EDITABLE_ROOM_STATUSES: ReadonlySet<string> = new Set([
+  "scheduled",
+  "waiting",
+  "open",
+]);
+
+/**
+ * WT-715: the statuses the backend's End action accepts (EndableStatuses: IN_PROGRESS, PAUSED,
+ * WAITING, OPEN). An allowlist, not "not over yet": a SCHEDULED room cannot be ended.
+ */
+const ENDABLE_ROOM_STATUSES: ReadonlySet<string> = new Set([
+  "waiting",
+  "open",
+  "in_progress",
+  "paused",
+]);
+
+/** The least a room has to carry for the host rules below. */
+export type RoomHostFacts = {
+  status: TranslationRoomStatus | string;
+  hostId?: string | null;
+  /** The server's own answer for this viewer (the effective host, after any transfer). */
+  isHost?: boolean | null;
+};
+
+type RoomViewer = { id?: string | null } | null | undefined;
+
+function normalizedRoomStatus(status: string | null | undefined): string {
+  return (status ?? "").toLowerCase();
+}
+
+/**
+ * WT-715: one host rule for the room detail page.
+ *
+ * The page had two. `isHost` accepted the server's `room.isHost`, while `canEditRoom` compared
+ * only `room.hostId` with the viewer, so someone the server marks as host (the room was handed to
+ * them) got the notes editor but no edit pencil and no "Stop repeating". Either signal makes the
+ * viewer the host here, which is what the page's broader rule already said.
+ */
+export function isRoomHost(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  if (room.isHost) return true;
+  const viewerId = viewer?.id;
+  return Boolean(viewerId) && room.hostId === viewerId;
+}
+
+/** WT-715: the host, on a room that has not started: the only case the settings endpoint accepts. */
+export function canEditRoomSetup(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  return (
+    isRoomHost(room, viewer) &&
+    SETUP_EDITABLE_ROOM_STATUSES.has(normalizedRoomStatus(room.status))
+  );
+}
+
+/** WT-715: the host, on a room in a status the backend's End action accepts. */
+export function canEndRoom(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  return (
+    isRoomHost(room, viewer) &&
+    ENDABLE_ROOM_STATUSES.has(normalizedRoomStatus(room.status))
+  );
+}
+
+/**
  * Whether entering this room means entering the lobby rather than the live call (WT-232).
  *
  * A room only carries live audio once the host starts it. Before that the room detail page
