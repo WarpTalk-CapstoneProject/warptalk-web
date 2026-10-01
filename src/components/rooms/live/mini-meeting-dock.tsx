@@ -28,10 +28,17 @@ const DEFAULT_SIZE: DockSize = { width: 232, height: 388 };
  */
 export function MiniMeetingDock({
   floating,
+  headless = false,
   children,
 }: {
   /** False while the live room route owns the screen: the session fills its container instead. */
   floating: boolean;
+  /**
+   * W4a: an EXTERNAL_BRIDGE meeting, which draws nothing in this window — the popup over Google
+   * Meet is its only UI (WT-868). The SAME element stays mounted, only hidden, so the session inside
+   * keeps its LiveKit connection; its dialogs portal out to <body> and still show.
+   */
+  headless?: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations("common.miniMeetingDock");
@@ -156,11 +163,15 @@ export function MiniMeetingDock({
   // full-screen stage as two branches of a ternary looks equivalent and is not: React would
   // unmount the session on every navigation into or out of the room, tearing down the LiveKit
   // connection that this whole component tree exists to keep alive across routes.
+  // Headless is the same element, hidden: a different element here would remount the session.
+  const framed = floating && !headless;
   return (
     <div
-      onPointerDown={floating ? handlePointerDown : undefined}
+      data-mini-meeting-headless={headless ? "" : undefined}
+      hidden={headless}
+      onPointerDown={framed ? handlePointerDown : undefined}
       style={
-        floating
+        framed
           ? {
               width: size.width,
               height: size.height,
@@ -173,13 +184,15 @@ export function MiniMeetingDock({
           : undefined
       }
       className={
-        floating
+        headless
+          ? "hidden"
+          : floating
           ? "fixed z-[70] overflow-hidden rounded-[20px] border border-white/70 bg-surface-1 shadow-[0_24px_70px_rgba(15,23,42,0.28)] ring-1 ring-black/5"
           : "absolute inset-0 z-30"
       }
     >
       {children}
-      {floating ? (
+      {framed ? (
         <div
           data-mini-resize
           role="separator"

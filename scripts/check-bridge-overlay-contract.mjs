@@ -342,18 +342,34 @@ if (!read(WIZARD)) {
  *
  * Opening it once when a device is missing is not enough. Devices are taken away mid-call by
  * reboots and by other apps grabbing the driver, and a user who dismissed the dialog has no second
- * chance unless something on the widget offers one.
+ * chance unless something offers one.
+ *
+ * W4a: that something is the popup's "Device settings" row now. The main window's own bridge widget
+ * (ExternalBridgeWidget) is gone — the popup is the only bridge UI — so the row sends `open-setup`
+ * over the relay and the meeting session opens the wizard in its own window and brings that window
+ * up (it sits behind Google Meet; a dialog opened there unannounced is a dialog nobody sees).
  */
-const WIDGET = "src/components/rooms/live/external-bridge-widget.tsx";
-const widget = read(WIDGET);
-if (!widget) {
-  failures.push(`${WIDGET} is missing; it is the whole WarpTalk UI during an external-bridge call.`);
-} else if (!/\bonOpenDeviceSetup\b/.test(widget)) {
+const SESSION_FILE = "src/components/rooms/live/persistent-meeting-session.tsx";
+const sessionCode = stripComments(read(SESSION_FILE) ?? "");
+if (read("src/components/rooms/live/external-bridge-widget.tsx") !== null) {
   failures.push(
-    `${WIDGET} has no onOpenDeviceSetup. The wizard would then be reachable only at the moment the `
-      + `device check first fails — and a device that drops mid-meeting, which is the common case, `
-      + `would leave the user with a widget reporting "not ready" and nothing to press.`,
+    "src/components/rooms/live/external-bridge-widget.tsx exists again. The popup over Meet is the only "
+      + "bridge widget (WT-868); the main window runs a bridge meeting headless.",
   );
+}
+if (/<ExternalBridgeWidget\b/.test(sessionCode)) {
+  failures.push(`${SESSION_FILE} renders <ExternalBridgeWidget>. The popup is the only bridge widget (WT-868).`);
+}
+if (!/onOpenSetup:\s*\(\)\s*=>\s*\{[^}]*setBridgeSetupOpen\(true\)[^}]*showDesktopMainWindow\(\)/.test(sessionCode)) {
+  failures.push(
+    `${SESSION_FILE} does not answer the popup's open-setup with the wizard AND the main window brought up `
+      + `(onOpenSetup: setBridgeSetupOpen(true) + showDesktopMainWindow()). Without it a device that `
+      + `drops mid-meeting leaves the user with nothing to press.`,
+  );
+}
+if (!widgetFiles.concat(`${WIDGET_DIR}/settings/use-bridge-widget-relay-client.ts`)
+  .some((file) => /["']open-setup["']/.test(stripComments(read(file) ?? "")))) {
+  failures.push(`Nothing under ${WIDGET_DIR} sends open-setup: the popup has no way back into the wizard.`);
 }
 
 /**
@@ -399,7 +415,6 @@ for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
   [CONTROLS, controls],
   [WIZARD, read(WIZARD)],
-  [WIDGET, widget],
   ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;

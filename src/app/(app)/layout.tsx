@@ -37,7 +37,11 @@ import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { adminPageLabelKey } from "@/lib/admin/admin-page-title";
-import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
+import {
+  isLiveMeetingPath,
+  isWorkspaceActivationPath,
+  roomDetailPath,
+} from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { useOnboardingStore } from "@/stores/onboarding-store";
@@ -56,7 +60,8 @@ import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
 import { useBridgeAutoRoom } from "@/hooks/use-bridge-auto-room";
-import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
+import { onBridgeRoomActivated, showDesktopMainWindow } from "@/lib/desktop/bridge";
+import { useBridgeEndedRelayHost } from "@/hooks/use-bridge-ended-relay-host";
 import { extractMeetCodeFromUrl, type TriggerMeeting } from "@/lib/meeting/bridge-trigger";
 import {
   preferRememberedWorkspace,
@@ -337,6 +342,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     activeBridgeRoomQuery.data && isExternalBridge(activeBridgeRoomQuery.data.translationRoomType)
       ? activeBridgeRoomQuery.data.id
       : null;
+  // W4a: the meeting this window runs is an external bridge, which draws no UI here (WT-868).
+  const activeMeetingIsBridge = activeBridgeRoomId !== null;
   const activeBridgeSessionsQuery = useTranslationRoomSessions(
     activeBridgeRoomId ?? "",
     activeBridgeRoomId !== null,
@@ -399,6 +406,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const stop = onBridgeRoomActivated((roomId) => openMeeting(roomId));
     return stop ?? undefined;
   }, [openMeeting]);
+
+  /**
+   * W4a: after a bridge meeting ENDS, the shell keeps answering its popup.
+   *
+   * The session that ran the room unmounts as the room ends (and says host-gone as it goes), but the
+   * popup over Google Meet is still on screen, showing EndedView, whose "Open meeting record" asks
+   * the main window over the relay — the one window signed in to WarpTalk. So the session hands the
+   * room over (`onBridgeMeetingEnded`) and the shell answers on it from then on: the room's
+   * record here, and this window brought to the front. Never for the room this window is running —
+   * that one has its own host in the session.
+   */
+  const [endedBridgeRoomId, setEndedBridgeRoomId] = useState<string | null>(null);
+  useBridgeEndedRelayHost({
+    roomId: endedBridgeRoomId && endedBridgeRoomId !== activeMeetingRoomId ? endedBridgeRoomId : null,
+    onOpenRoomRecord: (endedRoomId) => {
+      router.push(roomDetailPath(activeWorkspaceSlug || "workspace", endedRoomId));
+      void showDesktopMainWindow();
+    },
+  });
 
   // Starts the token's refresh timer for a session that was already in place on load.
   //
@@ -792,13 +818,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               // tears down the LiveKit connection this whole arrangement exists to preserve.
               // The dock owns the floating position now — it used to be pinned to the
               // bottom-right, which is exactly where the chat launcher and the toasts live.
-              <MiniMeetingDock floating={meetingWidgetFloating}>
+              // W4a: an external bridge draws nothing here — the popup over Google Meet is its only
+              // UI — so its dock is headless: the same element, hidden, the session still mounted.
+              <MiniMeetingDock floating={meetingWidgetFloating} headless={activeMeetingIsBridge}>
                 <PersistentMeetingSession
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
                   compact={meetingWidgetFloating}
                   meetSensor={meetSensor}
                   onMeetingClosed={closeMeeting}
+                  onBridgeMeetingEnded={setEndedBridgeRoomId}
                 />
               </MiniMeetingDock>
             ) : null}

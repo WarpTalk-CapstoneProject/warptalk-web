@@ -116,7 +116,6 @@ import {
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { MeetingReadyCard } from "@/components/rooms/live/meeting-ready-card";
 import { consumeInstantMeetingStart } from "@/lib/meeting/instant-meeting-handoff";
-import { ExternalBridgeWidget } from "@/components/rooms/live/external-bridge-widget";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { findBridgeDeviceIds, currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
@@ -127,7 +126,6 @@ import {
   clampMeetingAudioLevel,
   farSideMonitorGain,
   shouldMonitorFarSide,
-  shouldShowMeetSpeakerResetNotice,
   startFarSideMonitor,
   type FarSideMonitor,
 } from "@/lib/audio/bridge-far-side-monitor";
@@ -140,6 +138,7 @@ import {
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
+import { bridgeMeetingConnection } from "@/lib/meeting/bridge-meeting-connection";
 import {
   browserCaptureAnswerStorage,
   browserCaptureConsentState,
@@ -156,6 +155,7 @@ import {
   listWindowsLoopbackSources,
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
+  showDesktopMainWindow,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
 import { bridgeConsentSurface, isCompactConsentAsk } from "@/lib/meeting/bridge-capture-consent-relay";
@@ -285,6 +285,7 @@ export function PersistentMeetingSession({
   compact,
   meetSensor = null,
   onMeetingClosed,
+  onBridgeMeetingEnded,
 }: {
   roomId: string;
   compact: boolean;
@@ -294,6 +295,12 @@ export function PersistentMeetingSession({
    */
   meetSensor?: MeetSensorReading | null;
   onMeetingClosed: () => void;
+  /**
+   * W4a: an EXTERNAL_BRIDGE room ended while this session ran it. Called just before
+   * `onMeetingClosed`, so the app shell can keep answering the popup on this room once the session
+   * (and its relay host) is gone — see use-bridge-ended-relay-host.
+   */
+  onBridgeMeetingEnded?: (roomId: string) => void;
 }) {
   const router = useRouter();
   const activeWorkspaceSlug = useWorkspaceStore(
@@ -624,6 +631,15 @@ export function PersistentMeetingSession({
   const localMediaControlRef = useRef<LocalMediaControl | null>(null);
 
   const [meetingError, setMeetingError] = useState<string | null>(null);
+  // W4a: the popup is the only bridge UI (WT-868), so these two facts, which the main window only
+  // ever said with a toast or a status line, are mirrored to it over the relay.
+  //   - LiveKit's own Connected / Disconnected, for the popup's connection note;
+  //   - the WT-699 credits stop: null until the hub has said either way.
+  const [liveKitConnected, setLiveKitConnected] = useState(false);
+  const [creditsSuspension, setCreditsSuspension] = useState<{
+    suspended: boolean;
+    reason: string | null;
+  } | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
   // "Your meeting's ready": shown only to whoever just started an instant meeting in this tab,
@@ -1653,10 +1669,26 @@ export function PersistentMeetingSession({
     hasRoom: Boolean(roomQuery.data),
     canConnectRoom: canConnectMeeting,
   });
+  // W4a: whether this session has held a live room. A bridge room seen ENDED by a refetch after
+  // that — the TranslationRoomEnded broadcast missed while the hub was reconnecting — ended in
+  // front of us and lands where the broadcast would have sent it; a room restored already ended
+  // (a reload, the next day) is still retired silently, as above.
+  const heldLiveRoomRef = useRef(false);
+  // Filled in below the relay host, whose announceEnded it calls.
+  const handOffEndedBridgeRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (canConnectMeeting && meetingSession?.token) heldLiveRoomRef.current = true;
+  }, [canConnectMeeting, meetingSession?.token]);
   useEffect(() => {
     if (!meetingRoomIsGone) return;
+    if (isBridgeRoom && roomQuery.data?.status === "ended" && heldLiveRoomRef.current) {
+      handOffEndedBridgeRef.current();
+      onMeetingClosed();
+      router.replace(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+      return;
+    }
     onMeetingClosed();
-  }, [meetingRoomIsGone, onMeetingClosed]);
+  }, [meetingRoomIsGone, onMeetingClosed, isBridgeRoom, roomQuery.data?.status, router, activeWorkspaceSlug, roomId]);
 
   const displayName =
     savedJoinConfig.displayName ||
@@ -2612,7 +2644,12 @@ export function PersistentMeetingSession({
   // WT-525: the popup over Google Meet changes this meeting only through here. It sends intents;
   // these are the same handlers the control bar calls, and the snapshot is what this window holds.
   // See lib/meeting/bridge-widget-relay for why the popup may not change any of it itself.
-  useBridgeWidgetRelayHost({
+  //
+  // W4a: and the meeting itself (WT-901), now that the popup is the only bridge UI. Every control
+  // the popup offers is dispatched to the handler the native meeting uses for it — stop, the WT-605
+  // transcript pause, rejoin after the idle reaper, the device wizard, the room's record — so the
+  // host check, the toasts and the wizard are the native ones.
+  const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
     enabled: isBridgeRoom,
     // "auto" is not a language the popup can show, and a snapshot carrying it is rejected whole.
@@ -2641,6 +2678,61 @@ export function PersistentMeetingSession({
     onSetDubVoice: handleChangeDubVoice,
     onSetVoiceCloneConsent: handleChangeVoiceCloneConsent,
     onSetMeetingAudioLevel: (level) => setFarSideMonitorLevel(clampMeetingAudioLevel(level)),
+    translation: { started: translationStarted },
+    // WT-605: the same resolved state the Transcript panel draws (CC keeps running; only the
+    // written transcript is paused). Not the AI workers' `_paused_rooms`, which is a ROOM pause.
+    transcriptPause,
+    creditsSuspended: creditsSuspension?.suspended,
+    creditsSuspendedReason: creditsSuspension?.reason ?? null,
+    meetingError,
+    idleReaped: meetingIsIdleReaped,
+    connection: bridgeMeetingConnection({
+      hasToken: Boolean(meetingSession?.token),
+      canConnectRoom: canConnectMeeting,
+      idleReaped: meetingIsIdleReaped,
+      reconnecting: isReconnecting,
+      connected: liveKitConnected,
+    }),
+    isRoomHost,
+    // The native Stop, host-only as the native panel offers it (`isRoomHost ? handleStopWarptalk`).
+    // Absent for anybody else, and the hook then answers the popup with a snapshot instead.
+    onStopTranslation: isRoomHost ? handleStopWarptalk : undefined,
+    // commitTranscriptPause, not handleToggleTranscriptPause: the popup has already asked "are you
+    // sure" before a pause, and the native confirmation would be a second one, in a window the
+    // host is not looking at. Host-only, as the panel's switch is (TranscriptRecordingService 403s
+    // anybody else).
+    onSetTranscriptPaused: isRoomHost ? (paused) => commitTranscriptPause(paused) : undefined,
+    // The idle reaper's way back, exactly as the reaped compact view's Rejoin does it.
+    onRejoin: () => {
+      markMeetingInteraction();
+      setIdleDisconnected(false);
+    },
+    // The device wizard (WT-578) is a dialog in THIS window, which sits behind Google Meet: bring
+    // the window up with it, or the popup's "Device settings" opens something nobody can see.
+    onOpenSetup: () => {
+      setBridgeSetupOpen(true);
+      void showDesktopMainWindow();
+    },
+    // While the meeting still runs: the room's page in this window, with the meeting kept going
+    // underneath it (the session is mounted by the shell, not by the page).
+    onOpenRoomRecord: () => {
+      router.push(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+      void showDesktopMainWindow();
+    },
+  });
+
+  // W4a: what a bridge session does as its room ENDS (the Google Meet conference ended and
+  // MeetConferenceEndWorker closed the room). Read through a ref by the hub handler, which is
+  // registered once per connection. The navigation itself stays where the native one is.
+  useEffect(() => {
+    handOffEndedBridgeRef.current = () => {
+      if (!isBridgeRoom) return;
+      // Before the unmount: the popup hears "ended" now, and then the shell's ended host.
+      announceBridgeRoomEnded();
+      onBridgeMeetingEnded?.(roomId);
+      // The room's record is about to be on screen in a window that sits behind Meet.
+      void showDesktopMainWindow();
+    };
   });
 
   useEffect(() => {
@@ -2696,12 +2788,14 @@ export function PersistentMeetingSession({
     // translation_worker has stopped translating this room. Said to everyone — every listener
     // loses their dub, not just the host — and in words that name the actual reason.
     connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
+      setCreditsSuspension({ suspended: true, reason: reason || null });
       toast.error(translationSuspendedNotice(reason, translateCreditsNoticeRef.current), {
         duration: 15000,
       });
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     connection.on("TranslationCreditsRestored", () => {
+      setCreditsSuspension({ suspended: false, reason: null });
       toast.success(translationRestoredNotice(translateCreditsNoticeRef.current));
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
@@ -2799,6 +2893,9 @@ export function PersistentMeetingSession({
       // navigation happened to resolve second.
       if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
+      // W4a: a bridge room tells its popup (EndedView), hands the room to the shell's ended host
+      // and brings this window up. A no-op for every other room.
+      handOffEndedBridgeRef.current();
       onMeetingClosed();
       // WT-449: the same place the host lands, not the rooms list.
       //
@@ -3795,7 +3892,11 @@ export function PersistentMeetingSession({
         // "Waiting for LiveKit" with no message and no retry, indistinguishable from a slow
         // join. This is the wire that was missing.
         onError={(error) => setMeetingError(describeLiveKitError(error))}
-        onConnected={() => setMeetingError(null)}
+        onConnected={() => {
+          setMeetingError(null);
+          setLiveKitConnected(true);
+        }}
+        onDisconnected={() => setLiveKitConnected(false)}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-1 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
@@ -3849,32 +3950,11 @@ export function PersistentMeetingSession({
             screen. Consent is a moment, not a permanent state: people are told once, by toast,
             when recording starts, and the badge is the standing reminder. */}
 
-        {isBridgeRoom ? (
-          <ExternalBridgeWidget
-            room={room}
-            isHost={isRoomHost}
-            isConnecting={isMeetingJoining || !meetingSession}
-            meetingError={meetingError}
-            microphoneEnabled={microphoneEnabled}
-            translationStarted={translationStarted}
-            bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
-            inboundPath={bridgeInboundPath}
-            inboundHealth={inboundHealth}
-            meetSpeakerResetNotice={
-              isHost && shouldShowMeetSpeakerResetNotice(bridgeInboundPath, Boolean(bridgeInboundDeviceId))
-            }
-            idleDisconnected={meetingIsIdleReaped}
-            onRejoin={() => {
-              markMeetingInteraction();
-              setIdleDisconnected(false);
-            }}
-            onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
-            onStartTranslation={() => void handleStartWarptalk()}
-            onStopTranslation={handleStopWarptalk}
-            onOpenDeviceSetup={() => setBridgeSetupOpen(true)}
-            onExit={handleExit}
-          />
-        ) : compact ? (
+        {/* An EXTERNAL_BRIDGE meeting draws nothing here (WT-868, W4a). It runs headless in this window
+            — LiveKit, the dub, both bridge legs — and the popup over Google Meet is its only UI,
+            reached through the relay host above. The shell hides the dock around it; the device
+            wizard and the consent fallback below are dialogs and still open from here. */}
+        {isBridgeRoom ? null : compact ? (
           // The whole window drags, not just a strip across the top. That strip existed
           // because it had to: it was the only thing carrying [data-mini-drag-handle], so it
           // could never be hidden or the window could never be moved again. The dock now

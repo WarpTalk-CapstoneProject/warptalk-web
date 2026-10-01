@@ -53,7 +53,7 @@
  *                                                 inboundHealth?, translation?, transcriptPause?,
  *                                                 creditsSuspended?, creditsSuspendedReason?,
  *                                                 meetingError?, idleReaped?, connection?,
- *                                                 isRoomHost?, at }
+ *                                                 isRoomHost?, roomEnded?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -175,6 +175,13 @@ export type BridgeWidgetSnapshot = {
    * else, workspace owners included.
    */
   isRoomHost?: boolean;
+  /**
+   * W4a: the room has ENDED (the Meet conference ended, MeetConferenceEndWorker closed the room)
+   * and the main window has moved to the room's record. Said once by the meeting as it closes, and
+   * then by the app shell, which keeps answering on this room so "Open meeting record" still
+   * reaches a window that is signed in. Only `true` is ever sent; absent means "not said".
+   */
+  roomEnded?: boolean;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -332,6 +339,9 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
     snapshot.connection = raw.connection as BridgeWidgetMeetingConnection;
   }
   if (typeof raw.isRoomHost === "boolean") snapshot.isRoomHost = raw.isRoomHost;
+  // Only `true` means anything: "not ended" is what every other snapshot already says by saying
+  // nothing, and a `false` from another window must not un-end a room the REST record calls ENDED.
+  if (raw.roomEnded === true) snapshot.roomEnded = true;
 }
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
@@ -554,6 +564,8 @@ export type BridgeWidgetSnapshotFields = {
   idleReaped?: boolean;
   connection?: BridgeWidgetMeetingConnection;
   isRoomHost?: boolean;
+  /** W4a: set only once the room has ENDED; see `BridgeWidgetSnapshot.roomEnded`. */
+  roomEnded?: boolean;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -591,7 +603,26 @@ export function buildBridgeWidgetSnapshot(
   if (fields.idleReaped !== undefined) snapshot.idleReaped = fields.idleReaped;
   if (fields.connection) snapshot.connection = fields.connection;
   if (fields.isRoomHost !== undefined) snapshot.isRoomHost = fields.isRoomHost;
+  if (fields.roomEnded === true) snapshot.roomEnded = true;
   return snapshot;
+}
+
+/**
+ * W4a: what the app shell answers on a bridge room whose meeting has ENDED and unmounted.
+ *
+ * The meeting session that ran the room says `host-gone` as it unmounts, which leaves the popup's
+ * EndedView with nobody to send "Open meeting record" to — it would fall back to the system
+ * browser, which may not be signed in. The shell keeps a minimal host on the room's channel
+ * instead: nothing about languages, voice or consent (there is no meeting left to describe), only
+ * that the room ended, so the popup stays on EndedView and its `open-room-record` lands here.
+ */
+export function buildEndedBridgeWidgetSnapshot(
+  at: number,
+): Extract<BridgeWidgetMessageBody, { type: "snapshot" }> {
+  return buildBridgeWidgetSnapshot(
+    { voiceEnabled: false, browserCaptureState: "not-required", roomEnded: true },
+    at,
+  );
 }
 
 /**
@@ -797,6 +828,14 @@ export function bridgeWidgetTranscriptPauseState(
 export function bridgeWidgetIsRoomHost(view: BridgeWidgetRelayView, fallback: boolean): boolean {
   const relayed = liveSnapshot(view)?.isRoomHost;
   return relayed === undefined ? fallback : relayed;
+}
+
+/**
+ * W4a: whether a main window has said the room ENDED. Read alongside the room record, never
+ * instead of it: the popup ORs the two, so either one is enough to show EndedView.
+ */
+export function bridgeWidgetRoomEnded(view: BridgeWidgetRelayView): boolean {
+  return liveSnapshot(view)?.roomEnded === true;
 }
 
 /** What the popup draws about the meeting itself. Nothing is claimed without a live main window. */
