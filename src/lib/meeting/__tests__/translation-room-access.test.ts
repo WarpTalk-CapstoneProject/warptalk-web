@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canEditRoomSetup,
+  canEndRoom,
   canJoinTranslationRoom,
+  isRoomHost,
   resolveRoomEntryIntent,
   shouldEnterWaitingRoom,
 } from "../translation-room-access.ts";
@@ -225,4 +228,47 @@ test("WT-904: a non-host opens an external meeting on Google Meet, not WarpTalk'
     resolveRoomEntryIntent({ ...base, isExternalBridge: false, isHost: false }).mode,
     "join",
   );
+});
+
+test("WT-715: either host signal makes the viewer the host", () => {
+  const viewer = { id: "user-1" };
+  // Booked it.
+  assert.equal(isRoomHost({ status: "scheduled", hostId: "user-1" }, viewer), true);
+  // Handed it: the server says so even though hostId is the booker.
+  assert.equal(
+    isRoomHost({ status: "scheduled", hostId: "booker", isHost: true }, viewer),
+    true,
+  );
+  assert.equal(
+    isRoomHost({ status: "scheduled", hostId: "booker", isHost: false }, viewer),
+    false,
+  );
+  // An unresolved viewer is nobody's host, even against a room with no hostId.
+  assert.equal(isRoomHost({ status: "scheduled", hostId: undefined }, null), false);
+  assert.equal(isRoomHost({ status: "scheduled", hostId: "" }, { id: "" }), false);
+});
+
+test("WT-715: setup is editable only by the host, only before the meeting starts", () => {
+  const host = { id: "host" };
+  const editable = ["scheduled", "waiting", "open", "SCHEDULED", "WAITING", "OPEN"];
+  for (const status of editable) {
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, host), true, status);
+    assert.equal(canEditRoomSetup({ status, isHost: true }, { id: "someone" }), true, status);
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, { id: "guest" }), false, status);
+  }
+  for (const status of ["in_progress", "paused", "ended", "cancelled", "failed", "timeout", "unknown"]) {
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, host), false, status);
+  }
+});
+
+test("WT-715: End is offered only to the host, only where the backend accepts it", () => {
+  const host = { id: "host" };
+  for (const status of ["waiting", "open", "in_progress", "paused", "IN_PROGRESS"]) {
+    assert.equal(canEndRoom({ status, hostId: "host" }, host), true, status);
+    assert.equal(canEndRoom({ status, isHost: true }, null), true, status);
+    assert.equal(canEndRoom({ status, hostId: "host" }, { id: "guest" }), false, status);
+  }
+  for (const status of ["scheduled", "ended", "cancelled", "failed", "timeout", "unknown"]) {
+    assert.equal(canEndRoom({ status, hostId: "host" }, host), false, status);
+  }
 });

@@ -147,6 +147,9 @@ import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hook
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
+  canEditRoomSetup,
+  canEndRoom,
+  isRoomHost,
   resolveRoomEntryIntent,
   type RoomEntryIntent,
 } from "@/lib/meeting/translation-room-access";
@@ -935,7 +938,8 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
-  const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  // WT-715: one host rule, shared with the setup and End gates below.
+  const isHost = isRoomHost(room, user);
   const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
@@ -998,9 +1002,10 @@ export default function RoomInformationPage() {
 
   // Only the host, and only while the room still has settings worth changing — once it is
   // live or ended, editing it would rewrite a meeting already in progress or already over.
-  const canEditRoom =
-    room.hostId === user?.id &&
-    (room.status === "scheduled" || room.status === "waiting");
+  // WT-715: the same rule gates every setup control on this page (title, repeat rule, meeting
+  // languages, room notes), and it is the rule the settings endpoint enforces — including `open`.
+  const canEditRoom = canEditRoomSetup(room, user);
+  const roomNotes = room.description ?? "";
 
   const openRoomEditor = () => {
     useUIStore.getState().setEditRoomId(room.id);
@@ -1185,11 +1190,13 @@ export default function RoomInformationPage() {
                         was written. `!isEnded && status !== "cancelled"` left an EXPIRED or
                         FAILED room still offering it — and an expired room is precisely one that
                         never ran, so there is nothing there to end. The server would refuse the
-                        request; the menu entry was the lie. */}
+                        request; the menu entry was the lie.
+                        WT-715: narrowed further to the backend's own allowlist (waiting, open,
+                        in_progress, paused) — a SCHEDULED room cannot be ended either. */}
                     <RoomActionsMenu
                       room={room}
                       isHost={isHost}
-                      canEnd={isHost && !isFinishedStatus(room.status)}
+                      canEnd={canEndRoom(room, user)}
                       endPending={endRoomMutation.isPending}
                       onCopy={handleCopy}
                       onEnd={async () => {
@@ -1217,17 +1224,23 @@ export default function RoomInformationPage() {
                   timestamp on hover — so this row's last unique fact survives it. */}
             </div>
 
-            <RoomNotesEditor
-              key={room.id}
-              initialContent={room.description ?? ""}
-              canEdit={isHost}
-              onSave={(html) =>
-                updateRoomSettings.mutateAsync({
-                  id: room.id,
-                  data: { description: html },
-                })
-              }
-            />
+            {/* WT-715: notes are room setup, so they lock with the rest of it once the meeting
+                starts (the settings endpoint refuses them after that). A locked room with no
+                notes shows no section at all: an empty box inviting "Add agenda..." that can
+                never be typed into is a control that lies. */}
+            {canEditRoom || roomNotes.trim() ? (
+              <RoomNotesEditor
+                key={room.id}
+                initialContent={roomNotes}
+                canEdit={canEditRoom}
+                onSave={(html) =>
+                  updateRoomSettings.mutateAsync({
+                    id: room.id,
+                    data: { description: html },
+                  })
+                }
+              />
+            ) : null}
 
             {recordSectionShown ? (
               <MeetingRecordSection
