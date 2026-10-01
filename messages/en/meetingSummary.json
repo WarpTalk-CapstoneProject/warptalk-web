@@ -41,6 +41,7 @@
   },
   "rendering": {
     "writing": "Writing this version for you…",
+    "previousHint": "The text below is the previous version. It will be replaced when the new one is ready.",
     "ownVersion": "Your own version of this meeting. What the host published is unchanged."
   },
   "copyText": {
