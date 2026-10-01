@@ -445,6 +445,9 @@ export const API = {
       /** Members who connected the plugin — Owner or Admin; connection metadata only. */
       members: (workspaceId: string, pluginKey: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/members`,
+      /** The Owner's per-tool rules — GET Owner or Admin, PUT Owner. */
+      toolPolicies: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/tool-policies`,
       requests: (workspaceId: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
       myRequests: (workspaceId: string) =>

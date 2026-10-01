@@ -99,6 +99,45 @@ export interface McpToolDescriptorDto {
    * than the setting sends nothing; `toolPolicyOf` falls back to the effect in that case.
    */
   policy?: PluginToolPolicy;
+  /**
+   * The workspace Owner's rule for this tool, beside the member's own `policy` (wave 2). Present
+   * only on a catalog read with a workspace; absent or null is "member's choice". WarpBot gets the
+   * stricter of the two, so `policy` stays what the member chose and this is what they cannot loosen.
+   */
+  workspacePolicy?: WorkspaceToolRule | null;
+}
+
+/**
+ * What a workspace Owner may set for one tool across the workspace: ask every time, or never.
+ * There is no workspace "allow" — it would overrule a member who blocked the tool themselves.
+ * No rule (null) is "member's choice".
+ */
+export type WorkspaceToolRule = "approval" | "blocked";
+
+/** One tool of a plugin with the workspace's rule for it. Mirrors `WorkspaceToolPolicyItemDto`. */
+export interface WorkspaceToolPolicyItemDto {
+  name: string;
+  label: string;
+  description: string;
+  effect: "read" | "write";
+  workspacePolicy: WorkspaceToolRule | null;
+}
+
+/**
+ * GET/PUT /assistant/workspaces/{id}/plugins/{key}/tool-policies — Owner or Admin read; `canManage`
+ * is true for the Owner only. PUT answers with the whole list again.
+ */
+export interface WorkspaceToolPoliciesDto {
+  pluginKey: string;
+  pluginLabel: string;
+  canManage: boolean;
+  tools: WorkspaceToolPolicyItemDto[];
+}
+
+/** PUT body. A null `policy` clears the rule back to "member's choice". */
+export interface UpdateWorkspaceToolPolicyRequest {
+  toolName: string;
+  policy: WorkspaceToolRule | null;
 }
 
 /**

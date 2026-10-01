@@ -383,6 +383,12 @@ describe("tool-call outcomes — the recorder writes \"success\", not \"ok\"", (
   test("a refusal by policy is blocked, and a missing connection needs setup", () => {
     assert.equal(describePluginToolOutcome("permission_denied").tone, "blocked");
     assert.equal(describePluginToolOutcome("access_denied").tone, "blocked");
+    // A workspace Owner's per-tool rule (wave 2) is a refusal too, not a failure.
+    assert.deepEqual(describePluginToolOutcome("workspace_tool_blocked"), {
+      label: "Blocked",
+      tone: "blocked",
+      code: "workspace_tool_blocked",
+    });
     for (const code of [
       "plugin_not_installed",
       "connection_required",

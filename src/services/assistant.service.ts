@@ -14,12 +14,14 @@ import type {
   PluginToolPolicy,
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
+  UpdateWorkspaceToolPolicyRequest,
   WorkspacePluginItemDto,
   WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
   WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
   WorkspacePluginToolAuditQuery,
+  WorkspaceToolPoliciesDto,
 } from "@/types/assistant";
 
 export const assistantService = {
@@ -185,6 +187,19 @@ export const assistantService = {
   /** Members who connected the plugin, most recently used first. Owner or Admin. */
   listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
     return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
+  },
+
+  /** The plugin's tools with the workspace Owner's rule for each. Owner or Admin; `canManage` is the Owner's. */
+  getWorkspaceToolPolicies(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspaceToolPoliciesDto>(API.assistant.workspacePlugins.toolPolicies(workspaceId, pluginKey));
+  },
+
+  /** Sets or clears (`policy: null`) one tool's workspace rule. Owner. Answers with the whole list. */
+  setWorkspaceToolPolicy(workspaceId: string, pluginKey: string, request: UpdateWorkspaceToolPolicyRequest) {
+    return apiClient.put<WorkspaceToolPoliciesDto>(
+      API.assistant.workspacePlugins.toolPolicies(workspaceId, pluginKey),
+      request,
+    );
   },
 
   createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {

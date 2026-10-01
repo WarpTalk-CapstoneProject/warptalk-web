@@ -35,6 +35,8 @@
     "succeeded": "Succeeded",
     "blocked": "Blocked",
     "blockedHint": "This workspace doesn't allow this plugin. Add it on the workspace plugin page.",
+    "workspaceToolBlocked": "Blocked by workspace",
+    "workspaceToolBlockedHint": "The workspace Owner blocked this tool for WarpBot. Only the Owner can allow it again, on the workspace plugin page.",
     "turnedOff": "Turned off by member",
     "turnedOffHint": "The member switched this tool off for WarpBot. Only they can turn it back on.",
     "declined": "Declined",
