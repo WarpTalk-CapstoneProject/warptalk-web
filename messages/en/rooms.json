@@ -110,10 +110,7 @@
       "people": "People"
     },
     "language": {
-      "heading": "Meeting languages",
-      "blocked": "Blocked",
-      "blockedReason": "{language} is not allowed by this workspace's language policy.",
-      "blockedFooter": "Blocked languages are not permitted by this workspace's language policy. A workspace admin can change it in workspace settings."
+      "heading": "Meeting languages"
     },
     "options": {
       "dateAndTime": "Date & Time",
