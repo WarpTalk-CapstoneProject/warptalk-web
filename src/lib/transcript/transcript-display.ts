@@ -170,8 +170,9 @@ export function dedupeTranscriptSegments(
   for (const segment of segments) {
     byId.set(segment.segmentId, segment);
   }
-  // Map preserves the first insertion position when an existing value is replaced.
-  // Arrival order stays valid when a reconnected ingress track resets startTimeMs.
+  // Map preserves the first insertion position when an existing value is replaced. Does NOT sort:
+  // the store already inserts each new live line by its start time (insertByStartTime), and keeping
+  // the list's own order here is what keeps a line on a restarted clock where it was put.
   return Array.from(byId.values());
 }
 
