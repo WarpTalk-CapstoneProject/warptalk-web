@@ -56,6 +56,7 @@ import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetingNotices } from "./meeting-notices";
+import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { RelayCarryNotice } from "./relay-carry-notice";
 import { SettingsFlyout } from "./settings-flyout";
 import { BridgeStartStep } from "./start-step";
@@ -98,6 +99,7 @@ export function WidgetShell() {
           <CaptureTakeoverNotice />
           <InboundNoSignalNotice />
           <MeetingNotices />
+          <BridgeMeetMicNotice />
         </WidgetTabs>
       )}
       {ended || startStep ? null : <WidgetDock />}

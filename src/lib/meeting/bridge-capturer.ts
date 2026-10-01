@@ -104,6 +104,11 @@ export type BridgeClaimRequest = {
   targetLanguages?: string[];
   externalMeetingLanguage?: string;
   displayName?: string;
+  /**
+   * Text-only bridge (backend #509): "voice" | "text". Omitted keeps this participant's current
+   * mode (voice on a first claim) — see claimAudioModeFor in bridge-audio-mode for when it is sent.
+   */
+  audioMode?: "voice" | "text";
 };
 
 export type BridgeClaimLease = {

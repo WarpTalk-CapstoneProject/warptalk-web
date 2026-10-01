@@ -7,6 +7,11 @@ import {
   type BridgeClaimRequest,
   type BridgeRole,
 } from "@/lib/meeting/bridge-capturer";
+import {
+  parseBridgeAudioMode,
+  resolveBridgeAudioMode,
+  type BridgeAudioMode,
+} from "@/lib/meeting/bridge-audio-mode";
 import type {
   SummaryRenderingDto,
   SummaryRenderingSummaryDto,
@@ -70,11 +75,27 @@ type BackendBridgeClaim = {
   created?: boolean;
   capturerHeartbeatIntervalSeconds?: number;
   capturerLeaseSeconds?: number;
+  /** Text-only bridge (backend #509): the caller's mode in force after the claim. */
+  audioMode?: string;
 };
 
 export type BridgeClaimResult = BridgeClaimLease & {
   room: TranslationRoomDto;
   participant: TranslationRoomParticipantDto | null;
+  /**
+   * The caller's bridge audio mode in force (lib/meeting/bridge-audio-mode). From `audioMode`, else
+   * the participant row's `isBridgeTextOnly`, else voice — what a server before #509 means.
+   */
+  audioMode: BridgeAudioMode;
+};
+
+/** Text-only bridge — PUT /translation-rooms/{id}/bridge/audio-mode (BridgeAudioModeDto). */
+export type BridgeAudioModeResult = {
+  roomId: string;
+  userId: string;
+  mode: BridgeAudioMode;
+  /** A translation session is running, i.e. text → voice is currently locked. */
+  translationActive: boolean;
 };
 
 /** W4b — heartbeat / takeover answer (BridgeCapturerStatusDto). */
@@ -509,10 +530,37 @@ export const translationRoomService = {
   async claimBridgeRoom(request: BridgeClaimRequest): Promise<BridgeClaimResult> {
     const response = await apiClient.post<BackendBridgeClaim>(API.translationRooms.bridgeClaim, request);
     const body = response.data;
+    const participant = body.participant ? normalizeParticipant(body.participant) : null;
     return {
       room: normalizeRoom(body.room),
-      participant: body.participant ? normalizeParticipant(body.participant) : null,
+      participant,
       ...parseBridgeClaimLease(body),
+      audioMode: resolveBridgeAudioMode({
+        known: parseBridgeAudioMode(body.audioMode),
+        isBridgeTextOnly: participant?.isBridgeTextOnly,
+      }),
+    };
+  },
+
+  /**
+   * Text-only bridge (backend #509): set the CALLER's own audio mode in a bridge room. Voice → text
+   * is always allowed; text → voice rejects with 409 BRIDGE_AUDIO_MODE_LOCKED while translation
+   * runs (see bridgeAudioModeFailure). The same mode is a 200 no-op.
+   */
+  async setBridgeAudioMode(id: string, mode: BridgeAudioMode): Promise<BridgeAudioModeResult> {
+    const response = await apiClient.put<{
+      roomId: string;
+      userId: string;
+      mode: string;
+      translationActive?: boolean;
+    }>(API.translationRooms.bridgeAudioMode(id), { mode });
+    const body = response.data;
+    return {
+      roomId: body.roomId,
+      userId: body.userId,
+      // What we asked for when the server's answer is unreadable: a 200 means it was applied.
+      mode: parseBridgeAudioMode(body.mode) ?? mode,
+      translationActive: body.translationActive === true,
     };
   },
 
