@@ -13,6 +13,7 @@ import { test } from "node:test";
 import {
   canAlignToRecording,
   meetingMsFromRecordingSeconds,
+  recordingLeadInMs,
   seekTargetSeconds,
 } from "../recording-seek.ts";
 
@@ -168,4 +169,24 @@ test("canAlignToRecording answers before any particular moment is chosen", () =>
   assert.equal(canAlignToRecording(RECORDING_FIRST), true);
   assert.equal(canAlignToRecording({ timelineAnchorAt: null, recordingStartedAt: "x" }), false);
   assert.equal(canAlignToRecording({}), false);
+});
+
+// WT-896, from prod: room 01a0e5dd. The transcript's timeline began 02:36:48.817 and the host
+// pressed record at 02:59:13.853 — 22:25 into the meeting. The line at 1:07 is not in the file.
+const RECORDED_LATE = {
+  timelineAnchorAt: "2026-09-28T02:36:48.817Z",
+  recordingStartedAt: "2026-09-28T02:59:13.853Z",
+};
+
+test("a line spoken before the host pressed record has no place in the recording (WT-896)", () => {
+  assert.equal(seekTargetSeconds(RECORDED_LATE, 67_221), null);
+  assert.equal(recordingLeadInMs(RECORDED_LATE), 1_345_036);
+  // The first line after the recording began does seek, to just after its start.
+  const seconds = seekTargetSeconds(RECORDED_LATE, 1_364_617);
+  assert.ok(seconds !== null && seconds > 19 && seconds < 20);
+});
+
+test("no lead-in when the recording began before the first word, or cannot be aligned", () => {
+  assert.equal(recordingLeadInMs(RECORDING_FIRST), null);
+  assert.equal(recordingLeadInMs({ timelineAnchorAt: null, recordingStartedAt: "2026-09-28T02:59:13Z" }), null);
 });

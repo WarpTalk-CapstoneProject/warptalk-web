@@ -110,10 +110,7 @@
       "people": "Người tham gia"
     },
     "language": {
-      "heading": "Ngôn ngữ cuộc họp",
-      "blocked": "Bị chặn",
-      "blockedReason": "{language} không được phép theo chính sách ngôn ngữ của không gian làm việc này.",
-      "blockedFooter": "Các ngôn ngữ bị chặn không được phép theo chính sách ngôn ngữ của không gian làm việc này. Quản trị viên có thể thay đổi điều này trong cài đặt không gian làm việc."
+      "heading": "Ngôn ngữ cuộc họp"
     },
     "options": {
       "dateAndTime": "Ngày & Giờ",

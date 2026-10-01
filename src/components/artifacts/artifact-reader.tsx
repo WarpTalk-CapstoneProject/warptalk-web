@@ -23,6 +23,7 @@ export function ArtifactRecordView({
   workspaceSlug,
   onDrawUpMinutes,
   drawingUpMinutes = false,
+  showKindSwitcher = true,
 }: {
   group: MeetingRecordGroup;
   /** The one currently open. Always a member of `group.entries`. */
@@ -31,6 +32,7 @@ export function ArtifactRecordView({
   workspaceSlug: string;
   onDrawUpMinutes?: () => void;
   drawingUpMinutes?: boolean;
+  showKindSwitcher?: boolean;
 }) {
   const viewerId = useAuthStore((state) => state.user?.id);
   const isHost = entry.hostId === viewerId;
@@ -45,6 +47,7 @@ export function ArtifactRecordView({
         workspaceSlug={workspaceSlug}
         onDrawUpMinutes={onDrawUpMinutes}
         drawingUpMinutes={drawingUpMinutes}
+        showKindSwitcher={showKindSwitcher}
       />
 
       {/* Main Content Area - Scrollable */}

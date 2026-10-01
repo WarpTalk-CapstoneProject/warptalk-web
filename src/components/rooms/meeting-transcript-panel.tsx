@@ -277,6 +277,7 @@ export function MeetingTranscriptArtifact({
   translations,
   preferredLanguage,
   onSeekToRecording,
+  canSeekAt,
   baseTime,
   roomId,
   currentUserId,
@@ -303,6 +304,13 @@ export function MeetingTranscriptArtifact({
   /** Move the recording to this line. Omitted when the two clocks cannot be reconciled, which is
    *  how the timestamp stays plain text instead of becoming a button that does nothing. */
   onSeekToRecording?: (atMs: number) => void;
+  /**
+   * WT-896: whether THIS moment is inside the recording. A meeting recorded from 22 minutes in
+   * still has 22 minutes of lines with no place in the file, and seekTargetSeconds refuses them —
+   * so their timestamps must stay plain text rather than be play buttons that do nothing.
+   * Omitted means every moment is seekable whenever `onSeekToRecording` is given.
+   */
+  canSeekAt?: (atMs: number) => boolean;
   baseTime?: string;
   roomId: string;
   currentUserId?: string;
@@ -954,6 +962,10 @@ export function MeetingTranscriptArtifact({
     [onSeekToRecording, setFollowing],
   );
 
+  /** The click handler for one timestamp, or undefined when it cannot open the recording. */
+  const seekHandlerAt = (atMs: number): (() => void) | undefined =>
+    onSeekToRecording && (!canSeekAt || canSeekAt(atMs)) ? () => seekToMoment(atMs) : undefined;
+
   // J, K and `/` are handled by the provider — it is the only thing that can see a keypress aimed
   // at nothing in particular — and it needs this column to carry them out. Registered while
   // reading mode is on and withdrawn when it is not, so the keys go quiet in the layouts that have
@@ -999,7 +1011,7 @@ export function MeetingTranscriptArtifact({
       // The gate stays on `onSeekToRecording`, not on the wrapper: `seekToMoment` exists whether or
       // not a seek is possible, and gating on it would make every timestamp look clickable on a
       // meeting with no recording. See TranscriptLineTime.
-      onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
+      onSeek: seekHandlerAt(segment.startTimeMs),
       // Asked over every id the row answers to, not only its own. In Verbatim that is the same
       // answer as before (the page hands over ROW ids, and a row id is the first of its own list);
       // in Clean a citation resolved against the verbatim rows can name a segment this row
@@ -1745,11 +1757,7 @@ export function MeetingTranscriptArtifact({
                           )}
                           speakerName={turn.speakerName}
                           time={base ? segmentTime(turn.startTimeMs) : null}
-                          onSeek={
-                            onSeekToRecording
-                              ? () => seekToMoment(turn.startTimeMs)
-                              : undefined
-                          }
+                          onSeek={seekHandlerAt(turn.startTimeMs)}
                           // The rail starts AT the first dot rather than above it — a line hanging
                           // off the top of the transcript reads as content scrolled out of view.
                           isFirst={index === 0}
@@ -1776,11 +1784,7 @@ export function MeetingTranscriptArtifact({
                             speakerName={turn.speakerName}
                             elapsed={formatCitationTime(turn.startTimeMs)}
                             clock={base ? segmentTime(turn.startTimeMs) : null}
-                            onSeek={
-                              onSeekToRecording
-                                ? () => seekToMoment(turn.startTimeMs)
-                                : undefined
-                            }
+                            onSeek={seekHandlerAt(turn.startTimeMs)}
                             marked={markedKeySet?.has(turn.key) ?? false}
                             reading={sync?.readingKey === turn.key}
                             // Only ever true for the block the recording is actually playing —

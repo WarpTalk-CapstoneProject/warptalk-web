@@ -59,4 +59,26 @@ assert.match(
   "Setup modal must guard the API call if a room becomes terminal while open.",
 );
 
+// WT-866: the /join?code= screen has no room status of its own — it learns the code's room is
+// over from the join-language-policy lookup (`roomEnded`). It must show that instead of the
+// pre-join screen, must not ask for the camera/microphone for it, and must not trust the
+// previous code's placeholder answer while a new code is being typed.
+const joinPagePath = path.join(root, "src/app/(app)/join/page.tsx");
+const joinPage = fs.readFileSync(joinPagePath, "utf8");
+assert.match(
+  joinPage,
+  /const roomEnded = joinLanguagePolicy\?\.roomEnded === true && !joinPolicyIsStale;/,
+  "The join page must derive roomEnded from the lookup, ignoring placeholder (previous-code) data.",
+);
+assert.match(
+  joinPage,
+  /useEffect\(\(\) => \{\s*(\/\/[^\n]*\n\s*)*if \(roomEnded\) return;[\s\S]{0,200}?startMedia\(\)/,
+  "The join page must not start the camera/microphone preview for an ended room.",
+);
+assert.match(
+  joinPage,
+  /\{roomEnded \? \([\s\S]{0,400}?data-testid="join-room-ended"/,
+  "The join page must render the ended state in place of the pre-join screen.",
+);
+
 console.log("Terminal translation-room join contract: PASS");

@@ -1,3 +1,5 @@
+import { isDisplacedConnectionError } from "./session-displacement.ts";
+
 /**
  * What a failed LiveKit connection should say to the person who cannot get into the meeting.
  *
@@ -12,6 +14,14 @@
  * a billing limit rather than anything in the app.
  */
 export function describeLiveKitError(error: unknown): string {
+  // First, and before the network branch below: a connect refused because this account joined
+  // from another device or tab can carry "websocket"/"could not establish" wording, and calling it
+  // a network failure sent people to check a connection that was fine. Retrying is the one thing
+  // that must NOT happen here — it evicts the other device (see session-displacement.ts).
+  if (isDisplacedConnectionError(error)) {
+    return "This account joined the meeting from another device or tab, so this one was disconnected.";
+  }
+
   const message = error instanceof Error ? error.message : String(error ?? "");
   const lower = message.toLowerCase();
 
