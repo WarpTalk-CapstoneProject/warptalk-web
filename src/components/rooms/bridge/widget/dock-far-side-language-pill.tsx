@@ -37,17 +37,13 @@ import { useTranslations } from "next-intl";
 import { CaretDown, CheckCircle, UsersThree, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
-import { useJoinLanguagePolicy } from "@/hooks/use-translationRooms";
-import {
-  getLanguageCode,
-  getLanguageName,
-  meetingLanguagesForPolicy,
-  normalizeLanguageCode,
-} from "@/lib/language/languages";
+import { getLanguageCode, getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
 import { farSideLanguageProblem } from "@/lib/meeting/bridge-far-side-language";
+import { bridgeFarSideLanguageOptions } from "@/lib/meeting/bridge-language-options";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { cn } from "@/lib/utils";
 
+import { useBridgeLanguagePolicy } from "./bridge-language-menu";
 import { useBridgeWidget } from "./widget-context";
 
 /** The gateway's HubException text, without SignalR's "An unexpected error occurred invoking…". */
@@ -58,12 +54,6 @@ function hubRefusal(error: unknown): string | null {
   return at === -1 ? null : message.slice(at + marker.length).trim() || null;
 }
 
-function useFarSideLanguagePolicy() {
-  const { room } = useBridgeWidget();
-  // The same public per-room read the host's pill uses: it is about the ROOM's workspace.
-  const { data: languagePolicy } = useJoinLanguagePolicy(room?.translationRoomCode ?? "");
-  return languagePolicy?.allowedTargetLanguages;
-}
 
 export function DockFarSideLanguagePill() {
   const t = useTranslations("rooms.bridgeFarSide");
@@ -77,7 +67,9 @@ export function DockFarSideLanguagePill() {
     farSideLanguage,
     setFarSideLanguage,
   } = useBridgeWidget();
-  const allowedTargetLanguages = useFarSideLanguagePolicy();
+  const tPolicy = useTranslations("rooms.bridgeWidget.languagePolicy");
+  // The same public per-room read the host's pill uses: it is about the ROOM's workspace.
+  const { allowedTargetLanguages, policyStatus } = useBridgeLanguagePolicy();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,13 +80,21 @@ export function DockFarSideLanguagePill() {
   const enabled = Boolean(hub) && connectionState === "live" && !pending;
   const menuOpen = open && enabled;
 
-  // Every meeting language the workspace allows. The current one stays even if the policy has
+  // Every meeting language the workspace allows — once the policy has loaded. While it is not
+  // known (loading, no room code yet, or the read failed) only the room's own languages are
+  // listed, never the whole hard-coded list (WT-910). The current one stays even if the policy has
   // since dropped it: removing the selected option from its own menu leaves no way to move off it.
-  const options = useMemo(() => {
-    const codes = meetingLanguagesForPolicy(allowedTargetLanguages).map((language) => language.code);
-    if (farSideLanguage && !codes.includes(farSideLanguage)) codes.unshift(farSideLanguage);
-    return codes;
-  }, [allowedTargetLanguages, farSideLanguage]);
+  const options = useMemo(
+    () =>
+      bridgeFarSideLanguageOptions({
+        sourceLanguage: room?.sourceLanguage,
+        targetLanguages: room?.targetLanguages,
+        current: farSideLanguage,
+        allowedTargetLanguages,
+        policyStatus,
+      }),
+    [room?.sourceLanguage, room?.targetLanguages, farSideLanguage, allowedTargetLanguages, policyStatus],
+  );
 
   const problem = farSideLanguageProblem({
     hostLanguage: readerLanguage,
@@ -228,6 +228,15 @@ export function DockFarSideLanguagePill() {
                 );
               })}
             </div>
+            {policyStatus !== "known" ? (
+              <p
+                role={policyStatus === "error" ? "alert" : "status"}
+                data-slot="bridge-language-policy-hint"
+                className="px-2.5 pb-1 pt-1.5 text-[11px] leading-snug text-ink-muted"
+              >
+                {policyStatus === "error" ? tPolicy("error") : tPolicy("loading")}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -243,7 +252,7 @@ export function DockFarSideLanguagePill() {
 export function FarSideLanguageNotice() {
   const t = useTranslations("rooms.bridgeFarSide");
   const { room, canControl, readerLanguage, farSideLanguage } = useBridgeWidget();
-  const allowedTargetLanguages = useFarSideLanguagePolicy();
+  const { allowedTargetLanguages } = useBridgeLanguagePolicy();
 
   if (!canControl || (room && !isExternalBridge(room.translationRoomType))) return null;
 

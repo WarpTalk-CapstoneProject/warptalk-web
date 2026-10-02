@@ -310,6 +310,10 @@
     "devices": {
       "hint": "Opens device setup in the WarpTalk window"
     },
+    "languagePolicy": {
+      "loading": "Loading your workspace's languages…",
+      "error": "Couldn't load your workspace's languages. Only this meeting's languages are shown."
+    },
     "startStep": {
       "title": "Translate this call",
       "intro": "Pick your language. Everyone else in the call is translated into it for you.",

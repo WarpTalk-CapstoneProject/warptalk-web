@@ -310,6 +310,10 @@
     "devices": {
       "hint": "Mở phần thiết lập thiết bị trong cửa sổ WarpTalk"
     },
+    "languagePolicy": {
+      "loading": "Đang tải các ngôn ngữ của workspace…",
+      "error": "Không tải được các ngôn ngữ của workspace. Chỉ hiển thị ngôn ngữ của cuộc họp này."
+    },
     "startStep": {
       "title": "Dịch cuộc gọi này",
       "intro": "Chọn ngôn ngữ của bạn. Mọi người khác trong cuộc gọi được dịch sang ngôn ngữ đó cho bạn.",
