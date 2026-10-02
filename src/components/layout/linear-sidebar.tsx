@@ -49,7 +49,6 @@ import {
   Check,
   CreditCard,
   ChartBar,
-  ChartLine,
   Receipt,
   BookOpen,
   FileText,
@@ -794,16 +793,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: CreditCard,
         label: t("settingsNav.billing"),
-        // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
-        // treat-descendants-as-active rule lights Billing up while the reader is on either child,
-        // and two rows in the same group read as selected at once.
+        // Exact because Invoices lives BELOW it. Without this, NavLink's treat-descendants-as-active
+        // rule lights Billing up while the reader is on Invoices, and two rows in the same group
+        // read as selected at once. (Usage used to sit below it too; it is the Usage tab of
+        // Insights now, and its old address forwards in proxy.ts.)
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/billing`,
-      });
-      settingsItems.push({
-        icon: ChartLine,
-        label: t("settingsNav.usage"),
-        href: `/${activeWorkspaceSlug}/settings/billing/usage`,
       });
       settingsItems.push({
         icon: Receipt,
@@ -1041,9 +1036,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
                     than `===` so the row stays lit while the reader is off buying a plan at
                     /payment/plans, which is where this page's primary action sends them. */}
-                {/* Billing is EXACT now that Usage and Invoices sit below it. `startsWith` would
-                    light this row while the reader is on either child, so two rows in the group
-                    would read as selected at once. `/payment` still counts as Billing: it is where
+                {/* Billing is EXACT because Invoices sits below it. `startsWith` would light this
+                    row while the reader is on Invoices, so two rows in the group would read as
+                    selected at once. `/payment` still counts as Billing: it is where
                     the plan grid sends a buyer, and losing the highlight there is the one moment
                     they most need the way back. */}
                 <div className={cn(
@@ -1057,17 +1052,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.billing")}
-                    </span>
-                  </Link>
-                </div>
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/billing/usage`)
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      {t("settingsNav.usage")}
                     </span>
                   </Link>
                 </div>

@@ -19,6 +19,26 @@ Settings → Plugin activity is the per-call record again: the telemetry dashboa
 it (`workspace-telemetry-dashboard.tsx`) was built from placeholder figures and was removed. Its
 counts and charts are answered here, on the Tools tab.
 
+## The stand-alone Usage page is retired (2026-10-03)
+
+**What changed.** `/{slug}/settings/billing/usage` was deleted on the owner's call: Insights → Usage
+already rendered the same `UsageOverview` (member filter, refresh, CSV export) from the same
+queries, so the workspace had two doors to one surface.
+
+- `src/proxy.ts` forwards `/{slug}/settings/billing/usage` → `/{slug}/insights?tab=usage` with a
+  real 3xx (same pattern as the retired Payments and Audit log addresses), so bookmarks land on the
+  tab. Only a segment that can be a workspace slug is rewritten.
+- The settings sidebar loses its "Usage" row in both the collapsed and the expanded list;
+  `sidebar.settingsNav.usage` is removed from `messages/{en,vi,ja}/common.json`. Billing keeps
+  `exact: true` because Invoices still sits below it.
+- The page's design notes moved to the top of `usage-overview.tsx`;
+  `use-workspace-usage-overview.ts` is now the only copy of the data loading.
+- `settingsBillingUsage.accessDenied` stays: the Usage tab's member notice uses it.
+
+**Testing checklist.** Owner/admin: the sidebar shows no Usage row; opening the old address lands
+on Insights with the Usage tab selected; the tab shows the cycle, chart, rails and CSV export.
+Member: the old address forwards and then shows the Insights access notice.
+
 ## Who can see it
 
 Owner and Admin. The route shows a spinner until the workspace role is loaded, then either the page
@@ -44,7 +64,8 @@ Switching tab keeps the period; choosing a period keeps the tab. Both use
 | `src/components/workspace/insights/overview-model.ts` | Threads source states through the lib derivations; one model feeds the cards and the export. |
 | `src/components/workspace/insights/overview-tab.tsx` | The Overview view. |
 | `src/components/workspace/insights/usage-tab.tsx`, `tools-tab.tsx` | Usage / Tools tabs (separate tasks), same `InsightsTabProps` contract. |
-| `settings/billing/components/usage-overview.tsx` (`embedded`) | The Usage tab renders the Usage page's `UsageOverview` with `embedded`: no "Usage" h1 and no cycle pill (the tab's caption states the cycle); member filter, refresh and CSV export stay. Default `false` leaves `/settings/billing/usage` unchanged. |
+| `settings/billing/components/usage-overview.tsx` (`embedded`) | The Usage tab renders `UsageOverview` with `embedded`: no "Usage" h1 and no cycle pill (the tab's caption states the cycle); member filter, refresh and CSV export stay. Its header comment holds the surface's design notes (moved from the retired page). `embedded={false}` is only used by the `/dev/usage-preview` fixtures now. |
+| `src/hooks/use-workspace-usage-overview.ts` | The Usage tab's data: balance, the cycle's full ledger, the service breakdown, members, the cycle's meetings; billing hub + 30s visible-tab poll. The only copy since the stand-alone page was retired. |
 | `src/hooks/use-workspace-insights.ts` | Overview sources as `InsightsSourceState`s; `INSIGHTS_QUERY_ROOT`; `useInsightsUpdatedAt`. |
 | `src/lib/workspace/insights/overview-metrics.ts` | Pure arithmetic (ledger, meetings, six months, attention, CSV). Tested. |
 | `src/hooks/use-workspace-tool-insights.ts` | The one tool-call read (`GET /assistant/workspaces/{id}/insights/tools`), shared by Overview and Tools through one query key under `INSIGHTS_QUERY_ROOT`. |
