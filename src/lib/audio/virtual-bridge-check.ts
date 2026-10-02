@@ -16,7 +16,15 @@
  * tick that means less than it appears to.
  */
 
+import type { VirtualAudioStatus } from "../desktop/bridge.ts";
+
 /**
+ * FALLBACK TABLES — the desktop now reports these names itself (`VirtualAudioStatus.endpointLabels`,
+ * desktop feat/bridge-desktop-verdicts), and `bridgeDeviceLabelsFor` reads them from there. The
+ * constants below are only for a desktop build that predates that field, or no desktop at all.
+ * Delete them, with `bridgeDeviceLabelsForPlatform`/`currentBridgeDeviceLabels`/
+ * `resolveBridgeDeviceLabels`, once every supported desktop release sends `endpointLabels`.
+ *
  * Names as CoreAudio reports them, which is also what the Meet device picker shows.
  *
  * WarpTalk's own macOS devices: BlackHole's source built under WarpTalk's names by the desktop
@@ -117,14 +125,55 @@ export function bridgeDeviceLabelsForPlatform(platform: string): BridgeDeviceLab
 }
 
 /**
- * The labels for the machine this is running on.
+ * The labels the desktop reported, or null where it did not (an older build, or no desktop).
+ * The desktop's `platform` decides the install copy; nothing is sniffed from the user agent.
+ */
+export function bridgeDeviceLabelsFromStatus(
+  status: VirtualAudioStatus | null | undefined,
+): BridgeDeviceLabels | null {
+  const labels = status?.endpointLabels;
+  if (!labels) return null;
+  return {
+    outboundSink: labels.outboundSink,
+    inboundCapture: labels.inboundCapture,
+    meetMicrophone: labels.meetMicrophone,
+    meetSpeaker: labels.meetSpeaker,
+    inboundOptional: labels.inboundOptional === true,
+    platform: status.platform === "win32" ? "windows" : "macos",
+  };
+}
+
+/**
+ * THE labels for this machine: the desktop's whenever it sent them.
+ *
+ * `availableDeviceLabels` only feeds the FALLBACK's BlackHole swap; the desktop already chose the
+ * Mac pair (WarpTalk Audio or BlackHole) from what is installed.
+ */
+export function bridgeDeviceLabelsFor(
+  status: VirtualAudioStatus | null | undefined,
+  availableDeviceLabels: readonly string[] = [],
+): BridgeDeviceLabels {
+  const desktop = bridgeDeviceLabelsFromStatus(status);
+  if (desktop) return desktop;
+  // FALLBACK — no `endpointLabels` (desktop before feat/bridge-desktop-verdicts, or a browser).
+  // Delete with the tables above.
+  return resolveBridgeDeviceLabels(currentBridgeDeviceLabels(status), availableDeviceLabels);
+}
+
+/**
+ * FALLBACK — the labels for the machine this is running on, from the local tables. Only reached
+ * through `bridgeDeviceLabelsFor` when the desktop sent no `endpointLabels`; delete with the tables.
+ *
+ * The platform comes from the desktop's status when there is one; the user agent is read only
+ * when there is no status at all.
  *
  * Exported because the copy in toasts and in the setup wizard has to match the platform too — it
  * used to name the macOS devices unconditionally, so a Windows user with no VB-CABLE was told to
  * install BlackHole, which does not exist for Windows. Callers that render this during SSR must
  * resolve it after mount: `navigator` is absent on the server and the fallback below is macOS.
  */
-export function currentBridgeDeviceLabels(): BridgeDeviceLabels {
+export function currentBridgeDeviceLabels(status?: VirtualAudioStatus | null): BridgeDeviceLabels {
+  if (status?.platform) return bridgeDeviceLabelsForPlatform(status.platform);
   if (typeof navigator === "undefined") {
     return bridgeDeviceLabelsForPlatform("");
   }
@@ -246,7 +295,9 @@ export interface BridgeDeviceIds {
  * WarpTalk plays INTO, so it is looked up as an output; the device Meet uses as its SPEAKER is
  * something WarpTalk records FROM, so it is looked up as an input.
  */
-export async function findBridgeDeviceIds(): Promise<BridgeDeviceIds> {
+export async function findBridgeDeviceIds(
+  status: VirtualAudioStatus | null = null,
+): Promise<BridgeDeviceIds> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
     return { outboundDeviceId: null, inboundDeviceId: null, needsPermission: false };
   }
@@ -256,8 +307,8 @@ export async function findBridgeDeviceIds(): Promise<BridgeDeviceIds> {
   if (devices.length > 0 && devices.every((device) => device.label === "")) {
     return { outboundDeviceId: null, inboundDeviceId: null, needsPermission: true };
   }
-  const labels = resolveBridgeDeviceLabels(
-    currentBridgeDeviceLabels(),
+  const labels = bridgeDeviceLabelsFor(
+    status,
     devices.map((device) => device.label),
   );
   return {
@@ -387,7 +438,10 @@ export function bridgeProbeLegs(labels: BridgeDeviceLabels): BridgeProbeLeg[] {
 }
 
 /**
- * Every required leg carries sound, and an optional leg is either absent or carries sound too.
+ * The PROBE's own verdict: every required leg carries sound, and an optional leg is either absent
+ * or carries sound too. Where the desktop has a verdict this is only a downgrade
+ * (lib/desktop/bridge-verdict `bridgeDevicesReadyWithProbe`); on its own it decides only for a
+ * desktop that sent none.
  *
  * An optional device that is present but silent is NOT acceptable: `findBridgeDeviceIds` will find
  * it and route the far side through it, so a broken Hi-Fi Cable would silence the meeting rather
@@ -399,11 +453,14 @@ export function isBridgeCheckReady(probes: readonly DeviceProbe[]): boolean {
   );
 }
 
-export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
+export async function checkVirtualBridge(
+  status: VirtualAudioStatus | null = null,
+): Promise<BridgeCheckResult> {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const needsPermission = devices.every((device) => device.label === "");
-  const labels = resolveBridgeDeviceLabels(
-    currentBridgeDeviceLabels(),
+  // The same labels the meeting routes by, so the probe tests the devices that will be used.
+  const labels = bridgeDeviceLabelsFor(
+    status,
     devices.map((device) => device.label),
   );
   const legs = bridgeProbeLegs(labels);

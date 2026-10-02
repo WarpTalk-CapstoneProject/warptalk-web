@@ -65,6 +65,31 @@ export interface VirtualAudioStatus {
    * describing voice mode. See lib/meeting/bridge-audio-mode.
    */
   bridgeModes?: BridgeModeAvailability;
+  /**
+   * The endpoint labels to match in `enumerateDevices` for each leg, for the provider pair the
+   * desktop detected (desktop `feat/bridge-desktop-verdicts`). Absent on older builds and where
+   * `supported` is false; see lib/desktop/bridge-verdict for what replaces it then.
+   */
+  endpointLabels?: BridgeEndpointLabels;
+}
+
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `BridgeEndpointLabels`. Each label is matched
+ * case-insensitively as a substring of a device label; the desktop keeps them substring-safe.
+ */
+export interface BridgeEndpointLabels {
+  outboundProviderId: string;
+  /** Render endpoint WarpTalk plays the dub into (`audiooutput`). */
+  outboundSink: string;
+  /** Capture endpoint the user selects as Meet's microphone (`audioinput`). */
+  meetMicrophone: string;
+  inboundProviderId: string | null;
+  /** Capture endpoint WarpTalk records the far side from (`audioinput`). */
+  inboundCapture: string | null;
+  /** Render endpoint Meet's speaker is pointed at when the far side comes back on the device. */
+  meetSpeaker: string | null;
+  /** The bridge still runs without the inbound device (Windows: loopback or outbound-only). */
+  inboundOptional: boolean;
 }
 
 /** Mirrors warptalk-desktop src/shared/types.ts `BridgeModeAvailability`. */

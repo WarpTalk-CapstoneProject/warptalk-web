@@ -160,3 +160,25 @@ test("the Meet mic notice: text on the cable, voice on the real mic; silence whe
   assert.equal(bridgeMeetMicMismatch({ audioMode: "text", meetMic: "unknown" }), null);
   assert.equal(bridgeMeetMicMismatch({ audioMode: null, meetMic: "cable" }), null);
 });
+
+test("support: voice is the desktop's voice.possible, not the cable — desktop wins when reported", () => {
+  // Cable in, but the desktop says the far side cannot come back (no loopback, no Hi-Fi Cable).
+  const inboundMissing = windows({
+    devices: [cable],
+    bridgeModes: {
+      textOnly: { possible: false, reason: "loopback-runtime-not-wired" },
+      voice: { possible: false, cableInstalled: true, reason: "inbound-unavailable" },
+    },
+  });
+  assert.deepEqual(bridgeModeSupport(inboundMissing), {
+    voice: false,
+    text: false,
+    cableInstalled: true,
+    reported: true,
+  });
+  // The desktop's cableInstalled wins over a device list that disagrees with it.
+  assert.equal(bridgeModeSupport(windows({ devices: [cable], bridgeModes: modes(true, false) }))?.cableInstalled, false);
+  // Fallback only where the field is absent: an older build's device list decides.
+  assert.equal(bridgeModeSupport(windows({ devices: [cable] }))?.voice, true);
+  assert.equal(bridgeModeSupport(windows())?.voice, false);
+});
