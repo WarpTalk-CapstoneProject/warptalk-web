@@ -45,7 +45,6 @@
       "description": "<glossaryName></glossaryName>へインポートします。先頭付近の行で列名を指定してください。<term>Term</term>列と<translation>Translation</translation>列は必須です。Field、Definition、Note、Part of speech、Priorityは存在する場合に使用されます。",
       "expectedPairSame": "この用語集は{source} → {target}なので、2列目は翻訳ではなく各用語の意味です。",
       "expectedPairDifferent": "この用語集は{source} → {target}です。2列目は{target}にしてください。",
-      "downloadSample": "サンプルファイルをダウンロード",
       "chooseFile": ".xlsxまたは.csvファイルを選択",
       "chooseDifferentFile": "別のファイルを選択",
       "excelOrCsv": "Excelまたはカンマ区切り",
@@ -61,7 +60,11 @@
       "field": "Field",
       "cancel": "キャンセル",
       "importing": "インポート中…",
-      "importCount": "{count}件の用語をインポート"
+      "importCount": "{count}件の用語をインポート",
+      "downloadTemplate": "{source} → {target} のテンプレートをダウンロード (.xlsx)",
+      "viewTemplate": "テンプレートを見る",
+      "sampleSkipped": "テンプレートのサンプル行は読み飛ばしました。",
+      "context": "コンテキスト"
     }
   },
   "toasts": {
@@ -84,7 +87,8 @@
   },
   "tabs": {
     "custom": "カスタム用語集",
-    "global": "グローバル用語集"
+    "global": "グローバル用語集",
+    "importTemplate": "インポート用テンプレート"
   },
   "grouping": {
     "label": "グループ分け",
@@ -125,5 +129,43 @@
     "useThisInLanguage": "{language}でこれを使う",
     "removeTerm": "用語{index}を削除",
     "addTerm": "用語を追加"
+  },
+  "importTemplate": {
+    "title": "インポート用テンプレート",
+    "description": "すべての用語集で共通のファイル形式です。インポートする言語ペアを選ぶと、ソースとターゲットの列がその言語に合わせて変わります。見出しの下に1行1用語で入力してください。",
+    "sourceLanguage": "ソース言語",
+    "targetLanguage": "ターゲット言語",
+    "groups": {
+      "source": "ソース",
+      "target": "ターゲット",
+      "general": "共通"
+    },
+    "band": "{group} · {language}",
+    "sampleNote": "灰色の行はサンプルです。形式を示すためのもので、インポート時には読み飛ばされます。",
+    "downloadXlsx": ".xlsx をダウンロード",
+    "downloadCsv": ".csv をダウンロード",
+    "downloadFailed": "ファイルを作成できませんでした。.csv をお試しください。",
+    "fallbackNotice": "保存済みのテンプレートを読み込めなかったため、既定のテンプレートを表示しています。",
+    "columnsTitle": "列",
+    "columnHeader": "列",
+    "groupHeader": "グループ",
+    "acceptsHeader": "別名",
+    "required": "必須",
+    "columnsNote": "見出しは大文字小文字と括弧内の言語名を無視して照合されるため、「Translation (Japanese)」と「translation」は同じ列です。旧形式の Term / Translation 見出しのファイルも引き続きインポートできます。"
+  },
+  "pairs": {
+    "filterLabel": "言語ペアで用語集を絞り込む",
+    "all": "すべてのペア ({count})",
+    "option": "{source} → {target} ({count})"
+  },
+  "pairEditor": {
+    "label": "言語ペア",
+    "source": "ソース言語",
+    "target": "ターゲット言語",
+    "changed": "言語ペアを {source} → {target} に変更しました。",
+    "changeFailed": "言語ペアを変更できませんでした。",
+    "confirm": "既存の訳語はそのまま残ります。{source} → {target} に変更しますか?",
+    "confirmButton": "変更",
+    "cancel": "キャンセル"
   }
 }

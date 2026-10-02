@@ -43,6 +43,7 @@ import {
   MagnifyingGlass,
   BookOpen,
   Globe,
+  FileXls,
 } from "@phosphor-icons/react";
 
 import {
@@ -95,6 +96,9 @@ import {
   type ParsedGlossaryRow,
 } from "@/components/glossary/glossary-import-dialog";
 import { WorkspaceGlobalGlossaryView } from "@/components/glossary/workspace-global-glossary-view";
+import { WorkspaceImportTemplateView } from "@/components/glossary/workspace-import-template-view";
+import { GlossaryPairEditor } from "@/components/glossary/glossary-pair-editor";
+import { ALL_PAIRS, groupGlossariesByPair } from "@/lib/glossary/glossary-pairs";
 import {
   groupTermsByDomain,
   findCrossDomainTerms,
@@ -143,8 +147,9 @@ export default function WorkspaceGlossaryPage() {
   // this only avoids offering a control that would come back 403.
   const canManage = role === "owner" || role === "admin";
 
-  // Dual tabs: Custom Glossary (Private) vs Global Glossary (System Reference & Tracking)
-  const [activeTab, setActiveTab] = useState<"custom" | "global">("custom");
+  // Tabs: Custom Glossary (Private), Global Glossary (System Reference & Tracking), and WT-880's
+  // Import template (the admin-configured file shape; every member may view and download it).
+  const [activeTab, setActiveTab] = useState<"custom" | "global" | "template">("custom");
   const [groupBy, setGroupBy] = useState<"domain" | "alphabetical">("domain");
   const [selectedDomain, setSelectedDomain] = useState<string>("all");
 
@@ -152,10 +157,17 @@ export default function WorkspaceGlossaryPage() {
   const glossaries = useMemo(() => glossariesQuery.data ?? [], [glossariesQuery.data]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Derived rather than synced: the first glossary is selected until the reader picks another,
-  // and a selection that no longer exists (deleted) falls back instead of showing an empty page.
-  const selected: GlossaryDto | undefined =
-    glossaries.find((glossary) => glossary.id === selectedId) ?? glossaries[0];
+  // PO 2026-10-02: the chips are grouped by language pair and filterable by it ("English →
+  // Vietnamese" is one unit; the same term lives once per pair). Derived rather than synced: the
+  // first VISIBLE glossary is selected until the reader picks another, and a selection that no
+  // longer exists or is filtered out falls back instead of showing an empty page. A glossary whose
+  // pair is changed moves to its new group on the next render.
+  const [pairFilter, setPairFilter] = useState<string>(ALL_PAIRS);
+  const pairView = useMemo(
+    () => groupGlossariesByPair(glossaries, pairFilter, (code) => getLanguageName(code), selectedId),
+    [glossaries, pairFilter, selectedId],
+  );
+  const selected: GlossaryDto | undefined = pairView.selected;
 
   const [search, setSearch] = useState("");
   const [glossaryDialogOpen, setGlossaryDialogOpen] = useState(false);
@@ -437,28 +449,51 @@ export default function WorkspaceGlossaryPage() {
       <WorkspaceToolbar
         filters={
           activeTab === "custom" && glossaries.length > 0 ? (
-            <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-              {glossaries.map((glossary) => {
-                const active = selected?.id === glossary.id;
-                return (
-                  <button
-                    key={glossary.id}
-                    type="button"
-                    onClick={() => setSelectedId(glossary.id)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] transition-colors ${
-                      active
-                        ? "border-border bg-surface-2 font-medium text-ink"
-                        : "border-transparent text-ink-muted hover:bg-surface-2"
-                    }`}
-                  >
-                    {glossary.name}
-                    <span className="text-[10px] text-ink-subtle">
-                      {getLanguageName(glossary.sourceLanguage)} →{" "}
-                      {getLanguageName(glossary.targetLanguage)}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              {/* PO 2026-10-02: filter by language pair, one unit, with counts. */}
+              {pairView.options.length > 1 ? (
+                <Select value={pairView.filter} onValueChange={(value) => value && setPairFilter(value)}>
+                  <SelectTrigger className="h-7 w-auto min-w-[150px] text-[12px]" aria-label={t("pairs.filterLabel")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_PAIRS}>{t("pairs.all", { count: glossaries.length })}</SelectItem>
+                    {pairView.options.map((option) => (
+                      <SelectItem key={option.key} value={option.key}>
+                        {t("pairs.option", {
+                          source: getLanguageName(option.source),
+                          target: getLanguageName(option.target),
+                          count: option.count,
+                        })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              {pairView.groups.map((group) => (
+                <div key={group.key} className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-ink-subtle">
+                    {getLanguageName(group.source)} → {getLanguageName(group.target)}
+                  </span>
+                  {group.glossaries.map((glossary) => {
+                    const active = selected?.id === glossary.id;
+                    return (
+                      <button
+                        key={glossary.id}
+                        type="button"
+                        onClick={() => setSelectedId(glossary.id)}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] transition-colors ${
+                          active
+                            ? "border-border bg-surface-2 font-medium text-ink"
+                            : "border-transparent text-ink-muted hover:bg-surface-2"
+                        }`}
+                      >
+                        {glossary.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           ) : null
         }
@@ -533,10 +568,45 @@ export default function WorkspaceGlossaryPage() {
             <Globe className="h-4 w-4" />
             {t("tabs.global")}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("template")}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[13px] font-medium transition-colors -mb-[9px] ${
+              activeTab === "template"
+                ? "border-ink text-ink font-semibold"
+                : "border-transparent text-ink-muted hover:text-ink"
+            }`}
+          >
+            <FileXls className="h-4 w-4" />
+            {t("tabs.importTemplate")}
+          </button>
         </div>
 
-        {/* Tab 2: Global Glossary Reference & Tracking */}
-        {activeTab === "global" ? (
+        {/* PO 2026-10-02: the open glossary's language pair, changeable in place (Owner/Admin). */}
+        {activeTab === "custom" && selected && workspaceId ? (
+          <div className="mb-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="text-[13px] font-semibold text-ink">{selected.name}</span>
+            <GlossaryPairEditor
+              key={selected.id}
+              workspaceId={workspaceId}
+              glossary={selected}
+              termCount={termsQuery.data?.length ?? selected.termCount}
+              canManage={canManage}
+            />
+          </div>
+        ) : null}
+
+        {/* Tab 3 (WT-880): the import template — view and download, every member */}
+        {activeTab === "template" ? (
+          <WorkspaceImportTemplateView
+            initialPair={
+              selected
+                ? { sourceLanguage: selected.sourceLanguage, targetLanguage: selected.targetLanguage }
+                : undefined
+            }
+          />
+        ) : activeTab === "global" ? (
+          /* Tab 2: Global Glossary Reference & Tracking */
           <WorkspaceGlobalGlossaryView
             canManage={canManage}
             onCustomizeTerm={handleCustomizeGlobalTerm}
@@ -1015,7 +1085,8 @@ export default function WorkspaceGlossaryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog with Template Gallery */}
+      {/* Import dialog. WT-880: its quick download is the admin's template for this glossary's
+          pair; "View template" opens the Import template tab. */}
       {selected ? (
         <GlossaryImportDialog
           open={importDialogOpen}
@@ -1025,6 +1096,10 @@ export default function WorkspaceGlossaryPage() {
           targetLanguage={selected.targetLanguage}
           isImporting={bulkImport.isPending}
           onImport={importTerms}
+          onViewTemplate={() => {
+            setImportDialogOpen(false);
+            setActiveTab("template");
+          }}
         />
       ) : null}
     </WorkspacePage>
