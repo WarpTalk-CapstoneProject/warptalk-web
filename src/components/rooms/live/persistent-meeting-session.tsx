@@ -1730,10 +1730,14 @@ export function PersistentMeetingSession({
   // rule and the reasons, including why a running translation is NOT one of them, are
   // lastSignOfLife's. Read through a ref so a new sensor reading does not restart the poll.
   const roomMeetCode = extractMeetCodeFromUrl(room?.externalMeetingUrl);
-  const reaperEvidenceRef = useRef({ isBridgeRoom, meetSensor, roomMeetCode });
+  // WT-912: and from the desktop's read of Meet's own buttons (in the call) and a far side the
+  // capture can hear, which is what still works while the user's own mic is muted.
+  const meetCallPhase = meetFollow.callPhase;
+  const farSideHeard = isBridgeRoom && inboundHealth === "listening";
+  const reaperEvidenceRef = useRef({ isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard });
   useEffect(() => {
-    reaperEvidenceRef.current = { isBridgeRoom, meetSensor, roomMeetCode };
-  }, [isBridgeRoom, meetSensor, roomMeetCode]);
+    reaperEvidenceRef.current = { isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard };
+  }, [isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard]);
 
   // Returning to the full meeting surface is itself an unambiguous "I am here": clear the idle
   // disconnect so <LiveKitRoom> reconnects, and never reap while the meeting owns the screen.
@@ -1775,6 +1779,8 @@ export function PersistentMeetingSession({
         meetSensor: evidence.meetSensor,
         roomMeetCode: evidence.roomMeetCode,
         lastSpeechAt: lastSpeechAtRef.current,
+        meetCallPhase: evidence.meetCallPhase,
+        farSideHeard: evidence.farSideHeard,
       });
       if (signOfLife > lastInteractionRef.current) {
         lastInteractionRef.current = signOfLife;
