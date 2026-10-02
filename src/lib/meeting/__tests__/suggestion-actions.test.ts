@@ -7,7 +7,10 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   CATEGORY_ACTIONS,
@@ -87,5 +90,47 @@ test("an unknown category still gets a real request rather than nothing", () => 
 test("no more than two actions reach the card", () => {
   for (const category of Object.keys(CATEGORY_ACTIONS)) {
     assert.ok(actionsFor({ category, content: SUBJECT, detail: DETAIL }).length <= 2);
+  }
+});
+
+// WT-922. The card prints `t(\`actions.${id}\`)`, not `label`, so the reader sees the button in
+// their interface language. An id with no entry renders the raw key path on the button — exactly
+// the kind of slip that only shows up on screen, in the one language nobody tested.
+const MESSAGES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "messages");
+
+function suggestionCatalog(locale: string): {
+  categories: Record<string, { label: string; meaning: string }>;
+  actions: Record<string, string>;
+} {
+  return JSON.parse(readFileSync(join(MESSAGES, locale, "meetingTranscript.json"), "utf8")).suggestion;
+}
+
+test("every action id has a button label in every interface language", () => {
+  const ids = [...GENERIC_ACTIONS, ...Object.values(CATEGORY_ACTIONS).flat()].map((action) => action.id);
+  assert.equal(new Set(ids).size, ids.length, "two actions share an id, so one of them shows the other's label");
+  for (const locale of ["en", "vi", "ja"]) {
+    const { actions } = suggestionCatalog(locale);
+    for (const id of ids) {
+      assert.ok(actions[id]?.trim(), `messages/${locale}/meetingTranscript.json has no suggestion.actions.${id}`);
+    }
+  }
+});
+
+test("the English catalog says what the English source text says", () => {
+  // `label` is kept as the source of truth the prompts were reviewed against; the catalog must
+  // not drift from it in the source locale.
+  const { actions } = suggestionCatalog("en");
+  for (const action of [...GENERIC_ACTIONS, ...Object.values(CATEGORY_ACTIONS).flat()]) {
+    assert.equal(actions[action.id], action.label);
+  }
+});
+
+test("every category the card can show has a label and a meaning, including the fallback", () => {
+  for (const locale of ["en", "vi", "ja"]) {
+    const { categories } = suggestionCatalog(locale);
+    for (const category of [...Object.keys(CATEGORY_ACTIONS), "other"]) {
+      assert.ok(categories[category]?.label?.trim(), `${locale}: suggestion.categories.${category}.label`);
+      assert.ok(categories[category]?.meaning?.trim(), `${locale}: suggestion.categories.${category}.meaning`);
+    }
   }
 });

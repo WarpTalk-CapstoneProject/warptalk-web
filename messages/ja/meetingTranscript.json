@@ -124,5 +124,45 @@
     "originalTitle": "フィラーや言い直しを含む元の文字起こしを表示します。あなたの表示だけが変わります。",
     "showCleanTitle": "整形された文字起こしに戻します。あなたの表示だけが変わります。",
     "selfRepair": "話者が言い直しました。実際の発言: 「{rawText}」"
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "未回答",
+        "meaning": "質問されたものの、まだ回答されていません"
+      },
+      "term": {
+        "label": "用語",
+        "meaning": "この会議で説明なしに使われた用語です"
+      },
+      "action": {
+        "label": "アクション",
+        "meaning": "担当者または期限が決まっていない約束です"
+      },
+      "correction": {
+        "label": "要確認",
+        "meaning": "以前の発言と矛盾しています"
+      },
+      "fact": {
+        "label": "参照",
+        "meaning": "この会議に添付された資料からの情報です"
+      },
+      "other": {
+        "label": "提案",
+        "meaning": "会話の内容から自動的に検出されました"
+      }
+    },
+    "actions": {
+      "askWarpBot": "WarpBot に質問",
+      "researchTerm": "この用語を調べる",
+      "findTermInDocuments": "資料から探す",
+      "askQuestion": "WarpBot にこの質問をする",
+      "findWhoKnows": "詳しい人を探す",
+      "checkInDocuments": "資料と照合する",
+      "checkWhichIsRight": "どちらが正しいか確認",
+      "draftTask": "タスクとして作成"
+    },
+    "disclaimer": "自動生成されています。参考にする前に内容をご確認ください。",
+    "dismissAria": "提案を閉じる"
   }
 }
