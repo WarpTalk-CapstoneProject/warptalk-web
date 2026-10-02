@@ -306,7 +306,14 @@ type LocalMediaControl = {
  * for a log line. Null whenever the provider tree is not mounted.
  */
 type MeetWindowControl = {
-  publish: (roomId: string) => Promise<string>;
+  /** Arms the desktop capture of the Meet window and publishes it. Safe to call again after an unpublish. */
+  publishMeetWindow: (roomId: string) => Promise<string>;
+  /**
+   * Takes the `meet-window` track off the wire and stops the capture; the recording carries on
+   * audio-only. The seam for "Meet left its tab" (Picture-in-Picture): unpublish on the way out,
+   * `publishMeetWindow` again on the way back, so the recording never shows another tab.
+   */
+  unpublishMeetWindow: () => void;
 };
 
 const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
@@ -3123,7 +3130,7 @@ export function PersistentMeetingSession({
         // track is published as `meet-window` for the egress template to fill the frame with.
         // Best effort — an older desktop build, a Meet window that cannot be found, a refused
         // publish — and never a reason not to record: the recording is then audio-only.
-        const video = (await meetWindowControlRef.current?.publish(roomId)) ?? "no-publisher";
+        const video = (await meetWindowControlRef.current?.publishMeetWindow(roomId)) ?? "no-publisher";
         if (video !== "published") {
           console.warn(`[bridge] Recording without the Meet window: ${video}.`);
         }
@@ -4335,6 +4342,15 @@ export function PersistentMeetingSession({
   // with Stop for host and capturer. The effect lives with the other bridge wiring ("A BRIDGED
   // MEET CALL IS RECORDED BY DEFAULT", above useBridgeWidgetRelayHost) and its rules in
   // lib/meeting/bridge-recording.ts. Nothing about it applies to a native meeting.
+  //
+  // WT-916 (decision): the exception is exactly as wide as the checkbox. A default recording is
+  // never started for someone who was not shown the opt-out, so the two ways a bridge capture can
+  // start WITHOUT the popup's ask do not record: the main-window fallback modal
+  // (BrowserCaptureConsentModal below calls answerBrowserCapture directly and has no checkbox) and
+  // the direct device path (a cable with no loopback asks nothing at all). Neither can set
+  // `bridgeRecordChoice` — only useBridgeConsentHost's onAnswer does, and only with a `record` the
+  // popup sent — and with no choice bridgeAutoRecordingDecision answers "no-choice" (pinned by a
+  // unit test). Do not give either path a default: add the checkbox there first.
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
@@ -5374,7 +5390,8 @@ function BridgeMeetWindowPublisher({
     let publishing = false;
 
     controlRef.current = {
-      publish: async (roomId) => {
+      unpublishMeetWindow: () => currentRef.current?.drop(),
+      publishMeetWindow: async (roomId) => {
         if (currentRef.current) return "published";
         if (publishing) return "a capture of the Meet window is already being opened";
         if (room.state !== ConnectionState.Connected) return "the meeting is not connected";

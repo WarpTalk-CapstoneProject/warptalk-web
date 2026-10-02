@@ -159,6 +159,12 @@ export function BridgeCaptureConsentPanel({
             {CABLE_WHILE_ASKING_PROMPT.decline}
           </button>
         </span>
+        {/* WT-916: its own full-width row under the one-line ask, so the buttons keep their line. */}
+        {canRecord ? (
+          <span id="bridge-record-choice-compact-meet" className="basis-full text-[10px] leading-snug text-ink-subtle">
+            {BRIDGE_RECORD_CHOICE.meetNotice}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -222,7 +228,7 @@ export function BridgeCaptureConsentPanel({
           id="bridge-record-choice"
           checked={record}
           onChange={setRecord}
-          hint={BRIDGE_RECORD_CHOICE.hint}
+          hint={`${BRIDGE_RECORD_CHOICE.hint} ${BRIDGE_RECORD_CHOICE.meetNotice}`}
         />
       ) : null}
 

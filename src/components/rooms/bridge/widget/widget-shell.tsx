@@ -58,6 +58,7 @@ import { EndedView } from "./ended-view";
 import { MeetCaptionsNotice } from "./meet-captions-notice";
 import { MeetingNotices } from "./meeting-notices";
 import { RecordingChip } from "./recording-chip";
+import { RecordingStartNotice } from "./recording-start-notice";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { RelayCarryNotice } from "./relay-carry-notice";
@@ -102,6 +103,8 @@ export function WidgetShell() {
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
+          {/* WT-916: people in Meet cannot see the REC chip, so the host is asked to tell them. */}
+          <RecordingStartNotice />
           <CaptureTakeoverNotice />
           <InboundNoSignalNotice />
           <MeetingNotices />

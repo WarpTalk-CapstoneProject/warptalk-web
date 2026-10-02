@@ -19,6 +19,7 @@ import {
   parseBridgeRecordingMessage,
   resolveBridgeRecordingIntent,
   shouldPublishMeetWindow,
+  shouldShowRecordingStartNotice,
   type BridgeAutoRecordingInput,
 } from "../bridge-recording.ts";
 
@@ -254,5 +255,74 @@ test("the chip shows only for this room, only while recording", () => {
   assert.deepEqual(
     bridgeRecordingChipView(buildBridgeRecordingSnapshot({ roomId: ROOM, recording: false, canStop: true }), ROOM),
     { kind: "hidden" },
+  );
+});
+
+// ── WT-916 ───────────────────────────────────────────────────────────────────
+
+test("WT-916: nobody shown the opt-out, nobody recorded — the fallback modal and the device path", () => {
+  // Both paths answer the listening question (or need none) WITHOUT a recording checkbox, so no
+  // choice ever exists for the room. Everything else is as favourable as it gets: bridge room,
+  // host, capture open, nothing recording, nothing handled.
+  for (const canControl of [true, false]) {
+    for (const inboundOpen of [true, false]) {
+      assert.deepEqual(
+        bridgeAutoRecordingDecision(input({ choice: null, canControl, inboundOpen })),
+        { type: "none", reason: "no-choice" },
+      );
+    }
+  }
+  // And a choice is only ever made from an explicit boolean: the default-on lives in the checkbox.
+  assert.equal(nextBridgeRecordChoice(null, { roomId: ROOM, record: false }).record, false);
+});
+
+test("WT-916: startedAt rides on a recording snapshot only, and only as a number", () => {
+  assert.deepEqual(
+    buildBridgeRecordingSnapshot({ roomId: ROOM, recording: true, canStop: true, startedAt: 42 }),
+    { v: 1, kind: "snapshot", roomId: ROOM, recording: true, canStop: true, startedAt: 42 },
+  );
+  const stopped = buildBridgeRecordingSnapshot({ roomId: ROOM, recording: false, canStop: true, startedAt: 42 });
+  assert.equal("startedAt" in stopped, false);
+  const mistyped = parseBridgeRecordingMessage({
+    v: 1,
+    kind: "snapshot",
+    roomId: ROOM,
+    recording: true,
+    canStop: true,
+    startedAt: "now",
+  });
+  assert.deepEqual(mistyped, { v: 1, kind: "snapshot", roomId: ROOM, recording: true, canStop: true });
+});
+
+test("WT-916: the tell-everyone notice shows once per recording start, to host or capturer", () => {
+  const started = (startedAt: number, canStop = true) =>
+    buildBridgeRecordingSnapshot({ roomId: ROOM, recording: true, canStop, startedAt });
+
+  assert.equal(shouldShowRecordingStartNotice(started(100), ROOM, null), true);
+  // Dismissed: gone for this recording, through every republish of the same start.
+  assert.equal(shouldShowRecordingStartNotice(started(100), ROOM, 100), false);
+  // A new recording is a new start.
+  assert.equal(shouldShowRecordingStartNotice(started(200), ROOM, 100), true);
+  // A member cannot control the bridge and is not the one to tell the call.
+  assert.equal(shouldShowRecordingStartNotice(started(100, false), ROOM, null), false);
+  // Gone when the recording stops, for another room, with no snapshot, and against an older main
+  // window that does not say when it started.
+  assert.equal(
+    shouldShowRecordingStartNotice(
+      buildBridgeRecordingSnapshot({ roomId: ROOM, recording: false, canStop: true }),
+      ROOM,
+      null,
+    ),
+    false,
+  );
+  assert.equal(shouldShowRecordingStartNotice(started(100), OTHER, null), false);
+  assert.equal(shouldShowRecordingStartNotice(null, ROOM, null), false);
+  assert.equal(
+    shouldShowRecordingStartNotice(
+      buildBridgeRecordingSnapshot({ roomId: ROOM, recording: true, canStop: true }),
+      ROOM,
+      null,
+    ),
+    false,
   );
 });

@@ -100,6 +100,11 @@ export function bridgeAutoRecordingDecision(
   const choice = input.choice && input.choice.roomId === input.roomId ? input.choice : null;
   // Nobody was shown the checkbox in this room (a reload, the main-window fallback, a machine that
   // never asks). Default-on is the checkbox's default, not a licence to record without it.
+  //
+  // WT-916 (decision): this is the guarantee, not a side effect. A default recording is NEVER
+  // started for someone who was not shown the opt-out. A choice exists only when a `decide` from
+  // the popup's ask carried `record` — the main-window fallback modal has no checkbox and the
+  // direct device path asks nothing, so neither can produce one, and both end here.
   if (!choice) return { type: "none", reason: "no-choice" };
   if (!choice.record) return { type: "none", reason: "opted-out" };
   if (!input.canControl) return { type: "none", reason: "cannot-control" };
@@ -186,6 +191,12 @@ export interface BridgeRecordingSnapshot {
   recording: boolean;
   /** This user may stop it (room host or capturer). The server has the last word. */
   canStop: boolean;
+  /**
+   * WT-916: when main saw THIS recording start (its own clock). The identity of one recording, so
+   * the popup can say "tell everyone in the call" once per start. Optional: absent while not
+   * recording, and from a main window that predates it — then no notice is shown.
+   */
+  startedAt?: number;
 }
 
 /** Popup to main: a request, never a statement of state. */
@@ -214,7 +225,10 @@ export function parseBridgeRecordingMessage(data: unknown): BridgeRecordingMessa
     switch (data.kind) {
       case "snapshot":
         if (typeof data.recording !== "boolean" || typeof data.canStop !== "boolean") return null;
-        return { v, kind: "snapshot", roomId, recording: data.recording, canStop: data.canStop };
+        return withStartedAt(
+          { v, kind: "snapshot", roomId, recording: data.recording, canStop: data.canStop },
+          data.startedAt,
+        );
       case "hello":
         return { v, kind: "hello", roomId };
       case "stop":
@@ -227,18 +241,30 @@ export function parseBridgeRecordingMessage(data: unknown): BridgeRecordingMessa
   }
 }
 
+/** A hint, like the consent snapshot's: kept when it is a usable number while recording, else dropped. */
+function withStartedAt(snapshot: BridgeRecordingSnapshot, startedAt: unknown): BridgeRecordingSnapshot {
+  if (snapshot.recording && typeof startedAt === "number" && Number.isFinite(startedAt)) {
+    snapshot.startedAt = startedAt;
+  }
+  return snapshot;
+}
+
 export function buildBridgeRecordingSnapshot(input: {
   roomId: string;
   recording: boolean;
   canStop: boolean;
+  startedAt?: number | null;
 }): BridgeRecordingSnapshot {
-  return {
-    v: BRIDGE_RECORDING_RELAY_VERSION,
-    kind: "snapshot",
-    roomId: input.roomId,
-    recording: input.recording,
-    canStop: input.canStop,
-  };
+  return withStartedAt(
+    {
+      v: BRIDGE_RECORDING_RELAY_VERSION,
+      kind: "snapshot",
+      roomId: input.roomId,
+      recording: input.recording,
+      canStop: input.canStop,
+    },
+    input.startedAt,
+  );
 }
 
 export type BridgeRecordingAction = { type: "republish" } | { type: "stop" };
@@ -274,4 +300,25 @@ export function bridgeRecordingChipView(
 ): BridgeRecordingChipView {
   if (!snapshot || snapshot.roomId !== roomId || !snapshot.recording) return { kind: "hidden" };
   return { kind: "recording", canStop: snapshot.canStop };
+}
+
+/**
+ * WT-916 — "Recording started. Tell everyone in the call."
+ *
+ * People who are only in Google Meet cannot see WarpTalk's REC chip, and WarpTalk cannot draw
+ * inside Meet. So the person who can control the bridge is asked to say it out loud: once per
+ * recording START, to the room host or capturer only (`canStop` is exactly that), until they
+ * dismiss it or the recording stops. A later recording is a new start and asks again.
+ *
+ * `dismissedStartedAt` is the `startedAt` of the recording whose notice was dismissed, or null.
+ */
+export function shouldShowRecordingStartNotice(
+  snapshot: BridgeRecordingSnapshot | null,
+  roomId: string,
+  dismissedStartedAt: number | null,
+): boolean {
+  if (!snapshot || snapshot.roomId !== roomId) return false;
+  if (!snapshot.recording || !snapshot.canStop) return false;
+  if (typeof snapshot.startedAt !== "number") return false;
+  return snapshot.startedAt !== dismissedStartedAt;
 }

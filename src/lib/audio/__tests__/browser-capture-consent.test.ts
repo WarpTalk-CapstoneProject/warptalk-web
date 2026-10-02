@@ -190,3 +190,11 @@ test("the recording checkbox says when it starts and that it can be stopped", ()
   assert.match(BRIDGE_RECORD_CHOICE.hint, /starts when/);
   assert.match(BRIDGE_RECORD_CHOICE.hint, /stopped/);
 });
+
+test("WT-916: the host is told that people in Meet cannot see the recording", () => {
+  assert.equal(
+    BRIDGE_RECORD_CHOICE.meetNotice,
+    "People in the Meet call won't see that WarpTalk is recording. Let them know.",
+  );
+  assert.equal(BRIDGE_RECORD_CHOICE.started, "Recording started. Tell everyone in the call.");
+});

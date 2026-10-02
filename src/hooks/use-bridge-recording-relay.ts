@@ -7,6 +7,7 @@ import {
   bridgeRecordingChannelName,
   bridgeRecordingChipView,
   buildBridgeRecordingSnapshot,
+  shouldShowRecordingStartNotice,
   parseBridgeRecordingMessage,
   resolveBridgeRecordingIntent,
   type BridgeRecordingChipView,
@@ -41,12 +42,25 @@ export interface UseBridgeRecordingHostOptions {
 export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): void {
   const { roomId, enabled, recording, canStop } = options;
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const viewRef = useRef({ roomId, recording, canStop });
+  const viewRef = useRef<{ roomId: string; recording: boolean; canStop: boolean; startedAt: number | null }>({
+    roomId,
+    recording,
+    canStop,
+    startedAt: null,
+  });
   const onStopRef = useRef(options.onStop);
 
   // Declared first so it has run before the effects below read the refs in the same commit.
   useEffect(() => {
-    viewRef.current = { roomId, recording, canStop };
+    // WT-916: stamped once per start — kept while this recording runs, cleared when it stops or the
+    // room changes — so every republish of one recording names the same start.
+    const previous = viewRef.current;
+    const startedAt = !recording
+      ? null
+      : previous.recording && previous.roomId === roomId && previous.startedAt !== null
+        ? previous.startedAt
+        : Date.now();
+    viewRef.current = { roomId, recording, canStop, startedAt };
     onStopRef.current = options.onStop;
   });
 
@@ -79,13 +93,17 @@ export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): 
 
   // The whole state, every time it moves. Never a delta.
   useEffect(() => {
-    channelRef.current?.postMessage(buildBridgeRecordingSnapshot({ roomId, recording, canStop }));
+    // From the ref, which the effect above has just brought up to date: it carries `startedAt`.
+    channelRef.current?.postMessage(buildBridgeRecordingSnapshot(viewRef.current));
   }, [enabled, roomId, recording, canStop]);
 }
 
 export interface BridgeRecordingPrompt {
   view: BridgeRecordingChipView;
   stop: () => void;
+  /** WT-916: show "Recording started. Tell everyone in the call." (shouldShowRecordingStartNotice). */
+  startNotice: boolean;
+  dismissStartNotice: () => void;
 }
 
 /**
@@ -96,6 +114,8 @@ export interface BridgeRecordingPrompt {
  */
 export function useBridgeRecordingPrompt(roomId: string): BridgeRecordingPrompt {
   const [snapshot, setSnapshot] = useState<BridgeRecordingSnapshot | null>(null);
+  /** The start whose notice was dismissed. Window-local: a dismissal is this reader's, not the room's. */
+  const [dismissedStartedAt, setDismissedStartedAt] = useState<number | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
@@ -131,5 +151,13 @@ export function useBridgeRecordingPrompt(roomId: string): BridgeRecordingPrompt 
     channelRef.current?.postMessage({ v: BRIDGE_RECORDING_RELAY_VERSION, kind: "stop", roomId });
   }, [roomId]);
 
-  return { view: bridgeRecordingChipView(snapshot, roomId), stop };
+  const startedAt = snapshot?.startedAt ?? null;
+  const dismissStartNotice = useCallback(() => setDismissedStartedAt(startedAt), [startedAt]);
+
+  return {
+    view: bridgeRecordingChipView(snapshot, roomId),
+    stop,
+    startNotice: shouldShowRecordingStartNotice(snapshot, roomId, dismissedStartedAt),
+    dismissStartNotice,
+  };
 }

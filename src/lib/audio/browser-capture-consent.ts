@@ -206,4 +206,12 @@ export const LISTEN_SCOPE_COPY = {
 export const BRIDGE_RECORD_CHOICE = {
   label: "Record this meeting",
   hint: "Recording starts when WarpTalk starts hearing the call, and can be stopped at any time.",
+  /**
+   * WT-916: WarpTalk cannot draw inside Google Meet, so people who are only in the Meet call never
+   * see the REC chip. The host has to tell them, and is told so before the press and again when
+   * the recording starts.
+   */
+  meetNotice: "People in the Meet call won't see that WarpTalk is recording. Let them know.",
+  started: "Recording started. Tell everyone in the call.",
+  dismiss: "Dismiss",
 } as const;
