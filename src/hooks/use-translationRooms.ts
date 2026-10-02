@@ -1,6 +1,15 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getLanguageName } from "@/lib/language/languages";
+import {
+  readLanguagePolicyNotice,
+  readStartLanguagesRefusal,
+  StartLanguagesRefusedError,
+} from "@/lib/meeting/start-language-policy";
 import { translationRoomService } from "@/services/translation-room.service";
 import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
 import { applyRoomLanguages } from "@/lib/meeting/room-languages-changed";
@@ -239,14 +248,64 @@ export function useSetArtifactAccess(roomId: string) {
   });
 }
 
+/**
+ * Start (or re-Start) a room.
+ *
+ * WT-708: Start re-checks the meeting's languages against the workspace's CURRENT whitelist, and
+ * both outcomes are handled here so every call site gets them — the room page, the lobby, the
+ * create dialog, the in-meeting Start and the bridge controls all go through this hook:
+ *   - narrowed: the response carries `languagePolicyNotice`, shown as a warning naming what was
+ *     dropped and what the meeting runs in;
+ *   - nothing left: the 403 is rethrown as a StartLanguagesRefusedError whose message is the
+ *     localized sentence naming both sets, so each caller's own `getErrorMessage(error, …)` toast
+ *     shows it instead of a generic "could not start".
+ */
 export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
+  const t = useTranslations("rooms.languagePolicy");
+  const locale = useLocale();
+
+  const languageNames = (codes: string[]) => {
+    let display: Intl.DisplayNames | null = null;
+    try {
+      display = new Intl.DisplayNames([locale], { type: "language" });
+    } catch {
+      display = null;
+    }
+    return codes.map((code) => display?.of(code) ?? getLanguageName(code)).join(", ");
+  };
+
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: translationRoom } = await translationRoomService.start(id);
-      return translationRoom;
+      try {
+        const { data: translationRoom } = await translationRoomService.start(id);
+        return translationRoom;
+      } catch (error) {
+        const refusal = readStartLanguagesRefusal(getErrorMessage(error, ""));
+        if (!refusal) throw error;
+        throw new StartLanguagesRefusedError(
+          t("startRefused", {
+            meeting: languageNames(refusal.meeting),
+            allowed: refusal.allowed.length > 0 ? languageNames(refusal.allowed) : t("none"),
+          }),
+          refusal,
+          error,
+        );
+      }
     },
-    onSuccess: (translationRoom, id) => {
+    onSuccess: (startedRoom, id) => {
+      const notice = readLanguagePolicyNotice(startedRoom);
+      if (notice) {
+        toast.warning(t("narrowedTitle", { dropped: languageNames(notice.dropped) }), {
+          description: t("narrowedDescription", {
+            dropped: languageNames(notice.dropped),
+            effective: languageNames(notice.effective),
+          }),
+          duration: 12_000,
+        });
+      }
+      // The notice belongs to this one response, not to the room: keep it out of the cache.
+      const translationRoom: TranslationRoomDto = { ...startedRoom, languagePolicyNotice: undefined };
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
       queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
