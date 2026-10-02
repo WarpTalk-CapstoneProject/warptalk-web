@@ -725,6 +725,19 @@ export function useUpdateGlossary(workspaceId: string, id: string) {
   });
 }
 
+/** PO 2026-10-02: change a glossary's pair in place; its chip moves to the new pair group. */
+export function useUpdateGlossaryLanguages(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...request }: { id: string; sourceLanguage: string; targetLanguage: string }) =>
+      WorkspaceService.updateGlossaryLanguages(id, request),
+    onSuccess: (glossary) => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaries(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryDetail(glossary.id) });
+    },
+  });
+}
+
 export function useDeleteGlossary(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({

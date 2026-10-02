@@ -90,6 +90,11 @@ export const API = {
     revoke: "/auth/voice-consent/revoke",
   },
   translationRooms: {
+    /**
+     * WT-880 — the languages the platform admin has published (enabled catalog rows), for any
+     * signed-in user. The glossary import template is offered for these.
+     */
+    publishedLanguages: "/translation-rooms/published-languages",
     create: "/translation-rooms",
     list: "/translation-rooms",
     history: "/translation-rooms/history",
@@ -411,7 +416,11 @@ export const API = {
      */
     bulkTerms: (id: string) => `/glossaries/${id}/terms/bulk`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+    /** PUT { sourceLanguage, targetLanguage } — change the pair in place; terms are kept as they are. */
+    languages: (id: string) => `/glossaries/${id}/languages`,
     global: "/glossaries/global",
+    /** WT-880 — the admin-configured import file shape, read-only, any signed-in user. */
+    importTemplate: "/glossaries/import-template",
   },
   assistant: {
     conversations: "/assistant/conversations",
@@ -963,5 +972,7 @@ export const API = {
     archive: (id: string) => `/admin/global-glossary/${id}/archive`,
     bulkImport: "/admin/global-glossary/bulk-import",
     audits: (id: string) => `/admin/global-glossary/${id}/audits`,
+    /** WT-880 — GET / PUT (whole config) / DELETE (back to the built-in default). */
+    importTemplate: "/admin/global-glossary/import-template",
   },
 } as const;

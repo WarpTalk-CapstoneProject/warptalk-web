@@ -544,6 +544,18 @@ export const WorkspaceService = {
     await apiClient.put(API.glossaries.get(id), request);
   },
 
+  /**
+   * PO 2026-10-02: change a glossary's language pair after creation. Owner/Admin only; the
+   * existing terms are not re-translated or changed. Answers the updated glossary.
+   */
+  async updateGlossaryLanguages(
+    id: string,
+    request: { sourceLanguage: string; targetLanguage: string },
+  ): Promise<GlossaryDto> {
+    const { data } = await apiClient.put<GlossaryDto>(API.glossaries.languages(id), request);
+    return data;
+  },
+
   async deleteGlossary(id: string): Promise<void> {
     await apiClient.delete(API.glossaries.get(id));
   },
