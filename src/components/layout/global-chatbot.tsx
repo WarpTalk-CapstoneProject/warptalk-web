@@ -2302,7 +2302,11 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                {/* Never overflow-hidden: the "/" and "@" menus below are `absolute bottom-full`
+                    children of this box, so clipping it cut both menus off entirely and left only
+                    their shadow on the composer's top edge (#591 → "@ shows no list", 3 Oct). The
+                    permission form rounds its own top corners instead. */}
+                <div className={`${contextInputShellClassName} relative z-10`}>
                   {/* What WarpBot is waiting on, where the user's hands already are. In the thread
                       it scrolled away behind the answer that followed it and was gone when the
                       conversation was reopened, leaving WarpBot talking about a card nobody could
@@ -2322,6 +2326,7 @@ export function GlobalChatbot() {
                       // Declined, or the receipt's four seconds are up. One path out, so a
                       // dismissal cannot leave the answered stamp behind for the next prompt.
                       onDismiss={clearPluginCards}
+                      className="overflow-hidden rounded-t-[inherit]"
                     />
                   ) : null}
                   {/* Slash Command Dropdown */}
