@@ -43,7 +43,14 @@ popup kept coming back over Chrome.
 - `isBridgeMeetCallOnScreen({ sensor, roomMeetCode })` - the desktop Meet sensor sees this room's
   call (a sighting whose code names another call does not count; a missing code proves nothing).
   No reading at all (browser tab, macOS, desktop without the sensor, first poll pending) is
-  "unknown" and counts as on screen, so those hosts keep the old behaviour.
+  "unknown" and counts as on screen, so those hosts keep the old behaviour. Where the desktop reads
+  Meet's call state (WT-911, `useBridgeMeetFollow().callPhase`, code-checked by `trustedMeetPhase`)
+  it comes first: `left` (or `leftCall`, i.e. during WT-913's 30 s prompt) is off screen even if the
+  tab still shows Meet's "You left" page; `lobby` / `in-call` are on screen; `unknown` / no phase
+  (older desktop, macOS, background tab) falls back to the URL sensor.
+- With WT-913 merged, leaving Meet also makes `bridgeListening` false, so the consent question goes
+  `not-required` and the loop stops; the gate above is what holds during the prompt and on desktops
+  without the call-state sensor.
 - `nextConsentRaise` returns `hold` instead of `raise` (and instead of `use-main`) while Meet is not
   on screen. Holding spends nothing; the hook re-decides as soon as Meet is back on screen (and at
   the recheck as a backstop).

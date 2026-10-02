@@ -692,3 +692,20 @@ test("popspam1002: Meet is on screen only for a sighting of this room's call; no
     "a different Meet call is not this room's call",
   );
 });
+
+test("popspam1002: the desktop's Meet call phase (WT-911) comes first; unknown falls back to the URL sensor", () => {
+  const visible = { meetWindowVisible: true, meetCode: "abc-defg-hij" };
+  const gone = { meetWindowVisible: false };
+  // "left" wins even with the tab still on Meet's "You left the meeting" page.
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: visible, roomMeetCode: "abc-defg-hij", callPhase: "left" }), false);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: null, callPhase: "left" }), false);
+  // Readable call state means Meet is on screen (tab or picture-in-picture).
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase: "in-call" }), true);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase: "lobby" }), true);
+  // An older desktop (null) or an unreadable Meet ("unknown") leaves it to the URL sensor.
+  for (const callPhase of [null, undefined, "unknown"] as const) {
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase }), false);
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: visible, roomMeetCode: "abc-defg-hij", callPhase }), true);
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: null, callPhase }), true);
+  }
+});

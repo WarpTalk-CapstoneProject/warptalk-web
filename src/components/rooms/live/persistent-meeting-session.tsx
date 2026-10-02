@@ -1166,6 +1166,8 @@ export function PersistentMeetingSession({
   const consentMeetOnScreen = isBridgeMeetCallOnScreen({
     sensor: meetSensor,
     roomMeetCode: extractMeetCodeFromUrl(room?.externalMeetingUrl),
+    // WT-911 call state where the desktop has it; "left" also covers the 30 s before WT-913 ends it.
+    callPhase: meetFollow.leftCall ? "left" : meetFollow.callPhase,
   });
 
   // The relay to the popup. Main stays the one source of truth: it publishes this state and

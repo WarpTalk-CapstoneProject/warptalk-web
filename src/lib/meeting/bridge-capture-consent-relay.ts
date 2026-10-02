@@ -624,12 +624,22 @@ export function applyConsentRaise(
  * proves nothing either way. No reading at all - a browser tab, macOS, a desktop build without the
  * sensor, the first poll not back yet - is "unknown", and unknown keeps the old behaviour: it must
  * never be read as "Meet is gone", or those hosts would never be asked at all.
+ *
+ * WT-911/913: where the desktop reads Meet's own call state, its phase for THIS room's call
+ * (`trustedMeetPhase`, already code-checked) comes first. `left` is off screen whatever the URL
+ * sensor says (the tab can still be open on Meet's "You left the meeting" page); `lobby` and
+ * `in-call` are only readable while Meet is on screen (tab or picture-in-picture), so they count as
+ * on screen. `unknown` and null (an older desktop, macOS, a background tab) say nothing, and the URL
+ * sensor decides as before.
  */
 export function isBridgeMeetCallOnScreen(input: {
   sensor: { meetWindowVisible: boolean; meetCode?: string } | null;
   roomMeetCode?: string;
+  callPhase?: "lobby" | "in-call" | "left" | "unknown" | null;
 }): boolean {
-  const { sensor, roomMeetCode } = input;
+  const { sensor, roomMeetCode, callPhase } = input;
+  if (callPhase === "left") return false;
+  if (callPhase === "in-call" || callPhase === "lobby") return true;
   if (sensor === null) return true;
   const differentCall =
     Boolean(sensor.meetCode) && Boolean(roomMeetCode) && sensor.meetCode !== roomMeetCode;
