@@ -136,6 +136,8 @@
     "billingPolicyHeading": "Chính sách thanh toán",
     "pricingEconomicsHeading": "Cấu trúc giá",
     "pricingEconomicsSubnote": "Cùng một cấu hình mà bộ kiểm tra gói và bộ đọc biên lợi nhuận bảng giá tham chiếu — cũng có thể truy cập từ Gói & bảng giá. Giá bán cho khách hàng do Stripe quản lý, nên giá trị 1 credit và giá sàn mỗi credit không còn được chỉnh ở đây; chúng chỉ thay đổi qua migration.",
+    "meetingCreditRatesHeading": "Mức trừ credit của cuộc họp",
+    "meetingCreditRatesSubnote": "Số credit một cuộc họp bị trừ cho mỗi giây. Thay đổi có hiệu lực từ lần trừ kế tiếp; phần đã trừ giữ nguyên mức giá cũ.",
     "languageCatalogHeading": "Danh mục ngôn ngữ",
     "voiceConsentHeading": "Đồng ý nhân bản giọng nói",
     "voiceConsentCount": "{count, plural, other {# quyết định đã ghi nhận}}",
@@ -155,6 +157,28 @@
       "saveSuccessToast": "Đã lưu chính sách thanh toán.",
       "saveErrorToast": "Không thể lưu chính sách thanh toán.",
       "errorWhat": "chính sách thanh toán"
+    },
+    "meetingCreditRates": {
+      "labels": {
+        "TRANSLATION": "Dịch",
+        "AUDIO_DUBBING_STANDARD": "Lồng tiếng, giọng tiêu chuẩn",
+        "AUDIO_DUBBING_VOICE_CLONE": "Lồng tiếng, giọng clone"
+      },
+      "hints": {
+        "TRANSLATION": "Mỗi giây lời nói gốc, tính cho từng ngôn ngữ được dịch sang.",
+        "AUDIO_DUBBING_STANDARD": "Mỗi giây âm thanh tạo bằng giọng trong danh mục.",
+        "AUDIO_DUBBING_VOICE_CLONE": "Mỗi giây âm thanh tạo bằng giọng clone của người nói."
+      },
+      "unit": "credit / giây",
+      "perMinute": "≈ {credits} credit mỗi phút",
+      "ariaLabel": "{label}, credit mỗi giây",
+      "missing": "Chưa có rate card đang áp dụng",
+      "invalid": "Nhập mức giá lớn hơn 0, tối đa {max}, không quá 6 chữ số thập phân.",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "saveSuccessToast": "{label} hiện là {price} credit mỗi giây.",
+      "saveErrorToast": "Không lưu được mức giá.",
+      "errorWhat": "Mức trừ credit của cuộc họp"
     },
     "pricingEconomics": {
       "errorWhat": "cấu hình giá",

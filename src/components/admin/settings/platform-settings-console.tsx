@@ -61,7 +61,7 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { PlatformSettingDto, PlatformSettingsConsoleDto } from "@/types/admin-platform-settings";
 
-import { BillingPolicyPanel, PricingEconomicsPanel } from "./billing-panels";
+import { BillingPolicyPanel, MeetingCreditRatesPanel, PricingEconomicsPanel } from "./billing-panels";
 import { IntegrationsPanel } from "./integrations-panel";
 import { LanguageCatalogPanel, VoiceConsentSection } from "./reference-panels";
 import { RetentionPanel } from "./retention-panel";
@@ -489,6 +489,10 @@ function CategoryView({
         <>
           <h3 className="mt-8 text-sm font-semibold text-ink">{tLegacy("billingPolicyHeading")}</h3>
           <BillingPolicyPanel />
+
+          <h3 className="mt-6 text-sm font-semibold text-ink">{tLegacy("meetingCreditRatesHeading")}</h3>
+          <p className="mt-1 text-xs text-ink-muted">{tLegacy("meetingCreditRatesSubnote")}</p>
+          <MeetingCreditRatesPanel />
 
           <h3 className="mt-6 text-sm font-semibold text-ink">{tLegacy("pricingEconomicsHeading")}</h3>
           <p className="mt-1 text-xs text-ink-muted">{tLegacy("pricingEconomicsSubnote")}</p>

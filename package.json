@@ -188,7 +188,7 @@
     "test:admin-surface": "node scripts/check-admin-surface-contract.mjs && node scripts/check-admin-pricing-knobs-contract.mjs",
     "test:admin-insights": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/admin/__tests__/insights-report.test.ts src/lib/admin/__tests__/insights-report-docx.test.ts src/lib/admin/__tests__/insights-period.test.ts src/lib/admin/__tests__/insights-metrics.test.ts src/lib/admin/__tests__/insights-pnl.test.ts src/lib/admin/__tests__/insights-links.test.ts src/lib/admin/__tests__/billing-growth.test.ts src/lib/admin/__tests__/chart-scale.test.ts",
     "test:admin-money": "node --experimental-strip-types --test src/lib/billing/__tests__/admin-money.test.ts",
-    "test:rate-card-margin": "node --experimental-strip-types --test src/lib/billing/__tests__/rate-card-margin.test.ts",
+    "test:rate-card-margin": "node --experimental-strip-types --test src/lib/billing/__tests__/rate-card-margin.test.ts src/lib/billing/__tests__/meeting-credit-rates.test.ts",
     "test:admin-contract-billing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/contract-billing.test.ts src/lib/billing/__tests__/rate-card-preview.test.ts && node scripts/check-admin-contract-billing-contract.mjs",
     "test:admin-feedback-view": "node --experimental-strip-types --test src/lib/feedback/__tests__/admin-feedback-view.test.ts",
     "test:catalog-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/catalog-drift.test.ts src/lib/language/__tests__/admin-language-form.test.ts",

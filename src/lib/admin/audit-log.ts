@@ -58,6 +58,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "rate_card.upserted": "Rate card published",
   "rate_card.deactivated": "Rate card retired",
   "rate_card.provider_cost_set": "Provider cost set",
+  "rate_card.credit_price_set": "Meeting credit rate changed",
   "pricing_config.updated": "Pricing settings changed",
   "billing_policy.updated": "Billing policy changed",
   "subscription.contract_created": "Contract created",

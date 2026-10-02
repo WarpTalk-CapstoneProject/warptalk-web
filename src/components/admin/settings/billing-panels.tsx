@@ -7,8 +7,8 @@
  * category, beside the registry's billing settings.
  *
  * Writes are gated the way the server gates them: the VAT rate needs settings.manage
- * (BillingPolicyController); the FX actions and the pricing dialog need billing.pricing_manage
- * (AdminFxRateController, UsagesController) — and, since they live on the settings console,
+ * (BillingPolicyController); the FX actions, the pricing dialog and the meeting credit rates need
+ * billing.pricing_manage (AdminFxRateController, UsagesController) — and, since they live on the settings console,
  * settings.manage as well. A read-only viewer sees the values and no buttons.
  */
 
@@ -26,13 +26,23 @@ import { useAdminFxActions, useAdminFxRate } from "@/hooks/use-admin-insights";
 import {
   useAdminBillingPolicy,
   useAdminPricingConfig,
+  useAdminRateCards,
+  useSetAdminRateCardCreditPrice,
   useUpdateAdminBillingPolicy,
   useUpdateAdminPricingConfig,
 } from "@/hooks/use-admin-pricing";
+import {
+  MAX_CREDIT_UNIT_PRICE,
+  creditsPerMinute,
+  meetingCreditRates,
+  parseCreditUnitPrice,
+  type MeetingCreditChargeType,
+} from "@/lib/billing/meeting-credit-rates";
 import { fxLineView } from "@/lib/admin/insights-pnl";
 import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
+import type { UsageRateCardDto } from "@/types/admin-pricing";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 // USD per Cartesia credit is ~0.00004: the default six-digit cut would show 0.000039.
@@ -126,6 +136,113 @@ export function BillingPolicyPanel() {
         </KnobRow>
       )}
     </AdminPanel>
+  );
+}
+
+/**
+ * What a meeting is charged per second of translation and of dubbing — the credit-unit rate cards
+ * billing_worker settles on. One number per charge type; saving supersedes the card, so the next
+ * charge uses the new price and everything already settled keeps the one it was charged at.
+ */
+export function MeetingCreditRatesPanel() {
+  const t = useTranslations("adminPlansSettings.settings.meetingCreditRates");
+  const canManageSettings = useCan(ADMIN_PERMISSIONS.settingsManage);
+  const canManagePricing = useCan(ADMIN_PERMISSIONS.billingPricingManage);
+  const canManage = canManageSettings && canManagePricing;
+  const cardsQuery = useAdminRateCards();
+
+  return (
+    <AdminPanel className="mt-3">
+      {cardsQuery.isError ? (
+        <PanelError what={t("errorWhat")} onRetry={() => void cardsQuery.refetch()} />
+      ) : cardsQuery.isPending ? (
+        <div className="space-y-2 p-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-9 animate-pulse rounded bg-surface-2" />
+          ))}
+        </div>
+      ) : (
+        meetingCreditRates(cardsQuery.data ?? []).map(({ chargeType, card }) => (
+          // Keyed on the card as well: a save supersedes it, and the row's draft belongs to the
+          // card it was typed against.
+          <MeetingCreditRateRow
+            key={`${chargeType}:${card?.id ?? "none"}`}
+            chargeType={chargeType}
+            card={card}
+            canManage={canManage}
+          />
+        ))
+      )}
+    </AdminPanel>
+  );
+}
+
+function MeetingCreditRateRow({
+  chargeType,
+  card,
+  canManage,
+}: {
+  chargeType: MeetingCreditChargeType;
+  card: UsageRateCardDto | null;
+  canManage: boolean;
+}) {
+  const t = useTranslations("adminPlansSettings.settings.meetingCreditRates");
+  const setPrice = useSetAdminRateCardCreditPrice();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const label = t(`labels.${chargeType}`);
+  const value = draft ?? (card ? String(card.unitPrice) : "");
+  const parsed = parseCreditUnitPrice(value);
+  const isDirty = draft !== null && card != null && parsed !== card.unitPrice;
+  const shown = parsed ?? card?.unitPrice ?? null;
+
+  const save = async () => {
+    if (!card || parsed == null) return;
+    try {
+      const saved = await setPrice.mutateAsync({ id: card.id, request: { unitPrice: parsed } });
+      setDraft(null);
+      toast.success(t("saveSuccessToast", { label, price: saved.unitPrice }));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("saveErrorToast")));
+    }
+  };
+
+  return (
+    <KnobRow label={label} hint={t(`hints.${chargeType}`)}>
+      {card ? (
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <Input
+              value={value}
+              onChange={(event) => setDraft(event.target.value)}
+              inputMode="decimal"
+              disabled={!canManage || setPrice.isPending}
+              readOnly={!canManage}
+              aria-label={t("ariaLabel", { label })}
+              aria-invalid={draft !== null && parsed == null}
+              className="h-9 w-28 text-right tabular-nums"
+            />
+            <span className="text-xs text-ink-muted">{t("unit")}</span>
+            {canManage ? (
+              <Button size="sm" disabled={!isDirty || parsed == null || setPrice.isPending} onClick={() => void save()}>
+                {setPrice.isPending ? t("saving") : t("save")}
+              </Button>
+            ) : null}
+          </div>
+          {draft !== null && parsed == null ? (
+            <p role="alert" className="text-[11px] text-destructive">
+              {t("invalid", { max: MAX_CREDIT_UNIT_PRICE })}
+            </p>
+          ) : shown != null ? (
+            <p className="text-[11px] tabular-nums text-ink-muted">
+              {t("perMinute", { credits: numberFormatter.format(creditsPerMinute(shown)) })}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <span className="text-[13px] text-ink-muted">{t("missing")}</span>
+      )}
+    </KnobRow>
   );
 }
 
