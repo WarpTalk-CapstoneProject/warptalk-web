@@ -55,7 +55,9 @@ import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
-import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
+import { isDesktopApp, openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
+import { isRecordFinalizing } from "@/lib/meeting/room-history-mapping";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -938,6 +940,28 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
+
+  // WT-930: the desktop app lands here the moment End is pressed, with the main window brought up
+  // over Meet, while the finalizer is still writing the transcript and summary. Rendering the full
+  // record against half-written data is the moment the window went white in the report. Until the
+  // record exists this page is a loading state and nothing else; `useEndedRoomRecord` polls, so it
+  // clears on its own. See isRecordFinalizing for why the transcript artifact is the signal.
+  if (
+    isDesktopApp()
+    && isRecordFinalizing({ status: room.status, endedAt: room.endedAt, record: endedRecordQuery.data })
+  ) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <LumidotSpinner />
+          <p className="text-[13px] font-medium text-ink">{t("record.finalizing.title")}</p>
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+            {t("record.finalizing.body")}
+          </p>
+        </div>
+      </div>
+    );
+  }
   // WT-715: one host rule, shared with the setup and End gates below.
   const isHost = isRoomHost(room, user);
   const isActiveInMeeting = activeRoomId === room.id;
