@@ -315,7 +315,7 @@ function CreditPackEditor({
   };
 
   const preview = packRequest(draft);
-  const previewPrice = preview.priceVnd ?? preview.priceUsd;
+  const previewPrice = preview.priceUsd ?? preview.priceVnd;
 
   return (
     <EditorShell
@@ -357,11 +357,11 @@ function CreditPackEditor({
       </Section>
 
       <Section title={t("sections.price")}>
-        <Field label={t("fields.priceVnd")} htmlFor="pack-vnd" hint={t("fields.priceHint")}>
-          <Input id="pack-vnd" inputMode="numeric" value={draft.priceVnd} onChange={(e) => set("priceVnd", e.target.value)} />
-        </Field>
         <Field label={t("fields.priceUsd")} htmlFor="pack-usd" hint={t("fields.priceHint")}>
           <Input id="pack-usd" inputMode="decimal" value={draft.priceUsd} onChange={(e) => set("priceUsd", e.target.value)} />
+        </Field>
+        <Field label={t("fields.priceVnd")} htmlFor="pack-vnd" hint={t("fields.priceHint")}>
+          <Input id="pack-vnd" inputMode="numeric" value={draft.priceVnd} onChange={(e) => set("priceVnd", e.target.value)} />
         </Field>
       </Section>
 
@@ -420,7 +420,7 @@ function CreditPackEditor({
           validityDays={preview.validityDays}
           purchasesRemaining={preview.maxPerWorkspace}
           availableUntil={preview.availableUntil}
-          price={previewPrice !== null && Number.isFinite(previewPrice) ? { amount: previewPrice, currency: preview.priceVnd !== null ? "vnd" : "usd" } : null}
+          price={previewPrice !== null && Number.isFinite(previewPrice) ? { amount: previewPrice, currency: preview.priceUsd !== null ? "usd" : "vnd" } : null}
           action={<Button size="sm" disabled>{t("previewBuy")}</Button>}
         />
       </Preview>
@@ -545,7 +545,7 @@ function AddonEditor({
   };
 
   const preview = addonRequest(draft);
-  const previewMonthly = preview.priceMonthlyVnd ?? preview.priceMonthlyUsd;
+  const previewMonthly = preview.priceMonthlyUsd ?? preview.priceMonthlyVnd;
 
   return (
     <EditorShell
@@ -617,17 +617,17 @@ function AddonEditor({
       </Section>
 
       <Section title={t("sections.price")}>
-        <Field label={t("fields.priceMonthlyVnd")} htmlFor="addon-mvnd" hint={t("fields.perUnitHint")}>
-          <Input id="addon-mvnd" inputMode="numeric" value={draft.priceMonthlyVnd} onChange={(e) => set("priceMonthlyVnd", e.target.value)} />
-        </Field>
-        <Field label={t("fields.priceYearlyVnd")} htmlFor="addon-yvnd" hint={t("fields.perUnitHint")}>
-          <Input id="addon-yvnd" inputMode="numeric" value={draft.priceYearlyVnd} onChange={(e) => set("priceYearlyVnd", e.target.value)} />
-        </Field>
         <Field label={t("fields.priceMonthlyUsd")} htmlFor="addon-musd" hint={t("fields.perUnitHint")}>
           <Input id="addon-musd" inputMode="decimal" value={draft.priceMonthlyUsd} onChange={(e) => set("priceMonthlyUsd", e.target.value)} />
         </Field>
         <Field label={t("fields.priceYearlyUsd")} htmlFor="addon-yusd" hint={t("fields.perUnitHint")}>
           <Input id="addon-yusd" inputMode="decimal" value={draft.priceYearlyUsd} onChange={(e) => set("priceYearlyUsd", e.target.value)} />
+        </Field>
+        <Field label={t("fields.priceMonthlyVnd")} htmlFor="addon-mvnd" hint={t("fields.perUnitHint")}>
+          <Input id="addon-mvnd" inputMode="numeric" value={draft.priceMonthlyVnd} onChange={(e) => set("priceMonthlyVnd", e.target.value)} />
+        </Field>
+        <Field label={t("fields.priceYearlyVnd")} htmlFor="addon-yvnd" hint={t("fields.perUnitHint")}>
+          <Input id="addon-yvnd" inputMode="numeric" value={draft.priceYearlyVnd} onChange={(e) => set("priceYearlyVnd", e.target.value)} />
         </Field>
       </Section>
 
@@ -652,7 +652,7 @@ function AddonEditor({
           minQuantity={Number.isFinite(preview.minQuantity) ? preview.minQuantity : 1}
           maxQuantity={Number.isFinite(preview.maxQuantity) ? preview.maxQuantity : 1}
           cycle="monthly"
-          price={previewMonthly !== null && Number.isFinite(previewMonthly) ? { amount: previewMonthly, currency: preview.priceMonthlyVnd !== null ? "vnd" : "usd" } : null}
+          price={previewMonthly !== null && Number.isFinite(previewMonthly) ? { amount: previewMonthly, currency: preview.priceMonthlyUsd !== null ? "usd" : "vnd" } : null}
           action={<Button size="sm" variant="outline" disabled>{t("previewAdd")}</Button>}
         />
       </Preview>
@@ -688,7 +688,7 @@ function couponDraft(coupon: CouponDto | null): CouponDraft {
     discountType: coupon?.discountType ?? "percent",
     percentOff: num(coupon?.percentOff),
     amountOff: num(coupon?.amountOff),
-    amountOffCurrency: coupon?.amountOffCurrency ?? "vnd",
+    amountOffCurrency: coupon?.amountOffCurrency ?? "usd",
     appliesToTypes: coupon?.appliesToTypes ?? ["credit_pack"],
     appliesToIds: coupon?.appliesToIds ?? [],
     duration: coupon?.duration ?? "once",
@@ -826,8 +826,8 @@ function CouponEditor({
             </Field>
             <Field label={t("fields.currency")} htmlFor="coupon-currency">
               <select id="coupon-currency" className={selectClass} disabled={termsLocked} value={draft.amountOffCurrency} onChange={(e) => set("amountOffCurrency", e.target.value as "vnd" | "usd")}>
-                <option value="vnd">VND</option>
                 <option value="usd">USD</option>
+                <option value="vnd">VND</option>
               </select>
             </Field>
           </div>

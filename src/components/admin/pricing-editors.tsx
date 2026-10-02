@@ -34,7 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { usePreviewAdminRateCard } from "@/hooks/use-admin-pricing";
 import { getErrorMessage } from "@/lib/api/errors";
-import { formatAdminMoney } from "@/lib/billing/admin-money";
+import { formatMoney } from "@/lib/format/currency";
 import {
   isCreditRateCard,
   parseProviderCostUsd,
@@ -48,7 +48,7 @@ import {
 } from "@/lib/billing/rate-card-preview";
 import {
   PLAN_BILLING_CYCLE,
-  PLAN_CURRENCIES,
+  planCurrencyOptions,
   applyPlanEdits,
   validatePlanRequest,
 } from "@/lib/billing/plan-request";
@@ -280,11 +280,12 @@ const NEW_PLAN_SEED: PlanDto = {
   slug: "",
   tier: "standard",
   price: 0,
-  currency: "VND",
+  // USD is the accounting currency; the per-credit overage default is the backend's (4 VND at 26,300).
+  currency: "USD",
   billingCycle: PLAN_BILLING_CYCLE,
   creditsPerCycle: 0,
   overageCapCredits: 0,
-  overagePricePerCredit: 4,
+  overagePricePerCredit: 0.0001520913,
   lowBalanceThresholdCredits: 0,
   rolloverCapCredits: 0,
   invoiceTermsDays: 15,
@@ -432,7 +433,7 @@ function PlanEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {planCurrencyOptions(plan.id ? plan.currency : null).map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>
@@ -797,7 +798,8 @@ function RateCardEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {/* Part of the card's identity: the service matches on it and refuses any other. */}
+                  {[card.currency.toUpperCase()].map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>
@@ -858,29 +860,26 @@ function RateCardEditForm({
               <dd className="text-right tabular-nums text-ink">{preview.result.unitPriceCredits}</dd>
               <dt className="text-ink-muted">{t("preview.customerPrice")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.customerPriceVnd, currency: "VND" })}{" "}
-                {t("preview.vndSuffix")}
+                {formatMoney(preview.result.customerPriceUsd, "USD")}
               </dd>
               <dt className="text-ink-muted">{t("preview.providerCost")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.providerCostVnd, currency: "VND" })}{" "}
-                {t("preview.vndSuffix")}
+                {formatMoney(preview.result.providerCostUsd, "USD")}
               </dd>
               <dt className="text-ink-muted">{t("preview.margin")}</dt>
               <dd
                 className={cn(
                   "text-right font-semibold tabular-nums",
-                  preview.result.marginVnd < 0 ? "text-destructive" : "text-ink",
+                  preview.result.marginUsd < 0 ? "text-destructive" : "text-ink",
                 )}
               >
-                {formatAdminMoney({ amount: preview.result.marginVnd, currency: "VND" })} ·{" "}
+                {formatMoney(preview.result.marginUsd, "USD")} ·{" "}
                 {formatMarginRatio(preview.result.marginRatio)}
               </dd>
               <dt className="col-span-2 mt-1 font-mono text-[10px] text-ink-subtle">
                 {t("preview.formulaLine", {
                   formula: preview.result.formula,
-                  fx: preview.result.fxRateUsdVnd,
-                  credit: preview.result.creditValueVnd,
+                  credit: preview.result.creditValueUsd,
                 })}
               </dt>
             </dl>
@@ -1078,7 +1077,8 @@ function RateCardDeactivateForm({
         <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-muted">
           {card.chargeType} · {card.provider}
           {card.model ? ` · ${card.model}` : ""} · {tRateCard("perUnit", { unit: card.unit })} ·{" "}
-          {formatAdminMoney({ amount: card.unitPrice, currency: card.currency })} ({card.currency})
+          {/* unitPrice is credits per unit on every card; `currency` is only the card's label. */}
+          {card.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 6 })} credits ({card.currency})
         </p>
         <Field label={t("confirmLabel", { chargeType: card.chargeType })} htmlFor="card-deactivate-confirm">
           <Input
@@ -1110,7 +1110,7 @@ function RateCardDeactivateForm({
 /**
  * The knobs this dialog edits, in the order they are read on screen.
  *
- * WT-690: `creditValueVnd` and `minimumPricePerCreditVnd` are deliberately absent. Stripe owns
+ * WT-690: `creditValueUsd` and `minimumPricePerCreditUsd` are deliberately absent. Stripe owns
  * customer pricing; billing still reads both (top-up pricing and the plan/contract price floor),
  * so the request omits them and the backend keeps the stored values.
  *
@@ -1120,7 +1120,6 @@ function RateCardDeactivateForm({
 const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   // No fxRateUsdVnd: the rate is Stripe's, recorded daily; an override is its own explicit action on
   // /admin/settings (PUT /admin/billing/fx/override). Sending it here would read as an override.
-  "minimumContractPriceVnd",
   "minimumContractPriceUsd",
   "salesUsageWeight",
   "salesMembersWeight",

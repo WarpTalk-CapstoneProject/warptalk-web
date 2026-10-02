@@ -11,7 +11,7 @@
  *   auth             ~/admin/users/workspaces/{id}/revoke-sessions
  *
  * Every write carries a reason and is recorded in the platform audit log before it takes effect;
- * the actor is the token's, never the body's. Money is VND; a null amount is "cannot be computed"
+ * the actor is the token's, never the body's. Money is USD; a null amount is "cannot be computed"
  * (its note says why) and renders as "—", never as 0.
  */
 

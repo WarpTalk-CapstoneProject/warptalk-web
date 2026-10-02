@@ -63,6 +63,7 @@ import {
 } from "@/lib/admin/list-state";
 import { matchesSearch } from "@/lib/admin/search-text";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
+import { formatMoney } from "@/lib/format/currency";
 import {
   marginLabel,
   marginTone,
@@ -406,8 +407,8 @@ function RateCardMargin({ card }: { card: UsageRateCardDto }) {
   const margin = resolveRateCardMargin(card);
   const tone = marginTone(margin);
   // The column this page exists for. It is the STORED multiplier where there is one, and a named
-  // refusal where price and cost are in different currencies — never price ÷ cost across VND and
-  // USD, which produces a plausible number that is off by the exchange rate.
+  // refusal where the price in credits cannot be put in dollars — never credits ÷ dollars, which
+  // produces a plausible number that is off by the value of a credit.
   return (
     <Tooltip
       content={
@@ -542,7 +543,8 @@ function RateCardsList({
       className: "w-[130px]",
       sortField: "price",
       defaultDirection: "desc",
-      cell: (card) => formatAdminMoney({ amount: card.unitPrice, currency: card.currency }),
+      // Credits per unit on every card: `currency` is only the card's label, never the price's unit.
+      cell: (card) => `${card.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 6 })} credits`,
     },
     {
       id: "providerCost",
@@ -553,7 +555,7 @@ function RateCardsList({
         <span className="text-ink-muted">
           {card.providerUnitCostUsd == null
             ? "—"
-            : formatAdminMoney({ amount: card.providerUnitCostUsd, currency: "USD" })}
+            : formatMoney(card.providerUnitCostUsd, "USD")}
         </span>
       ),
     },
@@ -870,7 +872,7 @@ function PlansAndPricing() {
                 />
                 <ConfigRow
                   label={t("configRows.minimumContractPrice")}
-                  value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
+                  value={formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}
                 />
                 <ConfigRow label={t("configRows.salesWeightUsage")} value={config.salesUsageWeight} />
                 <ConfigRow

@@ -275,10 +275,10 @@
   },
   "contractBilling": {
     "termLabels": {
-      "contractPriceVnd": "Contract price per cycle (VND)",
+      "contractPriceUsd": "Contract price per cycle (USD)",
       "creditsPerCycleOverride": "Credits per cycle",
       "overageCapCreditsOverride": "Overage cap (credits)",
-      "overagePricePerCreditOverride": "Overage price per credit (VND)",
+      "overagePricePerCreditOverride": "Overage price per credit (USD)",
       "invoiceTermsDaysOverride": "Invoice terms (days)",
       "billingContactEmail": "Billing contact email"
     },
@@ -314,7 +314,6 @@
     "cancel": "Cancel",
     "review": "Review",
     "errorChoosePlan": "Choose the plan this contract is written against.",
-    "errorPlanCurrency": "{planName} is priced in {currency}. Enter the contract price in VND.",
     "errorNoChanges": "Nothing has changed.",
     "errorSaveTerms": "The contract terms could not be saved.",
     "errorCreateContract": "The contract could not be created.",

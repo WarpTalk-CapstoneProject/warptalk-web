@@ -11,7 +11,7 @@ import { useAdminExpenseReport } from "@/hooks/use-admin-expenses";
 import { categoryStacks } from "@/lib/admin/expenses";
 import { formatMoney } from "@/lib/format/currency";
 
-const vnd = (value: number) => formatMoney(Math.round(value), "VND");
+const usd = (value: number) => formatMoney(value, "USD");
 
 /**
  * Monthly totals by category (stacked), the trend line with budget, the top vendors, and what is
@@ -27,29 +27,29 @@ export function ExpenseReports({ range }: { range: { from: string; to: string } 
   if (report.isError || !data) return <p className="text-[13px] text-destructive">{t("error")}</p>;
 
   const labels = data.months.map((month) => month.month);
-  const hasBudget = data.months.some((month) => month.budgetVnd !== null);
-  const commitmentsTotal = data.commitments.reduce((sum, row) => sum + (row.amountVnd ?? 0), 0);
+  const hasBudget = data.months.some((month) => month.budgetUsd !== null);
+  const commitmentsTotal = data.commitments.reduce((sum, row) => sum + (row.amountUsd ?? 0), 0);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label={t("total")} value={vnd(data.totalVnd)} />
-        <Tile label={t("monthlyAverage")} value={vnd(data.monthlyAverageVnd)} />
-        <Tile label={t("runRate")} value={vnd(data.recurringMonthlyRunRateVnd)} caption={t("runRateCaption")} />
-        <Tile label={t("committed")} value={vnd(commitmentsTotal)} caption={t("committedCaption", { count: data.commitments.length })} />
+        <Tile label={t("total")} value={usd(data.totalUsd)} />
+        <Tile label={t("monthlyAverage")} value={usd(data.monthlyAverageUsd)} />
+        <Tile label={t("runRate")} value={usd(data.recurringMonthlyRunRateUsd)} caption={t("runRateCaption")} />
+        <Tile label={t("committed")} value={usd(commitmentsTotal)} caption={t("committedCaption", { count: data.commitments.length })} />
       </div>
       {data.fxNote ? <p className="text-[12px] text-ink-muted">{data.fxNote}</p> : null}
 
       <AdminPanel className="p-4">
         <h3 className="mb-3 text-[13px] font-semibold text-ink">{t("byCategory")}</h3>
-        {data.totalVnd > 0 ? (
+        {data.totalUsd > 0 ? (
           <TimeSeriesChart
             labels={labels}
             variant="bar"
             stacked
             series={stacks.map((stack) => ({ key: stack.key, label: stack.label, color: stack.color, values: stack.values }))}
-            formatValue={vnd}
-            tooltipFooter={(index) => t("monthTotal", { total: vnd(data.months[index]?.totalVnd ?? 0) })}
+            formatValue={usd}
+            tooltipFooter={(index) => t("monthTotal", { total: usd(data.months[index]?.totalUsd ?? 0) })}
             ariaLabel={t("byCategory")}
             height={240}
           />
@@ -64,10 +64,10 @@ export function ExpenseReports({ range }: { range: { from: string; to: string } 
           labels={labels}
           variant="line"
           series={[
-            { key: "spend", label: t("spend"), values: data.months.map((month) => month.totalVnd) },
-            ...(hasBudget ? [{ key: "budget", label: t("budget"), values: data.months.map((month) => month.budgetVnd) }] : []),
+            { key: "spend", label: t("spend"), values: data.months.map((month) => month.totalUsd) },
+            ...(hasBudget ? [{ key: "budget", label: t("budget"), values: data.months.map((month) => month.budgetUsd) }] : []),
           ]}
-          formatValue={vnd}
+          formatValue={usd}
           describeGap={() => t("noBudget")}
           ariaLabel={t("trend")}
           height={200}
@@ -82,10 +82,10 @@ export function ExpenseReports({ range }: { range: { from: string; to: string } 
               rows={data.topVendors.map((vendor) => ({
                 key: vendor.vendor,
                 label: vendor.vendor,
-                segments: [{ key: "amount", label: vendor.categoryName ?? vendor.vendor, value: vendor.amountVnd }],
-                valueText: vnd(vendor.amountVnd),
+                segments: [{ key: "amount", label: vendor.categoryName ?? vendor.vendor, value: vendor.amountUsd }],
+                valueText: usd(vendor.amountUsd),
               }))}
-              formatValue={vnd}
+              formatValue={usd}
               ariaLabel={t("topVendors")}
               showShare
             />
@@ -122,7 +122,7 @@ export function ExpenseReports({ range }: { range: { from: string; to: string } 
                     </td>
                     <td className="py-1.5 text-right tabular-nums text-ink">
                       {formatMoney(row.amount, row.currency)}
-                      {row.currency !== "VND" && row.amountVnd !== null ? <span className="block text-[10px] text-ink-subtle">{vnd(row.amountVnd)}</span> : null}
+                      {row.currency !== "USD" && row.amountUsd !== null ? <span className="block text-[10px] text-ink-subtle">{usd(row.amountUsd)}</span> : null}
                     </td>
                   </tr>
                 ))}

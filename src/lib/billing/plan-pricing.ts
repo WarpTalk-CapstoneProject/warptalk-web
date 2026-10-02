@@ -68,14 +68,15 @@ export function checkoutTotal(plan: PlanDto, interval: BillingInterval): number 
  * It lives beside `checkoutTotal` for the same reason that function exists: an amount and its
  * denomination are one decision, and splitting them across two files is how they drifted.
  *
- * Defaults to VND when there is no plan, which is correct rather than merely safe — the only
- * plan-less purchase is a credit top-up, priced server-side against `credit_value_vnd`.
+ * Defaults to USD (the accounting currency) when there is no plan, which is correct rather than
+ * merely safe — the only plan-less purchase is a credit top-up, priced server-side in USD against
+ * `credit_value_usd`.
  *
  * The server has always handled the rest: `StripePaymentService` passes VND through as a
  * zero-decimal currency and multiplies everything else by 100. It was simply never asked to.
  */
 export function checkoutCurrency(plan?: PlanDto | null): string {
-  return (plan?.currency ?? "vnd").toLowerCase();
+  return (plan?.currency ?? "usd").toLowerCase();
 }
 
 /** The plans a buyer may choose from, in the order the platform wants them shown. */

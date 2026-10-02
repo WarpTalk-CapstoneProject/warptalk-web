@@ -148,7 +148,7 @@
       "newUsers": "{count} mới trong 6 tháng"
     },
     "revenueTitle": "Doanh thu theo tháng",
-    "revenueNote": "Các khoản đã thanh toán, tính bằng VND; một lần checkout Stripe và hóa đơn đầu tiên của nó chỉ tính một lần. Tháng gần nhất là tính đến hôm nay.",
+    "revenueNote": "Các khoản đã thanh toán, tính bằng USD (khoản VND quy đổi theo tỷ giá Stripe của ngày đó); một lần checkout Stripe và hóa đơn đầu tiên của nó chỉ tính một lần. Tháng gần nhất là tính đến hôm nay.",
     "activeTitle": "Tài khoản và workspace hoạt động",
     "activeNote": "Theo tháng: tài khoản đã đăng nhập, workspace đã dùng credit. Tháng gần nhất là tính đến hôm nay.",
     "usersTitle": "Tăng trưởng người dùng và workspace",

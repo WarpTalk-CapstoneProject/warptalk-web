@@ -158,7 +158,7 @@
     },
     "mrr": {
       "note": "Doanh thu định kỳ hàng tháng",
-      "cannotTotal": "Không thể tính tổng bằng VND"
+      "cannotTotal": "Không thể tính tổng bằng USD"
     },
     "churn": {
       "breakdown": "{cancelled} đã huỷ / {atMonthStart} vào đầu tháng",
@@ -167,7 +167,7 @@
     "outstanding": {
       "invoiceCount": "{count, plural, other {# hoá đơn}}",
       "pastDueCount": "{count, plural, other {# quá hạn}}",
-      "cannotTotal": "không thể tính tổng số tiền bằng VND",
+      "cannotTotal": "không thể tính tổng số tiền bằng USD",
       "amountNotTotalled": "Không thể tính tổng số tiền",
       "amountNotTotalledWithNote": "Không thể tính tổng số tiền ({note})",
       "amountOutstanding": "{value} còn nợ"

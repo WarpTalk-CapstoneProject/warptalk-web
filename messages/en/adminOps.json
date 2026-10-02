@@ -158,7 +158,7 @@
     },
     "mrr": {
       "note": "Monthly recurring revenue",
-      "cannotTotal": "Cannot be totalled in VND"
+      "cannotTotal": "Cannot be totalled in USD"
     },
     "churn": {
       "breakdown": "{cancelled} cancelled / {atMonthStart} at month start",
@@ -167,7 +167,7 @@
     "outstanding": {
       "invoiceCount": "{count, plural, one {# invoice} other {# invoices}}",
       "pastDueCount": "{count, plural, one {# past due} other {# past due}}",
-      "cannotTotal": "amount cannot be totalled in VND",
+      "cannotTotal": "amount cannot be totalled in USD",
       "amountNotTotalled": "Amount not totalled",
       "amountNotTotalledWithNote": "Amount not totalled ({note})",
       "amountOutstanding": "{value} outstanding"

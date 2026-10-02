@@ -275,10 +275,10 @@
   },
   "contractBilling": {
     "termLabels": {
-      "contractPriceVnd": "サイクルごとの契約価格 (VND)",
+      "contractPriceUsd": "サイクルごとの契約価格 (USD)",
       "creditsPerCycleOverride": "サイクルごとのクレジット",
       "overageCapCreditsOverride": "超過上限 (クレジット)",
-      "overagePricePerCreditOverride": "クレジットあたりの超過料金 (VND)",
+      "overagePricePerCreditOverride": "クレジットあたりの超過料金 (USD)",
       "invoiceTermsDaysOverride": "請求書の支払期限 (日数)",
       "billingContactEmail": "請求連絡先メール"
     },
@@ -314,7 +314,6 @@
     "cancel": "キャンセル",
     "review": "確認",
     "errorChoosePlan": "この契約の基準となるプランを選択してください。",
-    "errorPlanCurrency": "{planName} は {currency} で価格設定されています。契約価格をVNDで入力してください。",
     "errorNoChanges": "変更内容がありません。",
     "errorSaveTerms": "契約条件を保存できませんでした。",
     "errorCreateContract": "契約を作成できませんでした。",

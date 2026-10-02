@@ -92,7 +92,7 @@ export async function buildInsightsReportDocx(report: InsightsReport, images: Re
     }),
     new Paragraph({
       spacing: { after: 200 },
-      children: [run(`Generated ${report.generatedAt.slice(0, 16).replace("T", " ")} UTC. Money is in VND.`, { size: 18, color: COLOR_MUTED })],
+      children: [run(`Generated ${report.generatedAt.slice(0, 16).replace("T", " ")} UTC. Money is in USD.`, { size: 18, color: COLOR_MUTED })],
     }),
   );
 
