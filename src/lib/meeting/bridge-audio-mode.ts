@@ -25,7 +25,8 @@
  * Relative imports with the extension: the unit tests run under the plain node test runner.
  */
 
-import type { BridgeModeAvailability, MeetMicState, VirtualAudioStatus } from "../desktop/bridge.ts";
+import type { MeetMicState, VirtualAudioStatus } from "../desktop/bridge.ts";
+import { readBridgeVerdict } from "../desktop/bridge-verdict.ts";
 
 export type BridgeAudioMode = "voice" | "text";
 
@@ -49,7 +50,7 @@ export function parseBridgeAudioMode(value: unknown): BridgeAudioMode | null {
 // ── what this machine can do ────────────────────────────────────────────────
 
 export type BridgeModeSupport = {
-  /** Voice mode can run: the outbound cable is installed (the dub has somewhere to go). */
+  /** Voice mode can run: the desktop's `bridgeModes.voice.possible`. */
   voice: boolean;
   /** Text-only mode can run: the desktop says loopback works without a cable. */
   text: boolean;
@@ -59,35 +60,25 @@ export type BridgeModeSupport = {
   reported: boolean;
 };
 
-function hasInstalledOutboundDevice(status: VirtualAudioStatus): boolean {
-  return (status.devices ?? []).some((device) => device.leg === "outbound" && device.installed);
-}
-
 /**
- * The two modes this machine can run, from one desktop status reading.
+ * The two modes this machine can run, from one desktop status reading — through the same verdict
+ * helper everything else reads (lib/desktop/bridge-verdict), so the popup and the main window
+ * cannot answer differently.
  *
- * `bridgeModes` is the desktop's own verdict (desktop #45). Without it — an older build — text mode
- * does not exist (its loopback refuses without the cable, B2), and voice is "the cable is there",
- * exactly what the rest of the bridge already assumes. Null status (a browser tab, no desktop answer)
+ * `bridgeModes` is the desktop's own verdict (desktop #45) and it wins: voice is
+ * `voice.possible`, which also wants the far side to be able to come back. Without it — an older
+ * build — the verdict helper falls back: text mode does not exist (its loopback refuses without the
+ * cable, B2), and voice is "the cable is there". Null status (a browser tab, no desktop answer)
  * answers null: "we did not look" is not "neither works".
- *
- * Voice reads `cableInstalled`, not the desktop's `voice.possible`: that one also wants the far side
- * to be able to come back, and the outbound dub is what voice mode is about. A machine whose inbound
- * leg is missing still speaks into Meet; the inbound problem is shown by its own notice.
  */
 export function bridgeModeSupport(status: VirtualAudioStatus | null): BridgeModeSupport | null {
-  if (!status) return null;
-  const modes: BridgeModeAvailability | undefined = status.bridgeModes;
-  if (!modes) {
-    const cable = hasInstalledOutboundDevice(status);
-    return { voice: cable, text: false, cableInstalled: cable, reported: false };
-  }
-  const cable = modes.voice?.cableInstalled === true;
+  const verdict = readBridgeVerdict(status);
+  if (!verdict) return null;
   return {
-    voice: cable,
-    text: modes.textOnly?.possible === true,
-    cableInstalled: cable,
-    reported: true,
+    voice: verdict.voicePossible,
+    text: verdict.textOnlyPossible,
+    cableInstalled: verdict.cableInstalled,
+    reported: verdict.reported.modes,
   };
 }
 
