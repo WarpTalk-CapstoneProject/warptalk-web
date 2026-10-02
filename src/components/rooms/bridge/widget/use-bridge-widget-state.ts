@@ -73,6 +73,7 @@ import {
   type VirtualAudioStatus,
 } from "@/lib/desktop/bridge";
 import { bridgeModeSupport } from "@/lib/meeting/bridge-audio-mode";
+import { bridgeDeviceLabelsFor } from "@/lib/audio/virtual-bridge-check";
 import { canControlBridge, resolveBridgeRole } from "@/lib/meeting/bridge-capturer";
 import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
@@ -180,8 +181,10 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   const neverStarted = sessions !== undefined && sessions.length === 0 && !translationStarted;
 
   /**
-   * The popup does not end the meeting (PO, 2026-10-01): a bridge room ends when its Google Meet
-   * conference does, which the backend learns from Google, or from the main window's own End. The
+   * The popup has no End button (PO, 2026-10-01). A bridge room follows its Google Meet call: the
+   * desktop reads Meet's own buttons, and when the host leaves the call the MAIN WINDOW ends the
+   * room (WT-913, lib/meeting/bridge-meet-follow); the server's sweeps end one everybody has left.
+   * Not "the backend learns it from Google", as this said before: nothing here relies on that. The
    * popup only notices that it has — the room record says ENDED — and then shows EndedView.
    *
    * The room is re-read on the slow tick below only while no main window is connected: one that is
@@ -512,7 +515,9 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
 
   /**
    * The desktop's device report, for which modes this machine can run. Read on open and again when
-   * the popup regains focus — the user may have installed VB-CABLE meanwhile.
+   * the popup regains focus — the user may have installed VB-CABLE meanwhile. Every answer drawn
+   * from it goes through the same verdict helpers the main window uses (bridgeModeSupport →
+   * lib/desktop/bridge-verdict, bridgeDeviceLabelsFor), so the two windows cannot disagree.
    */
   const [virtualAudioStatus, setVirtualAudioStatus] = useState<VirtualAudioStatus | null>(null);
   useEffect(() => {
@@ -530,6 +535,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     };
   }, []);
   const modeSupport = useMemo(() => bridgeModeSupport(virtualAudioStatus), [virtualAudioStatus]);
+  const deviceLabels = useMemo(() => bridgeDeviceLabelsFor(virtualAudioStatus), [virtualAudioStatus]);
 
   /**
    * Which microphone Meet records from (desktop #45). Watched only while a main window runs this
@@ -587,6 +593,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       canSwitchAudioMode,
       modeSupport,
       meetMic: meetMicState,
+      deviceLabels,
     }),
     [
       roomId,
@@ -626,6 +633,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       canSwitchAudioMode,
       modeSupport,
       meetMicState,
+      deviceLabels,
     ],
   );
 }

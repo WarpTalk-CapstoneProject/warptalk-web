@@ -368,6 +368,20 @@
       "title": "Google Meet で字幕（CC）をオンにしてください。",
       "body": "WarpTalk は Meet の字幕から話者名を読み取りますが、現在 Meet に字幕が表示されていません。Meet のツールバーで CC をクリックすると、相手側の発言に話者名が表示されます。",
       "dismiss": "閉じる"
+    },
+    "meetLeft": {
+      "title": "Meet の通話から退出しました。WarpTalk のルームを終了しますか？",
+      "countdown": "{seconds} 秒後に自動で終了します。",
+      "endNow": "今すぐ終了",
+      "keepOpen": "開いたままにする",
+      "kept": "ルームは開いたままです。WarpTalk はこの通話を聞いていません。再開するには Google Meet に再参加してください。"
+    },
+    "micChip": {
+      "off": "WarpTalk のマイクはオフです",
+      "on": "WarpTalk のマイクはオンです",
+      "turnOn": "オンにする",
+      "turnOff": "オフにする",
+      "hint": "ここでは WarpTalk が Google Meet のミュートボタンを読み取れないため、マイクは手動で切り替えます。"
     }
   }
 }

@@ -167,6 +167,41 @@ export function rememberSelectedMicrophone(
 }
 
 /**
+ * Record whether a BRIDGE room's microphone is published, as Google Meet's own button decides it
+ * (WT-912, lib/meeting/bridge-meet-follow).
+ *
+ * A bridge room has no pre-join screen: use-bridge-auto-room opens it straight from the Meet call,
+ * so there is no join record, and `readMeetingMediaPreferences` fails closed to a microphone that
+ * is off. Nothing ever turned it on, and WarpTalk never heard its own user. The main window now
+ * follows Meet's mute button, and writes what it applied here, so a reload of that window connects
+ * with the microphone the call was left in rather than silently muted again.
+ *
+ * Both records, because the reader needs both: the join record is what says "these preferences are
+ * for THIS room" (anything else fails closed), and the device record carries the value. Each is
+ * merged when it already belongs to this room and replaced when it belongs to another, the same
+ * rule as `rememberSelectedMicrophone`. The camera is never written: a bridge publishes none.
+ */
+export function rememberBridgeMicrophone(
+  storage: StorageReader & StorageWriter,
+  roomId: string,
+  microphoneEnabled: boolean,
+) {
+  const join = parseObject(storage.getItem(JOIN_PREVIEW_KEY));
+  const joinBase = join.roomId === roomId ? join : {};
+  storage.setItem(
+    JOIN_PREVIEW_KEY,
+    JSON.stringify({ ...joinBase, roomId, microphoneEnabled, cameraEnabled: false }),
+  );
+  const devices = parseObject(storage.getItem(DEVICE_PREVIEW_KEY));
+  const deviceBase =
+    devices.roomId === roomId || devices.roomId === undefined ? devices : {};
+  storage.setItem(
+    DEVICE_PREVIEW_KEY,
+    JSON.stringify({ ...deviceBase, roomId, microphoneEnabled, cameraEnabled: false }),
+  );
+}
+
+/**
  * The LiveKit room options that make the meeting capture from the chosen microphone (WT-631).
  *
  * Set as the ROOM's capture default rather than on the `audio` prop of <LiveKitRoom>, because the

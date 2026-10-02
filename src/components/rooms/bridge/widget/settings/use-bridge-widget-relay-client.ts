@@ -64,6 +64,16 @@ export type BridgeWidgetRelayClient = {
   setAudioMode: (mode: BridgeAudioMode) => boolean;
   /** web #646: "Use this device" — the main window takes the meeting back from another login. */
   takeOverSession: () => boolean;
+  /**
+   * WT-912: the fallback chip. Sent only to a main window whose snapshot says Meet's mute button
+   * cannot be read (`mic.control === "manual"`); the result is the next snapshot.
+   */
+  setMicEnabled: (enabled: boolean) => boolean;
+  /**
+   * WT-913: the answer to "You left the Meet call": true ends the room now, false keeps it open.
+   * Sent only while the main window's snapshot carries a countdown. The END is the main window's.
+   */
+  answerMeetLeft: (end: boolean) => boolean;
 };
 
 export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayClient {
@@ -212,6 +222,21 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     [sendWhenConnected],
   );
 
+  const setMicEnabled = useCallback(
+    (enabled: boolean) =>
+      viewRef.current.snapshot?.mic?.control === "manual"
+        ? sendWhenConnected({ type: "set-mic-enabled", enabled })
+        : false,
+    [sendWhenConnected],
+  );
+  const answerMeetLeft = useCallback(
+    (end: boolean) =>
+      viewRef.current.snapshot?.meetLeave?.state === "countdown"
+        ? sendWhenConnected({ type: "answer-meet-left", end })
+        : false,
+    [sendWhenConnected],
+  );
+
   // Memoized: the widget context carries this object (WT-901), and a fresh one every render would
   // re-render every slot whenever anything above the provider did.
   return useMemo(
@@ -232,6 +257,8 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       takeOverCapture,
       setAudioMode,
       takeOverSession,
+      setMicEnabled,
+      answerMeetLeft,
     }),
     [
       view,
@@ -250,6 +277,8 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       takeOverCapture,
       setAudioMode,
       takeOverSession,
+      setMicEnabled,
+      answerMeetLeft,
     ],
   );
 }

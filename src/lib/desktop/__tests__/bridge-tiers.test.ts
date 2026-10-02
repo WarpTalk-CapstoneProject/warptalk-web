@@ -15,6 +15,7 @@ import {
   BRIDGE_TIERS,
   availableBridgeTiers,
   canCaptureBrowserLoopback,
+  decideBridgeInbound,
   describeLoopbackFailure,
   finalBridgeInboundPath,
   findBridgeTier,
@@ -390,11 +391,73 @@ test("text-only mode opens the cable requirement, only where the desktop says te
     false,
     "the desktop's own no is believed",
   );
-  // The runtime gates hold for text mode exactly as for voice.
+  // Desktop verdict wins: textOnly.possible already folds in the runtime gate, so capability bits
+  // that disagree with it are not re-checked here any more.
   assert.equal(
     canCaptureBrowserLoopback(windowsCable({ bridgeModes: textOnly(true) }), { textOnly: true }),
-    false,
+    true,
   );
+});
+
+test("desktop verdict wins for loopback; the capability bits are only a fallback when bridgeModes is absent", () => {
+  const modes = (textPossible: boolean, cableInstalled: boolean) => ({
+    textOnly: textPossible ? { possible: true } : { possible: false, reason: "loopback-runtime-not-wired" as const },
+    voice: { possible: cableInstalled, cableInstalled },
+  });
+  // Capability bits say "not wired", the desktop says loopback works: the desktop is believed.
+  assert.equal(canCaptureBrowserLoopback(windowsCable({ bridgeModes: modes(true, true) })), true);
+  // Capability bits say "available", the desktop says no: the desktop is believed.
+  assert.equal(canCaptureBrowserLoopback(wiredLoopback({ bridgeModes: modes(false, true) })), false);
+  // Voice mode still needs the cable — the desktop's cableInstalled, not the device list.
+  assert.equal(canCaptureBrowserLoopback(wiredLoopback({ bridgeModes: modes(true, false) })), false);
+  // Absent field: today's derivation, unchanged.
+  assert.equal(canCaptureBrowserLoopback(wiredLoopback()), true);
+  assert.equal(canCaptureBrowserLoopback(windowsCable()), false);
+});
+
+test("decideBridgeInbound is selectBridgeInboundSource over the desktop's loopback verdict", () => {
+  const status = windowsCable({
+    bridgeModes: { textOnly: { possible: true }, voice: { possible: true, cableInstalled: true } },
+  });
+  const base = {
+    status,
+    audioMode: "voice" as const,
+    loopbackFailed: false,
+    inboundDeviceId: "hifi-1",
+    consentAnswer: true,
+    hasLoopbackSource: true,
+  };
+  assert.deepEqual(decideBridgeInbound(base), {
+    path: "loopback",
+    startable: true,
+    reason: "loopback",
+    loopbackCapable: true,
+  });
+  // Same inputs, same answer as the primitive — what the wizard and the session both rely on.
+  for (const consentAnswer of [true, false, null]) {
+    for (const inboundDeviceId of ["hifi-1", null]) {
+      const { loopbackCapable, ...decision } = decideBridgeInbound({ ...base, consentAnswer, inboundDeviceId });
+      assert.deepEqual(
+        decision,
+        selectBridgeInboundSource({
+          loopbackCapable,
+          loopbackFailed: false,
+          hasInboundDevice: Boolean(inboundDeviceId),
+          consentAnswer,
+          hasLoopbackSource: true,
+        }),
+      );
+    }
+  }
+  // Text mode without a cable: the desktop's text-only verdict opens loopback.
+  const noCable = windowsCable({
+    devices: [],
+    bridgeModes: { textOnly: { possible: true }, voice: { possible: false, cableInstalled: false } },
+  });
+  assert.equal(decideBridgeInbound({ ...base, status: noCable, audioMode: "text" }).path, "loopback");
+  assert.equal(decideBridgeInbound({ ...base, status: noCable, audioMode: "voice" }).reason, "loopback-unavailable");
+  // No status at all: no loopback, the device if there is one.
+  assert.equal(decideBridgeInbound({ ...base, status: null }).path, "device");
 });
 
 test("loopback wins over an installed Hi-Fi Cable", () => {

@@ -52,6 +52,7 @@ import type { HubConnection } from "@microsoft/signalr";
 import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
 import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
 import type { BridgeAudioMode, BridgeModeSupport } from "@/lib/meeting/bridge-audio-mode";
+import type { BridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import type { MeetMicState } from "@/lib/desktop/bridge";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptSegmentDto } from "@/types/realtime";
@@ -212,6 +213,11 @@ export type BridgeWidgetState = {
    * where it cannot tell (no detector, not Windows). Drives the Meet-mic mismatch notice.
    */
   meetMic: MeetMicState["state"] | null;
+  /**
+   * The bridge's device names, from the same desktop status reading as `modeSupport`
+   * (`bridgeDeviceLabelsFor`): the desktop's `endpointLabels`, else the fallback tables.
+   */
+  deviceLabels: BridgeDeviceLabels;
 
   /** The main window's meeting connection (LiveKit), or null when no main window says. */
   meetingConnection: BridgeWidgetMeetingConnection | null;
