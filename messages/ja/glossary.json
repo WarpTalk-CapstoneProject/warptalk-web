@@ -167,5 +167,14 @@
     "confirm": "既存の訳語はそのまま残ります。{source} → {target} に変更しますか?",
     "confirmButton": "変更",
     "cancel": "キャンセル"
+  },
+  "warpbot": {
+    "loading": "WarpBot ナレッジベースに読み込み中…",
+    "loadingProgress": "{total} 件中 {done} 件の用語を読み込みました",
+    "ready": "WarpBot ナレッジベースで利用可能",
+    "readyDescription": "WarpBot が「{name}」の用語を使えるようになりました。",
+    "failed": "WarpBot ナレッジベースに読み込めませんでした",
+    "failedDetail": "{count} 件の用語が読み込まれませんでした。編集するか再インポートしてやり直してください。",
+    "unconfirmedDetail": "WarpBot が {count} 件の用語をまだ確認していません。再インポートしてやり直してください。"
   }
 }

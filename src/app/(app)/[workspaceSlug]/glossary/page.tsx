@@ -98,6 +98,7 @@ import {
 import { WorkspaceGlobalGlossaryView } from "@/components/glossary/workspace-global-glossary-view";
 import { WorkspaceImportTemplateView } from "@/components/glossary/workspace-import-template-view";
 import { GlossaryPairEditor } from "@/components/glossary/glossary-pair-editor";
+import { GlossaryWarpBotStatusChip } from "@/components/glossary/glossary-warpbot-status";
 import { ALL_PAIRS, groupGlossariesByPair } from "@/lib/glossary/glossary-pairs";
 import {
   groupTermsByDomain,
@@ -592,6 +593,12 @@ export default function WorkspaceGlossaryPage() {
               glossary={selected}
               termCount={termsQuery.data?.length ?? selected.termCount}
               canManage={canManage}
+            />
+            {/* PO 2026-10-02: real "Loading into WarpBot knowledgebase…" → Ready / Couldn't load. */}
+            <GlossaryWarpBotStatusChip
+              key={`warpbot-${selected.id}`}
+              glossaryId={selected.id}
+              glossaryName={selected.name}
             />
           </div>
         ) : null}

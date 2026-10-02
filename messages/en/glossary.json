@@ -167,5 +167,14 @@
     "confirm": "Existing translations stay as they are. Change to {source} → {target}?",
     "confirmButton": "Change",
     "cancel": "Cancel"
+  },
+  "warpbot": {
+    "loading": "Loading into WarpBot knowledgebase…",
+    "loadingProgress": "{done} of {total} terms loaded",
+    "ready": "Ready in WarpBot knowledgebase",
+    "readyDescription": "WarpBot can now use the terms in \"{name}\".",
+    "failed": "Couldn't load into WarpBot knowledgebase",
+    "failedDetail": "{count, plural, one {# term was not loaded} other {# terms were not loaded}}. Edit or re-import to try again.",
+    "unconfirmedDetail": "{count, plural, one {WarpBot has not confirmed # term} other {WarpBot has not confirmed # terms}}. Import again to retry."
   }
 }

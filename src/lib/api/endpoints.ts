@@ -418,6 +418,8 @@ export const API = {
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
     /** PUT { sourceLanguage, targetLanguage } — change the pair in place; terms are kept as they are. */
     languages: (id: string) => `/glossaries/${id}/languages`,
+    /** PO 2026-10-02: whether the glossary's terms have reached WarpBot's knowledge. */
+    warpbotStatus: (id: string) => `/glossaries/${id}/warpbot-status`,
     global: "/glossaries/global",
     /** WT-880 — the admin-configured import file shape, read-only, any signed-in user. */
     importTemplate: "/glossaries/import-template",

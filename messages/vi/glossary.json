@@ -167,5 +167,14 @@
     "confirm": "Các bản dịch hiện có được giữ nguyên. Đổi sang {source} → {target}?",
     "confirmButton": "Đổi",
     "cancel": "Huỷ"
+  },
+  "warpbot": {
+    "loading": "Đang nạp vào knowledgebase của WarpBot…",
+    "loadingProgress": "Đã nạp {done}/{total} thuật ngữ",
+    "ready": "Đã sẵn sàng trong knowledgebase của WarpBot",
+    "readyDescription": "WarpBot đã dùng được các thuật ngữ trong \"{name}\".",
+    "failed": "Không nạp được vào knowledgebase của WarpBot",
+    "failedDetail": "{count} thuật ngữ chưa được nạp. Sửa hoặc import lại để thử lại.",
+    "unconfirmedDetail": "WarpBot chưa xác nhận {count} thuật ngữ. Import lại để thử lại."
   }
 }
