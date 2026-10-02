@@ -412,6 +412,9 @@ function JoinMeetingContent() {
             noiseSuppressionPreferenceVersion:
               NOISE_SUPPRESSION_PREFERENCE_VERSION,
             backgroundBlurEnabled,
+            // WT-631. The level meter above was reading from this device; without it the meeting
+            // captured from the OS default input instead, which can be a loopback cable.
+            selectedMicrophoneId,
           },
           navigate: (path) => router.push(path),
           closePreview: () => undefined,

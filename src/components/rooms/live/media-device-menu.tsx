@@ -23,6 +23,8 @@ import {
   mediaDeviceLabel,
 } from "@/lib/meeting/media-device-label";
 import type { MediaDeviceKindLabel } from "@/lib/meeting/media-device-label";
+import { rememberSelectedMicrophone } from "@/lib/meeting/meeting-join-state";
+import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 
 type DeviceKind = MediaDeviceKindLabel;
 
@@ -67,7 +69,30 @@ function DeviceSection({
                 aria-checked={selected}
                 onClick={async () => {
                   try {
-                    await setActiveMediaDevice(device.deviceId);
+                    // WT-631. A microphone is switched as a preference, not an `exact`
+                    // constraint. LiveKit keeps whatever is passed here as the room's capture
+                    // default, and an exact id outlives the device: unplug that headset and the
+                    // next time the microphone is created — after a reconnect, or turning it on
+                    // again — getUserMedia throws OverconstrainedError and the participant has no
+                    // microphone at all. A preference lands on the default instead. Cameras keep
+                    // LiveKit's exact behaviour; they are not what this ticket is about.
+                    await setActiveMediaDevice(
+                      device.deviceId,
+                      kind === "audioinput" ? { exact: false } : undefined,
+                    );
+                    // WT-631. The switch above lasts as long as this connection. A reload builds
+                    // a new one from the pre-join record, which would put the participant straight
+                    // back on the device they just left — so the pick goes into that record too.
+                    // The meeting bar is only ever rendered by the active meeting's session, so
+                    // the active room is the room this pick belongs to.
+                    const roomId = useActiveMeetingStore.getState().activeRoomId;
+                    if (kind === "audioinput" && roomId) {
+                      rememberSelectedMicrophone(
+                        window.sessionStorage,
+                        roomId,
+                        device.deviceId,
+                      );
+                    }
                   } finally {
                     // Closed either way. A switch that failed leaves the previous device
                     // active, and holding the menu open would read as "still working".

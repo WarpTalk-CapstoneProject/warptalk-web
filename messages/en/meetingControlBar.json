@@ -112,6 +112,14 @@
       "title": "Other languages",
       "hint": "Not offered by this room, but still translated for you.",
       "disclosure": "Another language"
+    },
+    "askHost": "Need another language? Ask the host to add it to the meeting.",
+    "addLanguage": {
+      "title": "Add to this meeting",
+      "hint": "Everyone can pick it once it's added. Your own language stays as it is.",
+      "disclosure": "Add a language to this meeting",
+      "adding": "Adding…",
+      "none": "Every language this workspace allows is already in this meeting."
     }
   },
   "micCheck": {
