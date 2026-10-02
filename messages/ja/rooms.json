@@ -358,6 +358,11 @@
         "body": "Meet は実際のマイクを使用しています。Meet のマイクに「CABLE Output (VB-Audio Virtual Cable)」を選択するか、自分の声モードに切り替えてください。",
         "action": "自分の声を使う"
       }
+    },
+    "meetCaptions": {
+      "title": "Google Meet で字幕（CC）をオンにしてください。",
+      "body": "WarpTalk は Meet の字幕から話者名を読み取りますが、現在 Meet に字幕が表示されていません。Meet のツールバーで CC をクリックすると、相手側の発言に話者名が表示されます。",
+      "dismiss": "閉じる"
     }
   }
 }

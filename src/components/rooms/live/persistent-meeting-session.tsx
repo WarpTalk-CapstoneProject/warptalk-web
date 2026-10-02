@@ -2037,7 +2037,7 @@ export function PersistentMeetingSession({
   // Live Meet speaker names (desktop #44 -> hub ReportFarSpeakerHints, backend #499): the
   // capturer's desktop reads Meet's CC and this window forwards the names on its hub connection.
   // Same gate as the far side's capture itself: a bridge room, open, this desktop the capturer.
-  useFarSpeakerHints({
+  const { meetCaptionsOff } = useFarSpeakerHints({
     roomId,
     meetCode: roomMeetCode,
     enabled: bridgeAudioOwner && bridgeListening && !meetingIsIdleReaped,
@@ -3054,6 +3054,9 @@ export function PersistentMeetingSession({
     bridgeRole: isBridgeRoom ? bridgeLease.bridgeRole : undefined,
     bridgeCapturerAway: bridgeLease.capturerAway ?? undefined,
     onTakeOverCapture: isBridgeRoom ? () => void bridgeLease.takeOver() : undefined,
+    // Meet's CC looks off on the call this desktop captures (useFarSpeakerHints, capturer only):
+    // the popup asks the user to turn it on, since this window is hidden while bridging.
+    meetCaptionsOff: isBridgeRoom ? meetCaptionsOff : undefined,
     // Text-only bridge: how Meet hears this user, and the popup's switch (any participant).
     audioMode: isBridgeRoom ? bridgeAudioMode : undefined,
     onSetAudioMode: isBridgeRoom ? (mode) => void handleSetBridgeAudioMode(mode) : undefined,

@@ -6,6 +6,7 @@ import {
   MAX_HINTS_PER_CALL,
   MAX_HINT_AGE_MS,
   captionEventToHint,
+  rendererClockOffsetMs,
   type FarSpeakerHint,
 } from "../far-speaker-hints.ts";
 import type { MeetCaptionEvent } from "../../desktop/bridge.ts";
@@ -189,4 +190,42 @@ test("dispose stops the schedule; a final flush sends what is left once", async 
   h.batcher.add(caption({ blockId: "b2" }));
   h.batcher.flushNow();
   assert.equal(h.calls.length, 1, "a disposed batcher sends nothing");
+});
+
+// ── The clock: desktop `sentAtMs` rebases caption times onto this renderer's Date.now() ──
+
+test("rendererClockOffsetMs: receipt minus sentAtMs, 0 without a stamp or a receipt time", () => {
+  assert.equal(rendererClockOffsetMs(caption({ sentAtMs: NOW - 60_000 }), NOW), 60_000);
+  assert.equal(rendererClockOffsetMs(caption({ sentAtMs: NOW + 5_000 }), NOW), -5_000);
+  assert.equal(rendererClockOffsetMs(caption(), NOW), 0, "older desktop: no stamp");
+  assert.equal(rendererClockOffsetMs(caption({ sentAtMs: NOW }), undefined), 0);
+  assert.equal(rendererClockOffsetMs(caption({ sentAtMs: Number.NaN }), NOW), 0);
+  assert.equal(rendererClockOffsetMs(caption({ sentAtMs: 0 }), NOW), 0);
+});
+
+test("captionEventToHint moves times by the wall-clock jump since the desktop started", () => {
+  // The wall clock jumped 90 s forward after the desktop anchored alignedNow(): main still says
+  // NOW-3000..NOW-1000 for a block read a moment ago, and stamps sentAtMs = NOW (its axis).
+  const jumped = NOW + 90_000;
+  const hint = captionEventToHint(caption({ sentAtMs: NOW }), jumped);
+  assert.equal(hint?.tStartMs, jumped - 3_000);
+  assert.equal(hint?.tEndMs, jumped - 1_000);
+});
+
+test("captionEventToHint without sentAtMs keeps the desktop's times (older desktop)", () => {
+  const hint = captionEventToHint(caption(), NOW + 90_000);
+  assert.equal(hint?.tStartMs, NOW - 3_000);
+  assert.equal(hint?.tEndMs, NOW - 1_000);
+});
+
+test("the batcher rebases at receipt, so a jumped clock does not age a fresh hint out", async () => {
+  // Wall clock went BACK 60 s after the desktop started: unrebased, tEnd would sit 60 s in the
+  // future; went forward 60 s: unrebased, it would be older than MAX_HINT_AGE_MS and dropped.
+  const h = harness();
+  h.advance(60_000);
+  h.batcher.add(caption({ sentAtMs: NOW }));
+  const waited = await h.tick();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].hints[0].tEndMs, NOW + 60_000 - 1_000);
+  assert.equal(h.calls[0].now, NOW + 60_000 + waited);
 });

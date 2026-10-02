@@ -258,6 +258,14 @@ export interface MeetCaptionEvent {
   tConfidence: "live" | "batch";
   stale: boolean;
   source: "meet_caption";
+  /**
+   * `alignedNow()` in main at the moment main sent this event to the renderer (a replay from the
+   * 30 s buffer is stamped when it is replayed, not when it was read). The renderer converts the
+   * times above to its own clock with `t + (Date.now() - sentAtMs)`: main's axis is anchored to
+   * Date.now() once at load, so a wall-clock jump since then (NTP, sleep/resume) would otherwise
+   * shift every time. IPC latency (~1 ms) is the residual error. Absent from older desktops.
+   */
+  sentAtMs?: number;
 }
 
 /** Mirrors warptalk-desktop src/shared/types.ts `MeetCaptionStatus` (desktop #44). */
@@ -606,7 +614,10 @@ export async function ensureMeetCaptionsOn(meetCode: string): Promise<EnsureMeet
  * desktop subscribes only the main window's renderer and sends events there alone.
  *
  * Subscribes before arming, so the 30 s the desktop buffered while this renderer was away (a
- * reload) lands in the callback. The returned function stops the read for this meeting and then
+ * reload) lands in the callback. `onStatus` (optional) gets the stream's status the same way:
+ * subscribed before arming, so the status the desktop replays on subscribe is not missed; a build
+ * without `onMeetCaptionStatus` simply never calls it. The returned function stops the read for
+ * this meeting and then
  * unsubscribes — in that order, because the stop's final flush still reaches a subscribed
  * renderer. The promise settles once both are done (never rejects). Null off the desktop shell and
  * on a build without both methods.
@@ -614,15 +625,31 @@ export async function ensureMeetCaptionsOn(meetCode: string): Promise<EnsureMeet
 export function streamMeetCaptions(
   meetCode: string,
   onCaption: (event: MeetCaptionEvent) => void,
+  onStatus?: (status: MeetCaptionStatus) => void,
 ): (() => Promise<void>) | null {
   const bridge = getDesktopBridge();
   if (!bridge?.setMeetCaptionsStream || !bridge.onMeetCaption) return null;
-  let unsubscribe: () => void;
+  let unsubscribeCaption: () => void;
   try {
-    unsubscribe = bridge.onMeetCaption(onCaption);
+    unsubscribeCaption = bridge.onMeetCaption(onCaption);
   } catch {
     return null;
   }
+  let unsubscribeStatus: (() => void) | null = null;
+  if (onStatus && bridge.onMeetCaptionStatus) {
+    try {
+      unsubscribeStatus = bridge.onMeetCaptionStatus(onStatus);
+    } catch {
+      unsubscribeStatus = null; // Names still flow; only the CC-off notice is lost.
+    }
+  }
+  const unsubscribe = () => {
+    try {
+      unsubscribeStatus?.();
+    } finally {
+      unsubscribeCaption();
+    }
+  };
   void bridge.setMeetCaptionsStream(meetCode, true).catch(() => undefined);
   return () => {
     const stopped = bridge.setMeetCaptionsStream?.(meetCode, false) ?? Promise.resolve();

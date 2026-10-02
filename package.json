@@ -278,7 +278,7 @@
     "test:bridge-language-options": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-language-options.test.ts",
     "test:bridge-popup-language": "node scripts/check-bridge-popup-language-contract.mjs",
     "test:bridge-text-only": "node scripts/check-bridge-text-only-contract.mjs",
-    "test:far-speaker-hints": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/far-speaker-hints.test.ts",
+    "test:far-speaker-hints": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/far-speaker-hints.test.ts src/lib/meeting/__tests__/meet-captions-off.test.ts",
     "test:bridge-audio-mode": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-audio-mode.test.ts",
     "test:bridge-meeting-connection": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-meeting-connection.test.ts",
     "test:desktop-signed-in": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/desktop/__tests__/signed-in-report.test.ts",

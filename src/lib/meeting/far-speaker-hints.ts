@@ -17,6 +17,13 @@
  *   - Repeating a block is harmless: the server keeps a per-name high-water mark, so an `update` of
  *     a block already sent only adds the points it did not have.
  *   - A caller that is not the capturer of a live bridge room gets a HubException.
+ *
+ * THE CLOCK. Caption times are on the desktop MAIN process's `alignedNow()` axis (performance.now
+ * anchored to Date.now() once at load); `clientNowMs` is this renderer's Date.now(). If the wall
+ * clock jumped after the desktop started (NTP, sleep/resume), the two differ by that jump and every
+ * hint would land that far off. A desktop that stamps `sentAtMs` (alignedNow() when main sent the
+ * event) lets the renderer rebase on receipt: `t + (Date.now() - sentAtMs)`. Without it (an older
+ * desktop) the times are used as they come, as before.
  */
 
 import type { MeetCaptionEvent } from "../desktop/bridge.ts";
@@ -45,16 +52,33 @@ export const FLUSH_INTERVAL_MS = 400;
 /** The longest wait between attempts after the hub refused or was down. */
 export const MAX_RETRY_DELAY_MS = 5_000;
 
-/** A caption event as a hint, or null when it cannot name anybody. */
-export function captionEventToHint(event: MeetCaptionEvent): FarSpeakerHint | null {
+/**
+ * How far to move a caption event's times to put them on this renderer's Date.now() axis:
+ * `receivedAtMs - sentAtMs`, or 0 when the desktop did not stamp `sentAtMs` (older build) or the
+ * receipt time is unknown.
+ */
+export function rendererClockOffsetMs(event: MeetCaptionEvent, receivedAtMs?: number): number {
+  const sentAtMs = event.sentAtMs;
+  if (typeof sentAtMs !== "number" || !Number.isFinite(sentAtMs) || sentAtMs <= 0) return 0;
+  if (typeof receivedAtMs !== "number" || !Number.isFinite(receivedAtMs)) return 0;
+  return receivedAtMs - sentAtMs;
+}
+
+/**
+ * A caption event as a hint, or null when it cannot name anybody. `receivedAtMs` is this
+ * renderer's Date.now() when the event arrived; with the desktop's `sentAtMs` it moves the times
+ * onto this renderer's clock (see THE CLOCK above).
+ */
+export function captionEventToHint(event: MeetCaptionEvent, receivedAtMs?: number): FarSpeakerHint | null {
   const name = typeof event.speaker === "string" ? event.speaker.trim() : "";
   if (!name) return null;
   if (!Number.isFinite(event.tStartMs) || !Number.isFinite(event.tEndMs)) return null;
   if (event.tStartMs <= 0 || event.tEndMs < event.tStartMs) return null;
+  const offset = rendererClockOffsetMs(event, receivedAtMs);
   return {
     name,
-    tStartMs: Math.round(event.tStartMs),
-    tEndMs: Math.round(event.tEndMs),
+    tStartMs: Math.round(event.tStartMs + offset),
+    tEndMs: Math.round(event.tEndMs + offset),
     confidence: event.tConfidence === "batch" ? "batch" : "live",
     stale: event.stale === true,
   };
@@ -109,7 +133,8 @@ export class FarSpeakerHintBatcher {
 
   add(event: MeetCaptionEvent): void {
     if (this.disposed || event.meetCode !== this.options.meetCode) return;
-    const hint = captionEventToHint(event);
+    // Rebased on receipt: the offset is the clocks' difference NOW, not at flush time.
+    const hint = captionEventToHint(event, this.now());
     if (!hint || !event.blockId) return;
     this.pending.set(event.blockId, hint);
     this.schedule(this.intervalMs);

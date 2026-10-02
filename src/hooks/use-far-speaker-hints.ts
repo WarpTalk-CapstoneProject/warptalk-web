@@ -18,16 +18,26 @@
  *
  * Losing any of them (role taken over, meeting ended, unmount) stops the desktop's read and
  * unsubscribes. A hub (re)connect (`hubGeneration`) resends whatever was not delivered.
+ *
+ * Returns `meetCaptionsOff`: Meet's CC looks off on the captured call (lib/meeting/meet-captions-off),
+ * so there are no names to read. The session relays it to the bridge popup — this window is hidden
+ * while bridging — and this hook also says it as a toast here whenever this window is visible.
  */
 
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 import { ensureMeetCaptionsOn, streamMeetCaptions } from "@/lib/desktop/bridge";
 import {
   FarSpeakerHintBatcher,
   REPORT_FAR_SPEAKER_HINTS,
 } from "@/lib/meeting/far-speaker-hints";
+import { MeetCaptionsOffWatch } from "@/lib/meeting/meet-captions-off";
+
+/** One toast at a time, replaced rather than stacked. */
+const MEET_CAPTIONS_OFF_TOAST_ID = "bridge-meet-captions-off";
 
 export function useFarSpeakerHints({
   roomId,
@@ -43,8 +53,10 @@ export function useFarSpeakerHints({
   connectionRef: MutableRefObject<HubConnection | null>;
   /** Bumped on every hub start/reconnect; a change resends what is pending. */
   hubGeneration: number;
-}): void {
+}): { meetCaptionsOff: boolean } {
+  const t = useTranslations("rooms.bridgeWidget");
   const batcherRef = useRef<FarSpeakerHintBatcher | null>(null);
+  const [meetCaptionsOff, setMeetCaptionsOff] = useState(false);
 
   useEffect(() => {
     if (!enabled || !roomId || !meetCode) return;
@@ -60,19 +72,33 @@ export function useFarSpeakerHints({
       },
     });
 
-    const stop = streamMeetCaptions(meetCode, (event) => batcher.add(event));
-    if (!stop) return; // A browser, or a desktop build without the caption stream.
+    const watch = new MeetCaptionsOffWatch({ onChange: setMeetCaptionsOff });
+    const stop = streamMeetCaptions(
+      meetCode,
+      (event) => batcher.add(event),
+      (status) => watch.status(status),
+    );
+    if (!stop) {
+      watch.dispose();
+      return; // A browser, or a desktop build without the caption stream.
+    }
     batcherRef.current = batcher;
+    let active = true;
 
     // CC has to be on for there to be anything to read. Best-effort: the desktop only presses
-    // Meet's own CC button, and a refusal ("disabled", "cc-button-hidden") costs only the names.
+    // Meet's own CC button; a refusal it could not get past ("cc-button-hidden") is said to the
+    // user as the CC-off notice, one ("disabled") that CC cannot fix is not.
     void ensureMeetCaptionsOn(meetCode).then((result) => {
       if (result && !result.ok) {
         console.info("[bridge] Meet captions not turned on:", result.reason ?? result.state);
       }
+      if (active) watch.ensureResult(result);
     });
 
     return () => {
+      active = false;
+      watch.dispose();
+      setMeetCaptionsOff(false);
       if (batcherRef.current === batcher) batcherRef.current = null;
       // Stop the read first (its final flush still reaches us), then send what is left.
       void stop().then(() => batcher.dispose({ finalFlush: true }));
@@ -82,4 +108,29 @@ export function useFarSpeakerHints({
   useEffect(() => {
     if (hubGeneration > 0) batcherRef.current?.flushNow();
   }, [hubGeneration]);
+
+  // The same notice as a toast in THIS window, when it is on screen: while bridging it is hidden
+  // and the popup carries the notice; shown again (by the user or "Show WarpTalk"), it says it too.
+  useEffect(() => {
+    if (!meetCaptionsOff) {
+      toast.dismiss(MEET_CAPTIONS_OFF_TOAST_ID);
+      return;
+    }
+    if (typeof document === "undefined") return;
+    let shown = false;
+    const show = () => {
+      if (shown || document.visibilityState !== "visible") return;
+      shown = true;
+      toast.warning(t("meetCaptions.title"), {
+        id: MEET_CAPTIONS_OFF_TOAST_ID,
+        description: t("meetCaptions.body"),
+        duration: 15_000,
+      });
+    };
+    show();
+    document.addEventListener("visibilitychange", show);
+    return () => document.removeEventListener("visibilitychange", show);
+  }, [meetCaptionsOff, t]);
+
+  return { meetCaptionsOff };
 }
