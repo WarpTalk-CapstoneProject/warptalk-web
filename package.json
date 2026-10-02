@@ -133,7 +133,7 @@
     "test:participant-language": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/participant-language-preference.test.ts && node scripts/check-participant-language-precedence-contract.mjs",
     "test:persistent-meeting": "node scripts/check-persistent-meeting-contract.mjs",
     "test:meeting-stage-layout": "node scripts/check-meeting-stage-layout.mjs",
-    "test:meeting-session-lifecycle": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-session-lifecycle.test.ts",
+    "test:meeting-session-lifecycle": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-session-lifecycle.test.ts src/lib/meeting/__tests__/bridge-meet-follow.test.ts",
     "test:daily-recurrence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/daily-recurrence.test.ts && node scripts/check-daily-recurrence-contract.mjs",
     "test:warpbot-widget": "node scripts/check-warpbot-widget-contract.mjs",
     "test:room-code": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-code-guess.test.ts",

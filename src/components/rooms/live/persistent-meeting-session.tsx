@@ -155,6 +155,8 @@ import {
 } from "@/lib/audio/bridge-inbound-health";
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
+import { useBridgeMeetFollow } from "@/hooks/use-bridge-meet-follow";
+import { meetLeaveOutcome, meetLeavePrompt } from "@/lib/meeting/bridge-meet-follow";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
 import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
 import { canControlBridge } from "@/lib/meeting/bridge-capturer";
@@ -1016,7 +1018,24 @@ export function PersistentMeetingSession({
   // rule the caption lane and the transcript follow (TRANSCRIPT_CLOSED_STATUSES above). It used to
   // wait for Start Translation, which kept every word the far side said before Start out of the
   // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
-  const bridgeListening = Boolean(room) && transcriptOpen;
+  //
+  // WT-912 / WT-913: a bridge follows its Google Meet call (use-bridge-meet-follow). The WarpTalk
+  // mic is Meet's mute button, and once the user has LEFT the call this desktop stops listening to
+  // Meet altogether, far side included: what the browser plays after the call is not the meeting,
+  // and a member still in the call can then take the capture over (the lease stops being renewed).
+  // Rejoining brings it all back. A native meeting gets `enabled: false` and is untouched.
+  const finishMeetLeaveRef = useRef<() => void>(() => {});
+  const meetFollow = useBridgeMeetFollow({
+    roomId,
+    enabled: isBridgeRoom,
+    roomMeetCode: extractMeetCodeFromUrl(room?.externalMeetingUrl),
+    liveKitConnected,
+    microphoneEnabled,
+    localMediaControlRef,
+    setMicrophoneIntent: setMicrophoneEnabled,
+    onLeaveDeadline: () => finishMeetLeaveRef.current(),
+  });
+  const bridgeListening = Boolean(room) && transcriptOpen && !meetFollow.leftCall;
   /**
    * W4b (bridge claim): only the CAPTURER's desktop opens the far side — the stand-in token, the
    * loopback or cable leg, and the capture consent that comes before them. A MEMBER publishes its
@@ -3090,6 +3109,27 @@ export function PersistentMeetingSession({
       router.push(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
       void showDesktopMainWindow();
     },
+    // WT-912: the WarpTalk mic follows Meet's mute button. The popup shows nothing while it does,
+    // and one chip where Meet cannot be read ("manual"), whose press lands here.
+    mic: isBridgeRoom ? { enabled: microphoneEnabled, control: meetFollow.micControl } : undefined,
+    onSetMicEnabled: isBridgeRoom ? meetFollow.setManualMic : undefined,
+    // WT-913: the user left the Meet call. Asked only of whoever may end the room (the server takes
+    // an End from the room's host alone); "End now" is the same exit the countdown runs out into.
+    meetLeave: isBridgeRoom ? meetLeavePrompt(meetFollow.state, { mayEndRoom: isRoomHost }) : undefined,
+    onAnswerMeetLeft: isBridgeRoom
+      ? (end) => (end ? finishMeetLeaveRef.current() : meetFollow.keepOpen())
+      : undefined,
+  });
+
+  // WT-913: the countdown ran out, or "End now". The room's host ends the room through the native
+  // End (handleExit, which tells the popup and finalizes the meeting as any End does); anybody
+  // else only leaves it on their side, and the room stays for the others.
+  useEffect(() => {
+    finishMeetLeaveRef.current = () => {
+      if (!isBridgeRoom) return;
+      meetFollow.resolveLeave();
+      void handleExit(meetLeaveOutcome({ mayEndRoom: isRoomHost }) === "end-room" ? "end" : "leave");
+    };
   });
 
   // W4a: what a bridge session does as its room ENDS (the Google Meet conference ended and
@@ -3948,6 +3988,9 @@ export function PersistentMeetingSession({
         if (room?.status !== "ended" && room?.status !== "cancelled") {
           await endRoom.mutateAsync(roomId);
         }
+        // WT-913: this client ignores its own TranslationRoomEnded (endedByMeRef), so a bridge's
+        // popup must hear "ended" from here. A no-op for every other room.
+        handOffEndedBridgeRef.current();
         toast.success("Room ended.");
       } else {
         if (room?.status !== "ended" && room?.status !== "cancelled") {

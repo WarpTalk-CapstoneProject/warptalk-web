@@ -363,6 +363,20 @@
       "title": "Hãy bật phụ đề (CC) trong Google Meet.",
       "body": "WarpTalk lấy tên người nói từ phụ đề của Meet, mà lúc này Meet chưa hiện phụ đề. Bấm CC trên thanh công cụ của Meet để các câu của phía bên kia hiện đúng tên người nói.",
       "dismiss": "Đóng"
+    },
+    "meetLeft": {
+      "title": "Bạn đã rời cuộc gọi Meet. Kết thúc phòng WarpTalk?",
+      "countdown": "Tự kết thúc sau {seconds} giây.",
+      "endNow": "Kết thúc ngay",
+      "keepOpen": "Giữ phòng mở",
+      "kept": "Phòng vẫn đang mở. WarpTalk không nghe cuộc gọi này; vào lại Google Meet để tiếp tục."
+    },
+    "micChip": {
+      "off": "Mic WarpTalk đang tắt",
+      "on": "Mic WarpTalk đang bật",
+      "turnOn": "Bật",
+      "turnOff": "Tắt",
+      "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay."
     }
   }
 }
