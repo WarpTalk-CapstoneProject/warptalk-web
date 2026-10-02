@@ -184,6 +184,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 
+  /**
+   * WT-880: the glossary import template's CRUD moved into /admin/global-glossary as its "Import
+   * template" tab; the stand-alone /admin/glossary-templates page (which persisted nothing) is
+   * deleted. Old bookmarks land on the tab.
+   */
+  if (/^\/admin\/glossary-templates(?:\/.*)?$/.test(pathname)) {
+    return NextResponse.redirect(new URL("/admin/global-glossary?tab=import-template", request.url));
+  }
+
   // A dead cookie must not survive the response that noticed it was dead, or the next page
   // load starts from the same misleading state. Applied to whatever response we return
   // below.

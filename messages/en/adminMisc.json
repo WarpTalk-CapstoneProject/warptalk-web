@@ -360,7 +360,9 @@
       "setting_reset": "Platform setting reset",
       "setting_reverted": "Platform setting reverted",
       "setting_imported": "Platform settings imported",
-      "settings_exported": "Platform settings exported"
+      "settings_exported": "Platform settings exported",
+      "glossary_template_updated": "Glossary import template saved",
+      "glossary_template_reset": "Glossary import template reset"
     },
     "entities": {
       "workspace": "Workspace",
@@ -393,7 +395,8 @@
       "credit_pack": "Credit pack",
       "addon": "Add-on",
       "coupon": "Coupon",
-      "platform_setting": "Platform setting"
+      "platform_setting": "Platform setting",
+      "glossary_import_template": "Glossary import template"
     },
     "sources": {
       "workspace_service": "Workspace",

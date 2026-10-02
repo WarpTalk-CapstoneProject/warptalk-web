@@ -96,6 +96,8 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "glossary.term_published": "Glossary term published",
   "glossary.term_archived": "Glossary term archived",
   "glossary.bulk_imported": "Glossary terms imported",
+  "glossary.template_updated": "Glossary import template saved",
+  "glossary.template_reset": "Glossary import template reset",
   // Announcements (notification)
   "announcement.sent": "Announcement sent",
   // The audit log itself
@@ -156,6 +158,7 @@ export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
   supported_language: "Language",
   plugin: "Plugin",
   glossary_term: "Glossary term",
+  glossary_import_template: "Glossary import template",
   notification: "Announcement",
   audit_log: "Audit log",
   staff_member: "Staff member",
@@ -269,6 +272,8 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
       return "/admin/plans";
     case "glossary_term":
       return "/admin/global-glossary";
+    case "glossary_import_template":
+      return "/admin/global-glossary?tab=import-template";
     case "notification":
       return entity.id ? `/admin/announcements/${encodeURIComponent(entity.id)}` : "/admin/announcements";
     case "sales_lead":

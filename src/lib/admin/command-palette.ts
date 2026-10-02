@@ -278,18 +278,6 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
-    id: "glossaryTemplates",
-    kind: "page",
-    href: "/admin/glossary-templates",
-    labelKey: "glossaryTemplates",
-    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
-    keywords: [
-      "glossary templates", "template", "templates", "preset", "catalog", "sample", "terminology",
-      "mẫu thuật ngữ", "bộ mẫu", "danh mục mẫu",
-      "用語集テンプレート", "テンプレート",
-    ],
-  },
-  {
     id: "staff",
     kind: "page",
     href: "/admin/staff",
