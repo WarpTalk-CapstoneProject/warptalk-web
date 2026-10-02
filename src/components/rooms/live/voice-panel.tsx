@@ -1,7 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CheckCircle, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react/dist/ssr";
+import {
+  Books,
+  Microphone,
+  SpeakerHigh,
+  SpeakerSlash,
+  UploadSimple,
+} from "@phosphor-icons/react/dist/ssr";
 
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { Switch } from "@/components/ui/switch";
@@ -182,52 +188,72 @@ export function VoicePanel({
               {plan.yourVoice.note}
             </p>
           ) : null}
-          {onChangeVoiceCloneConsent ? (
-            <VoiceOption
-              label="My voice"
-              detail={
-                voiceCloneHasAudience
-                  ? "Cloned from how you sound in this meeting"
-                  : "Nobody is listening in another language yet"
-              }
-              value={MY_VOICE_OPTION}
-              active={Boolean(voiceCloneEnabled) && !dubVoice}
-              onSelect={() => {
-                // Both halves, because they are two different settings that
-                // together mean "clone me": consent is the per-room permission,
-                // and a dub voice left set would win over the clone entirely.
-                onChangeDubVoice?.(null);
-                onChangeVoiceCloneConsent(true);
-              }}
-              close={done}
-            />
-          ) : null}
-          {onChangeDubVoice
-            ? (ownVoiceProfiles ?? []).map((profile) => (
-                <VoiceOption
-                  key={profile.id}
-                  label={profile.name}
-                  detail="A recording you uploaded"
-                  value={profile.voiceId}
-                  active={dubVoice === profile.voiceId}
-                  onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                  close={done}
-                />
-              ))
-            : null}
-          {onChangeDubVoice
-            ? sortedCatalog.map((voice) => (
-                <VoiceOption
-                  key={`dub-${voice.id}`}
-                  label={voice.name}
-                  detail={`A library voice${voice.gender ? ` · ${voice.gender}` : ""}`}
-                  value={voice.id}
-                  active={dubVoice === voice.id}
-                  onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                  close={done}
-                />
-              ))
-            : null}
+          <div role="radiogroup" aria-label={plan.yourVoice.heading} className="space-y-0.5 px-1">
+            {/* WT-927. What a speaker who has chosen nothing is heard in had no row of its own, so
+                the list showed nothing selected — while describeVoiceSelection, under the list,
+                said "Automatic". Every state the summary can name now has a row that reads as it. */}
+            {onChangeDubVoice ? (
+              <VoiceOption
+                label="Automatic"
+                detail="A stand-in voice, assigned rather than matched to you"
+                value=""
+                active={!dubVoice && !voiceCloneEnabled}
+                onSelect={() => {
+                  onChangeDubVoice(null);
+                  if (voiceCloneEnabled) onChangeVoiceCloneConsent?.(false);
+                }}
+                close={done}
+              />
+            ) : null}
+            {onChangeVoiceCloneConsent ? (
+              <VoiceOption
+                label="My voice"
+                source="live"
+                detail={
+                  voiceCloneHasAudience
+                    ? "Cloned from how you sound in this meeting"
+                    : "Nobody is listening in another language yet"
+                }
+                value={MY_VOICE_OPTION}
+                active={Boolean(voiceCloneEnabled) && !dubVoice}
+                onSelect={() => {
+                  // Both halves, because they are two different settings that
+                  // together mean "clone me": consent is the per-room permission,
+                  // and a dub voice left set would win over the clone entirely.
+                  onChangeDubVoice?.(null);
+                  onChangeVoiceCloneConsent(true);
+                }}
+                close={done}
+              />
+            ) : null}
+            {onChangeDubVoice
+              ? (ownVoiceProfiles ?? []).map((profile) => (
+                  <VoiceOption
+                    key={profile.id}
+                    label={profile.name}
+                    source="uploaded"
+                    value={profile.voiceId}
+                    active={dubVoice === profile.voiceId}
+                    onSelect={(voiceId) => onChangeDubVoice(voiceId)}
+                    close={done}
+                  />
+                ))
+              : null}
+            {onChangeDubVoice
+              ? sortedCatalog.map((voice) => (
+                  <VoiceOption
+                    key={`dub-${voice.id}`}
+                    label={voice.name}
+                    detail={genderLabel(voice.gender)}
+                    source="library"
+                    value={voice.id}
+                    active={dubVoice === voice.id}
+                    onSelect={(voiceId) => onChangeDubVoice(voiceId)}
+                    close={done}
+                  />
+                ))
+              : null}
+          </div>
         </>
       ) : null}
 
@@ -257,28 +283,34 @@ export function VoicePanel({
               the speaker id, so everyone keeps a stable voice and no two people
               sound alike — but nothing compares it to how the speaker actually
               sounds. Saying so is what makes the list below worth opening. */}
-          <VoiceOption
-            label="Automatic"
-            detail={plan.listenVoice.automaticDetail}
-            value=""
-            active={listenPickShown && !voicePreference}
-            onSelect={(value) => selectProviderVoice(value)}
-            close={done}
-          />
-          {/* Grouped by gender, then by name. The label alone still leaves six
-              mixed rows to read one at a time; clustering them is what turns the
-              list into "here are the masculine ones". */}
-          {sortedCatalog.map((voice) => (
+          <div
+            role="radiogroup"
+            aria-label={plan.listenVoice.heading?.title ?? "Voice"}
+            className="space-y-0.5 px-1"
+          >
             <VoiceOption
-              key={voice.id}
-              label={voice.name}
-              detail={voice.gender || undefined}
-              value={voice.id}
-              active={listenPickShown && voicePreference === voice.id}
+              label="Automatic"
+              detail={plan.listenVoice.automaticDetail}
+              value=""
+              active={listenPickShown && !voicePreference}
               onSelect={(value) => selectProviderVoice(value)}
               close={done}
             />
-          ))}
+            {/* Grouped by gender, then by name. The label alone still leaves six
+                mixed rows to read one at a time; clustering them is what turns the
+                list into "here are the masculine ones". */}
+            {sortedCatalog.map((voice) => (
+              <VoiceOption
+                key={voice.id}
+                label={voice.name}
+                detail={genderLabel(voice.gender)}
+                value={voice.id}
+                active={listenPickShown && voicePreference === voice.id}
+                onSelect={(value) => selectProviderVoice(value)}
+                close={done}
+              />
+            ))}
+          </div>
         </>
       ) : null}
 
@@ -328,9 +360,38 @@ export function VoicePanel({
   );
 }
 
+/** "feminine" → "Feminine". Only the first letter: CSS `capitalize` title-cased every detail line. */
+function genderLabel(gender?: string | null) {
+  const value = gender?.trim();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : undefined;
+}
+
+type VoiceSource = "live" | "uploaded" | "library";
+
+/**
+ * Where a voice comes from, as a tag rather than a sentence in the detail line.
+ *
+ * WT-927: "A recording you uploaded" / "A library voice · feminine" was the only way to tell the
+ * kinds apart, in the same grey as everything else, so the list had to be read row by row.
+ */
+const SOURCE_TAGS: Record<VoiceSource, { label: string; Icon: typeof Microphone }> = {
+  live: { label: "Live clone", Icon: Microphone },
+  uploaded: { label: "Uploaded", Icon: UploadSimple },
+  library: { label: "Library", Icon: Books },
+};
+
+/**
+ * One choice in a voice list — a radio, because each section holds exactly one answer.
+ *
+ * WT-927. The selected row used to be a slightly darker background and a 14px tick on the far
+ * right, easy to miss in a list of a dozen; a radio mark in front of every row says both "this is
+ * one of several" and "this one" before the label is read. Rows are 44px tall for a reliable
+ * target, and keyboard focus draws a ring instead of nothing.
+ */
 function VoiceOption({
   label,
   detail,
+  source,
   value,
   active,
   onSelect,
@@ -338,27 +399,48 @@ function VoiceOption({
 }: {
   label: string;
   detail?: string;
+  source?: VoiceSource;
   value: string;
   active: boolean;
   onSelect: (voiceId: string) => void;
   close: () => void;
 }) {
+  const tag = source ? SOURCE_TAGS[source] : null;
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
       onClick={() => {
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-surface-2 text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-surface-2"}`}
+      className={`flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+        active ? "bg-primary/[0.08]" : "hover:bg-surface-2"
+      }`}
     >
-      <span className="min-w-0 text-left">
-        <span className="block truncate">{label}</span>
+      <span
+        aria-hidden
+        className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border transition-colors ${
+          active ? "border-primary" : "border-ink-subtle/50"
+        }`}
+      >
+        {active ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-[13px] ${active ? "font-medium text-ink" : "text-ink"}`}>
+          {label}
+        </span>
         {detail ? (
-          <span className="block truncate text-[11px] capitalize text-ink-subtle">{detail}</span>
+          <span className="block text-[11px] leading-snug text-ink-subtle">{detail}</span>
         ) : null}
       </span>
-      {active ? <CheckCircle className="h-3.5 w-3.5 shrink-0 text-ink" weight="fill" /> : null}
+      {tag ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+          <tag.Icon className="h-3 w-3" aria-hidden />
+          {tag.label}
+        </span>
+      ) : null}
     </button>
   );
 }
