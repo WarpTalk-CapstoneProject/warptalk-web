@@ -91,17 +91,17 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   return (
     <div className="flex flex-col gap-3.5 text-ink">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">{t("title")}</h1>
+      {/* No page title: the top bar and the sidebar already name the page (see page-chrome.tsx).
+          The tabs open the page, with the freshness pulse opposite them. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label={t("tabs.label")} className="inline-flex overflow-hidden rounded-lg border border-hairline bg-surface-1">
+          {INSIGHTS_TABS.map((id) => (
+            <button key={id} type="button" className={SEGMENT} aria-pressed={tab === id} onClick={() => props.onChooseTab(id)}>
+              {t(`tabs.${id}`)}
+            </button>
+          ))}
+        </div>
         <UpdatedPulse updatedAt={updatedAt} />
-      </div>
-
-      <div role="group" aria-label={t("tabs.label")} className="inline-flex self-start overflow-hidden rounded-lg border border-hairline bg-surface-1">
-        {INSIGHTS_TABS.map((id) => (
-          <button key={id} type="button" className={SEGMENT} aria-pressed={tab === id} onClick={() => props.onChooseTab(id)}>
-            {t(`tabs.${id}`)}
-          </button>
-        ))}
       </div>
 
       {tab === "usage" ? null : (
