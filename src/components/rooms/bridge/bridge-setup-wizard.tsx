@@ -44,18 +44,17 @@ import {
   hifiFormatMismatch,
   type HiFiAlignOutcome,
 } from "@/lib/desktop/hifi-format";
-import {
-  canCaptureBrowserLoopback,
-  finalBridgeInboundPath,
-  selectBridgeInboundSource,
-} from "@/lib/desktop/bridge-tiers";
+import { decideBridgeInbound, finalBridgeInboundPath } from "@/lib/desktop/bridge-tiers";
+import { bridgeDevicesReadyWithProbe } from "@/lib/desktop/bridge-verdict";
 import {
   MEET_SPEAKER_RESET_NOTICE,
   shouldShowMeetSpeakerResetNotice,
 } from "@/lib/audio/bridge-far-side-monitor";
 import {
+  bridgeDeviceLabelsFor,
+  bridgeDeviceLabelsFromStatus,
   checkVirtualBridge,
-  currentBridgeDeviceLabels,
+  findBridgeDeviceIds,
   WINDOWS_CABLES_DOWNLOAD_PAGE,
   type BridgeCheckResult,
   type BridgeDeviceLabels,
@@ -66,6 +65,29 @@ const BREW_COMMAND = "brew install --cask blackhole-2ch blackhole-16ch";
 const DOWNLOAD_PAGE = "https://existential.audio/blackhole/";
 
 type StepState = "todo" | "active" | "done";
+
+/**
+ * How long the check waits for the desktop's status before probing with the fallback labels. The
+ * desktop's device read is a PowerShell spawn of up to ~2.5 s; a status read that hangs must not
+ * keep the tone test from reporting.
+ */
+const STATUS_WAIT_MS = 3500;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
 
 /**
  * The by-hand version of "Fix audio format", for a desktop build that cannot do it or a fix that
@@ -159,6 +181,7 @@ export function BridgeSetupWizard({
   readStatus = readVirtualAudioStatus,
   loopbackFailed = false,
   browserCaptureAnswer = null,
+  inboundDeviceId,
   onFormatAligned,
   audioMode = "voice",
 }: {
@@ -171,8 +194,11 @@ export function BridgeSetupWizard({
    * and "Start translating" would be a lie about what the button is about to do.
    */
   readyLabel?: string;
-  /** Injectable so the dev preview can render states a laptop without the devices cannot reach. */
-  runCheck?: () => Promise<BridgeCheckResult>;
+  /**
+   * Injectable so the dev preview can render states a laptop without the devices cannot reach.
+   * Given the desktop's status so the probe matches the endpoint labels the desktop reported.
+   */
+  runCheck?: (status: VirtualAudioStatus | null) => Promise<BridgeCheckResult>;
   /** Injectable for the same reason: a format mismatch cannot be produced on demand. */
   readStatus?: () => Promise<VirtualAudioStatus | null>;
   /**
@@ -184,6 +210,12 @@ export function BridgeSetupWizard({
    */
   loopbackFailed?: boolean;
   browserCaptureAnswer?: boolean | null;
+  /**
+   * The meeting's own inbound device id (`findBridgeDeviceIds`), so the wizard's inbound decision
+   * runs on exactly the inputs the meeting's does (`decideBridgeInbound`). Undefined outside a
+   * meeting (the dev preview): the wizard then looks it up with the same function.
+   */
+  inboundDeviceId?: string | null;
   /**
    * Called after the desktop app reports the Hi-Fi Cable format fixed. A capture already open on
    * Hi-Fi Cable Output was opened on the old format and does not recover by itself — its track
@@ -224,19 +256,31 @@ export function BridgeSetupWizard({
    * on a desktop build too old to report it, and then no format notice is shown at all.
    */
   const [status, setStatus] = useState<VirtualAudioStatus | null>(null);
+  /** Only used when no `inboundDeviceId` is passed in; see that prop. */
+  const [ownInboundDeviceId, setOwnInboundDeviceId] = useState<string | null>(null);
   const [aligning, setAligning] = useState(false);
   const [alignOutcome, setAlignOutcome] = useState<HiFiAlignOutcome | null>(null);
 
   useEffect(() => {
-    setLabels(currentBridgeDeviceLabels());
+    // No status yet: the fallback labels, replaced by the desktop's as soon as the check reads them.
+    setLabels(bridgeDeviceLabelsFor(null));
     setCanInstall(Boolean(getDesktopBridge()?.installVirtualAudio));
   }, []);
 
   const check = useCallback(async () => {
     setChecking(true);
-    // Not awaited with the tone test: a status read that hangs must not keep the test from
-    // reporting, and readVirtualAudioStatus already folds failure into null.
-    void readStatus().then(setStatus, () => setStatus(null));
+    // The desktop's status decides the labels the probe matches, so it is read first — but only
+    // waited on for so long: a status read that hangs must not keep the test from reporting.
+    const current = await withTimeout(readStatus(), STATUS_WAIT_MS, null);
+    setStatus(current);
+    const reported = bridgeDeviceLabelsFromStatus(current);
+    if (reported) setLabels(reported);
+    if (inboundDeviceId === undefined) {
+      void findBridgeDeviceIds(current).then(
+        (ids) => setOwnInboundDeviceId(ids.inboundDeviceId),
+        () => setOwnInboundDeviceId(null),
+      );
+    }
     // Text mode tests nothing: the tone goes through the cables, and text mode uses none.
     if (textMode) {
       setResult(null);
@@ -244,7 +288,7 @@ export function BridgeSetupWizard({
       return;
     }
     try {
-      const outcome = await runCheck();
+      const outcome = await runCheck(current);
       setResult(outcome);
       // The check knows which pair this machine really has — BlackHole on a Mac set up before the
       // rename — so the instructions follow it rather than the platform default.
@@ -254,7 +298,7 @@ export function BridgeSetupWizard({
     } finally {
       setChecking(false);
     }
-  }, [runCheck, readStatus, textMode]);
+  }, [runCheck, readStatus, textMode, inboundDeviceId]);
 
   const install = useCallback(async () => {
     const bridge = getDesktopBridge();
@@ -295,31 +339,35 @@ export function BridgeSetupWizard({
     void check();
   }, [check]);
 
-  const devicesReady = result?.ready === true;
+  // The desktop's verdict, which the tone probe may only DOWNGRADE (the desktop says the cable is
+  // there, the probe heard nothing). Without a desktop verdict the probe decides, as it always did.
+  const devicesReady = bridgeDevicesReadyWithProbe(status, result);
   const ready = devicesReady && meetConfirmed;
   const isWindows = labels?.platform === "windows";
-  const inboundViaDevice = Boolean(result?.probes.find((probe) => probe.leg === "inbound")?.present);
-  // WT-898: the same decision the meeting makes, so the Speakers line names the path the far side
-  // actually comes in on. Loopback first — Meet keeps its speakers and nothing needs changing —
-  // and the cable only where loopback cannot run here, was declined, or already failed. Before
-  // this an installed Hi-Fi Cable always won, and the wizard sent people into the one Meet setting
-  // most of them get wrong, for a path WarpTalk did not need.
-  const loopbackCapable = canCaptureBrowserLoopback(status, { textOnly: textMode });
+  // The meeting's inbound device when it passed one, else the same lookup the meeting uses — not
+  // the tone probe, which used to give the wizard a different answer from the meeting's.
+  const resolvedInboundDeviceId = inboundDeviceId === undefined ? ownInboundDeviceId : inboundDeviceId;
+  const inboundViaDevice = Boolean(resolvedInboundDeviceId);
+  // WT-898: THE decision the meeting makes (decideBridgeInbound), with the same inputs, so the
+  // Speakers line names the path the far side actually comes in on. Loopback first — Meet keeps
+  // its speakers and nothing needs changing — and the cable only where loopback cannot run here,
+  // was declined, or already failed.
   //
   // W4a: the FINAL path, not the one of the moment. While the capture question is still open the
   // meeting listens through an installed cable ("device-while-asking"), but that is a stopgap the
   // host's yes ends — telling them to point Meet's Speakers at the cable then would be the wrong
   // setting a minute later. finalBridgeInboundPath reads it as loopback.
-  const inboundPath = finalBridgeInboundPath(
-    selectBridgeInboundSource({
-      loopbackCapable,
-      loopbackFailed,
-      hasInboundDevice: inboundViaDevice,
-      consentAnswer: browserCaptureAnswer,
-      // Which window gets captured is picked in the meeting, not here; it never changes the path.
-      hasLoopbackSource: true,
-    }),
-  );
+  const inbound = decideBridgeInbound({
+    status,
+    audioMode: textMode ? "text" : "voice",
+    loopbackFailed,
+    inboundDeviceId: resolvedInboundDeviceId,
+    consentAnswer: browserCaptureAnswer,
+    // Which window gets captured is picked in the meeting, not here; it never changes the path.
+    hasLoopbackSource: true,
+  });
+  const loopbackCapable = inbound.loopbackCapable;
+  const inboundPath = finalBridgeInboundPath(inbound);
   // Anything but loopback names the cable: on the device path that is the setting that makes it
   // carry, and where there is no path at all the cable is the only way in — step 1 says to get it.
   const speakerToSet = labels?.meetSpeaker && inboundPath !== "loopback" ? labels.meetSpeaker : null;

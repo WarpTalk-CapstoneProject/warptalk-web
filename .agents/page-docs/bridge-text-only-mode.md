@@ -29,6 +29,27 @@ of you for the far side, and the web plays **nothing** into a cable.
 ## Desktop contract (desktop #45, merged)
 
 - `VirtualAudioStatus.bridgeModes` (`textOnly.possible`, `voice.cableInstalled`, ...).
+- `VirtualAudioStatus.endpointLabels` (desktop `feat/bridge-desktop-verdicts`) — the endpoint labels
+  to match in `enumerateDevices` per leg (`outboundSink`, `meetMicrophone`, `inboundCapture`,
+  `meetSpeaker`), the provider ids and `inboundOptional`. Optional.
+
+## One verdict — `src/lib/desktop/bridge-verdict.ts`
+
+The desktop's status is the single answer; every web caller reads it through this module:
+`bridgeVoicePossible` (`voice.possible`), `bridgeTextOnlyPossible`, `bridgeCableInstalled`,
+`bridgeLoopbackCapable` (`textOnly.possible`, plus `voice.cableInstalled` in voice mode),
+`bridgeDevicesReady` and `readBridgeVerdict`. Device labels: `bridgeDeviceLabelsFor(status)` in
+`virtual-bridge-check.ts` (the desktop's `endpointLabels`, platform from `status.platform`).
+
+- Each old web derivation survives only as a `FALLBACK` for a desktop build without the field, with
+  a comment saying when it can be deleted.
+- The wizard's tone probe only DOWNGRADES (`bridgeDevicesReadyWithProbe`): desktop ready + probe
+  heard nothing → not ready; it never turns a desktop "no" into "yes".
+- The inbound path has one owner, `decideBridgeInbound` (`bridge-tiers.ts`). The session and the
+  setup wizard both call it; the wizard gets the session's `inboundDeviceId` (via
+  `BridgeSetupDialog`), not its own tone probe.
+- The popup re-reads the status on focus as before, through the same helpers (`bridgeModeSupport`,
+  `bridgeDeviceLabelsFor`).
 - `startAudioCapture({ ..., mode: "text-only" })` — the loopback capture of Meet's OUTPUT (the far
   side) without the VB-CABLE gate. It does not record the user's mic; the main window's own LiveKit
   mic does that, as before.
@@ -39,8 +60,10 @@ of you for the far side, and the web plays **nothing** into a cable.
 
 ### Pure rules — `src/lib/meeting/bridge-audio-mode.ts`
 
-- `bridgeModeSupport(status)` / `preferredBridgeAudioMode` — voice where the cable is installed,
-  text where it is not and text-only works, voice otherwise (old desktop builds: voice only).
+- `bridgeModeSupport(status)` — via `readBridgeVerdict`: `voice` is the desktop's `voice.possible`
+  (old desktop builds: the cable alone), `text` its `textOnly.possible`.
+- `preferredBridgeAudioMode` — voice where the cable is installed, text where it is not and
+  text-only works, voice otherwise (old desktop builds: voice only).
 - `claimAudioModeFor(status)` — the claim sends `"text"` only where voice cannot run, otherwise
   nothing (never `"voice"`: a reload's claim would undo a text pick made before Start).
 - `resolveBridgeAudioMode` — store (claim / switch) → participant row → voice.
@@ -53,8 +76,9 @@ of you for the far side, and the web plays **nothing** into a cable.
 
 - Mode = `useBridgeAudioModeStore` (written by the claim in `use-bridge-auto-room.ts` and by a
   switch) → my participant row `isBridgeTextOnly` → voice.
-- `canCaptureBrowserLoopback(status, { textOnly })` (`bridge-tiers.ts`) — text mode does not need
-  the cable, only the desktop's `textOnly.possible`.
+- `canCaptureBrowserLoopback(status, { textOnly })` (`bridge-tiers.ts`, delegating to
+  `bridgeLoopbackCapable`) — text mode does not need the cable, only the desktop's
+  `textOnly.possible`. The inbound path itself comes from `decideBridgeInbound`.
 - The loopback capture asks for `mode: bridgeLoopbackCaptureMode(...)`. A voice → text switch does
   not restart a running capture.
 - FilteredRoomAudio's `bridgeOutboundDeviceId` goes through `bridgeOutboundSinkDeviceId` — null in

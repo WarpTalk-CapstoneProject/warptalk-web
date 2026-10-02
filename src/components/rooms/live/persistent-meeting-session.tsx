@@ -136,7 +136,7 @@ import { MeetingReadyCard } from "@/components/rooms/live/meeting-ready-card";
 import { consumeInstantMeetingStart } from "@/lib/meeting/instant-meeting-handoff";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
-import { findBridgeDeviceIds, currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
+import { findBridgeDeviceIds, bridgeDeviceLabelsFor } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
 import {
@@ -195,8 +195,8 @@ import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import {
   canCaptureBrowserLoopback,
   describeLoopbackFailure,
+  decideBridgeInbound,
   isLoopbackFallbackActive,
-  selectBridgeInboundSource,
   type BridgeLoopbackFallback,
 } from "@/lib/desktop/bridge-tiers";
 import {
@@ -427,12 +427,14 @@ export function PersistentMeetingSession({
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
   /**
    * The desktop's device report, as last read. Windows only: the far side can be captured from the
-   * browser itself — WT-898: the FIRST choice, cable or no cable (see selectBridgeInboundSource).
+   * browser itself — WT-898: the FIRST choice, cable or no cable (see decideBridgeInbound).
    * Kept whole rather than as the one boolean it used to be, because whether loopback can run now
    * depends on this user's bridge audio mode too (text-only needs no cable; bridgeInboundLoopback
    * below), and that mode is only known further down.
    */
   const [bridgeVirtualAudioStatus, setBridgeVirtualAudioStatus] = useState<VirtualAudioStatus | null>(null);
+  /** The same reading, for the capture effect's error copy, which must not re-run when it changes. */
+  const bridgeVirtualAudioStatusRef = useRef<VirtualAudioStatus | null>(null);
   /**
    * Text-only bridge: read inside the device effect below, which is written once per room and must
    * not re-run (and re-toast) every time the mode is learned. Set from `bridgeAudioMode` further down.
@@ -546,18 +548,19 @@ export function PersistentMeetingSession({
     const resolve = async () => {
       const run = ++latest;
       try {
-        const { outboundDeviceId, inboundDeviceId, needsPermission } = await findBridgeDeviceIds();
+        // The desktop's status first: it names the endpoints to look for (endpointLabels), so the
+        // device ids below are found by the desktop's labels rather than a table of our own.
+        // WT-898: loopback is asked as a capability of this status, NOT through the tier picker —
+        // the picker answers "full-bridge" on any machine with both cables, and reading loopback
+        // off that answer is what hid the loopback path from the users best placed to run it.
+        const status = await readVirtualAudioStatus();
+        if (cancelled || run !== latest) return;
+        const { outboundDeviceId, inboundDeviceId, needsPermission } = await findBridgeDeviceIds(status);
         if (cancelled || run !== latest) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
-
-        // Windows has a second way in: process loopback pulls the far side out of the browser
-        // itself. WT-898: asked as a capability, NOT through the tier picker any more — the picker
-        // answers "full-bridge" on any machine with both cables, and reading loopback off that
-        // answer is what hid the loopback path from exactly the users best placed to run it.
-        const status = await readVirtualAudioStatus();
-        if (cancelled || run !== latest) return;
         setBridgeVirtualAudioStatus(status);
+        bridgeVirtualAudioStatusRef.current = status;
         resolvedOnce = true;
         // Empty labels mean the browser has not been given microphone permission yet, so every
         // device reads as absent. That is not a missing cable, and telling the user it is sends
@@ -583,7 +586,7 @@ export function PersistentMeetingSession({
             // Named for THIS platform. It used to be the macOS constant unconditionally, so a
             // Windows user missing VB-CABLE was told to install BlackHole — a device that does
             // not exist for their machine, sending them off to fix the wrong thing.
-            description: `${currentBridgeDeviceLabels().outboundSink} is not installed, so the far side will not hear the translation.`,
+            description: `${bridgeDeviceLabelsFor(status).outboundSink} is not installed, so the far side will not hear the translation.`,
           });
           // WT-578: and then the wizard, which is the part that was missing. The toast alone named
           // a device and vanished; it never said where to get one, and the only screen that does
@@ -1100,7 +1103,7 @@ export function PersistentMeetingSession({
     // WT-898: an installed Hi-Fi Cable no longer silences the ask. Loopback comes first, so the
     // device only counts here where loopback is not wanted at all — and there
     // `loopbackAvailable` is false and nothing is asked anyway. A "no" still lands on the cable,
-    // through selectBridgeInboundSource below, and stays "declined" so it can be asked again.
+    // through decideBridgeInbound below, and stays "declined" so it can be asked again.
     hasInboundDevice: !inboundLoopbackWanted && Boolean(bridgeInboundDeviceId),
     loopbackAvailable: inboundLoopbackWanted,
     answer: browserCaptureAnswerForRoom,
@@ -1112,10 +1115,14 @@ export function PersistentMeetingSession({
    * widget's "Meet audio to WarpTalk" row, the health probe's path and the wizard's Speakers line
    * all read it, so none of them can drift back to "the cable wins" on its own.
    */
-  const bridgeInbound = selectBridgeInboundSource({
-    loopbackCapable: bridgeInboundLoopback,
+  // decideBridgeInbound: the same function, with the same inputs, the setup wizard calls (it is
+  // passed bridgeInboundDeviceId below). Its loopbackCapable equals bridgeInboundLoopback above:
+  // both are canCaptureBrowserLoopback of this status and this mode.
+  const bridgeInbound = decideBridgeInbound({
+    status: bridgeVirtualAudioStatus,
+    audioMode: bridgeAudioMode,
     loopbackFailed: loopbackFallbackActive,
-    hasInboundDevice: Boolean(bridgeInboundDeviceId),
+    inboundDeviceId: bridgeInboundDeviceId,
     consentAnswer: browserCaptureAnswerForRoom,
     hasLoopbackSource: Boolean(selectedLoopbackSourceId),
   });
@@ -1257,7 +1264,7 @@ export function PersistentMeetingSession({
   const [farSideMonitorLevel, setFarSideMonitorLevel] = useState(FAR_SIDE_MONITOR_UNDER_DUB);
 
   useEffect(() => {
-    // WT-898: which path is selectBridgeInboundSource's call, not this effect's. A device endpoint
+    // WT-898: which path is decideBridgeInbound's call, not this effect's. A device endpoint
     // may start straight away; the loopback path may not start until the user has actually said
     // yes. `mayCaptureBrowser` is checked on top of the decision rather than trusted from it,
     // because on the render before the answer arrives those two can differ, and one of them starts
@@ -1320,7 +1327,7 @@ export function PersistentMeetingSession({
         if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
 
         // WT-898: loopback first, the cable only as the way back — decided by
-        // selectBridgeInboundSource above. The loopback start is the one that can refuse (no
+        // decideBridgeInbound above. The loopback start is the one that can refuse (no
         // window, a desktop build that is not wired, an OS that says no), and a refusal is not the
         // end of the leg when a cable exists: it is remembered for this room and devices, and the
         // decision moves to the device on the next render instead of leaving the far side silent.
@@ -1486,7 +1493,7 @@ export function PersistentMeetingSession({
         // Keyed on the path that actually failed (WT-898): with loopback first, a machine that has
         // the cable installed can still fail on the loopback path, and naming the cable then would
         // send the user to fix a device that was never in use.
-        const { inboundCapture } = currentBridgeDeviceLabels();
+        const { inboundCapture } = bridgeDeviceLabelsFor(bridgeVirtualAudioStatusRef.current);
         toast.error("WarpTalk cannot hear the external call.", {
           description: getErrorMessage(
             error,
@@ -4962,6 +4969,7 @@ export function PersistentMeetingSession({
           audioMode={bridgeAudioMode}
           loopbackFailed={loopbackFallbackActive}
           browserCaptureAnswer={browserCaptureAnswerForRoom}
+          inboundDeviceId={bridgeInboundDeviceId}
           onFormatAligned={() => {
             // The cable was reconfigured under a running capture, whose track is now dead or silent
             // on the old format. Only the device path rides the cable; a loopback leg is untouched.
