@@ -1,15 +1,13 @@
 "use client";
 
 /**
- * Everything `UsageOverview` needs, loaded the way the Usage page loads it (WT-878).
+ * Everything `UsageOverview` needs, for the Usage tab of workspace Insights (WT-878).
  *
- * INTENTIONAL DUPLICATION
- *   This is the data half of `app/(app)/[workspaceSlug]/settings/billing/usage/page.tsx`, lifted
- *   into a hook so the workspace Insights page can show the same Usage surface in its Usage tab.
- *   The old page is NOT rewritten to call this hook: it stays exactly as it is until its route is
- *   retired, and then this hook is the only copy. Until then the two must agree — same query keys
- *   (so both screens share one cache), same polling, same realtime binding. A fix to one belongs
- *   in the other. The reasons behind every behaviour are written at the top of that page; in short:
+ * THE ONLY COPY
+ *   This was lifted out of the stand-alone `/settings/billing/usage` page so Insights could show
+ *   the same surface. That page was retired on 2026-10-03 (its address forwards to
+ *   `/insights?tab=usage` in proxy.ts), so this hook is now the one place these queries live. Why
+ *   the surface is shaped as it is lives at the top of `UsageOverview`; the behaviours, in short:
  *
  *   - WT-430: the cycle's ledger is paged in full (`getAllCreditHistory`), never one page.
  *   - One clock: `now` moves only when the data is refetched, so every figure agrees on "today".
