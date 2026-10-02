@@ -8,8 +8,10 @@ import type { BrowserCaptureConsentState } from "@/lib/audio/browser-capture-con
 import { openTranscriptWindow } from "@/lib/desktop/bridge";
 import type { BridgeInboundPath, BridgeInboundReason } from "@/lib/desktop/bridge-tiers";
 import {
+  CONSENT_POPUP_RECHECK_MS,
   applyConsentRaise,
   buildBridgeConsentSnapshot,
+  consentRaiseBudgetFor,
   initialConsentRaiseState,
   nextConsentRaise,
   parseBridgeConsentMessage,
@@ -60,6 +62,11 @@ export interface UseBridgeConsentHostOptions extends BridgeConsentHostView {
    * the raise loop, not the publish.
    */
   popupAvailable: boolean;
+  /**
+   * This room's Meet call is on screen (isBridgeMeetCallOnScreen). While it is not, the popup is
+   * never raised: no focus steal, no notification. Unknown (no sensor) must be passed as true.
+   */
+  meetOnScreen: boolean;
   onSelectSource: (sourceId: string) => void;
   onAnswer: (granted: boolean) => void;
   onReask: () => void;
@@ -83,6 +90,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
     selectedSourceId,
     loadingSources,
     popupAvailable,
+    meetOnScreen,
     inboundPath,
     inboundReason,
     inboundHealth,
@@ -106,6 +114,16 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
   });
   /** Set by an `ack` from the popup; read and cleared only by the raise loop. See nextConsentRaise. */
   const acknowledgedRef = useRef(false);
+  /** Read by the raise loop before every decision; a raise is held while it is false. */
+  const meetOnScreenRef = useRef(meetOnScreen);
+  /**
+   * Raises this question has cost, across restarts of the raise loop. Held here rather than in the
+   * loop because the loop restarts whenever `asking` or `popupAvailable` flickers, and a count that
+   * restarted with it bounded nothing. See ConsentRaiseBudget.
+   */
+  const raiseBudgetRef = useRef(consentRaiseBudgetFor(null, roomId, consent));
+  /** Set by a running raise loop: re-decide now (Meet came back on screen). */
+  const pokeRaiseLoopRef = useRef<(() => void) | null>(null);
   /** The room whose question the raise loop gave up on the popup for. Stamped, like the answers. */
   const [mainFallbackRoomId, setMainFallbackRoomId] = useState<string | null>(null);
 
@@ -128,6 +146,8 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
       onAnswer: options.onAnswer,
       onReask: options.onReask,
     };
+    meetOnScreenRef.current = meetOnScreen;
+    raiseBudgetRef.current = consentRaiseBudgetFor(raiseBudgetRef.current, roomId, consent);
   });
 
   useEffect(() => {
@@ -232,6 +252,12 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
    * question open for the rest of the meeting, with the far side unheard and nothing anywhere
    * asking again.
    *
+   * popspam1002: it also raised forever. Each raise opened the popup, the opened popup acked, and the
+   * ack reset the unanswered count - so a host who closed the popup without answering got it back,
+   * focused and announced, every recheck, including after they had left the Meet call. Now a raise
+   * is held while the Meet call is off screen, and one question gets at most
+   * CONSENT_POPUP_MAX_RAISES_PER_QUESTION raises however often this effect restarts.
+   *
    * The timers survive the main window being hidden behind Meet because the desktop shell sets
    * `backgroundThrottling: false` on it; a throttled window would raise the popup late or never.
    */
@@ -240,17 +266,29 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
     if (!asking) return;
 
     acknowledgedRef.current = false;
-    let state = initialConsentRaiseState({ consent: "required", popupAvailable, nowMs: Date.now() });
+    let state = initialConsentRaiseState({
+      consent: "required",
+      popupAvailable,
+      nowMs: Date.now(),
+      meetOnScreen: meetOnScreenRef.current,
+      raisesThisQuestion: raiseBudgetRef.current.raises,
+    });
     let timer: number | undefined;
     let stopped = false;
 
     const step = () => {
       if (stopped) return;
+      window.clearTimeout(timer);
       const now = Date.now();
-      state = { ...state, acknowledged: acknowledgedRef.current };
+      state = { ...state, acknowledged: acknowledgedRef.current, meetOnScreen: meetOnScreenRef.current };
       const decision = nextConsentRaise(state, now);
       switch (decision.type) {
         case "idle":
+          return;
+        case "hold":
+          // Meet is not on screen: no raise, no notification. The poke below re-decides the moment
+          // it is back; the timer is only the backstop for a sensor event that never comes.
+          timer = window.setTimeout(step, CONSENT_POPUP_RECHECK_MS);
           return;
         case "use-main":
           // Not a raise: the popup stays as it is, and may still answer. The modal is added.
@@ -268,6 +306,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
         case "raise":
           acknowledgedRef.current = false;
           state = applyConsentRaise(state, decision, now);
+          raiseBudgetRef.current = { roomId, raises: state.raisesThisQuestion };
           // Only after silence: openTranscriptWindow on a popup that is already open costs the
           // host an OS notification over a question they are already looking at.
           void openTranscriptWindow(roomId);
@@ -276,15 +315,23 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
       step();
     };
     step();
+    pokeRaiseLoopRef.current = step;
 
     return () => {
       stopped = true;
+      if (pokeRaiseLoopRef.current === step) pokeRaiseLoopRef.current = null;
       window.clearTimeout(timer);
       // The question this verdict was about is over (answered, or the room changed). The next ask
       // starts on the popup again.
       setMainFallbackRoomId(null);
     };
   }, [asking, roomId, popupAvailable]);
+
+  // A raise held while Meet was off screen goes out when the call is back, not a recheck later.
+  // Declared after the loop so a commit that starts the loop and brings Meet back pokes the new one.
+  useEffect(() => {
+    if (meetOnScreen) pokeRaiseLoopRef.current?.();
+  }, [meetOnScreen]);
 
   return asking && mainFallbackRoomId === roomId;
 }
