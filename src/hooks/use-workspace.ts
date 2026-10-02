@@ -509,7 +509,9 @@ export function useWorkspaceDocument(workspaceId: string, docId: string) {
     refetchInterval: (query) => {
       const status = query.state.data?.ingestionStatus?.toLowerCase();
       const isProcessing = status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
-      return isProcessing ? 3000 : false;
+      // A requested re-scan of the masked copy reports back only through this route.
+      const isMasking = query.state.data?.maskedVersionStatus === "pending";
+      return isProcessing || isMasking ? 3000 : false;
     },
   });
 }
@@ -840,6 +842,25 @@ export function useDeleteGlossaryTerm(glossaryId: string) {
 export function useDownloadWorkspaceDocument(workspaceId: string) {
   return useMutation({
     mutationFn: (docId: string) => WorkspaceService.downloadDocument(workspaceId, docId),
+  });
+}
+
+/** The PII-masked copy, in the uploaded format. */
+export function useDownloadMaskedWorkspaceDocument(workspaceId: string) {
+  return useMutation({
+    mutationFn: (docId: string) => WorkspaceService.downloadMaskedDocument(workspaceId, docId),
+  });
+}
+
+/** Owner/Admin: produce the masked copy of a restricted document that predates masked copies. */
+export function useRescanMaskedDocumentVersion(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => WorkspaceService.rescanMaskedVersion(workspaceId, docId),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(WORKSPACE_KEYS.documentDetail(workspaceId, docId), doc);
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+    },
   });
 }
 
