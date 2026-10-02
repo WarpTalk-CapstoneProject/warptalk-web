@@ -363,6 +363,20 @@
       "title": "Turn on captions (CC) in Google Meet.",
       "body": "WarpTalk reads speaker names from Meet's captions, and Meet isn't showing any right now. Click CC in Meet's toolbar so the other side's lines show who said them.",
       "dismiss": "Dismiss"
+    },
+    "meetLeft": {
+      "title": "You left the Meet call. End the WarpTalk room?",
+      "countdown": "Ends automatically in {seconds}s.",
+      "endNow": "End now",
+      "keepOpen": "Keep open",
+      "kept": "Room kept open. WarpTalk is not listening to this call; rejoin in Google Meet to resume."
+    },
+    "micChip": {
+      "off": "WarpTalk mic is off",
+      "on": "WarpTalk mic is on",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand."
     }
   }
 }

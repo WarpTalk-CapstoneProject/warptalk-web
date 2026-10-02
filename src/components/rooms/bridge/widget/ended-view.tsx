@@ -8,11 +8,19 @@
  *   The shell renders it, below the header, in place of the tabs and the dock whenever `ended`
  *   is true, inside a `flex min-h-0 flex-1 flex-col` region.
  *
- * THE POPUP DID NOT END IT (PO, 2026-10-01)
- *   There is no End in the popup. A bridge room ends when its Google Meet conference ends (the
- *   backend learns that from Google), or from the main window. This screen only reports that it
- *   has, and hands the user to what was kept — so it claims nothing about whether the Meet call is
- *   still going: it may well not be.
+ * THE POPUP HAS NO END BUTTON (PO, 2026-10-01), AND WHAT ACTUALLY ENDS THE ROOM (WT-913)
+ *   A bridge room follows its Google Meet call, and what tells WarpTalk is the DESKTOP, not
+ *   Google: the desktop app reads Meet's own buttons, and when the room's host leaves the call
+ *   the main window ends the room 30 s later (lib/meeting/bridge-meet-follow; the popup only gets
+ *   to answer "End now" or "Keep open" in between). The comment that stood here said the backend
+ *   learns of the conference's end from Google. Nothing in the bridge path relies on that: the
+ *   Google Meet plugin is at most a silent fallback, and most users never connect it.
+ *
+ *   The other ways a room ends are the server's own sweeps once everyone is gone (nobody left
+ *   connected, or the room idle), and an End made from the room's page in the main window.
+ *
+ *   So this screen only reports that the room HAS ended and hands the user to what was kept. It
+ *   claims nothing about the Meet call itself, which may still be going for everyone else.
  *
  * "OPEN MEETING RECORD": WHERE IT GOES, AND HOW
  *   The room's own page, `/rooms/{roomId}` — the WT-364 address that forwards to the room page in
@@ -65,10 +73,10 @@ export function EndedView() {
       <div className="flex flex-col gap-1.5">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
           <CheckCircle size={14} weight="fill" className="text-semantic-success" aria-hidden="true" />
-          Meeting ended
+          WarpTalk room ended
         </p>
         <h1 id="bridge-widget-ended-title" className="text-base font-semibold text-ink">
-          WarpTalk has stopped translating
+          WarpTalk has stopped listening and translating
         </h1>
         <p className="text-[13px] leading-relaxed text-ink-muted">
           {savesTranscript

@@ -53,6 +53,11 @@
  *                                                                     how Meet hears this user
  *                    take-over-session                                "Use this device", after another
  *                                                                     login displaced this session
+ *                    set-mic-enabled          { enabled }             WT-912: the fallback chip, only
+ *                                                                     while Meet's mute cannot be read
+ *                    answer-meet-left         { end }                 WT-913: "End now" (true) or
+ *                                                                     "Keep open" (false), after the
+ *                                                                     user left the Meet call
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
@@ -61,7 +66,7 @@
  *                                                 meetingError?, idleReaped?, connection?,
  *                                                 isRoomHost?, roomEnded?, bridgeRole?,
  *                                                 bridgeCapturerAway?, audioMode?, sessionDisplaced?,
- *                                                 meetCaptionsOff?, at }
+ *                                                 meetCaptionsOff?, mic?, meetLeave?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -108,9 +113,27 @@
  *   forgiving like the WT-901 fields: a main window that does not say draws no notice, and so is
  *   never sent the intent.
  *
- *   There is deliberately NO end intent. The popup does not end a bridge meeting (PO, 2026-10-01):
- *   the room ends when its Google Meet conference does. `open-room-record` is how the ended screen
+ *   There is deliberately NO end control. The popup has no End button (PO, 2026-10-01): the user
+ *   only operates Google Meet, and the room follows it. `open-room-record` is how the ended screen
  *   hands the user to the room's record in the main window, where they are signed in.
+ *
+ *   WT-912 / WT-913 (PO, 2026-10-02): Meet is the source of truth. The main window follows the
+ *   desktop's read of Meet's own buttons (lib/meeting/bridge-meet-follow) and says two things here:
+ *     - `mic`: whether the WarpTalk microphone is on, and who decides it. While it follows Meet's
+ *       mute button ("meet") the popup shows nothing. Where Meet cannot be read ("manual": an
+ *       older desktop, macOS, a button the sensor never saw) the popup shows one compact chip, and
+ *       `set-mic-enabled` is its press. The main window applies it only while it still says
+ *       "manual" (`acceptsManualMic`); a press that arrives after the mic started following Meet is
+ *       answered with a snapshot instead.
+ *     - `meetLeave`: the user left the Meet call. "countdown" carries when the main window will end
+ *       the room by itself; the popup asks "End the WarpTalk room?" and `answer-meet-left` is the
+ *       answer. This is the one way the popup has a say in ending, and it is not an End button: it
+ *       exists only after Meet was left, the END itself is the main window's native one, and
+ *       saying nothing ends the room anyway. "kept" says the room was kept open. Sent only to
+ *       somebody who may end the room; a member is asked nothing. An answer that arrives when no
+ *       countdown is running (already answered, or the user rejoined) is stale and is dropped
+ *       (`acceptsMeetLeftAnswer`).
+ *   Both optional and forgiving like the WT-901 fields.
  *
  * VERSIONING
  *   `v` changes only when an EXISTING message changes shape. A new message type does not need a
@@ -129,6 +152,7 @@ import type { VoiceCloneStateDto } from "../../types/realtime.ts";
 import { applySingleLanguageChoice, describeLanguageChoice } from "./language-choice.ts";
 import { isBridgeRole, type BridgeRole } from "./bridge-capturer.ts";
 import { isBridgeAudioMode, type BridgeAudioMode } from "./bridge-audio-mode.ts";
+import type { MeetLeavePrompt, MeetMicControl } from "./bridge-meet-follow.ts";
 
 export const BRIDGE_WIDGET_RELAY_VERSION = 1;
 
@@ -239,9 +263,22 @@ export type BridgeWidgetSnapshot = {
    * the popup reads as "not said": no notice.
    */
   meetCaptionsOff?: boolean;
+  /**
+   * WT-912: the WarpTalk microphone as the main window publishes it, and who decides it
+   * (lib/meeting/bridge-meet-follow). Absent from a main window that predates it: no chip, and
+   * `set-mic-enabled` is never sent.
+   */
+  mic?: BridgeWidgetMicSnapshot;
+  /**
+   * WT-913: the user left the Google Meet call. "countdown": the main window ends the room at
+   * `endsAtMs` unless told otherwise; "kept": the room was kept open. Absent: nothing to ask.
+   */
+  meetLeave?: MeetLeavePrompt;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
+
+export type BridgeWidgetMicSnapshot = { enabled: boolean; control: MeetMicControl };
 
 export type BridgeWidgetTranslationSnapshot = { started: boolean };
 
@@ -296,7 +333,9 @@ export type BridgeWidgetIntent =
   | { type: "open-room-record" }
   | { type: "take-over-capture" }
   | { type: "set-audio-mode"; mode: BridgeAudioMode }
-  | { type: "take-over-session" };
+  | { type: "take-over-session" }
+  | { type: "set-mic-enabled"; enabled: boolean }
+  | { type: "answer-meet-left"; end: boolean };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
 
@@ -342,6 +381,8 @@ const INTENT_TYPES = new Set<string>([
   "take-over-capture",
   "set-audio-mode",
   "take-over-session",
+  "set-mic-enabled",
+  "answer-meet-left",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -354,6 +395,7 @@ const INBOUND_HEALTH_STATES = new Set<string>(["unknown", "listening", "quiet", 
 const MEETING_CONNECTIONS = new Set<string>(
   ["connecting", "connected", "reconnecting", "disconnected"] satisfies BridgeWidgetMeetingConnection[],
 );
+const MIC_CONTROLS = new Set<string>(["meet", "manual", "none"] satisfies MeetMicControl[]);
 /** A sentence for a person, from another window: bounded so it cannot flood the popup. */
 const MEETING_ERROR_MAX = 500;
 const CREDITS_REASON_MAX = 64;
@@ -373,6 +415,20 @@ function parseTranscriptPause(raw: unknown): BridgeWidgetTranscriptPauseSnapshot
     since = raw.since;
   }
   return { known: raw.known, paused: raw.paused, since };
+}
+
+function parseMic(raw: unknown): BridgeWidgetMicSnapshot | null {
+  if (!isRecord(raw) || typeof raw.enabled !== "boolean") return null;
+  if (typeof raw.control !== "string" || !MIC_CONTROLS.has(raw.control)) return null;
+  return { enabled: raw.enabled, control: raw.control as MeetMicControl };
+}
+
+function parseMeetLeave(raw: unknown): MeetLeavePrompt | null {
+  if (!isRecord(raw)) return null;
+  if (raw.state === "kept") return { state: "kept" };
+  if (raw.state !== "countdown") return null;
+  if (typeof raw.endsAtMs !== "number" || !Number.isFinite(raw.endsAtMs) || raw.endsAtMs < 0) return null;
+  return { state: "countdown", endsAtMs: raw.endsAtMs };
 }
 
 /**
@@ -412,6 +468,10 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
   }
   if (typeof raw.bridgeCapturerAway === "boolean") snapshot.bridgeCapturerAway = raw.bridgeCapturerAway;
   if (isBridgeAudioMode(raw.audioMode)) snapshot.audioMode = raw.audioMode;
+  const mic = parseMic(raw.mic);
+  if (mic) snapshot.mic = mic;
+  const meetLeave = parseMeetLeave(raw.meetLeave);
+  if (meetLeave) snapshot.meetLeave = meetLeave;
 }
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
@@ -542,6 +602,10 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return isBridgeAudioMode(raw.mode) ? { type: "set-audio-mode", mode: raw.mode } : null;
     case "take-over-session":
       return { type: "take-over-session" };
+    case "set-mic-enabled":
+      return typeof raw.enabled === "boolean" ? { type: "set-mic-enabled", enabled: raw.enabled } : null;
+    case "answer-meet-left":
+      return typeof raw.end === "boolean" ? { type: "answer-meet-left", end: raw.end } : null;
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -651,6 +715,10 @@ export type BridgeWidgetSnapshotFields = {
   sessionDisplaced?: boolean;
   /** See `BridgeWidgetSnapshot.meetCaptionsOff`. */
   meetCaptionsOff?: boolean;
+  /** WT-912: see `BridgeWidgetSnapshot.mic`. */
+  mic?: BridgeWidgetMicSnapshot;
+  /** WT-913: see `BridgeWidgetSnapshot.meetLeave`. */
+  meetLeave?: MeetLeavePrompt;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -694,6 +762,13 @@ export function buildBridgeWidgetSnapshot(
   if (fields.audioMode) snapshot.audioMode = fields.audioMode;
   if (fields.sessionDisplaced !== undefined) snapshot.sessionDisplaced = fields.sessionDisplaced;
   if (fields.meetCaptionsOff !== undefined) snapshot.meetCaptionsOff = fields.meetCaptionsOff;
+  if (fields.mic) snapshot.mic = { enabled: fields.mic.enabled, control: fields.mic.control };
+  if (fields.meetLeave) {
+    snapshot.meetLeave =
+      fields.meetLeave.state === "countdown"
+        ? { state: "countdown", endsAtMs: fields.meetLeave.endsAtMs }
+        : { state: "kept" };
+  }
   return snapshot;
 }
 
@@ -733,6 +808,16 @@ export function acceptsRejoin(idleReaped: boolean | undefined): boolean {
  */
 export function acceptsSessionTakeOver(sessionDisplaced: boolean | undefined): boolean {
   return sessionDisplaced === true;
+}
+
+/**
+ * WT-913: whether an `answer-meet-left` may be acted on right now: only while the main window is
+ * counting down. One that arrives later (already answered, the countdown ran out, or the user
+ * rejoined the call and it was cancelled) is stale, and an old "End now" must never end a room
+ * whose user is back in the meeting. Rejected, never reinterpreted, like `acceptsRejoin`.
+ */
+export function acceptsMeetLeftAnswer(meetLeave: MeetLeavePrompt | undefined): boolean {
+  return meetLeave?.state === "countdown";
 }
 
 /**
@@ -999,6 +1084,29 @@ export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWi
     connection: snapshot?.connection ?? null,
     meetCaptionsOff: snapshot?.meetCaptionsOff === true,
   };
+}
+
+/**
+ * WT-912: the fallback chip, or null for nothing to draw.
+ *
+ * Only while the main window says Meet's mute button cannot be read ("manual") and its meeting is
+ * connected: a chip over a meeting that is still connecting, reaped or displaced would offer a
+ * microphone nothing can publish. While the mic follows Meet, and while the user is not in the
+ * call at all, there is nothing to offer. `enabled` is the microphone as it is now, so the chip
+ * can also turn off a microphone that was turned on by hand.
+ */
+export function bridgeWidgetMicChip(view: BridgeWidgetRelayView): { enabled: boolean } | null {
+  const snapshot = liveSnapshot(view);
+  if (!snapshot?.mic || snapshot.mic.control !== "manual") return null;
+  if (snapshot.connection !== "connected" || snapshot.roomEnded) return null;
+  return { enabled: snapshot.mic.enabled };
+}
+
+/** WT-913: what the main window says about the user having left the Meet call, or null. */
+export function bridgeWidgetMeetLeave(view: BridgeWidgetRelayView): MeetLeavePrompt | null {
+  const snapshot = liveSnapshot(view);
+  if (!snapshot?.meetLeave || snapshot.roomEnded) return null;
+  return snapshot.meetLeave;
 }
 
 /**

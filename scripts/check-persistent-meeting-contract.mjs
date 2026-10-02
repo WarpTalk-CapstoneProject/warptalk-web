@@ -257,10 +257,16 @@ assert.match(
     /translation/i,
     "the far side's capture must not wait for Start Translation — the transcript does not",
   );
+  // WT-913: ...and only while the user has not LEFT the Google Meet call. Once they have, what the
+  // browser plays is not the meeting, so this desktop stops listening (its lease lapses and a
+  // member still in the call can take the capture over); rejoining brings it back. `leftCall` is
+  // only ever true after the desktop read the "You left" page — never on "unknown", never on an
+  // older desktop — so nothing that could not be read can stop the far side being heard.
   assert.match(
     meetingSession,
-    /const bridgeListening = Boolean\(room\) && transcriptOpen;/,
-    "the bridge listens exactly while the transcript is open, and never before the room has loaded",
+    /const bridgeListening = Boolean\(room\) && transcriptOpen && !meetFollow\.leftCall;/,
+    "the bridge listens exactly while the transcript is open and the user is still in the Meet call, "
+      + "and never before the room has loaded",
   );
 }
 // W4a: the main window draws no bridge widget any more (WT-868) — the popup over Meet is the only

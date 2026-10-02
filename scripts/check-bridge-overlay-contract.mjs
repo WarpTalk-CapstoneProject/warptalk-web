@@ -458,11 +458,17 @@ if (!layout) {
  * 8. The popup does NOT end the meeting (PO, 2026-10-01).
  *
  * WAS: "End ends both halves, in the order End meeting for all does". The product decision since:
- * a bridge room ends when its Google Meet conference ends — the backend learns that from Google —
- * and the popup over Meet carries translation controls only (Start/Stop translation, Pause/Resume
- * transcript). An End there ended WarpTalk for a call that was still going, and was one click from
- * the controls people press all meeting. So the check is now the opposite one: no End control, no
- * end mutation and no end intent anywhere in the widget. EndedView stays — it is how the popup
+ * a bridge room follows its Google Meet call, and the popup over Meet carries translation controls
+ * only (Start/Stop translation, Pause/Resume transcript). An End there ended WarpTalk for a call
+ * that was still going, and was one click from the controls people press all meeting. So the check
+ * is now the opposite one: no End control, no end mutation and no end intent anywhere in the
+ * widget.
+ *
+ * WT-913 (PO, 2026-10-02) made "follows" concrete: the desktop reads Meet's buttons, and when the
+ * host leaves the call the MAIN WINDOW ends the room after a 30 s countdown. The popup shows that
+ * countdown and may answer it (`answer-meet-left`: End now / Keep open) — an answer to a question
+ * that exists only after Meet was left, not an End control, and the ending itself still never
+ * happens in the widget. The checks below hold exactly that. EndedView stays — it is how the popup
  * reports a room that ended elsewhere — and its way on is "Open meeting record", not an exit.
  *
  * Every file under the widget folder, nested ones included: a removed button is most likely to come
