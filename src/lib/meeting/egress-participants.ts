@@ -88,3 +88,33 @@ export function resolveEgressLayout(
     ? "meet-window"
     : "grid";
 }
+
+/**
+ * WT-910 follow-up — the Meet window is shown only once it has a picture.
+ *
+ * The layout above switches to `meet-window` the moment the track is SUBSCRIBED, on a black stage.
+ * A track that never delivered a frame therefore recorded as an unbroken black rectangle for the
+ * whole meeting, indistinguishable from a broken file. Until the first frame is decoded (and while
+ * the publisher has the track muted) the stage shows a slate instead: the grid's own light ground
+ * with a line saying what is missing, so a recording without its picture explains itself.
+ */
+export function meetWindowShowsPicture(input: { firstFrameSeen: boolean; muted: boolean }): boolean {
+  return input.firstFrameSeen && !input.muted;
+}
+
+/**
+ * How long a subscribed Meet window may go without its first frame before the subscription is
+ * renewed. A fresh subscription is a fresh downtrack, and with it a fresh keyframe request.
+ */
+export const MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS = 8_000;
+
+/** Whether to renew the subscription now: once per publication, and only for a picture that never came. */
+export function shouldResubscribeMeetWindow(input: {
+  firstFrameSeen: boolean;
+  subscribedAtMs: number;
+  nowMs: number;
+  alreadyRetried: boolean;
+}): boolean {
+  if (input.firstFrameSeen || input.alreadyRetried) return false;
+  return input.nowMs - input.subscribedAtMs >= MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS;
+}

@@ -220,6 +220,11 @@ import {
 } from "@/lib/meeting/bridge-recording";
 import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
 import {
+  MEET_WINDOW_CAPTURE_CONSTRAINTS,
+  MEET_WINDOW_PUBLISH_OPTIONS,
+  steadyFrameTrack,
+} from "@/lib/meeting/meet-window-track";
+import {
   canCaptureBrowserLoopback,
   describeLoopbackFailure,
   decideBridgeInbound,
@@ -5638,34 +5643,44 @@ function BridgeMeetWindowPublisher({
 
           let track: MediaStreamTrack | undefined;
           try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+              video: MEET_WINDOW_CAPTURE_CONSTRAINTS,
+              audio: false,
+            });
             track = stream.getVideoTracks()[0];
           } catch {
             track = undefined;
           }
           if (!track) return describeMeetWindowCaptureFailure("capture-failed");
-          const captured = track;
+          const source = track;
+          // A meeting UI: text and faces, kept sharp rather than smooth.
+          source.contentHint = "detail";
+          // Never a quiet track: a static Meet window would otherwise send the recorder nothing to
+          // decode, and the whole recording came out black. See meet-window-track.ts.
+          const steady = await steadyFrameTrack(source);
+          const captured = steady.track;
 
           try {
             await localParticipant.publishTrack(captured, {
               name: MEET_WINDOW_TRACK_NAME,
               source: Track.Source.ScreenShare,
+              ...MEET_WINDOW_PUBLISH_OPTIONS,
             });
           } catch {
-            captured.stop();
+            steady.stop();
             return describeMeetWindowCaptureFailure("publish-failed");
           }
 
           const drop = () => {
             if (currentRef.current?.track !== captured) return;
             currentRef.current = null;
-            captured.removeEventListener("ended", drop);
-            // `true` stops the track as well: nothing else holds this capture.
-            void localParticipant.unpublishTrack(captured, true).catch(() => captured.stop());
+            source.removeEventListener("ended", drop);
+            void localParticipant.unpublishTrack(captured, false).catch(() => {}).finally(() => steady.stop());
           };
           currentRef.current = { track: captured, drop };
-          // The Meet window was closed, or the desktop ended the capture.
-          captured.addEventListener("ended", drop);
+          // The Meet window was closed, or the desktop ended the capture. Heard on the SOURCE: the
+          // wrapper published in its place never fires `ended` on its own.
+          source.addEventListener("ended", drop);
 
           // Read AFTER the awaits, not before: the parent turns `wanted` on in the same commit that
           // calls this, so it is still false on entry. If it is false now, whatever wanted the
