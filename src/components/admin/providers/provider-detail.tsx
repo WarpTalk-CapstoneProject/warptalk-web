@@ -35,13 +35,11 @@ export function ProviderDetail({
   provider,
   series,
   range,
-  currency,
   tz,
 }: {
   provider: AdminProviderSummaryDto;
   series: AdminProviderSeriesDto | undefined;
   range: ProviderRangeQuery | null;
-  currency: "USD" | "VND";
   tz: string;
 }) {
   const t = useTranslations("adminProviders");
@@ -53,7 +51,7 @@ export function ProviderDetail({
   const errors = useAdminProviderBreakdown(provider.key, range, "errorClass", hasCalls);
   const uptime = useAdminProviderUptime(provider.key, tz);
 
-  const costKey: ProviderMetricKey = currency === "USD" ? "costUsd" : "costVnd";
+  const costKey: ProviderMetricKey = "costUsd";
   const columnMetric = series?.metrics.find((m) => m.key === costKey && m.values.some((v) => v !== null))
     ?? series?.metrics.find((m) => m.key === "usage");
   const total = (key: string) => series?.totals.find((item) => item.key === key) ?? null;
@@ -65,8 +63,7 @@ export function ProviderDetail({
     value: item.value,
     color: pieColors(breakdownData?.items.length ?? 0)[index],
     detail: [
-      item.costUsd !== null && currency === "USD" ? formatMetric(item.costUsd, "usd") : null,
-      item.costVnd !== null && currency === "VND" ? formatMetric(item.costVnd, "vnd") : null,
+      item.costUsd !== null ? formatMetric(item.costUsd, "usd") : null,
       item.failures !== null && item.failures > 0 ? `${formatMetric(item.failures, "count")} ${t("uptime.failed")}` : null,
     ]
       .filter(Boolean)
@@ -196,13 +193,13 @@ export function ProviderDetail({
             </thead>
             <tbody>
               {workspaces.data.items.map((item) => {
-                const cost = currency === "USD" ? item.costUsd : item.costVnd;
+                const cost = item.costUsd;
                 return (
                   <tr key={item.key} className="border-t border-hairline">
                     <td className="max-w-0 truncate py-1.5 pr-2 text-ink">{item.label}</td>
                     <td className="py-1.5 text-right tabular-nums">{formatMetric(item.value, workspaces.data!.unit)}</td>
                     <td className="py-1.5 text-right tabular-nums text-ink-muted">
-                      {cost === null ? "—" : formatMetric(cost, currency === "USD" ? "usd" : "vnd")}
+                      {cost === null ? "—" : formatMetric(cost, "usd")}
                     </td>
                   </tr>
                 );

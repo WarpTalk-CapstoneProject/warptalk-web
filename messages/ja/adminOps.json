@@ -158,7 +158,7 @@
     },
     "mrr": {
       "note": "月次経常収益（MRR）",
-      "cannotTotal": "VNDで合計できません"
+      "cannotTotal": "USDで合計できません"
     },
     "churn": {
       "breakdown": "月初 {atMonthStart} 件中 {cancelled} 件解約",
@@ -167,7 +167,7 @@
     "outstanding": {
       "invoiceCount": "{count, plural, other {請求書 #件}}",
       "pastDueCount": "{count, plural, other {うち延滞 #件}}",
-      "cannotTotal": "金額はVNDで合計できません",
+      "cannotTotal": "金額はUSDで合計できません",
       "amountNotTotalled": "金額を合計できません",
       "amountNotTotalledWithNote": "金額を合計できません（{note}）",
       "amountOutstanding": "未収 {value}"

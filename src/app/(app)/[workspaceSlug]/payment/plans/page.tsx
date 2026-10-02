@@ -518,8 +518,8 @@ export default function WorkspacePlansPage() {
                             An admin priced a plan at 200 USD and this rendered "200 VND" —
                             a number three orders of magnitude out, stated with total
                             confidence. `PlanDto.currency` has always carried the answer;
-                            formatMoney already falls back to VND when it is absent, so
-                            nothing changes for the VND plans that make up the catalogue. */}
+                            formatMoney falls back to USD (the accounting currency) when it is
+                            absent. */}
                         {displayPrice > 0 ? formatMoney(displayPrice, plan.currency) : "Free"}
                       </span>
                       <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
@@ -778,7 +778,7 @@ export default function WorkspacePlansPage() {
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1.5 my-2">
             <p>
               • <strong>You pay in full today</strong>:{" "}
-              {formatMoney(pendingPlanTotal, "VND")} for one{" "}
+              {formatMoney(pendingPlanTotal, activePlans.find((p) => p.slug === pendingPlanSlug)?.currency)} for one{" "}
               {billingInterval === "yearly" ? "year" : "month"}.
             </p>
             <p>

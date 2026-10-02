@@ -22,7 +22,6 @@
     "day": "Theo ngày",
     "hour": "Theo giờ",
     "hourlyLimit": "Chỉ xem theo giờ được cho khoảng 14 ngày trở xuống",
-    "currency": "Tiền tệ",
     "search": "Tìm nhà cung cấp",
     "sort": "Sắp xếp",
     "sorts": {
@@ -66,7 +65,6 @@
     "usage": "Mức dùng",
     "billedCredits": "Credit đã tính phí",
     "costUsd": "Chi phí",
-    "costVnd": "Chi phí",
     "calls": "Lệnh gọi",
     "failures": "Lỗi",
     "errorRate": "Tỉ lệ lỗi",
@@ -75,7 +73,7 @@
     "roomMinutes": "Phút phòng",
     "recordings": "Bản ghi",
     "failedPayments": "Thanh toán thất bại",
-    "volumeVnd": "Giá trị thanh toán"
+    "volumeUsd": "Giá trị thanh toán"
   },
   "chart": {
     "metricsLabel": "Chỉ số hiển thị",

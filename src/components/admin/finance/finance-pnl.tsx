@@ -15,7 +15,7 @@ import { downloadBlob } from "@/lib/ui/download-blob";
 import { cn } from "@/lib/utils";
 import type { FinancePnlMonthDto } from "@/types/admin-expenses";
 
-const vnd = (value: number | null) => (value === null ? "—" : formatMoney(Math.round(value), "VND"));
+const usd = (value: number | null) => (value === null ? "—" : formatMoney(value, "USD"));
 const pct = (value: number | null) => (value === null ? "—" : `${value}%`);
 
 /**
@@ -45,13 +45,13 @@ export function FinancePnl({ range }: { range: { from: string; to: string } }) {
     <div className="space-y-4">
       {clamped.from !== range.from ? <p className="text-[12px] text-ink-muted">{t("clamped", { months: PNL_MAX_MONTHS })}</p> : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Tile label={t("revenue")} value={vnd(total.revenue)} />
-        <Tile label={t("aiCost")} value={vnd(total.aiCost)} />
-        <Tile label={t("grossMargin")} value={vnd(total.grossMargin)} caption={pct(total.grossMarginPercent)} />
-        <Tile label={t("operatingExpenses")} value={vnd(total.operatingExpenses)} />
+        <Tile label={t("revenue")} value={usd(total.revenue)} />
+        <Tile label={t("aiCost")} value={usd(total.aiCost)} />
+        <Tile label={t("grossMargin")} value={usd(total.grossMargin)} caption={pct(total.grossMarginPercent)} />
+        <Tile label={t("operatingExpenses")} value={usd(total.operatingExpenses)} />
         <Tile
           label={t("netResult")}
-          value={vnd(total.netResult)}
+          value={usd(total.netResult)}
           caption={pct(total.netMarginPercent)}
           tone={total.netResult === null ? undefined : total.netResult < 0 ? "danger" : "good"}
         />
@@ -70,8 +70,8 @@ export function FinancePnl({ range }: { range: { from: string; to: string } }) {
               values: data.months.map((month) => (month.aiCost === null ? null : month.aiCost + month.operatingExpenses)),
             },
           ]}
-          formatValue={(value) => vnd(value)}
-          tooltipFooter={(index) => t("netLine", { net: vnd(data.months[index]?.netResult ?? null) })}
+          formatValue={(value) => usd(value)}
+          tooltipFooter={(index) => t("netLine", { net: usd(data.months[index]?.netResult ?? null) })}
           ariaLabel={t("chart")}
           height={220}
         />
@@ -119,18 +119,18 @@ function Row({ row, label, strong = false }: { row: FinancePnlMonthDto; label: s
   return (
     <tr className={cn("border-b border-hairline text-right tabular-nums last:border-0", strong && "bg-surface-2 font-semibold")}>
       <th scope="row" className="px-4 py-2 text-left font-medium text-ink">{label}</th>
-      <td className="px-2 py-2 text-ink">{vnd(row.revenue)}</td>
+      <td className="px-2 py-2 text-ink">{usd(row.revenue)}</td>
       <td className="px-2 py-2 text-ink-muted">
-        {vnd(row.aiCost)}
+        {usd(row.aiCost)}
         {row.costCoveragePercent < 100 ? <span className="block text-[10px] text-ink-subtle">{row.costCoveragePercent}%</span> : null}
       </td>
       <td className="px-2 py-2 text-ink">
-        {vnd(row.grossMargin)}
+        {usd(row.grossMargin)}
         <span className="block text-[10px] text-ink-subtle">{pct(row.grossMarginPercent)}</span>
       </td>
-      <td className="px-2 py-2 text-ink-muted">{vnd(row.operatingExpenses)}</td>
+      <td className="px-2 py-2 text-ink-muted">{usd(row.operatingExpenses)}</td>
       <td className={cn("px-4 py-2", row.netResult !== null && row.netResult < 0 ? "text-destructive" : "text-ink")}>
-        {vnd(row.netResult)}
+        {usd(row.netResult)}
         <span className="block text-[10px] text-ink-subtle">{pct(row.netMarginPercent)}</span>
       </td>
     </tr>

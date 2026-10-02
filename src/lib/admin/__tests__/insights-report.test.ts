@@ -68,7 +68,7 @@ test("the report states both periods inclusively, with the comparison basis", ()
 
 test("the summary carries each headline figure with its change, and skips what has no value", () => {
   const { summary } = buildInsightsReport({ billing, meetings }, period);
-  assert.ok(summary.some((s) => s.startsWith("Revenue: 48,900,000 VND, up 24.9%")));
+  assert.ok(summary.some((s) => s.startsWith("Revenue: 48,900,000.00 USD, up 24.9%")));
   assert.ok(summary.some((s) => s.startsWith("AI provider cost:") && s.includes("no comparable figure")));
   assert.ok(summary.some((s) => s.startsWith("Meetings held: 12, unchanged")));
   assert.ok(!summary.some((s) => s.startsWith("Revenue minus AI cost")), "no figure, no sentence");
@@ -107,7 +107,7 @@ test("no margin percentage or plan table is invented without the P&L source", ()
 test("the daily table merges the sources by date", () => {
   const report = buildInsightsReport({ billing, meetings }, period);
   const daily = report.sections.find((s) => s.id === "daily")!.tables[0];
-  assert.deepEqual(daily.rows[0], ["2026-09-01", "100 VND", "3", "1.5 h", "—"]);
+  assert.deepEqual(daily.rows[0], ["2026-09-01", "100.00 USD", "3", "1.5 h", "—"]);
   assert.deepEqual(daily.rows[1], ["2026-09-02", "—", "—", "—", "—"]);
 });
 

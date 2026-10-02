@@ -36,21 +36,22 @@ describe("resolveRateCardMargin", () => {
     assert.equal(margin.source, "recorded");
   });
 
-  it("derives a margin when price and cost are both in USD", () => {
-    const margin = resolveRateCardMargin(card());
+  it("derives a margin from the price in credits times the credit value", () => {
+    // 120 credits × $0.00015 = $0.018 against a $0.006 cost.
+    const margin = resolveRateCardMargin(card({ unitPrice: 120 }), 0.00015);
 
     assert.equal(margin.source, "derived");
     assert.ok(Math.abs(margin.value! - 3) < 1e-9);
   });
 
-  it("refuses to divide a VND price by a USD cost", () => {
+  it("refuses to divide credits by dollars when the credit value is unknown", () => {
     // The whole reason this module exists. The obvious calculation produces a number that looks
-    // like a margin, is off by the exchange rate, and would be believed.
-    const margin = resolveRateCardMargin(card({ currency: "VND", unitPrice: 474 }));
+    // like a margin, is off by the credit value, and would be believed.
+    const margin = resolveRateCardMargin(card({ unitPrice: 120 }));
 
     assert.equal(margin.value, null);
     assert.equal(margin.source, "unavailable");
-    assert.equal(margin.reason, "currency-mismatch");
+    assert.equal(margin.reason, "no-credit-value");
   });
 
   it("says so when no provider cost was recorded", () => {
@@ -69,10 +70,10 @@ describe("resolveRateCardMargin", () => {
     assert.equal(margin.reason, "no-cost-recorded");
   });
 
-  it("accepts a lowercase currency code when deciding comparability", () => {
-    const margin = resolveRateCardMargin(card({ currency: "usd" }));
-
-    assert.equal(margin.source, "derived");
+  it("does not care what the currency label says: the price is credits on every card", () => {
+    for (const currency of ["usd", "CRD", "VND"]) {
+      assert.equal(resolveRateCardMargin(card({ currency, unitPrice: 120 }), 0.00015).source, "derived");
+    }
   });
 });
 
@@ -94,7 +95,7 @@ describe("marginTone", () => {
 
   it("does not colour a margin it does not have", () => {
     assert.equal(
-      marginTone({ value: null, source: "unavailable", reason: "currency-mismatch" }),
+      marginTone({ value: null, source: "unavailable", reason: "no-credit-value" }),
       "unknown",
     );
   });
@@ -116,7 +117,7 @@ describe("marginLabel", () => {
   it("explains a currency mismatch instead of printing a dash alone", () => {
     // A bare dash reads as "zero margin". Naming the reason is what stops that.
     assert.equal(
-      marginLabel({ value: null, source: "unavailable", reason: "currency-mismatch" }),
+      marginLabel({ value: null, source: "unavailable", reason: "no-credit-value" }),
       "not comparable",
     );
   });

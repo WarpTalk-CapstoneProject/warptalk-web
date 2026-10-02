@@ -60,15 +60,12 @@ export function providerColors(providers: string[]): Record<string, string> {
   return colors;
 }
 
-export type CostCurrency = "VND" | "USD";
-
 /**
- * One series per provider over the period's days, largest total cost first. A day's VND figure is null
- * when that day had no USD→VND rate — a gap, not a 0.
+ * One series per provider over the period's days, in USD, largest total cost first. Providers bill in
+ * USD, the accounting currency, so no day is a gap for want of an exchange rate.
  */
 export function providerCostSeries(
   days: PnlPeriodDto[],
-  currency: CostCurrency,
 ): { key: string; label: string; values: (number | null)[]; total: number }[] {
   const providers = [...new Set(days.flatMap((day) => day.providers.map((p) => p.provider)))];
   return providers
@@ -76,7 +73,7 @@ export function providerCostSeries(
       const values = days.map((day) => {
         const row = day.providers.find((p) => p.provider === provider);
         if (!row) return 0;
-        return currency === "USD" ? row.costUsd : row.costVnd;
+        return row.costUsd;
       });
       return {
         key: provider,
@@ -95,12 +92,12 @@ export interface DerivedFigure {
   note: string | null;
 }
 
-/** AI cost ÷ hours translated, in VND per hour. */
+/** AI cost ÷ hours translated, in USD per hour (to the cent). */
 export function costPerMeetingHour(aiCost: number | null | undefined, hours: number | null | undefined): DerivedFigure {
   if (aiCost === null || aiCost === undefined) return { value: null, note: "AI provider cost is unavailable" };
   if (hours === null || hours === undefined) return { value: null, note: "hours translated are unavailable" };
   if (hours <= 0) return { value: null, note: "no meeting hours in the period" };
-  return { value: Math.round(aiCost / hours), note: "AI provider cost ÷ hours translated" };
+  return { value: Math.round((aiCost / hours) * 100) / 100, note: "AI provider cost ÷ hours translated" };
 }
 
 /** Per local day, joined on the day key both servers bucket by (the same tz). */

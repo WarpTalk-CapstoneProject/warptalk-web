@@ -12,7 +12,7 @@
  * Checked field by field against the C# response records of backend #420/#421 (camelCase, nulls
  * written as null), not against the first draft of the contract.
  *
- * Instants are ISO-8601 UTC. `from` is inclusive, `to` exclusive. Money is VND.
+ * Instants are ISO-8601 UTC. `from` is inclusive, `to` exclusive. Money is USD.
  *
  * TIME ZONE
  *   `tz` is an IANA id (the browser's own; the server defaults to Asia/Ho_Chi_Minh and 400s an
@@ -123,13 +123,13 @@ export type CartesiaSyncStatus = "ok" | "disabled" | "error" | "pending";
 
 export interface BillingSnapshotDto {
   generatedAt: string;
-  /** The local day of `tz`, in VND. Null when every payment that day was in an unconvertible currency. */
+  /** The local day of `tz`, in USD. Null when every payment that day was in an unconvertible currency. */
   revenueToday: number | null;
   /** What `revenueToday` converted or left out; null when nothing. */
   revenueTodayNote: string | null;
   revenueYesterday: number | null;
   revenueYesterdayNote: string | null;
-  /** Null when no active subscription's price could be converted to VND; `mrrNote` says why. */
+  /** Null when no active subscription's price could be converted to USD; `mrrNote` says why. */
   mrr: number | null;
   mrrNote: string | null;
   activeSubscriptions: number;
@@ -144,7 +144,7 @@ export interface BillingSnapshotDto {
   platformCreditBalance: number;
   outstandingInvoices: {
     count: number;
-    /** VND; null when no outstanding invoice's currency could be converted. */
+    /** USD; null when no outstanding invoice's currency could be converted. */
     amount: number | null;
     amountNote: string | null;
     pastDueCount: number;
@@ -244,8 +244,8 @@ export interface MeetingsInsightsDto extends PeriodEnvelope {
 
 // ── 6 · Billing, profit and loss ─────────────────────────────────────────────
 //
-// GET /admin/billing/insights/pnl?from&to&compare&tz (backend #feat/insights-pnl-fx). Money is VND
-// unless the name says Usd; every USD amount was converted at the USD→VND rate of its own UTC day
+// GET /admin/billing/insights/pnl?from&to&compare&tz (backend #feat/insights-pnl-fx). Money is USD,
+// the accounting currency; a VND payment was converted at the USD→VND rate of its own UTC day
 // (Stripe's, or an admin override). Metrics: revenue, aiProviderCost, grossMargin,
 // grossMarginPercent, arpa, activeWorkspaces, creditsConsumed.
 
@@ -253,8 +253,6 @@ export interface PnlProviderPeriodDto {
   provider: string;
   credits: number;
   costUsd: number;
-  /** Null when no USD→VND rate existed. */
-  costVnd: number | null;
 }
 
 /** One local day (`yyyy-MM-dd`) or month (`yyyy-MM`). */
@@ -282,7 +280,6 @@ export interface PnlProviderDto {
   coveredCredits: number;
   coveragePercent: number;
   costUsd: number;
-  costVnd: number | null;
   /** The part measured from the provider's own usage API (Cartesia). */
   measuredUsd: number;
   services: { chargeType: string; service: string; credits: number; coveredCredits: number; costUsd: number }[];
@@ -319,7 +316,7 @@ export interface ProfitAndLossDto extends PeriodEnvelope {
   aiCostUsd: number;
   costCoveragePercent: number;
   costNote: string | null;
-  /** Which USD→VND rate(s) the period converted at. Null when nothing was converted. */
+  /** Which USD→VND rate(s) the period converted VND payments at. Null when nothing was converted. */
   fxNote: string | null;
   days: PnlPeriodDto[];
   months: PnlPeriodDto[];

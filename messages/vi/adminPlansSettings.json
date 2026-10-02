@@ -179,7 +179,7 @@
       "cartesiaUsdPerCreditValue": "${price} mỗi credit",
       "minimumContractPriceLabel": "Giá hợp đồng tối thiểu",
       "minimumContractPriceHint": "Theo mỗi chu kỳ, trước khi một gói được coi là hợp lệ.",
-      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "Thời hạn thanh toán hóa đơn mặc định",
       "defaultInvoiceTermsHint": "Số ngày để thanh toán, và khoảng thời gian gia hạn sau đó, cho các gói không đặt riêng giá trị này.",
       "defaultInvoiceTermsValue": "{days} ngày · gia hạn {hours} giờ",
@@ -350,8 +350,7 @@
         "customerPrice": "Giá bán cho khách",
         "providerCost": "Chi phí nhà cung cấp",
         "margin": "Biên lợi nhuận",
-        "formulaLine": "{formula} · Tỷ giá {fx} · credit {credit} VND",
-        "vndSuffix": "(VND)"
+        "formulaLine": "{formula} · credit {credit} USD"
       },
       "errors": {
         "previewStale": "Chi phí hoặc markup đã thay đổi kể từ lần xem trước. Hãy xem trước lại trước khi lưu.",
@@ -396,7 +395,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "Tỷ giá USD→VND", "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND." },
-        "minimumContractPriceVnd": { "label": "Giá hợp đồng tối thiểu (VND)" },
         "minimumContractPriceUsd": { "label": "Giá hợp đồng tối thiểu (USD)" },
         "salesUsageWeight": { "label": "Trọng số bán hàng · mức sử dụng" },
         "salesMembersWeight": { "label": "Trọng số bán hàng · thành viên" },

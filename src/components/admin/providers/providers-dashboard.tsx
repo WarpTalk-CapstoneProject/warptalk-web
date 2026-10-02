@@ -24,7 +24,7 @@ import type { ProviderKey } from "@/types/admin-providers";
 
 /**
  * /admin/providers — one long card per external provider (OpenAI, Cartesia, LiveKit, Stripe). The
- * period, granularity and currency apply to every card at once; search and sort are local (four
+ * period and granularity apply to every card at once (cost is USD, the accounting currency); search and sort are local (four
  * rows need no server round trip).
  */
 export function ProvidersDashboard() {
@@ -34,7 +34,6 @@ export function ProvidersDashboard() {
   const [custom, setCustom] = useState<{ from: string; to: string }>({ from: "", to: "" });
   const [applied, setApplied] = useState<{ from: string; to: string }>({ from: "", to: "" });
   const [granularity, setGranularity] = useState<"day" | "hour">("day");
-  const [currency, setCurrency] = useState<"USD" | "VND">("USD");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<ProviderSort>("status");
   const [expanded, setExpanded] = useState<ProviderKey | null>(null);
@@ -119,15 +118,6 @@ export function ProvidersDashboard() {
           value={effectiveGranularity}
           onChange={setGranularity}
         />
-        <Segmented
-          label={t("controls.currency")}
-          options={[
-            { value: "USD" as const, label: "USD" },
-            { value: "VND" as const, label: "VND" },
-          ]}
-          value={currency}
-          onChange={setCurrency}
-        />
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
           <label className="relative">
             <span className="sr-only">{t("controls.search")}</span>
@@ -178,7 +168,6 @@ export function ProvidersDashboard() {
               provider={provider}
               range={range}
               granularity={effectiveGranularity}
-              currency={currency}
               tz={tz}
               expanded={expanded === provider.key}
               onToggle={() => setExpanded((current) => (current === provider.key ? null : provider.key))}

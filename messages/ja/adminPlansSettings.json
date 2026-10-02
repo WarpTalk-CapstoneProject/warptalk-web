@@ -179,7 +179,7 @@
       "cartesiaUsdPerCreditValue": "1 クレジットあたり ${price}",
       "minimumContractPriceLabel": "最低契約価格",
       "minimumContractPriceHint": "プランが有効と判定される前の、1サイクルあたりの金額。",
-      "minimumContractPriceValue": "{vnd} ₫ ・ {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "デフォルトの請求書支払期限",
       "defaultInvoiceTermsHint": "個別に設定していないプランに適用される、支払までの日数とその後の猶予期間。",
       "defaultInvoiceTermsValue": "{days} 日・猶予 {hours} 時間",
@@ -350,8 +350,7 @@
         "customerPrice": "顧客価格",
         "providerCost": "プロバイダーコスト",
         "margin": "利益率",
-        "formulaLine": "{formula} ・ 為替 {fx} ・ クレジット単価 {credit} VND",
-        "vndSuffix": "（VND）"
+        "formulaLine": "{formula} ・ クレジット単価 {credit} USD"
       },
       "errors": {
         "previewStale": "プレビュー後にコストまたはマークアップが変更されました。保存する前にもう一度プレビューしてください。",
@@ -396,7 +395,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "為替レート USD→VND", "hint": "USD建てのプロバイダーコストをVNDとして読み取る際に使用します。" },
-        "minimumContractPriceVnd": { "label": "最低契約価格（VND）" },
         "minimumContractPriceUsd": { "label": "最低契約価格（USD）" },
         "salesUsageWeight": { "label": "販売ウェイト・利用量" },
         "salesMembersWeight": { "label": "販売ウェイト・メンバー数" },

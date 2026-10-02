@@ -43,7 +43,7 @@ export interface CategoryStack {
  */
 export function categoryStacks(report: ExpenseReportDto, otherLabel: string, limit = STACKED_CATEGORY_LIMIT): CategoryStack[] {
   const names = new Map(report.categories.map((category) => [category.id, category.name]));
-  const ranked = report.categoryTotals.filter((total) => total.amountVnd > 0).map((total) => total.categoryId);
+  const ranked = report.categoryTotals.filter((total) => total.amountUsd > 0).map((total) => total.categoryId);
   const shown = ranked.slice(0, limit);
   const folded = new Set(ranked.slice(limit));
 
@@ -52,7 +52,7 @@ export function categoryStacks(report: ExpenseReportDto, otherLabel: string, lim
     categoryId,
     label: names.get(categoryId) ?? categoryId,
     color: SLOT_TOKENS[index % SLOT_TOKENS.length],
-    values: report.months.map((month) => month.categories.find((cell) => cell.categoryId === categoryId)?.amountVnd ?? 0),
+    values: report.months.map((month) => month.categories.find((cell) => cell.categoryId === categoryId)?.amountUsd ?? 0),
   }));
 
   if (folded.size > 0) {
@@ -62,7 +62,7 @@ export function categoryStacks(report: ExpenseReportDto, otherLabel: string, lim
       label: otherLabel,
       color: OTHER_TOKEN,
       values: report.months.map((month) =>
-        month.categories.filter((cell) => folded.has(cell.categoryId)).reduce((sum, cell) => sum + cell.amountVnd, 0),
+        month.categories.filter((cell) => folded.has(cell.categoryId)).reduce((sum, cell) => sum + cell.amountUsd, 0),
       ),
     });
   }
@@ -131,10 +131,10 @@ export const EXPENSE_CSV_COLUMNS = [
   "recurrence",
 ] as const;
 
-/** Header + rows; `amount_vnd` is appended for reading and ignored by the import. */
+/** Header + rows; `amount_usd` is appended for reading and ignored by the import. */
 export function expenseCsvRows(items: readonly OperatingExpenseDto[]): (string | number)[][] {
   return [
-    [...EXPENSE_CSV_COLUMNS, "amount_vnd"],
+    [...EXPENSE_CSV_COLUMNS, "amount_usd"],
     ...items.map((item) => [
       item.expenseDate,
       item.vendor,
@@ -147,7 +147,7 @@ export function expenseCsvRows(items: readonly OperatingExpenseDto[]): (string |
       item.paidBy ?? "",
       item.tags.join(";"),
       item.recurrence,
-      item.amountVnd ?? "",
+      item.amountUsd ?? "",
     ]),
   ];
 }
@@ -157,7 +157,7 @@ export function expenseCsvTemplate(categories: readonly ExpenseCategoryDto[]): (
   const first = categories.find((c) => c.isActive)?.slug ?? "other";
   return [
     [...EXPENSE_CSV_COLUMNS],
-    ["2026-09-01", "Vietnix", first, 1500000, "VND", "VPS app-1", "bank_transfer", "paid", "", "infra", "monthly"],
+    ["2026-09-01", "Vietnix", first, 58, "USD", "VPS app-1", "bank_transfer", "paid", "", "infra", "monthly"],
     ["2026-09-03", "GitHub", first, 21, "USD", "Team plan", "company_card", "paid", "", "saas", "none"],
   ];
 }
@@ -165,7 +165,7 @@ export function expenseCsvTemplate(categories: readonly ExpenseCategoryDto[]): (
 export function pnlCsvRows(pnl: FinancePnlDto): (string | number)[][] {
   const cell = (value: number | null) => (value === null ? "" : value);
   return [
-    ["month", "revenue_vnd", "ai_cost_vnd", "gross_margin_vnd", "gross_margin_pct", "operating_expenses_vnd", "net_result_vnd", "net_margin_pct"],
+    ["month", "revenue_usd", "ai_cost_usd", "gross_margin_usd", "gross_margin_pct", "operating_expenses_usd", "net_result_usd", "net_margin_pct"],
     ...[...pnl.months, pnl.total].map((row) => [
       row.month,
       cell(row.revenue),

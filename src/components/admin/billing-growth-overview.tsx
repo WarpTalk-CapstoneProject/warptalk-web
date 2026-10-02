@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import type { InsightsMetric, InsightsQuery } from "@/types/admin-insights";
 
 const money = (value: number) => formatInsightValue(value, "money");
-const moneyAxis = (value: number) => compactMoney(value, "VND");
+const moneyAxis = (value: number) => compactMoney(value, "USD");
 const count = (value: number) => formatInsightValue(value, "count");
 
 function metricOf(metrics: InsightsMetric[] | undefined, id: string): InsightsMetric | undefined {

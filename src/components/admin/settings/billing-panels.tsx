@@ -258,7 +258,6 @@ export function PricingEconomicsPanel() {
             <KnobRow label={t("minimumContractPriceLabel")} hint={t("minimumContractPriceHint")}>
               <span className="text-[13px] tabular-nums text-ink">
                 {t("minimumContractPriceValue", {
-                  vnd: numberFormatter.format(config.minimumContractPriceVnd),
                   usd: numberFormatter.format(config.minimumContractPriceUsd),
                 })}
               </span>

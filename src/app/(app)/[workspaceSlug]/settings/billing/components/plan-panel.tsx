@@ -84,12 +84,10 @@ export function PlanPanel({
           </p>
           <p className="mt-0.5 text-[12px] text-ink-muted">
             {subscription
-              ? // WT-459: from the PLAN, because SubscriptionDto carries a price with no
-                // currency beside it. `plan` is already in scope for the billing cycle below,
-                // and formatMoney falls back to VND when it is absent — so a workspace whose
-                // plan has not loaded yet reads exactly as it did before.
+              ? // WT-459: from the PLAN, or the subscription's own planCurrency while the plan has
+                // not loaded. formatMoney falls back to USD, the accounting currency.
                 t(isYearly ? "planPanel.pricePerYear" : "planPanel.pricePerMonth", {
-                  price: formatMoney(subscription.price, plan?.currency),
+                  price: formatMoney(subscription.price, plan?.currency ?? subscription.planCurrency),
                 })
               : t("planPanel.noBalance")}
           </p>

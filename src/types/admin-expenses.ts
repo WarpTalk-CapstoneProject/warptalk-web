@@ -2,12 +2,12 @@
  * G12 operating costs and expenses — the billing service's contract
  * (WarpTalk.BillingService.Application.DTOs.OperatingExpenseDtos). camelCase on the wire.
  *
- * An expense keeps its own currency (VND or USD). Every `…Vnd` figure is converted by the server at
- * the USD→VND rate of the expense's own date (subscription.fx_rates, Stripe-sourced) and is null
- * when no rate exists — never a guessed 0. Months are "yyyy-MM", dates "yyyy-MM-dd".
+ * An expense keeps its own currency (USD or VND). Every `…Usd` figure is in USD, the accounting
+ * currency: a VND expense is converted by the server at the USD→VND rate of its own date
+ * (subscription.fx_rates, Stripe-sourced) and is null when no rate exists — never a guessed 0. Months are "yyyy-MM", dates "yyyy-MM-dd".
  */
 
-export const EXPENSE_CURRENCIES = ["VND", "USD"] as const;
+export const EXPENSE_CURRENCIES = ["USD", "VND"] as const;
 export type ExpenseCurrency = (typeof EXPENSE_CURRENCIES)[number];
 
 export const EXPENSE_STATUSES = ["planned", "paid"] as const;
@@ -57,7 +57,7 @@ export interface OperatingExpenseDto {
   description: string | null;
   amount: number;
   currency: ExpenseCurrency;
-  amountVnd: number | null;
+  amountUsd: number | null;
   fxRate: number | null;
   fxSource: string | null;
   fxRateDate: string | null;
@@ -78,10 +78,10 @@ export interface OperatingExpenseDto {
 
 export interface ExpenseTotalsDto {
   count: number;
-  totalVnd: number;
-  paidVnd: number;
-  plannedVnd: number;
-  /** USD rows with no rate: left out of the VND totals. */
+  totalUsd: number;
+  paidUsd: number;
+  plannedUsd: number;
+  /** VND rows with no rate: left out of the USD totals. */
   unconverted: number;
 }
 
@@ -117,7 +117,7 @@ export interface MarkExpensePaidRequest {
 export interface ExpenseBudgetDto {
   categoryId: string;
   month: string;
-  amountVnd: number;
+  amountUsd: number;
   note: string | null;
 }
 
@@ -125,23 +125,23 @@ export interface ExpenseBudgetInput {
   categoryId: string;
   month: string;
   /** null removes the budget of that (category, month). */
-  amountVnd: number | null;
+  amountUsd: number | null;
   note?: string | null;
 }
 
 export interface ExpenseMonthCategoryDto {
   categoryId: string;
-  amountVnd: number;
-  budgetVnd: number | null;
+  amountUsd: number;
+  budgetUsd: number | null;
   overBudget: boolean;
 }
 
 export interface ExpenseReportMonthDto {
   month: string;
-  totalVnd: number;
-  paidVnd: number;
-  plannedVnd: number;
-  budgetVnd: number | null;
+  totalUsd: number;
+  paidUsd: number;
+  plannedUsd: number;
+  budgetUsd: number | null;
   categories: ExpenseMonthCategoryDto[];
 }
 
@@ -150,14 +150,14 @@ export interface ExpenseCategoryTotalDto {
   slug: string;
   name: string;
   color: string | null;
-  amountVnd: number;
+  amountUsd: number;
   count: number;
-  budgetVnd: number | null;
+  budgetUsd: number | null;
 }
 
 export interface ExpenseVendorTotalDto {
   vendor: string;
-  amountVnd: number;
+  amountUsd: number;
   count: number;
   categoryName: string | null;
 }
@@ -171,7 +171,7 @@ export interface ExpenseCommitmentDto {
   categoryName: string;
   amount: number;
   currency: ExpenseCurrency;
-  amountVnd: number | null;
+  amountUsd: number | null;
   /** none | occurrence | monthly | yearly */
   recurrence: string;
   /** true: an occurrence of a series not written yet (the worker writes it a week ahead). */
@@ -182,8 +182,8 @@ export interface ExpenseBudgetAlertDto {
   categoryId: string;
   categoryName: string;
   month: string;
-  budgetVnd: number;
-  actualVnd: number;
+  budgetUsd: number;
+  actualUsd: number;
   percent: number;
   over: boolean;
 }
@@ -198,11 +198,11 @@ export interface ExpenseReportDto {
   topVendors: ExpenseVendorTotalDto[];
   commitments: ExpenseCommitmentDto[];
   budgetAlerts: ExpenseBudgetAlertDto[];
-  totalVnd: number;
-  paidVnd: number;
-  plannedVnd: number;
-  monthlyAverageVnd: number;
-  recurringMonthlyRunRateVnd: number;
+  totalUsd: number;
+  paidUsd: number;
+  plannedUsd: number;
+  monthlyAverageUsd: number;
+  recurringMonthlyRunRateUsd: number;
   unconverted: number;
   fxNote: string | null;
 }
@@ -244,7 +244,7 @@ export interface ExpenseImportRowDto {
   categoryName: string | null;
   amount: number | null;
   currency: string | null;
-  amountVnd: number | null;
+  amountUsd: number | null;
   status: string | null;
   paymentMethod: string | null;
   paidBy: string | null;
@@ -259,7 +259,7 @@ export interface ExpenseImportPreviewDto {
   rows: ExpenseImportRowDto[];
   validCount: number;
   invalidCount: number;
-  totalVnd: number;
+  totalUsd: number;
 }
 
 export interface ExpenseImportResultDto {

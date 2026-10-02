@@ -22,7 +22,7 @@
  *     search-text.ts — code, not copy. Real Vietnamese copy always carries at least one
  *     further tone or vowel mark ("Hủy", "Đăng nhập"), and that is what the guard looks for.
  *     The VND currency suffix that used to rely on this carve-out is gone; money now renders
- *     through lib/currency.ts as "90,000 VND".
+ *     through lib/format/currency.ts as "29.00 USD".
  *
  * There is no file allowlist. Anything that genuinely must hold non-English text needs an
  * explicit `i18n-allow` marker, which applies to the contiguous block it heads — so a
