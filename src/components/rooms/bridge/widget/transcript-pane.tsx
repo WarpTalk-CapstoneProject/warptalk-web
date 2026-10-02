@@ -220,7 +220,14 @@ export function TranscriptPane(): JSX.Element {
             Above the empty state too — a host can pause before anyone has spoken, and "Waiting
             for the first thing anyone says" alone would then say the opposite of what is
             happening. */}
-        {transcriptPaused ? <WidgetTranscriptPausedNotice since={transcriptPausedSince} /> : null}
+        {transcriptPaused ? (
+          <WidgetTranscriptPausedNotice
+            since={transcriptPausedSince}
+            // WT-910: the notice must not say translation is running under a header that says it
+            // stopped. Unknown until the sessions query answers, and then it says neither.
+            translationRunning={translationStatus === "unknown" ? null : translationStarted}
+          />
+        ) : null}
 
         {/* At 460px there is no toolbar to put this in, so it sits above the scroller where the
             in-meeting panel puts its own — same place, same words, same choice. */}

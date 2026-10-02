@@ -3,7 +3,7 @@
 /**
  * The layout of the Meet widget. WT-525, Phase 2.
  *
- *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  Reconnecting… ┐
+ *   ┌ Transcript | WarpBot ···· ● Translating  [REC Stop]  [Paused]  Reconnecting… ┐
  *   ├ consent, only while the main window is asking ───────────────────────────────┤
  *   ├ "No sound from Meet yet", only before the main window has heard anything ───┤
  *   ├ credits stop / meeting error / "Disconnected · Rejoin meeting" (WT-901) ─────┤
@@ -57,6 +57,8 @@ import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetCaptionsNotice } from "./meet-captions-notice";
 import { MeetingNotices } from "./meeting-notices";
+import { RecordingChip } from "./recording-chip";
+import { RecordingStartNotice } from "./recording-start-notice";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { RelayCarryNotice } from "./relay-carry-notice";
@@ -101,6 +103,8 @@ export function WidgetShell() {
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
+          {/* WT-916: people in Meet cannot see the REC chip, so the host is asked to tell them. */}
+          <RecordingStartNotice />
           <CaptureTakeoverNotice />
           <InboundNoSignalNotice />
           <MeetingNotices />
@@ -206,6 +210,10 @@ function WidgetStatus() {
           <span className="truncate text-[12px] font-semibold">{status.label}</span>
         </span>
       ) : null}
+
+      {/* WT-910: a bridged call is recorded by default, and this is the only window a bridge user
+          sees — so the standing "being recorded" notice lives here, with Stop for host/capturer. */}
+      <RecordingChip />
 
       {transcriptPaused ? (
         // Text in ink, amber on the wash only: the amber token is too light to carry 10px text
