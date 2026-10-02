@@ -177,6 +177,29 @@ export interface WindowsLoopbackCaptureRequest {
    * contract, which needs the cable. An older desktop ignores the field and keeps requiring it.
    */
   mode?: "voice" | "text-only";
+  /**
+   * Desktop capture-target: "meet-sighting" makes the desktop aim the capture at the browser process
+   * behind its own Google Meet sighting (read from the browser's URL, not a page-written title) and
+   * ignore `sourceId`/`targetProcessId`. Refused with R8 `meet-sighting-missing` /
+   * `meet-sighting-no-process` when it cannot; an older desktop ignores the field and refuses with
+   * R8 `target-process-required`. Either way the caller falls back to the picked window.
+   */
+  target?: "meet-sighting";
+  /** With `target: "meet-sighting"` only: the desktop stops the capture once Meet has been gone a while. */
+  stopWhenMeetGone?: boolean;
+}
+
+/** `audio:get-capture-state` (desktop capture-target): what the main process is capturing. */
+export interface DesktopCaptureState {
+  capturing: boolean;
+  mode: "voice" | "text-only" | null;
+  targetProcessId: number | null;
+  startedVia: "meet-sighting" | "source" | "process-id" | null;
+}
+
+/** `audio:capture-stopped`: the desktop stopped a capture on its own. */
+export interface DesktopCaptureStopped {
+  reason: string;
 }
 
 /**
@@ -226,6 +249,12 @@ export interface DesktopBridge {
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
   startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
   stopAudioCapture?: () => Promise<void>;
+  /**
+   * Desktop capture-target. Its presence is also the capability check for `target: "meet-sighting"`
+   * and `stopWhenMeetGone`: a build that has these has all of them.
+   */
+  getCaptureState?: () => Promise<DesktopCaptureState>;
+  onAudioCaptureStopped?: (callback: (event: DesktopCaptureStopped) => void) => () => void;
   watchMeetPresence?: () => Promise<void>;
   unwatchMeetPresence?: () => Promise<void>;
   onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
@@ -618,6 +647,14 @@ export function reportDesktopSignedIn(signedIn: boolean): void {
   } catch {
     // Nothing to do: the shell keeps whatever it last knew.
   }
+}
+
+/**
+ * Whether the desktop can aim loopback capture at its own Meet sighting and stop it when Meet is
+ * gone. A per-method check, like every helper here: an installed build can lag the web app.
+ */
+export function supportsMeetSightingCapture(bridge: DesktopBridge | null = getDesktopBridge()): boolean {
+  return typeof bridge?.getCaptureState === "function" && typeof bridge.onAudioCaptureStopped === "function";
 }
 
 /**
