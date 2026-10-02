@@ -1274,7 +1274,6 @@ export default function RoomInformationPage() {
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
                     translations={transcriptTranslations}
-                    preferredLanguage={user?.preferredLanguage}
                     // WT-655: the count gate joined the alignment gate. Two playable recordings
                     // means every offset is measured against the wrong file half the time, and the
                     // notice above the transcript now says why the timestamps went quiet.
