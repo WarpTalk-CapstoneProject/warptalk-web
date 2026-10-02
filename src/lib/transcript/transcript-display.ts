@@ -736,9 +736,17 @@ export type TranscriptPauseBlock<T> = {
  */
 export function withLivePauseGap(
   gaps: readonly TranscriptPauseGap[],
-  pause: { paused: boolean; since: string | null } | undefined,
+  pause: { paused: boolean; since: string | null; known?: boolean } | undefined,
   baseTime?: string,
 ): TranscriptPauseGap[] {
+  // THE SAME LAG, THE OTHER WAY ROUND. After a resume this client is told "running" at once, and
+  // holds a window list that still has the pause open until the refetch lands — or for good, if
+  // that one request fails, since the query does not retry. An open gap is what
+  // `withoutSegmentsInOpenPauseGaps` withholds against, so every line spoken after the resume
+  // was hidden from that viewer while it was saved and shown to everybody else: "the transcript
+  // is there, my panel just does not show it" (prod, 2 Oct). When the room is KNOWN to be
+  // running, an open window is stale by definition and must not withhold anything.
+  if (pause?.known && !pause.paused) return gaps.filter((gap) => gap.endMs !== null);
   if (!pause?.paused) return [...gaps];
   // Already known from the window list — the host's case. Adding a second open gap would split the
   // same pause in two and draw its divider twice.
