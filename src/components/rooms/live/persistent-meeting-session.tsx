@@ -3089,8 +3089,15 @@ export function PersistentMeetingSession({
   // rather than cleared from the capture effect's "not wanted" branch: that would be a synchronous
   // setState in an effect, and a stale "open" from before an idle reap or a Stop listening must not
   // keep the Meet window on the wire.
+  //
+  // Only once this window has JOINED the meeting (WT-916). The meeting service creates its
+  // MeetingRoom row in the join call and nowhere else, and the recording endpoint answers 404
+  // without that row. The inbound leg does not wait for the join (it connects with its own bridge
+  // token), so a join that is still in flight or has failed could otherwise spend this answer's
+  // one automatic start on a 404. Waiting here means the start happens when the join lands.
   const bridgeInboundOpen =
     isBridgeRoom &&
+    Boolean(meetingSession) &&
     bridgeInboundOpenRoomId === roomId &&
     bridgeAudioOwner &&
     bridgeListening &&
