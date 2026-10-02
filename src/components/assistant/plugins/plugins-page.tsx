@@ -1361,11 +1361,8 @@ export default function PluginsPage() {
         />
       ) : null}
 
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
-        <p className="text-xs text-ink-muted">{t("header.subtitle")}</p>
-      </header>
-
+      {/* No title block: this page wears the main chrome now, and there the top bar and the
+          sidebar already name it (see workspace/page-chrome.tsx). */}
       <div className="relative">
         <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" size={16} />
         <Input

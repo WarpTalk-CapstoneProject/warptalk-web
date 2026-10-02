@@ -65,6 +65,31 @@ export interface VirtualAudioStatus {
    * describing voice mode. See lib/meeting/bridge-audio-mode.
    */
   bridgeModes?: BridgeModeAvailability;
+  /**
+   * The endpoint labels to match in `enumerateDevices` for each leg, for the provider pair the
+   * desktop detected (desktop `feat/bridge-desktop-verdicts`). Absent on older builds and where
+   * `supported` is false; see lib/desktop/bridge-verdict for what replaces it then.
+   */
+  endpointLabels?: BridgeEndpointLabels;
+}
+
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `BridgeEndpointLabels`. Each label is matched
+ * case-insensitively as a substring of a device label; the desktop keeps them substring-safe.
+ */
+export interface BridgeEndpointLabels {
+  outboundProviderId: string;
+  /** Render endpoint WarpTalk plays the dub into (`audiooutput`). */
+  outboundSink: string;
+  /** Capture endpoint the user selects as Meet's microphone (`audioinput`). */
+  meetMicrophone: string;
+  inboundProviderId: string | null;
+  /** Capture endpoint WarpTalk records the far side from (`audioinput`). */
+  inboundCapture: string | null;
+  /** Render endpoint Meet's speaker is pointed at when the far side comes back on the device. */
+  meetSpeaker: string | null;
+  /** The bridge still runs without the inbound device (Windows: loopback or outbound-only). */
+  inboundOptional: boolean;
 }
 
 /** Mirrors warptalk-desktop src/shared/types.ts `BridgeModeAvailability`. */
@@ -188,6 +213,29 @@ export interface WindowsLoopbackCaptureRequest {
    * contract, which needs the cable. An older desktop ignores the field and keeps requiring it.
    */
   mode?: "voice" | "text-only";
+  /**
+   * Desktop capture-target: "meet-sighting" makes the desktop aim the capture at the browser process
+   * behind its own Google Meet sighting (read from the browser's URL, not a page-written title) and
+   * ignore `sourceId`/`targetProcessId`. Refused with R8 `meet-sighting-missing` /
+   * `meet-sighting-no-process` when it cannot; an older desktop ignores the field and refuses with
+   * R8 `target-process-required`. Either way the caller falls back to the picked window.
+   */
+  target?: "meet-sighting";
+  /** With `target: "meet-sighting"` only: the desktop stops the capture once Meet has been gone a while. */
+  stopWhenMeetGone?: boolean;
+}
+
+/** `audio:get-capture-state` (desktop capture-target): what the main process is capturing. */
+export interface DesktopCaptureState {
+  capturing: boolean;
+  mode: "voice" | "text-only" | null;
+  targetProcessId: number | null;
+  startedVia: "meet-sighting" | "source" | "process-id" | null;
+}
+
+/** `audio:capture-stopped`: the desktop stopped a capture on its own. */
+export interface DesktopCaptureStopped {
+  reason: string;
 }
 
 /**
@@ -237,6 +285,12 @@ export interface DesktopBridge {
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
   startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
   stopAudioCapture?: () => Promise<void>;
+  /**
+   * Desktop capture-target. Its presence is also the capability check for `target: "meet-sighting"`
+   * and `stopWhenMeetGone`: a build that has these has all of them.
+   */
+  getCaptureState?: () => Promise<DesktopCaptureState>;
+  onAudioCaptureStopped?: (callback: (event: DesktopCaptureStopped) => void) => () => void;
   watchMeetPresence?: () => Promise<void>;
   unwatchMeetPresence?: () => Promise<void>;
   onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
@@ -689,6 +743,14 @@ export function reportDesktopSignedIn(signedIn: boolean): void {
   } catch {
     // Nothing to do: the shell keeps whatever it last knew.
   }
+}
+
+/**
+ * Whether the desktop can aim loopback capture at its own Meet sighting and stop it when Meet is
+ * gone. A per-method check, like every helper here: an installed build can lag the web app.
+ */
+export function supportsMeetSightingCapture(bridge: DesktopBridge | null = getDesktopBridge()): boolean {
+  return typeof bridge?.getCaptureState === "function" && typeof bridge.onAudioCaptureStopped === "function";
 }
 
 /**

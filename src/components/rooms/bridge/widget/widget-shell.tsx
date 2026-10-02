@@ -45,7 +45,6 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { INBOUND_NO_SIGNAL_TITLE, inboundNoSignalHint } from "@/lib/audio/bridge-inbound-health";
-import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
@@ -133,6 +132,7 @@ export function WidgetShell() {
 function InboundNoSignalNotice() {
   const {
     relay: { view },
+    deviceLabels,
   } = useBridgeWidget();
   const noSignal = view.status === "connected" && view.snapshot?.inboundHealth === "no-signal";
   if (!noSignal) return null;
@@ -144,7 +144,7 @@ function InboundNoSignalNotice() {
       className="shrink-0 border-b border-border bg-status-waiting/15 px-3.5 py-2 text-[11px] leading-snug text-ink"
     >
       <span className="font-semibold">{INBOUND_NO_SIGNAL_TITLE}.</span>{" "}
-      {inboundNoSignalHint(currentBridgeDeviceLabels())}
+      {inboundNoSignalHint(deviceLabels)}
     </div>
   );
 }

@@ -348,12 +348,7 @@ export function WarpBotToolsPage() {
   return (
     <WorkspacePage>
       <WorkspaceToolbar
-        filters={
-          <div className="min-w-0">
-            <h1 className="text-[15px] font-semibold text-ink">{t("title")}</h1>
-            <p className="text-[12px] text-ink-muted">{t("subtitle")}</p>
-          </div>
-        }
+        // No title block: the top bar and the sidebar already name the page (see page-chrome.tsx).
         actions={
           <div className="relative">
             <MagnifyingGlass

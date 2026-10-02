@@ -180,8 +180,28 @@ expect(layout, /<MiniMeetingDock floating=\{meetingWidgetFloating\} headless=\{a
 expect(code(DOCK), /hidden=\{headless\}/, DOCK, "the headless dock must hide the SAME element, not swap it.");
 
 // ── 7. the wizard reads the final path ───────────────────────────────────────
-expect(code(WIZARD), /const inboundPath = finalBridgeInboundPath\(\s*selectBridgeInboundSource\(/, WIZARD,
+expect(code(WIZARD), /const inboundPath = finalBridgeInboundPath\(\s*inbound\s*\)/, WIZARD,
   "the Speakers instruction must come from the final inbound path, not the transient device-while-asking.");
+
+// ── 7b. one owner for the inbound decision, one source for the verdicts ──────
+// decideBridgeInbound is the only caller of selectBridgeInboundSource; the session and the wizard
+// both call it, the wizard with the meeting's own inbound device id rather than its tone probe.
+expect(code(WIZARD), /const inbound = decideBridgeInbound\(\{[\s\S]{0,300}inboundDeviceId: resolvedInboundDeviceId/, WIZARD,
+  "the wizard must decide the inbound path through decideBridgeInbound with the meeting's device id.");
+expect(session, /const bridgeInbound = decideBridgeInbound\(\{[\s\S]{0,300}inboundDeviceId: bridgeInboundDeviceId/, SESSION,
+  "the session must decide the inbound path through decideBridgeInbound.");
+expect(session, /<BridgeSetupDialog[\s\S]{0,400}inboundDeviceId=\{bridgeInboundDeviceId\}/, SESSION,
+  "the wizard must be given the session's inbound device id, so both decisions share their inputs.");
+for (const file of [WIZARD, SESSION]) {
+  if (/selectBridgeInboundSource\(/.test(code(file))) {
+    failures.push(`${file} calls selectBridgeInboundSource directly — go through decideBridgeInbound.`);
+  }
+  if (/currentBridgeDeviceLabels\(/.test(code(file))) {
+    failures.push(`${file} reads the fallback device labels directly — use bridgeDeviceLabelsFor(status).`);
+  }
+}
+expect(code(WIZARD), /bridgeDevicesReadyWithProbe\(status, result\)/, WIZARD,
+  "the wizard's devices-ready must be the desktop verdict, downgraded by the probe (bridgeDevicesReadyWithProbe).");
 
 // ── 8. a displaced session can be taken back from the popup ──────────────────
 expect(hostCall, /\n {4}sessionDisplaced,/, SESSION,

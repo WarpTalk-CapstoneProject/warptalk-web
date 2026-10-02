@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  bridgeDeviceLabelsFor,
   bridgeDeviceLabelsForPlatform,
+  bridgeDeviceLabelsFromStatus,
   bridgeProbeLegs,
   INBOUND_DEVICE_LABEL,
   isBridgeCheckReady,
@@ -185,5 +187,42 @@ test("a missing optional cable does not block readiness, a silent one does", () 
     isBridgeCheckReady([probe({ leg: "outbound", present: false, carriesSignal: null }), probe({ leg: "inbound" })]),
     false,
     "the outbound cable is never optional",
+  );
+});
+
+test("labels: the desktop's endpointLabels win over the tables; the tables only when absent", () => {
+  const endpointLabels = {
+    outboundProviderId: "blackhole",
+    outboundSink: "BlackHole 2ch",
+    meetMicrophone: "BlackHole 2ch",
+    inboundProviderId: "blackhole",
+    inboundCapture: "BlackHole 16ch",
+    meetSpeaker: "BlackHole 16ch",
+    inboundOptional: false,
+  };
+  const oldMac = { platform: "darwin", supported: true, ready: true, foreignDrivers: [], devices: [] };
+  const mac = { ...oldMac, endpointLabels };
+  const expected = {
+    outboundSink: "BlackHole 2ch",
+    inboundCapture: "BlackHole 16ch",
+    meetMicrophone: "BlackHole 2ch",
+    meetSpeaker: "BlackHole 16ch",
+    inboundOptional: false,
+    platform: "macos",
+  };
+  assert.deepEqual(bridgeDeviceLabelsFromStatus(mac), expected);
+  // No device list needed: the desktop already chose BlackHole from what is installed.
+  assert.deepEqual(bridgeDeviceLabelsFor(mac, []), expected);
+  // A desktop that disagrees with the tables wins, platform included.
+  const odd = { ...mac, platform: "win32", endpointLabels: { ...endpointLabels, outboundSink: "Some Cable In" } };
+  assert.equal(bridgeDeviceLabelsFor(odd).outboundSink, "Some Cable In");
+  assert.equal(bridgeDeviceLabelsFor(odd).platform, "windows");
+  // Fallback: no endpointLabels → the tables, by the desktop's platform rather than the user agent.
+  assert.equal(bridgeDeviceLabelsFromStatus(oldMac), null);
+  assert.deepEqual(bridgeDeviceLabelsFor({ ...oldMac, platform: "win32" }), bridgeDeviceLabelsForPlatform("Win32"));
+  assert.equal(
+    bridgeDeviceLabelsFor(oldMac, ["BlackHole 2ch", "BlackHole 16ch"]).outboundSink,
+    LEGACY_OUTBOUND_DEVICE_LABEL,
+    "the fallback still swaps to BlackHole from the device list",
   );
 });
