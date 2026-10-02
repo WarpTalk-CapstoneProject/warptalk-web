@@ -119,6 +119,16 @@ export interface TranslationRoomDto {
    * See lib/meeting/artifact-language-options.ts for how each of those is read.
    */
   artifactLanguages?: RoomArtifactLanguagesDto | null;
+  /**
+   * WT-708: set only on the Start (and re-Start) response, and only when the workspace's CURRENT
+   * whitelist narrowed this meeting's languages. Read through lib/meeting/start-language-policy.ts.
+   */
+  languagePolicyNotice?: {
+    requested: string[];
+    effective: string[];
+    dropped: string[];
+    message: string;
+  } | null;
 }
 
 /** WT-703: server-computed language set for a finished room's artifacts. */

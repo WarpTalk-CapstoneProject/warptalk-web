@@ -273,6 +273,17 @@
     "suspended": "Đã dừng dịch: dịch vụ AI của workspace đang bị tạm ngưng. Hãy nhờ chủ workspace kiểm tra thanh toán.",
     "restored": "Đã có thể dịch trở lại — thanh toán của workspace đã được khôi phục."
   },
+  "languagePolicy": {
+    "narrowedTitle": "Đã bỏ {dropped} khỏi cuộc họp này",
+    "narrowedDescription": "Workspace của bạn không còn cho phép {dropped}, nên cuộc họp này chỉ chạy bằng {effective}. Hãy nhờ admin workspace cho phép lại, hoặc sửa ngôn ngữ của cuộc họp.",
+    "startRefused": "Không thể bắt đầu cuộc họp: các ngôn ngữ của cuộc họp ({meeting}) không còn được workspace cho phép; hiện workspace chỉ cho phép {allowed}. Hãy sửa ngôn ngữ của cuộc họp, hoặc nhờ admin workspace cho phép lại.",
+    "none": "không ngôn ngữ nào"
+  },
+  "seriesBlockedNotice": {
+    "title": "\"{title}\" đã ngừng lên lịch",
+    "body": "Chuỗi họp này không còn tạo cuộc họp mới: ngôn ngữ của nó không còn được workspace cho phép. Hãy sửa ngôn ngữ của cuộc họp, hoặc nhờ admin workspace cho phép lại.",
+    "openFailed": "Không mở được chuỗi họp này. Hãy thử lại sau giây lát."
+  },
   "bridgeWidget": {
     "relay": {
       "waiting": "Đang kết nối tới WarpTalk…",

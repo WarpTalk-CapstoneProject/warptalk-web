@@ -5,12 +5,18 @@ import {
   readMeetingInviteNotice,
   readMeetingStartedNotice,
 } from "@/lib/notifications/meeting-started-notice";
+import {
+  readSeriesBlockedNotice,
+  seriesBlockedRoomId,
+} from "@/lib/notifications/series-blocked-notice";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { NotificationMessageDto } from "@/types/notification";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -83,7 +89,44 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
   const openHref =
     (opened?.kind === "opened" ? opened.joinHref : null) ?? notification.actionUrl;
 
+  /**
+   * WT-708 — MEETING_SERIES_BLOCKED. The server's title and body are English and the payload has
+   * no action_url (it is about a series, and no new room is being made), so the row is worded from
+   * the catalog and its link resolved on click: the series' current or latest meeting, where the
+   * host edits the booking's languages. See lib/notifications/series-blocked-notice.ts.
+   */
+  const tSeries = useTranslations("rooms.seriesBlockedNotice");
+  const seriesBlocked = readSeriesBlockedNotice(notification);
+  const [openingSeries, setOpeningSeries] = useState(false);
+  const navigable = Boolean(notification.actionUrl) || seriesBlocked !== null;
+  const title = seriesBlocked
+    ? seriesBlocked.seriesTitle
+      ? tSeries("title", { title: seriesBlocked.seriesTitle })
+      : notification.title
+    : notification.title;
+  const content = seriesBlocked ? tSeries("body") : notification.content;
+
+  const openBlockedSeries = async (seriesId: string) => {
+    if (openingSeries) return;
+    setOpeningSeries(true);
+    try {
+      const detail = await translationRoomService.getSeries(seriesId);
+      const roomId = seriesBlockedRoomId(detail);
+      const slug = useWorkspaceStore.getState().activeWorkspaceSlug;
+      onNavigate?.();
+      router.push(roomId ? `/rooms/${roomId}` : slug ? `/${slug}/schedules` : "/workspace");
+    } catch {
+      toast.error(tSeries("openFailed"));
+    } finally {
+      setOpeningSeries(false);
+    }
+  };
+
   const handleOpen = () => {
+    if (seriesBlocked) {
+      void openBlockedSeries(seriesBlocked.seriesId);
+      return;
+    }
     if (!openHref) return;
     onNavigate?.();
     router.push(openHref);
@@ -91,11 +134,12 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
 
   return (
     <div
-      role={notification.actionUrl ? "link" : undefined}
-      tabIndex={notification.actionUrl ? 0 : undefined}
+      role={navigable ? "link" : undefined}
+      tabIndex={navigable ? 0 : undefined}
+      aria-busy={openingSeries || undefined}
       onClick={handleOpen}
       onKeyDown={(event) => {
-        if (notification.actionUrl && (event.key === "Enter" || event.key === " ")) {
+        if (navigable && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           handleOpen();
         }
@@ -103,7 +147,7 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
       className={cn(
         "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[14px] py-3.5 pr-3.5 pl-4 outline-none transition-colors",
         "hover:bg-ink/[0.045] focus-visible:bg-ink/[0.045] focus-visible:ring-2 focus-visible:ring-primary",
-        notification.actionUrl && "cursor-pointer",
+        navigable && "cursor-pointer",
       )}
     >
       <div className="min-w-0">
@@ -122,8 +166,8 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
             )}
           />
           <span className="min-w-0">
-            {notification.title}
-            {notification.actionUrl ? (
+            {title}
+            {navigable ? (
               <span aria-hidden className="font-normal text-ink-muted">
                 {" "}
                 →
@@ -133,7 +177,7 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
           </span>
         </p>
         <p className="mt-1.5 ml-3.5 line-clamp-3 text-[13.5px] leading-[1.55] text-ink-muted">
-          {notification.content}
+          {content}
         </p>
         <p className="mt-2.5 ml-3.5 text-xs text-ink-subtle">
           {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
