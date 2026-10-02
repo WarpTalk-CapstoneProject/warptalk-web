@@ -280,6 +280,8 @@ export type ArmMeetWindowCaptureResult =
       reason:
         | "meet-sighting-missing"
         | "meet-window-not-found"
+        /** B18: Meet is in Chrome's Picture-in-Picture window, which is never recorded. Desktop #51. */
+        | "meet-not-on-tab"
         | "unsupported-platform"
         | "not-main-window"
         | "consent-required";
@@ -684,6 +686,15 @@ export function watchMeetMicState(
     unsubscribe();
     void bridge.setMeetMicStream?.(false).catch(() => undefined);
   };
+}
+
+/**
+ * Whether this desktop build can say where the Meet call is (`onMeetCallState`, WT-911). False off
+ * the desktop shell and on older builds. WT-910 B18 keeps the pre-B18 recording rule without it.
+ */
+export function hasMeetCallSensor(): boolean {
+  const bridge = getDesktopBridge();
+  return typeof bridge?.onMeetCallState === "function";
 }
 
 /**

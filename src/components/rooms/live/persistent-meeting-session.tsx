@@ -176,6 +176,7 @@ import {
   armMeetWindowCapture,
   canOpenTranscriptWindow,
   closeTranscriptWindow,
+  hasMeetCallSensor,
   listWindowsLoopbackSources,
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
@@ -201,9 +202,14 @@ import {
   bridgeAutoRecordingDecision,
   bridgeRecordingFailurePlan,
   describeMeetWindowCaptureFailure,
+  MEET_TAB_RETURN_HOLD_MS,
+  mayCaptureMeetWindowAtStart,
+  meetWindowOnTab,
+  meetWindowTabReading,
   nextBridgeRecordChoice,
   shouldKeepBridgeRecordingRetry,
   shouldPublishMeetWindow,
+  shouldRepublishMeetWindow,
   type BridgeAutoRecordingInput,
   type BridgeRecordChoice,
   type BridgeRecordingRetry,
@@ -3195,6 +3201,25 @@ export function PersistentMeetingSession({
     startRecordingRef.current = setRecordingMutation.mutateAsync;
   });
 
+  // B18: the recording's picture follows the Meet tab (rules in lib/meeting/bridge-recording).
+  // Leaving the tab (PiP, another tab) counts at once; coming back only after it held for a second.
+  const meetTabReading = meetWindowTabReading({
+    sensorAvailable: isBridgeRoom && hasMeetCallSensor(),
+    call: meetFollow.call,
+    roomMeetCode,
+  });
+  const [meetTabSettled, setMeetTabSettled] = useState(false);
+  useEffect(() => {
+    const onTab = meetTabReading === "on-tab";
+    const timer = window.setTimeout(() => setMeetTabSettled(onTab), onTab ? MEET_TAB_RETURN_HOLD_MS : 0);
+    return () => window.clearTimeout(timer);
+  }, [meetTabReading]);
+  const meetOnTab = meetWindowOnTab(meetTabReading, meetTabSettled);
+  const meetOnTabRef = useRef(meetOnTab);
+  useEffect(() => {
+    meetOnTabRef.current = meetOnTab;
+  });
+
   useEffect(() => {
     const decisionInput: BridgeAutoRecordingInput = {
       roomId,
@@ -3231,7 +3256,10 @@ export function PersistentMeetingSession({
         // track is published as `meet-window` for the egress template to fill the frame with.
         // Best effort — an older desktop build, a Meet window that cannot be found, a refused
         // publish — and never a reason not to record: the recording is then audio-only.
-        const video = (await meetWindowControlRef.current?.publishMeetWindow(roomId)) ?? "no-publisher";
+        // B18: off the Meet tab it starts audio-only; the picture follows when Meet is back.
+        const video = !mayCaptureMeetWindowAtStart(meetOnTabRef.current)
+          ? "Google Meet is not on its tab"
+          : ((await meetWindowControlRef.current?.publishMeetWindow(roomId)) ?? "no-publisher");
         if (video !== "published") {
           console.warn(`[bridge] Recording without the Meet window: ${video}.`);
         }
@@ -3320,7 +3348,22 @@ export function PersistentMeetingSession({
     inboundOpen: bridgeInboundOpen,
     recording: isRecording,
     starting: bridgeRecordingStarting,
+    meetOnTab,
   });
+  // B18: Meet is back on its tab mid-recording: arm the desktop capture again and publish it.
+  const meetWindowRepublish = shouldRepublishMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
+  useEffect(() => {
+    if (!meetWindowRepublish) return;
+    void meetWindowControlRef.current?.publishMeetWindow(roomId).then((video) => {
+      if (video !== "published") console.warn(`[bridge] Meet window not published again: ${video}.`);
+    });
+  }, [meetWindowRepublish, roomId]);
 
   // The popup's REC chip, and its Stop. Every bridge participant's main window publishes the state
   // (a member is being recorded too and has to see it); only host and capturer are offered Stop,

@@ -43,7 +43,8 @@
  * Pure on purpose: no React, no DOM, no channel, no LiveKit.
  */
 
-import type { ArmMeetWindowCaptureResult } from "../desktop/bridge";
+import type { ArmMeetWindowCaptureResult, MeetCallState } from "../desktop/bridge";
+import { trustsMeetReading } from "./bridge-meet-follow.ts";
 
 // ── the choice ───────────────────────────────────────────────────────────────
 
@@ -245,14 +246,100 @@ export function shouldKeepBridgeRecordingRetry(
  * captured. A recording stopped by hand takes the video with it: a window capture nobody is
  * recording is a screen being sent for nothing. The inbound leg closing for good — Stop listening
  * with no cable, the meeting ending, an idle reap — does the same.
+ *
+ * B18: and only while Meet is on its tab (`meetOnTab`, see meetWindowTabReading). `false` takes the
+ * video down — the recording carries on audio-only — and `null` (a desktop without the call-state
+ * sensor) leaves the rule as it was before B18.
  */
 export function shouldPublishMeetWindow(input: {
   isBridgeRoom: boolean;
   inboundOpen: boolean;
   recording: boolean;
   starting: boolean;
+  meetOnTab?: boolean | null;
 }): boolean {
+  if (input.meetOnTab === false) return false;
   return input.isBridgeRoom && input.inboundOpen && (input.recording || input.starting);
+}
+
+// ── B18: the video follows the Meet tab ──────────────────────────────────────
+
+/**
+ * How long Meet must stay on its tab before its window is published again. A window capture is
+ * opened and published from scratch every time, so tab flapping must not thrash it. Leaving is
+ * never delayed: the video goes down on the first reading that is not "on the tab".
+ */
+export const MEET_TAB_RETURN_HOLD_MS = 1_000;
+
+/**
+ * B18 (PO 2026-10-02): where the Meet call is, for the recording's picture.
+ *
+ * A window capture shows what its window shows. When Meet leaves its tab — Chrome's
+ * Picture-in-Picture, or the user switches to another tab — the browser window shows something
+ * that is not the meeting, so the video is taken down; the PiP window is never recorded either.
+ * Audio is not affected.
+ *
+ *   "on-tab"   the desktop says the user is in the call (`in-call`) on the Meet tab (`via: "tab"`),
+ *              and the reading is about this room's call (the codes match when both are known).
+ *   "off-tab"  anything else from a desktop that has the sensor: `pip`, `lobby`, `left`, `unknown`,
+ *              a reading about another call, or no reading yet. Fails closed.
+ *   null       the desktop has no call-state sensor (built before WT-911): no B18, the rule is as
+ *              it was. A documented gap.
+ */
+export type MeetTabReading = "on-tab" | "off-tab";
+
+export function meetWindowTabReading(input: {
+  /** The desktop exposes `onMeetCallState` (WT-911). */
+  sensorAvailable: boolean;
+  /** The desktop's last call state, or null before the first one. */
+  call: Pick<MeetCallState, "phase" | "via" | "meetCode"> | null | undefined;
+  /** The Meet code in the room's stored Meet URL, when it has one. */
+  roomMeetCode: string | null | undefined;
+}): MeetTabReading | null {
+  if (!input.sensorAvailable) return null;
+  const call = input.call;
+  if (!call || !trustsMeetReading(call.meetCode, input.roomMeetCode)) return "off-tab";
+  return call.phase === "in-call" && call.via === "tab" ? "on-tab" : "off-tab";
+}
+
+/**
+ * `meetOnTab` for shouldPublishMeetWindow: a reading of "on-tab" counts only once it has held for
+ * MEET_TAB_RETURN_HOLD_MS (`settled`, kept by a timer in the component); "off-tab" counts at once.
+ */
+export function meetWindowOnTab(reading: MeetTabReading | null, settled: boolean): boolean | null {
+  if (reading === null) return null;
+  return reading === "on-tab" && settled;
+}
+
+/**
+ * B18: publish the Meet window AGAIN, because Meet came back to its tab while a recording runs.
+ *
+ * Only for a desktop with the sensor (`meetOnTab === true`; an older desktop never re-publishes, as
+ * before), only once the recording is on (the start chain publishes the first picture itself), and
+ * only while the picture is wanted at all. The publisher answers "published" at once when the
+ * track is already up, so a true value that persists does no work.
+ */
+export function shouldRepublishMeetWindow(input: {
+  isBridgeRoom: boolean;
+  inboundOpen: boolean;
+  recording: boolean;
+  starting: boolean;
+  meetOnTab: boolean | null;
+}): boolean {
+  return (
+    input.meetOnTab === true &&
+    input.recording &&
+    !input.starting &&
+    shouldPublishMeetWindow(input)
+  );
+}
+
+/**
+ * Whether the start chain may open the Meet window as the recording's first picture. Off the tab it
+ * starts audio-only, and the picture follows when Meet is back (shouldRepublishMeetWindow).
+ */
+export function mayCaptureMeetWindowAtStart(meetOnTab: boolean | null): boolean {
+  return meetOnTab !== false;
 }
 
 /** Why the recording is audio-only, in words for a log line. */
@@ -275,6 +362,8 @@ export function describeMeetWindowCaptureFailure(
       return "the desktop app has not seen a Google Meet window";
     case "meet-window-not-found":
       return "the Google Meet window could not be found";
+    case "meet-not-on-tab":
+      return "Google Meet is not on its tab (Picture-in-Picture or another tab)";
     case "unsupported-platform":
       return "window capture is not supported on this platform";
     case "not-main-window":

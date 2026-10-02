@@ -34,7 +34,8 @@ Native meetings are unchanged: recording is never started for you there.
 - `armMeetWindowCapture(roomId)` → `{ ok: true, sourceName } | { ok: false, reason }`. After
   `ok: true`, the next `getDisplayMedia({ video: true, audio: false })` from the main window within
   10 s resolves with the Meet window and no dialog. Only works while the loopback capture is
-  running. Older desktops lack the method.
+  running. Older desktops lack the method. `reason: "meet-not-on-tab"` while Meet is in PiP (B18).
+- `onMeetCallState` / `getMeetCallState` (WT-911): where the call is. Used for B18.
 
 ## How it works
 
@@ -123,15 +124,42 @@ recording should start within a few seconds. Make the start fail with a 403: one
 line for the host. Press "Try again" after a give-up. Opt out, or stop listening, while a retry waits:
 nothing starts.
 
+## The video follows the Meet tab (B18, PO 2026-10-02)
+
+A window capture shows whatever its window shows. When Meet leaves its tab (Chrome's
+Picture-in-Picture, or the user switches to another tab), the `meet-window` video is unpublished.
+The PiP window is never recorded, and neither is another tab. When the Meet tab is the active
+document again, the window is armed and published again. Audio is recorded the whole time.
+
+- Signal: the desktop's `MeetCallState` (`onMeetCallState`, WT-911), read on web by
+  `useBridgeMeetFollow`, which now also returns the raw `call` for this room.
+- `meetWindowTabReading` returns `"on-tab"` only for `phase === "in-call"` with `via === "tab"` and
+  a matching `meetCode` (when both codes are known). `pip`, `unknown`, `lobby`, `left`, another
+  call, or no reading yet all give `"off-tab"` (fails closed). Without the sensor
+  (`hasMeetCallSensor()` false) it gives `null`, which keeps the pre-B18 rule.
+- `meetWindowOnTab`: leaving counts at once. Coming back counts only after the reading held for
+  `MEET_TAB_RETURN_HOLD_MS` (1 s), so tab flapping does not reopen the capture each time.
+- `shouldPublishMeetWindow({ ..., meetOnTab })`: `false` takes the video down.
+- `shouldRepublishMeetWindow`: back on the tab, recording on, not starting, sensor present. The
+  session then calls `publishMeetWindow(roomId)` again (arm + `getDisplayMedia` + publish).
+- `mayCaptureMeetWindowAtStart`: a recording that starts while Meet is off its tab starts
+  audio-only, and the picture follows when Meet is back.
+- Desktop (#51): an arm is refused with `meet-not-on-tab` while the last sighting is the PiP window
+  or the call-state tracker places the call in PiP. Arming is repeatable: each arm replaces the
+  last, and the recording is announced once per room. The arm still needs the loopback capture to
+  run. The same PR fixes in-call sightings losing their HWND after WT-911.
+
+Tests: `src/lib/meeting/__tests__/bridge-recording-meet-tab.test.ts` (in `npm run test:bridge-recording`).
+
 ## Known gaps (2026-10-02, not run on a real desktop yet)
 
 - WT-916 retry: during the wait between attempts the Meet window is unpublished, and each attempt
   publishes it again. A reload of main loses a pending retry and the `failed` line, along with the
   choice.
 
-- When Meet leaves its tab (Picture-in-Picture or a tab switch) the capture stays on the original
-  window and would record another tab. Decision: stop publishing the video until the Meet tab is
-  back. Not wired yet; it needs the desktop's `onMeetCallState` signal.
+- B18 needs a desktop with the call-state sensor (WT-911, desktop #50). On an older desktop the
+  video stays on the captured window when Meet leaves its tab, as before B18.
+- B18 is unverified at runtime: PiP, tab switch and return have not been run on a real desktop.
 - A reload of the main window mid-meeting loses the record choice and the REC chip while the
   server-side recording continues.
 - A LiveKit reconnect drops the `meet-window` track and does not publish it again.

@@ -71,6 +71,11 @@ export type BridgeMeetFollow = {
   state: MeetFollowState;
   /** The desktop's last phase for THIS room's call, "unknown" included; null if never told. */
   callPhase: MeetCallState["phase"] | null;
+  /**
+   * WT-910 B18: the desktop's last raw reading for THIS room's call (tab or PiP included); null if
+   * never told. The recording's picture follows it (lib/meeting/bridge-recording).
+   */
+  call: MeetCallState | null;
   /** Who decides the WarpTalk mic; "manual" is when the popup offers its chip. */
   micControl: MeetMicControl;
   /** The user left the call and has not come back: this desktop stops listening to Meet. */
@@ -193,6 +198,7 @@ export function useBridgeMeetFollow({
 
   const callPhase =
     enabled && rawCall?.roomId === roomId ? trustedMeetPhase(rawCall.call, roomMeetCode) : null;
+  const call = enabled && rawCall?.roomId === roomId ? rawCall.call : null;
   const derivedControl = meetFollowMicControl(state);
   const micControl: MeetMicControl =
     derivedControl === "meet" && micNotTaken && micWanted ? "manual" : derivedControl;
@@ -202,12 +208,13 @@ export function useBridgeMeetFollow({
     () => ({
       state,
       callPhase,
+      call,
       micControl,
       leftCall,
       setManualMic: applyMicrophone,
       keepOpen,
       resolveLeave,
     }),
-    [state, callPhase, micControl, leftCall, applyMicrophone, keepOpen, resolveLeave],
+    [state, callPhase, call, micControl, leftCall, applyMicrophone, keepOpen, resolveLeave],
   );
 }
