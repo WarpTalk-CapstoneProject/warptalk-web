@@ -1360,6 +1360,26 @@ test("a pause the window list already knows about is not counted twice", () => {
   assert.equal(gaps.length, 1, "two open gaps would split one pause in two and draw it twice");
 });
 
+test("a room known to be running is not withheld by a window list that still says paused", () => {
+  // After a resume: the broadcast has landed, the refetch has not (or failed, and is not retried).
+  const stale = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+  assert.equal(stale.filter((gap) => gap.endMs === null).length, 1, "the fixture must hold an open window");
+
+  const gaps = withLivePauseGap(stale, { paused: false, since: null, known: true }, BASE_TIME);
+  const kept = withoutSegmentsInOpenPauseGaps([{ startTimeMs: 90_000, id: "after-resume" }], gaps);
+
+  assert.equal(kept.segments.length, 1);
+  assert.equal(kept.hiddenCount, 0);
+});
+
+test("an unknown state leaves an open window alone", () => {
+  // Before anything has told this client the state, the window list is all there is.
+  const open = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.deepEqual(withLivePauseGap(open, { paused: false, since: null, known: false }, BASE_TIME), open);
+  assert.deepEqual(withLivePauseGap(open, { paused: false, since: null }, BASE_TIME), open);
+});
+
 test("no live pause, or nothing to anchor it against, changes nothing", () => {
   const fromWindows = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
 
