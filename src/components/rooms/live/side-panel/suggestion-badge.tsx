@@ -11,6 +11,7 @@ import {
   MagnifyingGlass,
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import type { AiSuggestionDto } from "@/types/realtime";
 import { actionsFor } from "@/lib/meeting/suggestion-actions";
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
@@ -25,32 +26,26 @@ const CATEGORY_ICONS = {
   fact: Lightbulb,
 } as const;
 
-const CATEGORY_LABELS: Record<string, string> = {
-  clarification: "Unanswered",
-  term: "Term",
-  action: "Action",
-  correction: "Check",
-  fact: "Reference",
-};
-
 /**
- * What the badge's one-word label actually means, said in full when it is opened.
+ * The categories the suggester decides between. Anything else falls back to "other".
  *
- * WT-371 Bug 6, half two: "Thông tin suggest hiển thị không rõ cấu trúc (gồm những gì)". The
- * badge said UNANSWERED and the panel it opened showed two paragraphs of prose. Nothing told the
- * reader what kind of observation this was, so there was no way to know whether the first line
- * was a question, a definition or a warning — or why it had appeared at all.
+ * WT-922: the label ("Unanswered") and its meaning ("A question that was asked and not
+ * answered") used to be English constants here, so they stayed English beside a Vietnamese
+ * suggestion and under a Vietnamese interface. They are the INTERFACE's words — they describe the
+ * kind of hint — and now come from meetingTranscript.suggestion in the reader's UI language.
  *
- * These are the same five categories the suggester decides between, phrased for the person
- * reading rather than for the model writing.
+ * The meaning is WT-371 Bug 6, half two: "Thông tin suggest hiển thị không rõ cấu trúc (gồm những
+ * gì)". The badge said UNANSWERED and the panel it opened showed two paragraphs of prose; nothing
+ * told the reader what kind of observation this was, or why it had appeared at all.
+ *
+ * `content` and `detail` are NOT translated here. They are the model's words about what was said,
+ * written in the language of the transcript, and follow the worker's rule rather than the UI's.
  */
-const CATEGORY_MEANINGS: Record<string, string> = {
-  clarification: "A question that was asked and not answered",
-  term: "A term used in this meeting without being defined",
-  action: "A commitment with no owner or no deadline",
-  correction: "This contradicts something said earlier",
-  fact: "From a document attached to this meeting",
-};
+const KNOWN_CATEGORIES = new Set(["clarification", "term", "action", "correction", "fact"]);
+
+function categoryKey(category: string) {
+  return KNOWN_CATEGORIES.has(category) ? category : "other";
+}
 
 /**
  * The next steps a hint offers, per category.
@@ -72,14 +67,6 @@ const CATEGORY_MEANINGS: Record<string, string> = {
  * Two at most. This card sits inside a transcript bubble in a side panel, and a row of
  * choices there competes with the conversation it is commenting on.
  */
-function labelFor(category: string) {
-  return CATEGORY_LABELS[category] ?? "Suggestion";
-}
-
-function meaningFor(category: string) {
-  return CATEGORY_MEANINGS[category] ?? "Noticed automatically from what was said";
-}
-
 /**
  * The mark on a transcript bubble that says the AI noticed something about this line.
  *
@@ -107,6 +94,7 @@ export function SuggestionBadge({
   open: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations("meetingTranscript.suggestion");
   // Indexed, not returned from a helper: react-hooks/static-components can see that this
   // resolves to one of a fixed set of module-level components, and cannot see it through a
   // function call.
@@ -130,7 +118,7 @@ export function SuggestionBadge({
       }`}
     >
       <Icon className="h-2.5 w-2.5" weight="bold" aria-hidden />
-      {labelFor(suggestion.category)}
+      {t(`categories.${categoryKey(suggestion.category)}.label`)}
     </motion.button>
   );
 }
@@ -145,6 +133,8 @@ export function SuggestionDetail({
   isSelf: boolean;
   onDismiss: () => void;
 }) {
+  const t = useTranslations("meetingTranscript.suggestion");
+  const category = categoryKey(suggestion.category);
   const hasDetail = Boolean(suggestion.detail?.trim());
   const askWarpBot = useAssistantWidgetStore((state) => state.askWarpBot);
   // Indexed here too rather than shared through a helper — same reason as in SuggestionBadge:
@@ -176,12 +166,12 @@ export function SuggestionDetail({
             }`}
           >
             <Icon className="h-2.5 w-2.5" weight="bold" aria-hidden />
-            {labelFor(suggestion.category)}
+            {t(`categories.${category}.label`)}
           </p>
           <p
             className={`text-[10px] leading-snug ${isSelf ? "text-white/60" : "text-ink-subtle"}`}
           >
-            {meaningFor(suggestion.category)}
+            {t(`categories.${category}.meaning`)}
           </p>
           <p
             className={`mt-1.5 text-[11px] font-medium leading-snug ${isSelf ? "text-white" : "text-ink"}`}
@@ -210,7 +200,7 @@ export function SuggestionDetail({
           <div className="mt-2 flex flex-wrap gap-1">
             {actionsFor(suggestion).map((action) => (
               <button
-                key={action.label}
+                key={action.id}
                 type="button"
                 onClick={() => askWarpBot(action.prompt)}
                 className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors ${
@@ -220,7 +210,7 @@ export function SuggestionDetail({
                 }`}
               >
                 <MagnifyingGlass className="h-2.5 w-2.5" weight="bold" aria-hidden />
-                {action.label}
+                {t(`actions.${action.id}`)}
               </button>
             ))}
           </div>
@@ -230,14 +220,14 @@ export function SuggestionDetail({
           <p
             className={`mt-1.5 text-[9px] ${isSelf ? "text-white/45" : "text-ink-subtle/70"}`}
           >
-            Generated automatically — check before relying on it.
+            {t("disclaimer")}
           </p>
         </div>
 
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss suggestion"
+          aria-label={t("dismissAria")}
           className={`shrink-0 rounded p-0.5 ${
             isSelf
               ? "text-white/60 hover:bg-white/15 hover:text-white"
