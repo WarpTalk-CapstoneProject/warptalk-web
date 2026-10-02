@@ -255,8 +255,9 @@
     "empty": "Không tìm thấy cuộc họp nào. Hãy thử tên phòng, mã, hoặc một trong các thao tác nhanh ở trên."
   },
   "bridgeFarSide": {
-    "label": "Bên kia nói",
-    "ariaLabel": "Bên kia nói {language}. Đổi ngôn ngữ của phía bên kia cuộc gọi",
+    "name": "Ngôn ngữ phía bên kia cuộc gọi nói",
+    "ariaLabel": "Ngôn ngữ phía bên kia cuộc gọi nói: {language}. Đổi ngôn ngữ",
+    "ariaLabelNotSet": "Ngôn ngữ phía bên kia cuộc gọi nói: chưa chọn. Chọn ngôn ngữ",
     "hint": "Ngôn ngữ phía bên kia cuộc gọi đang nói",
     "connecting": "Đang kết nối tới WarpTalk…",
     "notSet": "Chọn",

@@ -4,6 +4,13 @@
  * SLOT: "They speak" — what the other side of the Google Meet call speaks. Beside the host's own
  * language pill in the widget dock, plus the notice above the dock when the pair cannot translate.
  *
+ * NO VISIBLE "THEY SPEAK" LABEL (WT-910)
+ *   The pill shows the people icon and the language code; the menu opens on its one-line hint.
+ *   The words "They speak" are no longer drawn anywhere — the slot keeps the name in code and
+ *   comments only. Screen readers still get what the control is from `aria-label` ("Language the
+ *   other side of the call speaks: …"), and sighted users from the hover/focus hint. Choosing the
+ *   language here still works; WT-909 replaces the picker with auto-detection.
+ *
  * WHY IT EXISTS
  *   A bridge room is the host plus one "External Meeting" stand-in for everyone on the far side.
  *   The stand-in's language is what the host is translated INTO and what the far side is
@@ -156,7 +163,7 @@ export function DockFarSideLanguagePill() {
           aria-label={
             farSideLanguage
               ? t("ariaLabel", { language: getLanguageName(farSideLanguage) })
-              : t("label")
+              : t("ariaLabelNotSet")
           }
           onClick={() => {
             if (enabled) setOpen((current) => !current);
@@ -193,14 +200,11 @@ export function DockFarSideLanguagePill() {
         <div
           id={menuId}
           role="menu"
-          aria-label={t("label")}
+          aria-label={t("name")}
           className="absolute bottom-full left-3 z-50 mb-2 max-h-[min(24rem,calc(100dvh-4.5rem))] w-64 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-2xl border border-border bg-surface-1 p-1.5 shadow-lg"
         >
-          <div role="group" aria-label={t("label")}>
-            <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-              {t("label")}
-            </p>
-            <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{t("menuHint")}</p>
+          <div role="group" aria-label={t("name")}>
+            <p className="px-2.5 pb-1 pt-1.5 text-[11px] leading-snug text-ink-muted">{t("menuHint")}</p>
             <div className="max-h-48 overflow-y-auto">
               {options.map((language) => {
                 const active = farSideLanguage === language;

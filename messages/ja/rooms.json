@@ -255,8 +255,9 @@
     "empty": "ミーティングが見つかりません。ルーム名やコードを入力するか、上のクイックアクションをお試しください。"
   },
   "bridgeFarSide": {
-    "label": "相手の言語",
-    "ariaLabel": "相手は{language}を話しています。通話相手の言語を変更",
+    "name": "通話相手が話す言語",
+    "ariaLabel": "通話相手が話す言語: {language}。変更する",
+    "ariaLabelNotSet": "通話相手が話す言語: 未設定。選択する",
     "hint": "通話の相手側が話している言語",
     "connecting": "WarpTalk に接続しています…",
     "notSet": "選択",
