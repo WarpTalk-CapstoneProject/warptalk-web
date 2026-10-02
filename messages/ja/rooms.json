@@ -354,14 +354,14 @@
     },
     "meetMic": {
       "textOnCable": {
-        "title": "Meet にあなたの声が届いていません。",
-        "body": "Meet は仮想ケーブルをマイクとして使用していますが、このモードでは何も再生されません。Meet の音声設定で実際のマイクを選択してください。",
-        "action": "翻訳音声を使う"
+        "title": "Meet の参加者にあなたの声が届いていません。",
+        "body": "Meet のマイクが「CABLE Output」になっています。ここには翻訳音声しか流れませんが、WarpTalk は現在あなた自身の声を送っています。Meet でマイクボタンの横の矢印をクリックし、実際のマイクを選択してください。",
+        "action": "代わりに翻訳音声を送る"
       },
       "voiceOnReal": {
-        "title": "Meet に翻訳前の声が届いています。",
-        "body": "Meet は実際のマイクを使用しています。Meet のマイクに「CABLE Output (VB-Audio Virtual Cable)」を選択するか、自分の声モードに切り替えてください。",
-        "action": "自分の声を使う"
+        "title": "Meet の参加者には翻訳前の声が届いています。",
+        "body": "WarpTalk は翻訳音声を「CABLE Output」経由で送っていますが、Meet のマイクは実際のマイクになっています。Meet でマイクボタンの横の矢印をクリックし、「CABLE Output (VB-Audio Virtual Cable)」を選択してください。",
+        "action": "代わりに自分の声を送る"
       }
     },
     "meetCaptions": {

@@ -354,14 +354,14 @@
     },
     "meetMic": {
       "textOnCable": {
-        "title": "Meet can't hear you.",
-        "body": "Meet is using the virtual cable as your microphone, but in this mode nothing is played into it. Pick your real microphone in Meet's audio settings.",
-        "action": "Use translated voice"
+        "title": "People in the Meet call can't hear you.",
+        "body": "Meet's microphone is set to “CABLE Output”, which only carries your translated voice, and WarpTalk is sending your own voice. In Meet, click the arrow next to the microphone button and choose your real microphone.",
+        "action": "Send my translated voice instead"
       },
       "voiceOnReal": {
-        "title": "Meet hears you untranslated.",
-        "body": "Meet is using your real microphone. Choose “CABLE Output (VB-Audio Virtual Cable)” as Meet's microphone, or switch to your own voice.",
-        "action": "Use my own voice"
+        "title": "People in the Meet call hear you untranslated.",
+        "body": "WarpTalk is sending your translated voice through “CABLE Output”, but Meet's microphone is set to your real one. In Meet, click the arrow next to the microphone button and choose “CABLE Output (VB-Audio Virtual Cable)”.",
+        "action": "Send my own voice instead"
       }
     },
     "meetCaptions": {

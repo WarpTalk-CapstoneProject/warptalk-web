@@ -22,7 +22,6 @@
  * (desktop #45) and the popup says when it disagrees with the mode.
  */
 
-import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Headphones, Microphone, Subtitles, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -171,24 +170,17 @@ export function BridgeAudioModeChoice({ compact = false }: { compact?: boolean }
  *                              allowed, so "Use my own voice" is always offered.
  *
  * `unknown` and `ambiguous` say nothing: a muted Meet records from no microphone at all.
+ *
+ * The banner alone, no toast: a toast is drawn in this same popup, so it reached nobody the banner
+ * did not, said the title twice and covered the popup's header (PO, 2026-10-02). The copy names what
+ * the people in the call hear, which setting causes it, and the one thing to click in Meet; it never
+ * says "this mode", because the popup's own Text / Voice switch is a different setting.
  */
 export function BridgeMeetMicNotice() {
   const t = useTranslations("rooms.bridgeWidget");
   const { meetMic, audioMode } = useBridgeWidget();
   const modeSwitch = useBridgeAudioModeSwitch();
   const mismatch = bridgeMeetMicMismatch({ audioMode, meetMic });
-
-  // Said once per mismatch as a toast too: the user is looking at Meet, not at this banner.
-  const announcedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!mismatch) {
-      announcedRef.current = null;
-      return;
-    }
-    if (announcedRef.current === mismatch) return;
-    announcedRef.current = mismatch;
-    toast.warning(t(`meetMic.${mismatch === "text-on-cable" ? "textOnCable" : "voiceOnReal"}.title`));
-  }, [mismatch, t]);
 
   if (!mismatch) return null;
   const key = mismatch === "text-on-cable" ? "textOnCable" : "voiceOnReal";

@@ -108,9 +108,13 @@ The desktop's status is the single answer; every web caller reads it through thi
   stops".
 - Text mode shows the headphones advice (speakers play the call; the real mic can pick it up —
   server-side leak dedupe covers only part of it).
-- The Meet-mic notice (widget shell and start step): text + Meet on the cable ("Meet can't hear
-  you") or voice + Meet on the real mic ("Meet hears you untranslated"), with the allowed switch.
-  Watched only while a main window runs the room.
+- The Meet-mic notice (widget shell and start step): text + Meet on the cable ("People in the Meet
+  call can't hear you") or voice + Meet on the real mic ("People in the Meet call hear you
+  untranslated"), with the allowed switch. Watched only while a main window runs the room.
+  A banner only, no toast (2026-10-02): the toast was drawn in the same popup, repeated the title
+  and covered the header. The body says what the call hears, which WarpTalk setting causes it
+  (own voice vs translated voice, never "this mode": the popup's Text / Voice switch is a different
+  setting) and the one click to make in Meet (the arrow next to its microphone button).
 - Strings: `rooms.bridgeWidget.audioMode.*`, `rooms.bridgeWidget.meetMic.*` (en / vi / ja).
 
 ## Files
@@ -146,8 +150,9 @@ The desktop's status is the single answer; every web caller reads it through thi
 - [ ] Live in voice: Settings → Meet hears you → Your own voice works; Translated voice is then
       greyed until Stop.
 - [ ] Text mode: nothing plays into "CABLE Input" (check with a recorder on CABLE Output).
-- [ ] Meet set to CABLE Output in text mode → "Meet can't hear you" notice; Meet on the real mic in
-      voice mode → "Meet hears you untranslated" with "Use my own voice".
+- [ ] Meet set to CABLE Output in text mode → "People in the Meet call can't hear you" banner (no
+      toast); Meet on the real mic in voice mode → "People in the Meet call hear you untranslated"
+      with "Send my own voice instead".
 - [ ] Older main window (no `audioMode` in its snapshot): the chooser is not shown / not switchable.
 
 ## Known limitations / notes for maintainers
