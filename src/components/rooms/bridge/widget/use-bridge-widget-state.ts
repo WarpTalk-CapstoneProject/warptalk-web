@@ -151,7 +151,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       : sessions.length > 0
         ? "stopped"
         : "ready";
-  // Both halves, as bridge-overlay-controls and every other host check in the app does it — or,
+  // Both halves, as every other host check in the app does it — or,
   // better, the main window's `isRoomHost`, which also follows a live host transfer.
   const isHost = bridgeWidgetIsRoomHost(
     relayView,
@@ -579,6 +579,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       meetingError: meetingStatus.meetingError,
       idleReaped: meetingStatus.idleReaped,
       sessionDisplaced: meetingStatus.sessionDisplaced,
+      meetCaptionsOff: meetingStatus.meetCaptionsOff,
       creditsSuspended: meetingStatus.creditsSuspended,
       creditsSuspendedReason: meetingStatus.creditsSuspendedReason,
       readerLanguage,
@@ -618,6 +619,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       meetingStatus.meetingError,
       meetingStatus.idleReaped,
       meetingStatus.sessionDisplaced,
+      meetingStatus.meetCaptionsOff,
       meetingStatus.creditsSuspended,
       meetingStatus.creditsSuspendedReason,
       readerLanguage,

@@ -358,6 +358,11 @@
         "body": "Meet is using your real microphone. Choose “CABLE Output (VB-Audio Virtual Cable)” as Meet's microphone, or switch to your own voice.",
         "action": "Use my own voice"
       }
+    },
+    "meetCaptions": {
+      "title": "Turn on captions (CC) in Google Meet.",
+      "body": "WarpTalk reads speaker names from Meet's captions, and Meet isn't showing any right now. Click CC in Meet's toolbar so the other side's lines show who said them.",
+      "dismiss": "Dismiss"
     }
   }
 }

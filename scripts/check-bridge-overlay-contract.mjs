@@ -25,7 +25,7 @@
  *
  * PHASE 2 (WT-525): THE OVERLAY IS A WIDGET NOW
  *
- *   The page no longer renders the WT-577 control strip (bridge-overlay-controls.tsx). It renders
+ *   The page no longer renders the WT-577 control strip. It renders
  *   `WidgetShell` inside `BridgeWidgetProvider` (components/rooms/bridge/widget/), and the controls
  *   the strip carried moved into the widget's slots: Start/Stop and Pause transcript into the
  *   dock's session slot, End into the header, the voice into the settings slot. Assertion 2 used
@@ -33,9 +33,8 @@
  *   structure that replaced it, by the same rule — the slot must be rendered by something a user
  *   reaches, and each control must still fire its mutation.
  *
- *   The old strip's file is still in the repo (another session owns it), so the checks written
- *   against it stay, but only while the file exists: a check that fails because a dead file was
- *   deleted would be guarding nothing.
+ *   The old strip's file has since been deleted, and the checks that were written against it went
+ *   with it: a check on a file nothing renders guards nothing.
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -182,12 +181,10 @@ const WIDGET_DIR = "src/components/rooms/bridge/widget";
 const SHELL = `${WIDGET_DIR}/widget-shell.tsx`;
 const DOCK = `${WIDGET_DIR}/dock-session-controls.tsx`;
 const END = `${WIDGET_DIR}/end-session.tsx`;
-const CONTROLS = "src/components/rooms/bridge/bridge-overlay-controls.tsx";
 const overlayPage = read(OVERLAY_PAGE);
 const shell = read(SHELL);
 const dock = read(DOCK);
 const endSession = read(END);
-const controls = read(CONTROLS);
 
 /** Every .ts/.tsx in the widget folder, for the checks that are about the widget as a whole. */
 const widgetFiles = existsSync(join(root, WIDGET_DIR))
@@ -273,40 +270,6 @@ if (!dock) {
           + `the dock is the only place in the overlay it lives.`,
       );
     }
-  }
-}
-
-/**
- * 2b. The old strip, while it still exists.
- *
- * REMOVED: the requirement that it use `useSetVoiceCloneConsent`. The widget has no clone switch,
- * by design: whether somebody is cloned follows their account's "Enable Voice Cloning" setting
- * plus their consent, not a per-window toggle. Requiring the switch here would pin a control the
- * product has decided against to a file that is no longer rendered — and a later rewrite of that
- * file that dropped it, correctly, would fail for it.
- *
- * The voice picker checks stay, on this file, until the widget's settings slot (t4) carries its
- * own. Moving them to the settings slot now would fail the build on a stub that has not landed.
- */
-if (controls) {
-  for (const [hook, what] of [
-    ["useResumeTranslationRoom", "Start Translation (/resume is the endpoint that opens a session)"],
-    ["useStopTranslation", "Stop Translation"],
-    ["useSetDubVoice", "the voice picker"],
-  ]) {
-    if (!new RegExp(`\\b${hook}\\b`).test(controls)) {
-      failures.push(`${CONTROLS} no longer uses ${hook} — ${what} is one of its controls.`);
-    }
-  }
-
-  // The dub voice lives in AuthService, which knows nothing about rooms. The AI pipeline learns it
-  // from an AUDIO_ROUTES_UPDATED payload, so without the refresh the change is correct everywhere
-  // except the meeting the user is standing in — which is the only place this window is used.
-  if (!/\buseRefreshDubVoice\b/.test(controls)) {
-    failures.push(
-      `${CONTROLS} sets the dub voice without calling useRefreshDubVoice. The setting would be saved `
-        + `and the meeting would keep speaking in the old voice until the user rejoined.`,
-    );
   }
 }
 
@@ -413,7 +376,6 @@ for (const [label, source] of [
  */
 for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
-  [CONTROLS, controls],
   [WIZARD, read(WIZARD)],
   ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
@@ -440,8 +402,7 @@ for (const [label, source] of [
  * by its unit test; what a test of the helper cannot see is a popup that stops going through it.
  *
  * Phase 2: the Start a user can actually press is the widget dock's, so that is the file this is
- * REQUIRED of. The old strip is held to the same rule while it exists — it is still a Start button,
- * and an unrendered file is one import away from being rendered again.
+ * REQUIRED of.
  */
 function checkStartGoesThroughActivation(label, source) {
   const code = withoutImports(stripComments(source));
@@ -477,7 +438,6 @@ function checkStartGoesThroughActivation(label, source) {
 }
 
 if (dock) checkStartGoesThroughActivation(DOCK, dock);
-if (controls) checkStartGoesThroughActivation(CONTROLS, controls);
 
 const LAYOUT = "src/app/(app)/layout.tsx";
 const layout = read(LAYOUT);
