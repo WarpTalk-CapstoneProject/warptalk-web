@@ -142,6 +142,11 @@ export const API = {
     bridgeCapturerHeartbeat: (id: string) => `/translation-rooms/${id}/bridge/capturer/heartbeat`,
     /** W4b — a participant takes the capture over once the lease is stale. 409 while it is live. */
     bridgeCapturerTakeover: (id: string) => `/translation-rooms/${id}/bridge/capturer/takeover`,
+    /**
+     * Text-only bridge — the caller's OWN audio mode, `{ mode: "voice" | "text" }`. 409
+     * BRIDGE_AUDIO_MODE_LOCKED for text → voice while translation runs.
+     */
+    bridgeAudioMode: (id: string) => `/translation-rooms/${id}/bridge/audio-mode`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
     /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,

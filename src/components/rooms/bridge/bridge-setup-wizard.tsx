@@ -37,6 +37,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { getDesktopBridge, readVirtualAudioStatus, type VirtualAudioStatus } from "@/lib/desktop/bridge";
+import type { BridgeAudioMode } from "@/lib/meeting/bridge-audio-mode";
 import {
   alignHiFiCableFormatViaDesktop,
   describeHiFiFormat,
@@ -159,6 +160,7 @@ export function BridgeSetupWizard({
   loopbackFailed = false,
   browserCaptureAnswer = null,
   onFormatAligned,
+  audioMode = "voice",
 }: {
   onReady?: () => void;
   /**
@@ -188,7 +190,15 @@ export function BridgeSetupWizard({
    * ends or goes silent while the device id stays the same — so the meeting has to reopen it.
    */
   onFormatAligned?: () => void;
+  /**
+   * Text-only bridge (PO, 2026-10-01). In "text" mode Meet keeps the user's real microphone and
+   * speakers and nothing is played into a cable, so there is no driver to install, no virtual
+   * device to point Meet at and no tone to test: the wizard says so and asks for the one Meet
+   * setting that matters — the REAL microphone. Defaults to voice, the wizard as it always was.
+   */
+  audioMode?: BridgeAudioMode;
 }) {
+  const textMode = audioMode === "text";
   const [result, setResult] = useState<BridgeCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [meetConfirmed, setMeetConfirmed] = useState(false);
@@ -227,6 +237,12 @@ export function BridgeSetupWizard({
     // Not awaited with the tone test: a status read that hangs must not keep the test from
     // reporting, and readVirtualAudioStatus already folds failure into null.
     void readStatus().then(setStatus, () => setStatus(null));
+    // Text mode tests nothing: the tone goes through the cables, and text mode uses none.
+    if (textMode) {
+      setResult(null);
+      setChecking(false);
+      return;
+    }
     try {
       const outcome = await runCheck();
       setResult(outcome);
@@ -238,7 +254,7 @@ export function BridgeSetupWizard({
     } finally {
       setChecking(false);
     }
-  }, [runCheck, readStatus]);
+  }, [runCheck, readStatus, textMode]);
 
   const install = useCallback(async () => {
     const bridge = getDesktopBridge();
@@ -288,7 +304,7 @@ export function BridgeSetupWizard({
   // and the cable only where loopback cannot run here, was declined, or already failed. Before
   // this an installed Hi-Fi Cable always won, and the wizard sent people into the one Meet setting
   // most of them get wrong, for a path WarpTalk did not need.
-  const loopbackCapable = canCaptureBrowserLoopback(status);
+  const loopbackCapable = canCaptureBrowserLoopback(status, { textOnly: textMode });
   //
   // W4a: the FINAL path, not the one of the moment. While the capture question is still open the
   // meeting listens through an installed cable ("device-while-asking"), but that is a stopgap the
@@ -312,6 +328,19 @@ export function BridgeSetupWizard({
   // the cable. On the loopback path nothing plays the call back from there, so the step now says
   // to undo it — the same words the widget shows (bridge-far-side-monitor).
   const speakerResetNotice = shouldShowMeetSpeakerResetNotice(inboundPath, inboundViaDevice);
+
+  if (textMode) {
+    return (
+      <TextOnlySetup
+        loopbackCapable={loopbackCapable}
+        statusKnown={status !== null}
+        meetConfirmed={meetConfirmed}
+        onMeetConfirmed={setMeetConfirmed}
+        readyLabel={readyLabel}
+        onReady={onReady}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
@@ -576,6 +605,92 @@ export function BridgeSetupWizard({
             : "Finish the steps above to start."}
         </p>
         <Button type="button" disabled={!ready} onClick={onReady}>
+          {readyLabel}
+        </Button>
+      </footer>
+    </div>
+  );
+}
+
+/**
+ * The wizard for text-only mode: two steps, no driver. Meet keeps the real microphone and speakers;
+ * WarpTalk listens to the browser (when Windows allows it) and transcribes and translates as text.
+ */
+function TextOnlySetup({
+  loopbackCapable,
+  statusKnown,
+  meetConfirmed,
+  onMeetConfirmed,
+  readyLabel,
+  onReady,
+}: {
+  loopbackCapable: boolean;
+  statusKnown: boolean;
+  meetConfirmed: boolean;
+  onMeetConfirmed: (confirmed: boolean) => void;
+  readyLabel: string;
+  onReady?: () => void;
+}) {
+  return (
+    <div data-bridge-setup-text-only className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
+      <header>
+        <h1 className="text-xl font-semibold">Set up text-only mode</h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          Your meeting runs on Google Meet with your own microphone and speakers. The other side hears
+          your real voice; WarpTalk shows you the transcript and the translations as text.
+        </p>
+      </header>
+
+      <StepShell index={1} title="No audio driver needed" state="done">
+        <p>
+          Text-only mode plays nothing into Meet, so there is no virtual cable to install.{" "}
+          {loopbackCapable
+            ? "WarpTalk listens to Meet straight from your browser to translate the other side."
+            : statusKnown
+              ? "This computer does not let WarpTalk listen to your browser directly, so only what you say is transcribed."
+              : "WarpTalk listens to Meet from your browser where Windows allows it."}
+        </p>
+      </StepShell>
+
+      <StepShell index={2} title="Check Google Meet" state={meetConfirmed ? "done" : "active"}>
+        <p className="mb-3">In your Meet tab, open Settings → Audio and check:</p>
+        <ul className="mb-3 space-y-1">
+          <li>
+            Microphone → <span className="font-medium text-ink">your own microphone</span>, not
+            &ldquo;CABLE Output&rdquo;. Nothing is played into the cable in this mode, so Meet would
+            hear silence from you.
+          </li>
+          <li>
+            Speakers → <span className="font-medium text-ink">leave as they are</span>, so you hear
+            the call.
+          </li>
+        </ul>
+        <p data-bridge-headphones-hint className="mb-3 text-xs text-amber-600 dark:text-amber-400">
+          Use headphones. Your speakers play the call, and your real microphone can pick it up and send
+          it back into Meet.
+        </p>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={meetConfirmed}
+            onChange={(event) => onMeetConfirmed(event.target.checked)}
+          />
+          <span>
+            I&apos;ve checked the microphone in Meet.
+            <span className="block text-xs text-ink-subtle">
+              WarpTalk can&apos;t check this one — what Meet has selected lives inside Google&apos;s
+              page, out of reach.
+            </span>
+          </span>
+        </label>
+      </StepShell>
+
+      <footer className="flex items-center justify-between gap-4 pt-2">
+        <p className="text-xs text-ink-subtle">
+          {meetConfirmed ? "Everything checked." : "Finish the steps above to start."}
+        </p>
+        <Button type="button" disabled={!meetConfirmed} onClick={onReady}>
           {readyLabel}
         </Button>
       </footer>

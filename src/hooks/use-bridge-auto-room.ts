@@ -7,11 +7,13 @@ import { toast } from "sonner";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/api/errors";
-import { isDesktopApp } from "@/lib/desktop/bridge";
+import { isDesktopApp, readVirtualAudioStatus } from "@/lib/desktop/bridge";
+import { claimAudioModeFor } from "@/lib/meeting/bridge-audio-mode";
 import { planBridgeClaim } from "@/lib/meeting/bridge-auto-room";
 import type { BridgeTriggerState } from "@/lib/meeting/bridge-trigger";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
+import { useBridgeAudioModeStore } from "@/stores/bridge-audio-mode-store";
 import { useBridgeCapturerStore } from "@/stores/bridge-capturer-store";
 
 /**
@@ -49,6 +51,7 @@ export function useBridgeAutoRoom({
   const queryClient = useQueryClient();
   const openMeeting = useActiveMeetingStore((state) => state.openMeeting);
   const setCapturerEntry = useBridgeCapturerStore((state) => state.setEntry);
+  const setAudioMode = useBridgeAudioModeStore((state) => state.setMode);
   const { data: workspaceSettings, isSuccess: workspaceSettingsLoaded } = useWorkspaceSettings(
     workspaceId ?? "",
   );
@@ -75,14 +78,27 @@ export function useBridgeAutoRoom({
 
     handled.current = meetCode;
 
-    translationRoomService
-      .claimBridgeRoom({ workspaceId, ...plan.body })
+    // Text-only bridge (PO, 2026-10-01): a machine with no cable starts the sitting in text mode,
+    // where voice is impossible anyway. Otherwise nothing is sent and the server keeps the mode this
+    // participant already has — voice on a first claim, or a text pick made in the popup before a
+    // reload (see claimAudioModeFor). The popup's start step changes it before Start.
+    readVirtualAudioStatus()
+      .then((status) => claimAudioModeFor(status))
+      .catch(() => undefined)
+      .then((audioMode) =>
+        translationRoomService.claimBridgeRoom({
+          workspaceId,
+          ...plan.body,
+          ...(audioMode ? { audioMode } : {}),
+        }),
+      )
       .then((claim) => {
         setCapturerEntry(claim.room.id, {
           role: claim.bridgeRole,
           heartbeatIntervalSeconds: claim.heartbeatIntervalSeconds,
           leaseSeconds: claim.leaseSeconds,
         });
+        setAudioMode(claim.room.id, claim.audioMode);
         openMeeting(claim.room.id);
         // The room list feeds the trigger: until it has this room, the call is still an "offer".
         void queryClient.invalidateQueries({ queryKey: ["translationRooms"] });
@@ -92,7 +108,7 @@ export function useBridgeAutoRoom({
           getErrorMessage(error, "WarpTalk could not join a meeting for this call."),
         );
       });
-  }, [ready, triggerState, meetCode, workspaceSettings, userSettings, workspaceId, openMeeting, setCapturerEntry, queryClient]);
+  }, [ready, triggerState, meetCode, workspaceSettings, userSettings, workspaceId, openMeeting, setCapturerEntry, setAudioMode, queryClient]);
 }
 
 function announceFailure(reason: string) {

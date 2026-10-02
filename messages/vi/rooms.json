@@ -316,6 +316,37 @@
       "done": "Thiết bị này hiện thu âm cuộc gọi.",
       "failed": "Không thu âm cuộc gọi được trên thiết bị này.",
       "failedDescription": "Có thể vẫn có người đang thu âm. Xem chi tiết trong cửa sổ WarpTalk."
+    },
+    "audioMode": {
+      "label": "Meet nghe bạn thế nào",
+      "settingsRow": "Meet nghe bạn",
+      "voice": "Giọng đã dịch",
+      "text": "Giọng thật của bạn",
+      "voiceHint": "Meet nghe bản dịch giọng của bạn do WarpTalk phát qua VB-CABLE.",
+      "textHint": "Meet nghe micro thật của bạn. Bạn vẫn có bản ghi và bản dịch dạng chữ.",
+      "unknown": "Đang kết nối với WarpTalk…",
+      "voiceNeedsCable": "Giọng đã dịch cần VB-CABLE. Cài đặt trong Cài đặt thiết bị.",
+      "textUnavailable": "Máy này không dùng được chế độ giọng thật.",
+      "lockedHint": "Bạn có thể chuyển lại giọng đã dịch sau khi dừng dịch.",
+      "headphones": "Hãy dùng tai nghe: loa phát cuộc gọi, và micro của bạn có thể thu lại tiếng đó.",
+      "nowText": "Meet giờ nghe giọng thật của bạn.",
+      "nowVoice": "Meet giờ nghe giọng đã dịch của bạn.",
+      "locked": "Không thể chuyển sang giọng đã dịch khi đang dịch.",
+      "lockedDescription": "Hãy dừng dịch trước rồi chuyển lại.",
+      "failed": "Không đổi được cách Meet nghe bạn.",
+      "failedDescription": "Xem chi tiết trong cửa sổ WarpTalk."
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "Meet không nghe thấy bạn.",
+        "body": "Meet đang dùng cáp ảo làm micro, nhưng ở chế độ này không có gì được phát vào đó. Hãy chọn micro thật của bạn trong cài đặt âm thanh của Meet.",
+        "action": "Dùng giọng đã dịch"
+      },
+      "voiceOnReal": {
+        "title": "Meet đang nghe bạn chưa qua dịch.",
+        "body": "Meet đang dùng micro thật của bạn. Hãy chọn “CABLE Output (VB-Audio Virtual Cable)” làm micro của Meet, hoặc chuyển sang giọng thật.",
+        "action": "Dùng giọng thật của tôi"
+      }
     }
   }
 }

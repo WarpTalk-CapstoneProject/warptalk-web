@@ -51,6 +51,8 @@ import type { HubConnection } from "@microsoft/signalr";
 
 import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
 import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
+import type { BridgeAudioMode, BridgeModeSupport } from "@/lib/meeting/bridge-audio-mode";
+import type { MeetMicState } from "@/lib/desktop/bridge";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptCleanSentenceDto } from "@/types/transcript";
@@ -192,6 +194,25 @@ export type BridgeWidgetState = {
    * language step with one Start for exactly this.
    */
   neverStarted: boolean;
+  /**
+   * Text-only bridge (PO, 2026-10-01): how Meet hears THIS user — "voice" (VB-CABLE carries their
+   * dub) or "text" (their real mic, no dub). The main window's snapshot when it says, else this
+   * user's participant row (`isBridgeTextOnly`), else null (not known yet).
+   */
+  audioMode: BridgeAudioMode | null;
+  /**
+   * Whether `relay.setAudioMode` reaches a main window that understands it (its snapshot carries
+   * `audioMode`). Any participant may switch their own mode — no host check.
+   */
+  canSwitchAudioMode: boolean;
+  /** What this machine can run (lib/meeting/bridge-audio-mode), or null off the desktop. */
+  modeSupport: BridgeModeSupport | null;
+  /**
+   * Which microphone the Meet browser records from, as the desktop reads it (desktop #45), or null
+   * where it cannot tell (no detector, not Windows). Drives the Meet-mic mismatch notice.
+   */
+  meetMic: MeetMicState["state"] | null;
+
   /** The main window's meeting connection (LiveKit), or null when no main window says. */
   meetingConnection: BridgeWidgetMeetingConnection | null;
   /** The meeting's own error from the main window, worded for a person, or null. */

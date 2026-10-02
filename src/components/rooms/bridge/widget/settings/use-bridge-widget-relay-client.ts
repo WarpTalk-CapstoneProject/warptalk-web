@@ -27,6 +27,7 @@ import {
   type BridgeWidgetRelayView,
 } from "@/lib/meeting/bridge-widget-relay";
 import { normalizeLanguageCode } from "@/lib/language/languages";
+import type { BridgeAudioMode } from "@/lib/meeting/bridge-audio-mode";
 
 export type BridgeWidgetRelayClient = {
   view: BridgeWidgetRelayView;
@@ -56,6 +57,11 @@ export type BridgeWidgetRelayClient = {
   openRoomRecord: () => boolean;
   /** W4b: a member asks the main window to take the far side's capture over (bridge takeover). */
   takeOverCapture: () => boolean;
+  /**
+   * Text-only bridge: ask the main window to switch how Meet hears this user. Sent only to a main
+   * window whose snapshot carries `audioMode` (canRelayAudioMode); the result is the next snapshot.
+   */
+  setAudioMode: (mode: BridgeAudioMode) => boolean;
   /** web #646: "Use this device" — the main window takes the meeting back from another login. */
   takeOverSession: () => boolean;
 };
@@ -198,6 +204,14 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     [sendWhenConnected],
   );
 
+  const setAudioMode = useCallback(
+    (mode: BridgeAudioMode) =>
+      viewRef.current.snapshot?.audioMode === undefined
+        ? false
+        : sendWhenConnected({ type: "set-audio-mode", mode }),
+    [sendWhenConnected],
+  );
+
   // Memoized: the widget context carries this object (WT-901), and a fresh one every render would
   // re-render every slot whenever anything above the provider did.
   return useMemo(
@@ -216,6 +230,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openSetup,
       openRoomRecord,
       takeOverCapture,
+      setAudioMode,
       takeOverSession,
     }),
     [
@@ -233,6 +248,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       openSetup,
       openRoomRecord,
       takeOverCapture,
+      setAudioMode,
       takeOverSession,
     ],
   );
