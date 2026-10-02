@@ -425,6 +425,11 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+  /** The latest inbound device, for a desktop capture-stopped event that arrives long after the start. */
+  const bridgeInboundDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    bridgeInboundDeviceIdRef.current = bridgeInboundDeviceId;
+  }, [bridgeInboundDeviceId]);
   /**
    * The desktop's device report, as last read. Windows only: the far side can be captured from the
    * browser itself — WT-898: the FIRST choice, cable or no cable (see selectBridgeInboundSource).
@@ -1336,6 +1341,20 @@ export function PersistentMeetingSession({
               // "text-only". Read from the ref, not a dependency: a voice → text switch must not
               // tear down a working capture just to restart it under a different name.
               mode: bridgeLoopbackCaptureMode(bridgeAudioModeRef.current),
+              // The desktop aims at the browser behind its own Meet sighting when it can (a URL,
+              // not a page-written title), and the picked window above is the fallback. It also
+              // stops that capture once Meet has been gone for its grace — handled like a failed
+              // start: remembered for this room, and the leg moves to the cable if there is one.
+              preferMeetSighting: true,
+              onCaptureStopped: (stopReason) => {
+                const deviceId = bridgeInboundDeviceIdRef.current;
+                console.warn(
+                  `[bridge] The desktop stopped listening to the browser (${stopReason}); ${
+                    deviceId ? "falling back to the virtual speaker" : "no virtual speaker to fall back to"
+                  }.`,
+                );
+                setBridgeLoopbackFallback({ roomId, inboundDeviceId: deviceId, reason: stopReason });
+              },
             });
           } catch (loopbackError) {
             if (cancelled) return;
