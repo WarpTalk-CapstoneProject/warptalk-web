@@ -42,9 +42,17 @@
  *   session and must keep reading no WarpTalk API (see WHY IT IS PUBLIC above), so those three stay
  *   out rather than being faked. See the change's PR description for what each would need on the
  *   backend before a future pass can add them for real.
+ *
+ * WT-910: A BRIDGE ROOM RECORDS THE GOOGLE MEET WINDOW
+ *   A bridged call happens in Google Meet; WarpTalk's own participants have no cameras there. The
+ *   host's client publishes the Meet window as a video track named `meet-window`
+ *   (egress-participants.ts), and while that track is subscribed it fills the frame and nobody is
+ *   drawn as a tile. Every recordable participant's AUDIO is still mounted and mixed exactly as in
+ *   the grid — the layout changes the picture, never who is heard. Still read off the LiveKit room
+ *   alone: no WarpTalk API, no session, the same public page.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Room,
   RoomEvent,
@@ -57,7 +65,12 @@ import {
 } from "livekit-client";
 import EgressHelper from "@livekit/egress-sdk";
 
-import { isRecordableParticipant, resolveEgressDisplayName } from "@/lib/meeting/egress-participants";
+import {
+  isMeetWindowTrack,
+  isRecordableParticipant,
+  resolveEgressDisplayName,
+  resolveEgressLayout,
+} from "@/lib/meeting/egress-participants";
 import { getInitials } from "@/lib/meeting/participant-identity";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -65,6 +78,8 @@ interface Tile {
   identity: string;
   element: HTMLMediaElement;
   kind: Track.Kind;
+  /** WT-910: the Google Meet window of a bridge room, published under MEET_WINDOW_TRACK_NAME. */
+  meetWindow: boolean;
 }
 
 /** What overlays a video tile — everything here comes straight off the LiveKit `Room`. */
@@ -132,21 +147,29 @@ export default function EgressCompositePage() {
       });
     }
 
-    function attach(track: RemoteTrack, participant: RemoteParticipant) {
+    function attach(
+      track: RemoteTrack,
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) {
       // The filter, and the only line that matters. A bot's track is never subscribed, so its
       // audio never reaches the encoder.
       if (!isRecordableParticipant(participant.identity)) return;
       if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
 
+      const meetWindow =
+        track.kind === Track.Kind.Video && isMeetWindowTrack(publication.trackName);
       const element = track.attach();
       if (element instanceof HTMLVideoElement) {
         element.style.width = "100%";
         element.style.height = "100%";
-        element.style.objectFit = "cover";
+        // A face is cropped to fill its tile; a window is not. Cropping the Meet window would cut
+        // off whoever sits at the edge of its grid, so it is letterboxed instead.
+        element.style.objectFit = meetWindow ? "contain" : "cover";
       }
       setTiles((current) => [
         ...current,
-        { identity: participant.identity, element, kind: track.kind },
+        { identity: participant.identity, element, kind: track.kind, meetWindow },
       ]);
       refreshOverlay(participant);
     }
@@ -161,7 +184,9 @@ export default function EgressCompositePage() {
     }
 
     room
-      .on(RoomEvent.TrackSubscribed, (track, _pub, participant) => attach(track, participant))
+      .on(RoomEvent.TrackSubscribed, (track, publication, participant) =>
+        attach(track, publication, participant),
+      )
       .on(RoomEvent.TrackUnsubscribed, (track) => detach(track))
       // Mic/camera badges follow these two directly — no polling, no assumption that a mute
       // toggle also (un)subscribes a track.
@@ -231,6 +256,41 @@ export default function EgressCompositePage() {
     return Array.from(set);
   }, [overlays, tiles]);
 
+  // WT-910: the Meet window, when a bridge room publishes one, is the whole picture.
+  const meetWindowTile =
+    resolveEgressLayout(tiles) === "meet-window"
+      ? tiles.find((tile) => tile.kind === Track.Kind.Video && tile.meetWindow)
+      : undefined;
+
+  if (meetWindowTile && !error) {
+    return (
+      <main
+        ref={containerRef}
+        style={{
+          position: "relative",
+          width: "100vw",
+          height: "100vh",
+          margin: 0,
+          background: "#000",
+          overflow: "hidden",
+        }}
+      >
+        <MediaHolder tile={meetWindowTile} style={{ width: "100%", height: "100%" }} />
+        {/* Everyone's audio, mounted exactly as the grid mounts it: headless Chrome only records
+            what is in the DOM, and the layout must never decide who is heard. */}
+        {tiles
+          .filter((tile) => tile.kind === Track.Kind.Audio)
+          .map((tile, index) => (
+            <MediaHolder
+              key={`${tile.identity}-audio-${index}`}
+              tile={tile}
+              style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+            />
+          ))}
+      </main>
+    );
+  }
+
   return (
     <main
       ref={containerRef}
@@ -256,7 +316,10 @@ export default function EgressCompositePage() {
           micMuted: false,
           camMuted: true,
         };
-        const videoTile = tiles.find((t) => t.identity === identity && t.kind === Track.Kind.Video);
+        // Not the Meet window: it is a screen-share track, and it is never somebody's camera tile.
+        const videoTile = tiles.find(
+          (t) => t.identity === identity && t.kind === Track.Kind.Video && !t.meetWindow,
+        );
         const audioTile = tiles.find((t) => t.identity === identity && t.kind === Track.Kind.Audio);
 
         return (
@@ -270,6 +333,22 @@ export default function EgressCompositePage() {
       })}
     </main>
   );
+}
+
+/** Mounts one attached media element, and takes it back out when the tile goes. WT-910. */
+function MediaHolder({ tile, style }: { tile: Tile; style: CSSProperties }) {
+  const holderRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const holder = holderRef.current;
+    if (!holder) return;
+    holder.appendChild(tile.element);
+    return () => {
+      if (tile.element.parentElement === holder) holder.removeChild(tile.element);
+    };
+  }, [tile]);
+
+  return <div ref={holderRef} style={style} />;
 }
 
 /* The live meeting's own tokens (globals.css, light theme), copied as literals because this page has

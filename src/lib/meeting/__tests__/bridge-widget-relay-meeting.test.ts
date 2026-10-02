@@ -3,10 +3,13 @@ import assert from "node:assert/strict";
 
 import {
   BRIDGE_WIDGET_RELAY_VERSION,
+  acceptsMeetLeftAnswer,
   acceptsRejoin,
   acceptsSessionTakeOver,
   bridgeWidgetIsRoomHost,
+  bridgeWidgetMeetLeave,
   bridgeWidgetMeetingStatus,
+  bridgeWidgetMicChip,
   bridgeWidgetTranscriptPauseState,
   bridgeWidgetTranslationState,
   buildBridgeWidgetSnapshot,
@@ -334,4 +337,103 @@ test("meetCaptionsOff: built only when given, round-trips, an unreadable value i
   const junk = parsedSnapshot({ meetCaptionsOff: "yes", idleReaped: true });
   assert.equal("meetCaptionsOff" in junk, false);
   assert.equal(junk.idleReaped, true, "the rest of the snapshot survives");
+});
+
+// ── WT-912 / WT-913: the room follows the Meet call ─────────────────────────
+
+test("WT-912: the two new intents parse, and reject a body that is not a boolean", () => {
+  const micOn = parseBridgeWidgetMessage({ v, roomId: ROOM, type: "set-mic-enabled", enabled: true }, ROOM);
+  assert.equal(micOn.ok, true);
+  if (micOn.ok) {
+    assert.equal(isBridgeWidgetIntent(micOn.message), true);
+    assert.deepEqual(micOn.message, { v, roomId: ROOM, type: "set-mic-enabled", enabled: true });
+  }
+  const keep = parseBridgeWidgetMessage({ v, roomId: ROOM, type: "answer-meet-left", end: false }, ROOM);
+  assert.equal(keep.ok, true);
+  if (keep.ok) assert.deepEqual(keep.message, { v, roomId: ROOM, type: "answer-meet-left", end: false });
+
+  for (const junk of [
+    { v, roomId: ROOM, type: "set-mic-enabled" },
+    { v, roomId: ROOM, type: "set-mic-enabled", enabled: "yes" },
+    { v, roomId: ROOM, type: "answer-meet-left" },
+    { v, roomId: ROOM, type: "answer-meet-left", end: 1 },
+  ]) {
+    assert.deepEqual(parseBridgeWidgetMessage(junk, ROOM), { ok: false, reason: "malformed" });
+  }
+});
+
+test("WT-912: mic is built only when given, round-trips, and an unreadable one is dropped alone", () => {
+  assert.equal("mic" in buildBridgeWidgetSnapshot(baseFields, 1), false);
+  const built = buildBridgeWidgetSnapshot({ ...baseFields, mic: { enabled: false, control: "manual" } }, 1);
+  assert.deepEqual(built.mic, { enabled: false, control: "manual" });
+  assert.deepEqual(parsedSnapshot({ mic: { enabled: true, control: "meet" } }).mic, {
+    enabled: true,
+    control: "meet",
+  });
+  for (const junk of [{ enabled: true }, { enabled: "on", control: "meet" }, { enabled: true, control: "auto" }, "on"]) {
+    const snapshot = parsedSnapshot({ mic: junk, idleReaped: true });
+    assert.equal("mic" in snapshot, false);
+    assert.equal(snapshot.idleReaped, true, "the rest of the snapshot survives");
+  }
+});
+
+test("WT-912: the chip shows only while Meet's mute cannot be read and the meeting is connected", () => {
+  const chip = (over: Record<string, unknown>) => bridgeWidgetMicChip(connected(parsedSnapshot(over)));
+  // The fallback: an older desktop, macOS, a button the sensor never read.
+  assert.deepEqual(chip({ connection: "connected", mic: { enabled: false, control: "manual" } }), {
+    enabled: false,
+  });
+  // Turned on by hand: still there, so it can be turned off again.
+  assert.deepEqual(chip({ connection: "connected", mic: { enabled: true, control: "manual" } }), {
+    enabled: true,
+  });
+  // Following Meet normally: nothing, whether the mic is on or off.
+  assert.equal(chip({ connection: "connected", mic: { enabled: false, control: "meet" } }), null);
+  assert.equal(chip({ connection: "connected", mic: { enabled: true, control: "meet" } }), null);
+  // Not in the call (lobby, left): no mic to offer.
+  assert.equal(chip({ connection: "connected", mic: { enabled: false, control: "none" } }), null);
+  // Not connected: nothing could publish it.
+  assert.equal(chip({ connection: "connecting", mic: { enabled: false, control: "manual" } }), null);
+  assert.equal(chip({ connection: "disconnected", mic: { enabled: false, control: "manual" } }), null);
+  // A main window that predates the field, and no main window at all.
+  assert.equal(chip({ connection: "connected" }), null);
+  assert.equal(bridgeWidgetMicChip(initialBridgeWidgetRelayView(ROOM)), null);
+});
+
+test("WT-913: meetLeave round-trips both states, and an unreadable one is dropped alone", () => {
+  assert.equal("meetLeave" in buildBridgeWidgetSnapshot(baseFields, 1), false);
+  const counting = buildBridgeWidgetSnapshot(
+    { ...baseFields, meetLeave: { state: "countdown", endsAtMs: 31_000 } },
+    1_000,
+  );
+  assert.deepEqual(counting.meetLeave, { state: "countdown", endsAtMs: 31_000 });
+  assert.deepEqual(parsedSnapshot({ meetLeave: { state: "countdown", endsAtMs: 31_000 } }).meetLeave, {
+    state: "countdown",
+    endsAtMs: 31_000,
+  });
+  assert.deepEqual(parsedSnapshot({ meetLeave: { state: "kept" } }).meetLeave, { state: "kept" });
+  for (const junk of [{ state: "countdown" }, { state: "countdown", endsAtMs: "soon" }, { state: "ended" }, true]) {
+    const snapshot = parsedSnapshot({ meetLeave: junk, isRoomHost: true });
+    assert.equal("meetLeave" in snapshot, false);
+    assert.equal(snapshot.isRoomHost, true, "the rest of the snapshot survives");
+  }
+});
+
+test("WT-913: the popup asks only while a live main window says the user left", () => {
+  const view = connected(parsedSnapshot({ meetLeave: { state: "countdown", endsAtMs: 31_000 } }));
+  assert.deepEqual(bridgeWidgetMeetLeave(view), { state: "countdown", endsAtMs: 31_000 });
+  assert.equal(bridgeWidgetMeetLeave(connected(parsedSnapshot({}))), null);
+  // The main window went away: no prompt is left standing over nobody.
+  const gone = reduceBridgeWidgetRelayView(view, { roomId: ROOM, type: "host-gone" });
+  assert.equal(bridgeWidgetMeetLeave(gone), null);
+  // The room has ended: EndedView's turn.
+  const ended = connected(parsedSnapshot({ roomEnded: true, meetLeave: { state: "countdown", endsAtMs: 31_000 } }));
+  assert.equal(bridgeWidgetMeetLeave(ended), null);
+});
+
+test("WT-913: an answer is accepted only while a countdown is running", () => {
+  assert.equal(acceptsMeetLeftAnswer({ state: "countdown", endsAtMs: 31_000 }), true);
+  // Rejoined (cancelled), already answered, or kept open: an old "End now" must not end the room.
+  assert.equal(acceptsMeetLeftAnswer(undefined), false);
+  assert.equal(acceptsMeetLeftAnswer({ state: "kept" }), false);
 });

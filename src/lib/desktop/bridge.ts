@@ -65,6 +65,31 @@ export interface VirtualAudioStatus {
    * describing voice mode. See lib/meeting/bridge-audio-mode.
    */
   bridgeModes?: BridgeModeAvailability;
+  /**
+   * The endpoint labels to match in `enumerateDevices` for each leg, for the provider pair the
+   * desktop detected (desktop `feat/bridge-desktop-verdicts`). Absent on older builds and where
+   * `supported` is false; see lib/desktop/bridge-verdict for what replaces it then.
+   */
+  endpointLabels?: BridgeEndpointLabels;
+}
+
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `BridgeEndpointLabels`. Each label is matched
+ * case-insensitively as a substring of a device label; the desktop keeps them substring-safe.
+ */
+export interface BridgeEndpointLabels {
+  outboundProviderId: string;
+  /** Render endpoint WarpTalk plays the dub into (`audiooutput`). */
+  outboundSink: string;
+  /** Capture endpoint the user selects as Meet's microphone (`audioinput`). */
+  meetMicrophone: string;
+  inboundProviderId: string | null;
+  /** Capture endpoint WarpTalk records the far side from (`audioinput`). */
+  inboundCapture: string | null;
+  /** Render endpoint Meet's speaker is pointed at when the far side comes back on the device. */
+  meetSpeaker: string | null;
+  /** The bridge still runs without the inbound device (Windows: loopback or outbound-only). */
+  inboundOptional: boolean;
 }
 
 /** Mirrors warptalk-desktop src/shared/types.ts `BridgeModeAvailability`. */
@@ -98,6 +123,42 @@ export interface MeetMicState {
   endpoints?: string[];
   reason?: "no-active-session" | "other-virtual-device" | "probe-failed" | "unsupported-platform";
   at: number;
+}
+
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `MeetCallState` (`bridge:meet-call-state`): whether
+ * the user is IN the Google Meet call, read from Meet's own buttons by UI Automation.
+ *
+ *   lobby    the "Join now" screen: not joined yet.
+ *   in-call  in the call, in the main tab (`via:"tab"`) or Chrome's Picture-in-Picture window.
+ *   left     the "You left the meeting / Rejoin" page, or the Meet tab closed after being in call.
+ *            A page that was never joined can look the same, so a room is ended on it only after
+ *            an `in-call` (lib/meeting/bridge-meet-follow).
+ *   unknown  nothing readable: Meet is a background tab with no PiP, the read failed, the watch is
+ *            off, or the platform has no sensor (macOS). It NEVER means the call ended.
+ *
+ * `reason` is for logs only; nothing may branch on it.
+ */
+export interface MeetCallState {
+  phase: "lobby" | "in-call" | "left" | "unknown";
+  via: "tab" | "pip" | null;
+  meetCode: string | null;
+  reason: string;
+  atMs: number;
+}
+
+/**
+ * Mirrors warptalk-desktop `MeetSelfMic` (`bridge:meet-self-mic`): what Meet's own microphone
+ * button says. NOT `MeetMicState` above, which answers which DEVICE the browser records from and
+ * cannot see mute. `muted: null` is unknown; `stale: true` means `muted` is the last value read,
+ * not a current one, and must not be treated as the user pressing the button.
+ */
+export interface MeetSelfMic {
+  muted: boolean | null;
+  stale: boolean;
+  via: "class" | "name" | null;
+  meetCode: string | null;
+  atMs: number;
 }
 
 /** One Windows endpoint's shared-mode format, as the desktop app read it from the registry. */
@@ -152,6 +213,29 @@ export interface WindowsLoopbackCaptureRequest {
    * contract, which needs the cable. An older desktop ignores the field and keeps requiring it.
    */
   mode?: "voice" | "text-only";
+  /**
+   * Desktop capture-target: "meet-sighting" makes the desktop aim the capture at the browser process
+   * behind its own Google Meet sighting (read from the browser's URL, not a page-written title) and
+   * ignore `sourceId`/`targetProcessId`. Refused with R8 `meet-sighting-missing` /
+   * `meet-sighting-no-process` when it cannot; an older desktop ignores the field and refuses with
+   * R8 `target-process-required`. Either way the caller falls back to the picked window.
+   */
+  target?: "meet-sighting";
+  /** With `target: "meet-sighting"` only: the desktop stops the capture once Meet has been gone a while. */
+  stopWhenMeetGone?: boolean;
+}
+
+/** `audio:get-capture-state` (desktop capture-target): what the main process is capturing. */
+export interface DesktopCaptureState {
+  capturing: boolean;
+  mode: "voice" | "text-only" | null;
+  targetProcessId: number | null;
+  startedVia: "meet-sighting" | "source" | "process-id" | null;
+}
+
+/** `audio:capture-stopped`: the desktop stopped a capture on its own. */
+export interface DesktopCaptureStopped {
+  reason: string;
 }
 
 /**
@@ -181,6 +265,28 @@ export interface WindowsLoopbackPcmChunk {
  * web app is prepared to find missing at runtime — hence the per-method guards in the helpers
  * below rather than one "is desktop" boolean that vouches for the whole surface.
  */
+/**
+ * WT-910. What the desktop answers when asked to arm a capture of the Google Meet window for this
+ * room's recording. Mirrors warptalk-desktop's preload exactly.
+ *
+ * After `ok: true`, the NEXT `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`
+ * from the main window within 10 seconds resolves to the Meet window with no picker. Any
+ * `ok: false` means no window video; the recording still runs, audio-only.
+ */
+export type ArmMeetWindowCaptureResult =
+  | { ok: true; sourceName: string }
+  | {
+      ok: false;
+      reason:
+        | "meet-sighting-missing"
+        | "meet-window-not-found"
+        /** B18: Meet is in Chrome's Picture-in-Picture window, which is never recorded. Desktop #51. */
+        | "meet-not-on-tab"
+        | "unsupported-platform"
+        | "not-main-window"
+        | "consent-required";
+    };
+
 export interface DesktopBridge {
   getVersion?: () => Promise<string>;
   getPlatform?: () => string;
@@ -201,6 +307,12 @@ export interface DesktopBridge {
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
   startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
   stopAudioCapture?: () => Promise<void>;
+  /**
+   * Desktop capture-target. Its presence is also the capability check for `target: "meet-sighting"`
+   * and `stopWhenMeetGone`: a build that has these has all of them.
+   */
+  getCaptureState?: () => Promise<DesktopCaptureState>;
+  onAudioCaptureStopped?: (callback: (event: DesktopCaptureStopped) => void) => () => void;
   watchMeetPresence?: () => Promise<void>;
   unwatchMeetPresence?: () => Promise<void>;
   onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
@@ -222,6 +334,16 @@ export interface DesktopBridge {
   setMeetMicStream?: (enabled: boolean, options?: { browserPid?: number }) => Promise<void>;
   onMeetMicState?: (callback: (state: MeetMicState) => void) => () => void;
   /**
+   * In the Meet call or not, and Meet's own mute button (desktop meet-call-state.ts, Windows only).
+   * Both events run while the desktop watches Meet presence and fire only on change, so a late
+   * subscriber reads the getters once. Sent to the main window and the popup. Absent on older
+   * builds; on macOS the phase is always "unknown".
+   */
+  onMeetCallState?: (callback: (state: MeetCallState) => void) => () => void;
+  getMeetCallState?: () => Promise<MeetCallState>;
+  onMeetSelfMic?: (callback: (mic: MeetSelfMic) => void) => () => void;
+  getMeetSelfMic?: () => Promise<MeetSelfMic>;
+  /**
    * Desktop #44: speaker names from Google Meet's own captions, for the meeting being bridged
    * (Windows only, behind the desktop's `bridgeMeetCaptionNames` flag). `setMeetCaptionsStream`
    * starts/stops the read; only a call from the MAIN window subscribes it, and events go to the
@@ -232,6 +354,8 @@ export interface DesktopBridge {
   setMeetCaptionsStream?: (meetCode: string, enabled: boolean) => Promise<void>;
   /** Turns Meet's CC on in the capturer's Chrome window if it is off (never off). */
   ensureMeetCaptions?: (meetCode: string) => Promise<EnsureMeetCaptionsResult>;
+  /** WT-910: see ArmMeetWindowCaptureResult. Absent on desktop builds that predate it. */
+  armMeetWindowCapture?: (roomId: string) => Promise<ArmMeetWindowCaptureResult>;
 }
 
 /**
@@ -565,6 +689,65 @@ export function watchMeetMicState(
 }
 
 /**
+ * Whether this desktop build can say where the Meet call is (`onMeetCallState`, WT-911). False off
+ * the desktop shell and on older builds. WT-910 B18 keeps the pre-B18 recording rule without it.
+ */
+export function hasMeetCallSensor(): boolean {
+  const bridge = getDesktopBridge();
+  return typeof bridge?.onMeetCallState === "function";
+}
+
+/**
+ * Follow the Meet call itself: in the call or not, and Meet's mute button (WT-912 / WT-913).
+ *
+ * Nothing to arm: the desktop reads both for as long as it watches Meet presence, which the app
+ * shell does for the whole session (use-bridge-trigger). The events fire only on change, so the
+ * current values are read once on subscribe; a getter that answers after a newer event is dropped.
+ * Null off the desktop shell and on a build without the sensor: the caller then knows it will
+ * never be told, which is different from being told "unknown".
+ */
+export function watchMeetCall(handlers: {
+  onCallState: (state: MeetCallState) => void;
+  onSelfMic: (mic: MeetSelfMic) => void;
+}): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onMeetCallState || !bridge.onMeetSelfMic) return null;
+  let stopped = false;
+  let callAtMs = Number.NEGATIVE_INFINITY;
+  let micAtMs = Number.NEGATIVE_INFINITY;
+  const onCall = (state: MeetCallState) => {
+    if (stopped || !state || state.atMs < callAtMs) return;
+    callAtMs = state.atMs;
+    handlers.onCallState(state);
+  };
+  const onMic = (mic: MeetSelfMic) => {
+    if (stopped || !mic || mic.atMs < micAtMs) return;
+    micAtMs = mic.atMs;
+    handlers.onSelfMic(mic);
+  };
+  let stopCall: () => void;
+  let stopMic: () => void;
+  try {
+    stopCall = bridge.onMeetCallState(onCall);
+  } catch {
+    return null;
+  }
+  try {
+    stopMic = bridge.onMeetSelfMic(onMic);
+  } catch {
+    stopCall();
+    return null;
+  }
+  void bridge.getMeetCallState?.().then(onCall).catch(() => undefined);
+  void bridge.getMeetSelfMic?.().then(onMic).catch(() => undefined);
+  return () => {
+    stopped = true;
+    stopCall();
+    stopMic();
+  };
+}
+
+/**
  * W4a: bring the desktop main window to the front — the room's record after a bridge meeting
  * ended, the device wizard asked for from the popup. Returns false off the desktop shell and on a
  * build older than the method (desktop PR #43), where the window simply stays where it is.
@@ -593,6 +776,14 @@ export function reportDesktopSignedIn(signedIn: boolean): void {
   } catch {
     // Nothing to do: the shell keeps whatever it last knew.
   }
+}
+
+/**
+ * Whether the desktop can aim loopback capture at its own Meet sighting and stop it when Meet is
+ * gone. A per-method check, like every helper here: an installed build can lag the web app.
+ */
+export function supportsMeetSightingCapture(bridge: DesktopBridge | null = getDesktopBridge()): boolean {
+  return typeof bridge?.getCaptureState === "function" && typeof bridge.onAudioCaptureStopped === "function";
 }
 
 /**
@@ -663,4 +854,22 @@ export function streamMeetCaptions(
         }
       });
   };
+}
+
+/**
+ * WT-910. Asks the desktop to hand the Google Meet window to the next getDisplayMedia call, so a
+ * bridge recording can carry the call's picture (lib/meeting/bridge-recording).
+ *
+ * Returns null where there is nothing to ask — a browser tab, or a desktop build older than the
+ * method — and where the call itself threw. Null and every `ok: false` mean the same thing to the
+ * caller: record without the window, and say why in the log.
+ */
+export async function armMeetWindowCapture(roomId: string): Promise<ArmMeetWindowCaptureResult | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.armMeetWindowCapture) return null;
+  try {
+    return await bridge.armMeetWindowCapture(roomId);
+  } catch {
+    return null;
+  }
 }

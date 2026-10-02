@@ -124,5 +124,45 @@
     "originalTitle": "Xem lại bản ghi âm nguyên bản chưa lọc từ đệm. Chỉ thay đổi cách bạn xem.",
     "showCleanTitle": "Quay lại bản gọn đã lọc từ đệm. Chỉ thay đổi cách bạn xem.",
     "selfRepair": "Người nói đã tự sửa lời. Nguyên văn: \"{rawText}\""
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "Chưa trả lời",
+        "meaning": "Một câu hỏi đã được nêu nhưng chưa ai trả lời"
+      },
+      "term": {
+        "label": "Thuật ngữ",
+        "meaning": "Một thuật ngữ được dùng trong cuộc họp mà chưa được giải thích"
+      },
+      "action": {
+        "label": "Việc cần làm",
+        "meaning": "Một cam kết chưa có người phụ trách hoặc chưa có hạn chót"
+      },
+      "correction": {
+        "label": "Cần kiểm tra",
+        "meaning": "Điều này mâu thuẫn với một điều đã nói trước đó"
+      },
+      "fact": {
+        "label": "Tham chiếu",
+        "meaning": "Lấy từ một tài liệu đính kèm cuộc họp này"
+      },
+      "other": {
+        "label": "Gợi ý",
+        "meaning": "Được tự động nhận ra từ nội dung cuộc họp"
+      }
+    },
+    "actions": {
+      "askWarpBot": "Hỏi WarpBot",
+      "researchTerm": "Tra cứu thuật ngữ này",
+      "findTermInDocuments": "Tìm trong tài liệu",
+      "askQuestion": "Hỏi WarpBot câu này",
+      "findWhoKnows": "Tìm người có thể biết",
+      "checkInDocuments": "Đối chiếu với tài liệu",
+      "checkWhichIsRight": "Kiểm tra bên nào đúng",
+      "draftTask": "Soạn thành công việc"
+    },
+    "disclaimer": "Được tạo tự động — hãy kiểm tra trước khi dựa vào.",
+    "dismissAria": "Bỏ qua gợi ý"
   }
 }

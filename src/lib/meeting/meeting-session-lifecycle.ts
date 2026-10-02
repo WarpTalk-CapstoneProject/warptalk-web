@@ -148,18 +148,36 @@ export interface MeetSensorReading {
  *   the dub, both bridge legs and the loopback went with LiveKit while the popup still said
  *   translation was running. A bridge is alive while there is evidence its Meet call is:
  *
+ *   0. WT-912: the user is IN the Meet call, per the desktop's read of Meet's own buttons
+ *      (`meetCallPhase: "in-call"`, already matched to this room's Meet code by the caller). The
+ *      best evidence there is, and it holds the clock at `now`. It replaces a guess that failed in
+ *      production: with the user's microphone never published (the bug WT-912 fixes) there were no
+ *      transcript lines, sign 3 below never fired, and a live meeting was let go at 15 minutes.
+ *   0b. The far side is audible: the capture of Meet's audio is running and has heard sound within
+ *      the last few seconds (`farSideHeard`, lib/audio/bridge-inbound-health "listening"). A call
+ *      that can be heard is a call that is on, whatever the transcript has or has not written yet.
+ *      Not once the user has LEFT the call: what the browser plays after that is not the meeting.
  *   1. Meet is on screen, per the desktop sensor. That is the host in the call right now, so it
  *      holds the clock at `now` for as long as it lasts. Except when the sighting's code names a
  *      DIFFERENT Meet call from the room's — the same test the trigger uses. Otherwise a bridge room
  *      forgotten this morning would be kept alive, and billing, by an unrelated call this afternoon.
+ *      And except when the desktop is SURE the user is not in the call (`lobby`, `left`): the "You
+ *      left the meeting" page is still a Meet window, and counting it kept a room the user had
+ *      walked out of connected for as long as that tab stayed open. Only "unknown" (the desktop
+ *      cannot read Meet's buttons) and no phase at all (an older desktop) leave this sign standing.
  *   2. The moment the sensor lost sight of Meet. The budget runs from the call leaving the screen,
  *      not from whenever the main window was last touched.
  *   3. Speech in the meeting — the last transcript segment. This is what works where the sensor
  *      does not: a browser tab, macOS, an older desktop build, a Meet window the sensor cannot
  *      read. It is also the thing the pipeline bills for, so "somebody is talking" is the honest
- *      measure of a meeting worth keeping connected.
+ *      measure of a meeting worth keeping connected. No longer the only thing that works there:
+ *      see 0 and 0b.
  *
  * DELIBERATELY NOT A SIGN OF LIFE
+ *   - `left`, and an `unknown` with nothing audible. Neither says the call is on; the budget then
+ *     runs from the last sign that did.
+ *   - A capture that is merely RUNNING. It runs for as long as the room is open here, so counting
+ *     it would be counting the reaper's own patience. Only sound through it counts (0b).
  *   - Translation running. It is the state a forgotten bridge is left in — nobody presses Stop on
  *     the way out of a call — and the most expensive one. Counting it would switch the reaper off
  *     in exactly the case it exists for.
@@ -175,6 +193,8 @@ export function lastSignOfLife({
   meetSensor,
   roomMeetCode,
   lastSpeechAt,
+  meetCallPhase = null,
+  farSideHeard = false,
 }: {
   now: number;
   /** Input in this window. */
@@ -185,14 +205,28 @@ export function lastSignOfLife({
   roomMeetCode?: string;
   /** When the last transcript segment arrived, or null if none has. */
   lastSpeechAt: number | null;
+  /**
+   * WT-912: the desktop's last read of Meet's own buttons FOR THIS ROOM'S CALL (the caller drops a
+   * reading whose code names another call: lib/meeting/bridge-meet-follow `trustedMeetPhase`).
+   * Null when it has never said: an older desktop, a browser tab.
+   */
+  meetCallPhase?: "lobby" | "in-call" | "left" | "unknown" | null;
+  /** WT-912: the far side's capture is running and has just heard sound. */
+  farSideHeard?: boolean;
 }): number {
   if (!isBridgeRoom) return lastInteractionAt;
+
+  if (meetCallPhase === "in-call") return now;
+  if (farSideHeard && meetCallPhase !== "left") return now;
 
   // A code that is merely absent proves nothing either way — Meet's picture-in-picture window
   // carries none — so only a code that disagrees refuses the sighting.
   const differentCall =
     Boolean(meetSensor?.meetCode) && Boolean(roomMeetCode) && meetSensor?.meetCode !== roomMeetCode;
-  if (meetSensor?.meetWindowVisible && !differentCall) return now;
+  // The desktop is sure the user is not in the call: a Meet window on screen is then the join
+  // screen or the "You left" page, not the meeting.
+  const notInCall = meetCallPhase === "lobby" || meetCallPhase === "left";
+  if (meetSensor?.meetWindowVisible && !differentCall && !notInCall) return now;
 
   return Math.max(
     lastInteractionAt,

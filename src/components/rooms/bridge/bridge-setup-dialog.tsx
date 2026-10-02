@@ -47,6 +47,7 @@ export function BridgeSetupDialog({
   audioMode,
   loopbackFailed,
   browserCaptureAnswer,
+  inboundDeviceId,
   onFormatAligned,
 }: {
   open: boolean;
@@ -58,6 +59,8 @@ export function BridgeSetupDialog({
   /** WT-898: passed through so the wizard's Speakers line follows the meeting's inbound path. */
   loopbackFailed?: boolean;
   browserCaptureAnswer?: boolean | null;
+  /** Passed through: the wizard decides the inbound path from the meeting's own device id. */
+  inboundDeviceId?: string | null;
   /** Passed through: the meeting reopens its Hi-Fi capture after the wizard fixes the format. */
   onFormatAligned?: () => void;
 }) {
@@ -80,6 +83,7 @@ export function BridgeSetupDialog({
           audioMode={audioMode}
           loopbackFailed={loopbackFailed}
           browserCaptureAnswer={browserCaptureAnswer}
+          inboundDeviceId={inboundDeviceId}
           onFormatAligned={onFormatAligned}
           onReady={() => {
             onOpenChange(false);

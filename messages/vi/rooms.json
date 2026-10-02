@@ -255,8 +255,9 @@
     "empty": "Không tìm thấy cuộc họp nào. Hãy thử tên phòng, mã, hoặc một trong các thao tác nhanh ở trên."
   },
   "bridgeFarSide": {
-    "label": "Bên kia nói",
-    "ariaLabel": "Bên kia nói {language}. Đổi ngôn ngữ của phía bên kia cuộc gọi",
+    "name": "Ngôn ngữ phía bên kia cuộc gọi nói",
+    "ariaLabel": "Ngôn ngữ phía bên kia cuộc gọi nói: {language}. Đổi ngôn ngữ",
+    "ariaLabelNotSet": "Ngôn ngữ phía bên kia cuộc gọi nói: chưa chọn. Chọn ngôn ngữ",
     "hint": "Ngôn ngữ phía bên kia cuộc gọi đang nói",
     "connecting": "Đang kết nối tới WarpTalk…",
     "notSet": "Chọn",
@@ -308,6 +309,10 @@
     },
     "devices": {
       "hint": "Mở phần thiết lập thiết bị trong cửa sổ WarpTalk"
+    },
+    "languagePolicy": {
+      "loading": "Đang tải các ngôn ngữ của workspace…",
+      "error": "Không tải được các ngôn ngữ của workspace. Chỉ hiển thị ngôn ngữ của cuộc họp này."
     },
     "startStep": {
       "title": "Dịch cuộc gọi này",
@@ -363,6 +368,20 @@
       "title": "Hãy bật phụ đề (CC) trong Google Meet.",
       "body": "WarpTalk lấy tên người nói từ phụ đề của Meet, mà lúc này Meet chưa hiện phụ đề. Bấm CC trên thanh công cụ của Meet để các câu của phía bên kia hiện đúng tên người nói.",
       "dismiss": "Đóng"
+    },
+    "meetLeft": {
+      "title": "Bạn đã rời cuộc gọi Meet. Kết thúc phòng WarpTalk?",
+      "countdown": "Tự kết thúc sau {seconds} giây.",
+      "endNow": "Kết thúc ngay",
+      "keepOpen": "Giữ phòng mở",
+      "kept": "Phòng vẫn đang mở. WarpTalk không nghe cuộc gọi này; vào lại Google Meet để tiếp tục."
+    },
+    "micChip": {
+      "off": "Mic WarpTalk đang tắt",
+      "on": "Mic WarpTalk đang bật",
+      "turnOn": "Bật",
+      "turnOff": "Tắt",
+      "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay."
     }
   }
 }

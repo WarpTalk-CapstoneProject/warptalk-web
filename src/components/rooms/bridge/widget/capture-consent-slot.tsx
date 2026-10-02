@@ -26,11 +26,13 @@ import { BridgeCaptureConsentPanel } from "../bridge-capture-consent-panel";
 import { useBridgeWidget } from "./widget-context";
 
 export function CaptureConsentSlot() {
-  const { roomId } = useBridgeWidget();
+  // WT-910: the recording checkbox is for whoever may control the bridge (host or capturer) — the
+  // same people the server lets start a bridge recording.
+  const { roomId, canControl } = useBridgeWidget();
 
   return (
     <div className="shrink-0 border-b border-border px-3.5 py-1.5 empty:hidden empty:border-0 empty:p-0">
-      <BridgeCaptureConsentPanel roomId={roomId} />
+      <BridgeCaptureConsentPanel roomId={roomId} canRecord={canControl} />
     </div>
   );
 }

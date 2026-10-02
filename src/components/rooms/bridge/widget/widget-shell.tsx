@@ -3,7 +3,7 @@
 /**
  * The layout of the Meet widget. WT-525, Phase 2.
  *
- *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  Reconnecting… ┐
+ *   ┌ Transcript | WarpBot ···· ● Translating  [REC Stop]  [Paused]  Reconnecting… ┐
  *   ├ consent, only while the main window is asking ───────────────────────────────┤
  *   ├ "No sound from Meet yet", only before the main window has heard anything ───┤
  *   ├ credits stop / meeting error / "Disconnected · Rejoin meeting" (WT-901) ─────┤
@@ -45,7 +45,6 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { INBOUND_NO_SIGNAL_TITLE, inboundNoSignalHint } from "@/lib/audio/bridge-inbound-health";
-import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
@@ -56,7 +55,10 @@ import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetCaptionsNotice } from "./meet-captions-notice";
+import { MeetFollowNotices } from "./meet-follow-notices";
 import { MeetingNotices } from "./meeting-notices";
+import { RecordingChip } from "./recording-chip";
+import { RecordingStartNotice } from "./recording-start-notice";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { RelayCarryNotice } from "./relay-carry-notice";
@@ -87,6 +89,9 @@ export function WidgetShell() {
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-canvas text-ink">
+      {/* WT-912 / WT-913: "You left the Meet call" and the mic fallback chip. Above both screens
+          (the language step and the tabs), and nothing at all while the room simply follows Meet. */}
+      <MeetFollowNotices />
       {ended ? (
         <EndedView />
       ) : startStep ? (
@@ -101,6 +106,8 @@ export function WidgetShell() {
           {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
+          {/* WT-916: people in Meet cannot see the REC chip, so the host is asked to tell them. */}
+          <RecordingStartNotice />
           <CaptureTakeoverNotice />
           <InboundNoSignalNotice />
           <MeetingNotices />
@@ -129,6 +136,7 @@ export function WidgetShell() {
 function InboundNoSignalNotice() {
   const {
     relay: { view },
+    deviceLabels,
   } = useBridgeWidget();
   const noSignal = view.status === "connected" && view.snapshot?.inboundHealth === "no-signal";
   if (!noSignal) return null;
@@ -140,7 +148,7 @@ function InboundNoSignalNotice() {
       className="shrink-0 border-b border-border bg-status-waiting/15 px-3.5 py-2 text-[11px] leading-snug text-ink"
     >
       <span className="font-semibold">{INBOUND_NO_SIGNAL_TITLE}.</span>{" "}
-      {inboundNoSignalHint(currentBridgeDeviceLabels())}
+      {inboundNoSignalHint(deviceLabels)}
     </div>
   );
 }
@@ -206,6 +214,10 @@ function WidgetStatus() {
           <span className="truncate text-[12px] font-semibold">{status.label}</span>
         </span>
       ) : null}
+
+      {/* WT-910: a bridged call is recorded by default, and this is the only window a bridge user
+          sees — so the standing "being recorded" notice lives here, with Stop for host/capturer. */}
+      <RecordingChip />
 
       {transcriptPaused ? (
         // Text in ink, amber on the wash only: the amber token is too light to carry 10px text

@@ -255,8 +255,9 @@
     "empty": "ミーティングが見つかりません。ルーム名やコードを入力するか、上のクイックアクションをお試しください。"
   },
   "bridgeFarSide": {
-    "label": "相手の言語",
-    "ariaLabel": "相手は{language}を話しています。通話相手の言語を変更",
+    "name": "通話相手が話す言語",
+    "ariaLabel": "通話相手が話す言語: {language}。変更する",
+    "ariaLabelNotSet": "通話相手が話す言語: 未設定。選択する",
     "hint": "通話の相手側が話している言語",
     "connecting": "WarpTalk に接続しています…",
     "notSet": "選択",
@@ -308,6 +309,10 @@
     },
     "devices": {
       "hint": "WarpTalk ウィンドウでデバイス設定を開きます"
+    },
+    "languagePolicy": {
+      "loading": "ワークスペースの言語を読み込んでいます…",
+      "error": "ワークスペースの言語を読み込めませんでした。このミーティングの言語のみ表示しています。"
     },
     "startStep": {
       "title": "この通話を翻訳",
@@ -363,6 +368,20 @@
       "title": "Google Meet で字幕（CC）をオンにしてください。",
       "body": "WarpTalk は Meet の字幕から話者名を読み取りますが、現在 Meet に字幕が表示されていません。Meet のツールバーで CC をクリックすると、相手側の発言に話者名が表示されます。",
       "dismiss": "閉じる"
+    },
+    "meetLeft": {
+      "title": "Meet の通話から退出しました。WarpTalk のルームを終了しますか？",
+      "countdown": "{seconds} 秒後に自動で終了します。",
+      "endNow": "今すぐ終了",
+      "keepOpen": "開いたままにする",
+      "kept": "ルームは開いたままです。WarpTalk はこの通話を聞いていません。再開するには Google Meet に再参加してください。"
+    },
+    "micChip": {
+      "off": "WarpTalk のマイクはオフです",
+      "on": "WarpTalk のマイクはオンです",
+      "turnOn": "オンにする",
+      "turnOff": "オフにする",
+      "hint": "ここでは WarpTalk が Google Meet のミュートボタンを読み取れないため、マイクは手動で切り替えます。"
     }
   }
 }

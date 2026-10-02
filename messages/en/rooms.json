@@ -255,8 +255,9 @@
     "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
   },
   "bridgeFarSide": {
-    "label": "They speak",
-    "ariaLabel": "They speak {language}. Change what the other side of the call speaks",
+    "name": "Language the other side of the call speaks",
+    "ariaLabel": "Language the other side of the call speaks: {language}. Change it",
+    "ariaLabelNotSet": "Language the other side of the call speaks: not set. Choose it",
     "hint": "What the other side of the call speaks",
     "connecting": "Connecting to WarpTalk…",
     "notSet": "Set",
@@ -308,6 +309,10 @@
     },
     "devices": {
       "hint": "Opens device setup in the WarpTalk window"
+    },
+    "languagePolicy": {
+      "loading": "Loading your workspace's languages…",
+      "error": "Couldn't load your workspace's languages. Only this meeting's languages are shown."
     },
     "startStep": {
       "title": "Translate this call",
@@ -363,6 +368,20 @@
       "title": "Turn on captions (CC) in Google Meet.",
       "body": "WarpTalk reads speaker names from Meet's captions, and Meet isn't showing any right now. Click CC in Meet's toolbar so the other side's lines show who said them.",
       "dismiss": "Dismiss"
+    },
+    "meetLeft": {
+      "title": "You left the Meet call. End the WarpTalk room?",
+      "countdown": "Ends automatically in {seconds}s.",
+      "endNow": "End now",
+      "keepOpen": "Keep open",
+      "kept": "Room kept open. WarpTalk is not listening to this call; rejoin in Google Meet to resume."
+    },
+    "micChip": {
+      "off": "WarpTalk mic is off",
+      "on": "WarpTalk mic is on",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand."
     }
   }
 }
