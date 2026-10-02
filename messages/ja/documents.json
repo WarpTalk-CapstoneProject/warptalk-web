@@ -61,10 +61,10 @@
     "pendingApproval": "承認待ち",
     "revisionPending": "修正版を確認待ち",
     "administrative": "管理用",
-    "aiReady": "AI利用可能",
-    "aiFailed": "AI失敗",
-    "aiIngestionFailed": "AI取り込み失敗",
-    "processingAi": "AI処理中...",
+    "aiReady": "WarpBot ナレッジベースで利用可能",
+    "aiFailed": "WarpBot ナレッジベースに読み込めませんでした",
+    "aiIngestionFailed": "WarpBot ナレッジベースに読み込めませんでした",
+    "processingAi": "WarpBot ナレッジベースに読み込み中…",
     "aiContext": "AIコンテキスト"
   },
   "actions": {

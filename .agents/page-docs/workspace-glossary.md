@@ -62,7 +62,40 @@ terms of a fixed pair into whatever glossary was open (WT-522 again) and persist
   (no window.confirm). The chip moves to its new group, and the dialog's download / template tab
   follow the new pair.
 
+## "Loading into WarpBot knowledgebase…" (PO, 2026-10-02)
+
+Onboarding is "Schedule a Meeting → Upload Document → Set Up Glossary → Load Knowledge Into WarpBot",
+so both a glossary import and a document upload say whether WarpBot has the content yet. Real state
+only — no timers. Copy (en, fixed by the PO): **Loading into WarpBot knowledgebase…** /
+**Ready in WarpBot knowledgebase** / **Couldn't load into WarpBot knowledgebase** (vi/ja translated).
+
+- **Glossary.** Terms were already sent to WarpBot's index (TranscriptService publishes each
+  added/imported/edited term to `embedding:index_requests`, source_type `glossary_term`), but nobody
+  read the results. The backend now counts them per glossary and serves
+  `GET /glossaries/{id}/warpbot-status` → `{ state: idle|loading|stalled|failed|ready, requested,
+  indexed, failed, blocked, pending, updatedAt }` (any workspace member).
+  - `src/lib/glossary/warpbot-status.ts` (pure, tested): `warpBotStatusView` (idle/unknown → show
+    nothing; `stalled` → the "Couldn't load" state with the unanswered count),
+    `warpBotAnnouncement(previous, next)` (one notice when a visible load settles, or when new
+    requests had already settled before the first poll; never on first read), `isWarpBotLoading`.
+  - `useGlossaryWarpBotStatus` (`src/hooks/use-workspace.ts`) polls every 2 s only while `loading`;
+    import / add / edit / delete term mutations invalidate it.
+  - `GlossaryWarpBotStatusChip` (`src/components/glossary/glossary-warpbot-status.tsx`) sits beside
+    the glossary name and pair editor (every member sees it) and raises a sonner toast on completion
+    or failure. `keyed` by glossary id so the previous status never crosses glossaries.
+  - `idle` (nothing sent in the last 7 days, e.g. a glossary imported before this shipped) shows no
+    chip: the page makes no claim it cannot back.
+- **Documents.** The status already existed (`ingestionStatus` pending/processing/completed/failed,
+  3 s polling in `useWorkspaceDocuments`, `DocumentStatusChanged` over SignalR). Only the wording
+  changed: `documents.status.{processingAi,aiReady,aiFailed,aiIngestionFailed}` in en/vi/ja, and the
+  toast in `src/components/providers/realtime-notification-provider.tsx` ("Ready in WarpBot
+  knowledgebase"; new error toast on the `DocumentFailed` event; one toast per document via toast id).
+
 ## Files Affected (WT-880 follow-up)
+
+- WarpBot status: `src/lib/glossary/warpbot-status.ts` (+ test),
+  `src/components/glossary/glossary-warpbot-status.tsx`, `messages/{en,vi,ja}/{glossary,documents}.json`,
+  `src/components/providers/realtime-notification-provider.tsx`
 
 - `src/app/(app)/[workspaceSlug]/glossary/page.tsx`
 - `src/components/glossary/{glossary-import-dialog,import-template-preview,workspace-import-template-view,glossary-pair-editor}.tsx`
