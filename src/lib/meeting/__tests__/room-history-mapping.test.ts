@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   clampPage,
   formatMeetingDuration,
+  isRecordFinalizing,
   parsePageParam,
+  RECORD_FINALIZING_WINDOW_MS,
   resolveArtifactStatus,
   resolveHistoryStatus,
   resolveMeetingDurationSeconds,
@@ -500,4 +502,58 @@ test("a summary that exists survives an empty transcript", () => {
     }),
     "ready",
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WT-930 — the desktop app shows "finalizing" on a just-ended room until its record exists.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ENDED_AT = "2026-10-02T12:08:00.000Z";
+const ENDED_MS = Date.parse(ENDED_AT);
+
+test("isRecordFinalizing: a meeting that just ended with no record yet is finalizing", () => {
+  const now = ENDED_MS + 10_000;
+  // Still loading the history list, not in it yet, and in it without the transcript.
+  assert.equal(isRecordFinalizing({ status: "ended", endedAt: ENDED_AT, record: undefined }, now), true);
+  assert.equal(isRecordFinalizing({ status: "ended", endedAt: ENDED_AT, record: null }, now), true);
+  assert.equal(
+    isRecordFinalizing(
+      { status: "ended", endedAt: ENDED_AT, record: { artifacts: [{ type: "recording" }] } },
+      now,
+    ),
+    true,
+  );
+});
+
+test("isRecordFinalizing: the transcript artifact means the finalizer is done, summary or not", () => {
+  const now = ENDED_MS + 10_000;
+  // The finalizer saves both in one transaction, and only the transcript when no record is kept.
+  assert.equal(
+    isRecordFinalizing(
+      { status: "ended", endedAt: ENDED_AT, record: { artifacts: [{ type: "transcript_export" }] } },
+      now,
+    ),
+    false,
+  );
+});
+
+test("isRecordFinalizing: past the window the record page shows what it has", () => {
+  assert.equal(
+    isRecordFinalizing(
+      { status: "ended", endedAt: ENDED_AT, record: null },
+      ENDED_MS + RECORD_FINALIZING_WINDOW_MS + 1,
+    ),
+    false,
+  );
+  // A client clock behind the server's: the end looks like it is in the future, and is fresh.
+  assert.equal(isRecordFinalizing({ status: "ended", endedAt: ENDED_AT, record: null }, ENDED_MS - 5_000), true);
+});
+
+test("isRecordFinalizing: only an ended room with a known end time can be finalizing", () => {
+  const now = ENDED_MS + 10_000;
+  assert.equal(isRecordFinalizing({ status: "active", endedAt: ENDED_AT, record: null }, now), false);
+  assert.equal(isRecordFinalizing({ status: "cancelled", endedAt: ENDED_AT, record: null }, now), false);
+  assert.equal(isRecordFinalizing({ status: "ended", endedAt: null, record: null }, now), false);
+  // The wire casing the backend sends.
+  assert.equal(isRecordFinalizing({ status: "ENDED", endedAt: ENDED_AT, record: null }, now), true);
 });
