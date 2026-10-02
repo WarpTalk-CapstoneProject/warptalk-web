@@ -136,6 +136,8 @@
     "billingPolicyHeading": "課金ポリシー",
     "pricingEconomicsHeading": "価格エコノミクス",
     "pricingEconomicsSubnote": "プラン検証と料金カードの利益率算出が参照するのと同じ設定です。プランと価格ページからもアクセスできます。顧客向け価格は Stripe が管理するため、クレジット単価とクレジットあたりの最低価格はここでは編集できません。変更はマイグレーションで行います。",
+    "meetingCreditRatesHeading": "会議のクレジット単価",
+    "meetingCreditRatesSubnote": "会議で1秒あたりに消費されるクレジット。変更は次の課金から適用され、精算済みの利用分は当時の単価のままです。",
     "languageCatalogHeading": "言語カタログ",
     "voiceConsentHeading": "音声クローン同意",
     "voiceConsentCount": "{count} 件の決定を記録済み",
@@ -155,6 +157,28 @@
       "saveSuccessToast": "課金ポリシーを保存しました。",
       "saveErrorToast": "課金ポリシーを保存できませんでした。",
       "errorWhat": "課金ポリシー"
+    },
+    "meetingCreditRates": {
+      "labels": {
+        "TRANSLATION": "翻訳",
+        "AUDIO_DUBBING_STANDARD": "吹き替え(標準音声)",
+        "AUDIO_DUBBING_VOICE_CLONE": "吹き替え(クローン音声)"
+      },
+      "hints": {
+        "TRANSLATION": "元の発話1秒あたり、翻訳先の言語ごとに課金されます。",
+        "AUDIO_DUBBING_STANDARD": "カタログ音声で生成した音声1秒あたり。",
+        "AUDIO_DUBBING_VOICE_CLONE": "話者のクローン音声で生成した音声1秒あたり。"
+      },
+      "unit": "クレジット / 秒",
+      "perMinute": "≈ 1分あたり {credits} クレジット",
+      "ariaLabel": "{label}、1秒あたりのクレジット",
+      "missing": "有効なレートカードがありません",
+      "invalid": "0 より大きく {max} 以下、小数点以下6桁までで入力してください。",
+      "save": "保存",
+      "saving": "保存中…",
+      "saveSuccessToast": "{label} は1秒あたり {price} クレジットになりました。",
+      "saveErrorToast": "単価を保存できませんでした。",
+      "errorWhat": "会議のクレジット単価"
     },
     "pricingEconomics": {
       "errorWhat": "価格設定",

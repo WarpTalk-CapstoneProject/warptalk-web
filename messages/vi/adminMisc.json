@@ -291,6 +291,7 @@
       "rate_card_upserted": "Công bố biểu giá",
       "rate_card_deactivated": "Ngừng biểu giá",
       "rate_card_provider_cost_set": "Đặt chi phí nhà cung cấp",
+      "rate_card_credit_price_set": "Đổi mức trừ credit của cuộc họp",
       "pricing_config_updated": "Đổi thiết lập định giá",
       "billing_policy_updated": "Đổi chính sách thanh toán",
       "subscription_contract_created": "Tạo hợp đồng",

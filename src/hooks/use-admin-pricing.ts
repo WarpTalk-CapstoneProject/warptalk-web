@@ -7,6 +7,7 @@ import type { RateCardPreviewRequest } from "@/types/admin-contract-billing";
 import type {
   BillingPolicyDto,
   PlanRequest,
+  SetRateCardCreditPriceRequest,
   SetRateCardProviderCostRequest,
   UpdatePricingConfigRequest,
   UpsertUsageRateCardRequest,
@@ -122,6 +123,15 @@ export function useSetAdminRateCardProviderCost() {
   return useMutation({
     mutationFn: ({ id, request }: { id: string; request: SetRateCardProviderCostRequest }) =>
       adminPricingService.setRateCardProviderCost(id, request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetAdminRateCardCreditPrice() {
+  const invalidate = useInvalidateAdminPricing();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: SetRateCardCreditPriceRequest }) =>
+      adminPricingService.setRateCardCreditPrice(id, request),
     onSuccess: invalidate,
   });
 }

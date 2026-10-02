@@ -629,6 +629,8 @@ export const API = {
     rateCardPreview: "/usages/rate-card/preview",
     /** PUT. Records the provider cost of a credit-unit (CRD) card; its credit price stays. */
     rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
+    /** PUT. Sets what a credit-unit (CRD) card charges per unit; supersedes the card. */
+    rateCardCreditPrice: (id: string) => `/usages/rate-card/${id}/credit-price`,
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform announcements. Read-only in the UI; sending is its own release. */

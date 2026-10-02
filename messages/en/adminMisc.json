@@ -291,6 +291,7 @@
       "rate_card_upserted": "Rate card published",
       "rate_card_deactivated": "Rate card retired",
       "rate_card_provider_cost_set": "Provider cost set",
+      "rate_card_credit_price_set": "Meeting credit rate changed",
       "pricing_config_updated": "Pricing settings changed",
       "billing_policy_updated": "Billing policy changed",
       "subscription_contract_created": "Contract created",
