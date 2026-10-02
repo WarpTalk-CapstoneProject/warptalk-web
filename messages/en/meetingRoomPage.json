@@ -83,6 +83,10 @@
       "collapse": "Collapse the record",
       "expand": "Expand the record"
     },
+    "finalizing": {
+      "title": "Finishing up this meeting",
+      "body": "Saving the transcript and writing the summary. This page opens the record by itself in a moment."
+    },
     "writingUp": {
       "title": "Still writing this up",
       "body": "The transcript and the AI summary are produced after a meeting ends — usually within a minute. This page updates on its own."

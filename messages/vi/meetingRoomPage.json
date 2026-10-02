@@ -83,6 +83,10 @@
       "collapse": "Thu gọn hồ sơ",
       "expand": "Mở rộng hồ sơ"
     },
+    "finalizing": {
+      "title": "Đang hoàn tất cuộc họp",
+      "body": "Đang lưu bản ghi và soạn tóm tắt. Trang sẽ tự mở hồ sơ cuộc họp trong giây lát."
+    },
     "writingUp": {
       "title": "Đang soạn hồ sơ này",
       "body": "Bản ghi và tóm tắt AI được tạo ra sau khi cuộc họp kết thúc — thường trong vòng một phút. Trang này sẽ tự cập nhật."
