@@ -354,14 +354,14 @@
     },
     "meetMic": {
       "textOnCable": {
-        "title": "Meet không nghe thấy bạn.",
-        "body": "Meet đang dùng cáp ảo làm micro, nhưng ở chế độ này không có gì được phát vào đó. Hãy chọn micro thật của bạn trong cài đặt âm thanh của Meet.",
-        "action": "Dùng giọng đã dịch"
+        "title": "Người trong cuộc gọi Meet không nghe thấy bạn.",
+        "body": "Micro của Meet đang là “CABLE Output”, nơi chỉ có giọng đã dịch của bạn, trong khi WarpTalk đang gửi giọng thật. Trong Meet, bấm mũi tên cạnh nút micro rồi chọn micro thật của bạn.",
+        "action": "Gửi giọng đã dịch thay vào"
       },
       "voiceOnReal": {
-        "title": "Meet đang nghe bạn chưa qua dịch.",
-        "body": "Meet đang dùng micro thật của bạn. Hãy chọn “CABLE Output (VB-Audio Virtual Cable)” làm micro của Meet, hoặc chuyển sang giọng thật.",
-        "action": "Dùng giọng thật của tôi"
+        "title": "Người trong cuộc gọi Meet đang nghe bạn chưa qua dịch.",
+        "body": "WarpTalk đang gửi giọng đã dịch của bạn qua “CABLE Output”, nhưng micro của Meet lại là micro thật. Trong Meet, bấm mũi tên cạnh nút micro rồi chọn “CABLE Output (VB-Audio Virtual Cable)”.",
+        "action": "Gửi giọng thật thay vào"
       }
     },
     "meetCaptions": {
