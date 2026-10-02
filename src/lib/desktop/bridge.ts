@@ -59,6 +59,45 @@ export interface VirtualAudioStatus {
   hifiFormat?: HiFiCableFormats;
   /** The desktop app's own verdict on `hifiFormat`. Absent on older builds; see hifi-format.ts. */
   hifiFormatMismatch?: boolean;
+  /**
+   * Which bridge modes this machine can run now (desktop #45). Absent on desktop builds that
+   * predate text-only mode, which means only voice mode exists. `bridgeMode` above keeps
+   * describing voice mode. See lib/meeting/bridge-audio-mode.
+   */
+  bridgeModes?: BridgeModeAvailability;
+}
+
+/** Mirrors warptalk-desktop src/shared/types.ts `BridgeModeAvailability`. */
+export interface BridgeModeAvailability {
+  textOnly: {
+    /** Loopback works with no cable: Meet keeps the real mic and speakers. */
+    possible: boolean;
+    reason?: "unsupported-platform" | "process-loopback-unsupported" | "loopback-runtime-not-wired";
+  };
+  voice: {
+    /** VB-CABLE is installed and the far side can come back. */
+    possible: boolean;
+    cableInstalled: boolean;
+    inbound?: "hifi-cable" | "process-loopback" | "virtual-device";
+    reason?: "unsupported-platform" | "cable-missing" | "inbound-unavailable";
+  };
+}
+
+/**
+ * Which capture endpoint the meeting BROWSER records from, read from Windows Core Audio sessions
+ * (desktop #45). Per browser, not per tab.
+ *   cable      only "CABLE Output (VB-Audio Virtual Cable)"
+ *   real       only physical microphones
+ *   ambiguous  the cable AND another endpoint
+ *   unknown    nothing recording (Meet muted, not capturing), or the probe failed
+ */
+export interface MeetMicState {
+  state: "cable" | "real" | "unknown" | "ambiguous";
+  browserPid?: number;
+  endpoint?: string;
+  endpoints?: string[];
+  reason?: "no-active-session" | "other-virtual-device" | "probe-failed" | "unsupported-platform";
+  at: number;
 }
 
 /** One Windows endpoint's shared-mode format, as the desktop app read it from the registry. */
@@ -107,6 +146,12 @@ export interface WindowsLoopbackCaptureRequest {
   consentGranted?: boolean;
   /** Must be true. `false` is the OS's EXCLUDE mode, which captures everything BUT the target. */
   includeTargetProcessTree?: boolean;
+  /**
+   * Desktop #45. "text-only": Meet uses the real mic and speakers and nothing is dubbed, so the
+   * desktop skips its VB-CABLE gate (B2) — every other gate still holds. Absent or "voice": the old
+   * contract, which needs the cable. An older desktop ignores the field and keeps requiring it.
+   */
+  mode?: "voice" | "text-only";
 }
 
 /**
@@ -169,6 +214,13 @@ export interface DesktopBridge {
    * fire-and-forget on the desktop side.
    */
   reportSignedIn?: (signedIn: boolean) => void;
+  /**
+   * Desktop #45: start (true) or stop (false) the read of which microphone the Meet browser records
+   * from; answers arrive on `onMeetMicState`. `browserPid` defaults to the browser the loopback
+   * capture targets. Read-only. Absent on older builds.
+   */
+  setMeetMicStream?: (enabled: boolean, options?: { browserPid?: number }) => Promise<void>;
+  onMeetMicState?: (callback: (state: MeetMicState) => void) => () => void;
 }
 
 /**
@@ -419,6 +471,31 @@ export function onWindowsLoopbackPcmChunk(
   } catch {
     return null;
   }
+}
+
+/**
+ * Text-only bridge mode: subscribe to which microphone the Meet browser records from (desktop #45).
+ *
+ * Arming and disarming go together, like `watchMeetPresence`: the desktop polls Core Audio only while
+ * some window is subscribed, so the returned function stops it for this window and unsubscribes.
+ * Null off the desktop shell and on a build without the detector — the caller then shows nothing.
+ */
+export function watchMeetMicState(
+  onState: (state: MeetMicState) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.setMeetMicStream || !bridge.onMeetMicState) return null;
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = bridge.onMeetMicState(onState);
+  } catch {
+    return null;
+  }
+  void bridge.setMeetMicStream(true).catch(() => undefined);
+  return () => {
+    unsubscribe();
+    void bridge.setMeetMicStream?.(false).catch(() => undefined);
+  };
 }
 
 /**

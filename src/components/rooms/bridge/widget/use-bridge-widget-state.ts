@@ -65,12 +65,20 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
-import { activateBridgeRoom } from "@/lib/desktop/bridge";
+import {
+  activateBridgeRoom,
+  readVirtualAudioStatus,
+  watchMeetMicState,
+  type MeetMicState,
+  type VirtualAudioStatus,
+} from "@/lib/desktop/bridge";
+import { bridgeModeSupport } from "@/lib/meeting/bridge-audio-mode";
 import { canControlBridge, resolveBridgeRole } from "@/lib/meeting/bridge-capturer";
 import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import {
+  bridgeWidgetAudioMode,
   bridgeWidgetBridgeRole,
   bridgeWidgetIsRoomHost,
   bridgeWidgetMeetingStatus,
@@ -78,6 +86,7 @@ import {
   bridgeWidgetTranscriptPauseState,
   bridgeWidgetTranslationState,
   canOfferCaptureTakeover,
+  canRelayAudioMode,
 } from "@/lib/meeting/bridge-widget-relay";
 import { resolveTranscriptPause } from "@/lib/meeting/transcript-pause";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -488,6 +497,55 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     return resolveListenLanguage({ participant: myParticipant?.listenLanguage }, room, speak);
   }, [readerLanguagePick, room, participantsQuery.isFetched, myParticipant]);
 
+  // ── text-only bridge ─────────────────────────────────────────────────────
+
+  /**
+   * How Meet hears this user: the main window's answer, else the one-shot participant row. The row
+   * is read once, so it can lag a switch made since — the main window's answer, when there is one,
+   * is the one that counts.
+   */
+  const audioMode = bridgeWidgetAudioMode(
+    relayView,
+    myParticipant ? (myParticipant.isBridgeTextOnly === true ? "text" : "voice") : null,
+  );
+  const canSwitchAudioMode = canRelayAudioMode(relayView);
+
+  /**
+   * The desktop's device report, for which modes this machine can run. Read on open and again when
+   * the popup regains focus — the user may have installed VB-CABLE meanwhile.
+   */
+  const [virtualAudioStatus, setVirtualAudioStatus] = useState<VirtualAudioStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const read = () => {
+      void readVirtualAudioStatus().then((status) => {
+        if (!cancelled) setVirtualAudioStatus(status);
+      });
+    };
+    read();
+    window.addEventListener("focus", read);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", read);
+    };
+  }, []);
+  const modeSupport = useMemo(() => bridgeModeSupport(virtualAudioStatus), [virtualAudioStatus]);
+
+  /**
+   * Which microphone Meet records from (desktop #45). Watched only while a main window runs this
+   * room and the meeting is not over: the desktop polls Core Audio for as long as anyone listens.
+   */
+  const [meetMicState, setMeetMicState] = useState<MeetMicState["state"] | null>(null);
+  const watchMeetMic = relayView.status === "connected" && !ended;
+  useEffect(() => {
+    if (!watchMeetMic) return;
+    const stop = watchMeetMicState((state) => setMeetMicState(state.state));
+    return () => {
+      stop?.();
+      setMeetMicState(null);
+    };
+  }, [watchMeetMic]);
+
   // Memoized because it is a context value: a fresh object every render would re-render every
   // slot whenever anything above the provider did, including the WarpBot composer mid-keystroke.
   return useMemo(
@@ -524,6 +582,10 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       farSideLanguage,
       setFarSideLanguage,
       ended,
+      audioMode,
+      canSwitchAudioMode,
+      modeSupport,
+      meetMic: meetMicState,
     }),
     [
       roomId,
@@ -558,6 +620,10 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       farSideLanguage,
       setFarSideLanguage,
       ended,
+      audioMode,
+      canSwitchAudioMode,
+      modeSupport,
+      meetMicState,
     ],
   );
 }

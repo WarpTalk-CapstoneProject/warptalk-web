@@ -327,6 +327,37 @@
       "done": "This device now captures the call's audio.",
       "failed": "Could not capture the call's audio on this device.",
       "failedDescription": "Someone may still be capturing it. Check the WarpTalk window for details."
+    },
+    "audioMode": {
+      "label": "How Meet hears you",
+      "settingsRow": "Meet hears you",
+      "voice": "Translated voice",
+      "text": "Your own voice",
+      "voiceHint": "Meet hears WarpTalk's translation of you through VB-CABLE.",
+      "textHint": "Meet hears your real microphone. You get the transcript and translations as text.",
+      "unknown": "Connecting to WarpTalk…",
+      "voiceNeedsCable": "Translated voice needs VB-CABLE. Install it from Device settings.",
+      "textUnavailable": "Your own voice isn't available on this computer.",
+      "lockedHint": "You can switch back to translated voice after translation stops.",
+      "headphones": "Use headphones: your speakers play the call, and your microphone can pick it up.",
+      "nowText": "Meet now hears your own voice.",
+      "nowVoice": "Meet now hears your translated voice.",
+      "locked": "Translated voice is locked while translation runs.",
+      "lockedDescription": "Stop translation first, then switch back.",
+      "failed": "Could not change how Meet hears you.",
+      "failedDescription": "Check the WarpTalk window for details."
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "Meet can't hear you.",
+        "body": "Meet is using the virtual cable as your microphone, but in this mode nothing is played into it. Pick your real microphone in Meet's audio settings.",
+        "action": "Use translated voice"
+      },
+      "voiceOnReal": {
+        "title": "Meet hears you untranslated.",
+        "body": "Meet is using your real microphone. Choose “CABLE Output (VB-Audio Virtual Cable)” as Meet's microphone, or switch to your own voice.",
+        "action": "Use my own voice"
+      }
     }
   }
 }

@@ -176,8 +176,20 @@ import {
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
   showDesktopMainWindow,
+  type VirtualAudioStatus,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
+import {
+  bridgeAudioModeChange,
+  bridgeAudioModeFailure,
+  bridgeLoopbackCaptureMode,
+  bridgeModeSupport,
+  bridgeOutboundSinkDeviceId,
+  missingCableIsAProblem,
+  resolveBridgeAudioMode,
+  type BridgeAudioMode,
+} from "@/lib/meeting/bridge-audio-mode";
+import { useBridgeAudioModeStore } from "@/stores/bridge-audio-mode-store";
 import { bridgeConsentSurface, isCompactConsentAsk } from "@/lib/meeting/bridge-capture-consent-relay";
 import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import {
@@ -414,10 +426,18 @@ export function PersistentMeetingSession({
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
   /**
-   * Windows only: the far side can be captured from the browser itself. WT-898: this is now the
-   * FIRST choice, cable or no cable — see selectBridgeInboundSource.
+   * The desktop's device report, as last read. Windows only: the far side can be captured from the
+   * browser itself — WT-898: the FIRST choice, cable or no cable (see selectBridgeInboundSource).
+   * Kept whole rather than as the one boolean it used to be, because whether loopback can run now
+   * depends on this user's bridge audio mode too (text-only needs no cable; bridgeInboundLoopback
+   * below), and that mode is only known further down.
    */
-  const [bridgeInboundLoopback, setBridgeInboundLoopback] = useState(false);
+  const [bridgeVirtualAudioStatus, setBridgeVirtualAudioStatus] = useState<VirtualAudioStatus | null>(null);
+  /**
+   * Text-only bridge: read inside the device effect below, which is written once per room and must
+   * not re-run (and re-toast) every time the mode is learned. Set from `bridgeAudioMode` further down.
+   */
+  const bridgeAudioModeRef = useRef<BridgeAudioMode>("voice");
   /**
    * WT-898. A loopback start that failed in this room, so the inbound leg runs on the Hi-Fi Cable
    * instead of staying silent. Stamped with the room and the inbound device of the moment (see
@@ -537,13 +557,23 @@ export function PersistentMeetingSession({
         // answer is what hid the loopback path from exactly the users best placed to run it.
         const status = await readVirtualAudioStatus();
         if (cancelled || run !== latest) return;
-        setBridgeInboundLoopback(canCaptureBrowserLoopback(status));
+        setBridgeVirtualAudioStatus(status);
         resolvedOnce = true;
         // Empty labels mean the browser has not been given microphone permission yet, so every
         // device reads as absent. That is not a missing cable, and telling the user it is sends
         // them to reinstall a driver that is already there. The permission listener below
         // resolves again once they allow it, and the real answer is given then.
         if (needsPermission) return;
+        // Text-only bridge: no cable is needed in text mode, nor on a machine that starts in it
+        // because it has none (claimAudioModeFor). "Cannot reach Google Meet" would be untrue there.
+        if (
+          !missingCableIsAProblem({
+            audioMode: bridgeAudioModeRef.current,
+            support: bridgeModeSupport(status),
+          })
+        ) {
+          return;
+        }
         // Once per room, the toast as well as the wizard. The resolve now reruns on every
         // devicechange, and a toast that fired on each of those would repeat every time a headset
         // was plugged in for as long as the cable is missing.
@@ -1003,6 +1033,34 @@ export function PersistentMeetingSession({
     participants: apiParticipants,
   });
   const bridgeAudioOwner = isBridgeRoom && bridgeLease.bridgeRole === "capturer";
+  /**
+   * Text-only bridge (PO, 2026-10-01): how Meet hears THIS user — "voice" (VB-CABLE carries their
+   * dub) or "text" (Meet keeps their real mic; nothing is played into a cable). What the server last
+   * told this window (the claim, a switch) first, then this user's participant row, then voice
+   * (lib/meeting/bridge-audio-mode). Per participant: a member has a mode as well as the capturer.
+   */
+  const knownBridgeAudioMode = useBridgeAudioModeStore((state) => state.byRoomId[roomId] ?? null);
+  const setKnownBridgeAudioMode = useBridgeAudioModeStore((state) => state.setMode);
+  const bridgeSelfUserId = user?.id;
+  const myBridgeParticipant = useMemo(
+    () =>
+      bridgeSelfUserId
+        ? apiParticipants.find((participant) => sameUserId(participant.userId, bridgeSelfUserId))
+        : undefined,
+    [apiParticipants, bridgeSelfUserId],
+  );
+  const bridgeAudioMode: BridgeAudioMode = resolveBridgeAudioMode({
+    known: knownBridgeAudioMode,
+    isBridgeTextOnly: myBridgeParticipant?.isBridgeTextOnly,
+  });
+  useEffect(() => {
+    bridgeAudioModeRef.current = bridgeAudioMode;
+  }, [bridgeAudioMode]);
+  // Whether the far side can be captured from the browser right now. Text mode asks the desktop for
+  // a "text-only" capture, which needs no cable (desktop #45); voice mode keeps the cable condition.
+  const bridgeInboundLoopback = canCaptureBrowserLoopback(bridgeVirtualAudioStatus, {
+    textOnly: bridgeAudioMode === "text",
+  });
   const loopbackFallbackActive = isLoopbackFallbackActive(bridgeLoopbackFallback, {
     roomId,
     inboundDeviceId: bridgeInboundDeviceId,
@@ -1274,6 +1332,10 @@ export function PersistentMeetingSession({
             inbound = await openLoopbackInboundSource({
               consentGranted: true,
               sourceId: selectedLoopbackSourceId ?? undefined,
+              // Text-only bridge: the desktop skips its VB-CABLE gate only when asked for
+              // "text-only". Read from the ref, not a dependency: a voice → text switch must not
+              // tear down a working capture just to restart it under a different name.
+              mode: bridgeLoopbackCaptureMode(bridgeAudioModeRef.current),
             });
           } catch (loopbackError) {
             if (cancelled) return;
@@ -2892,6 +2954,43 @@ export function PersistentMeetingSession({
   // transcript pause, rejoin after the idle reaper, the device wizard, the room's record — so the
   // host check, the toasts and the wizard are the native ones.
   const bridgeCanControl = canControlBridge({ isRoomHost, bridgeRole: bridgeLease.bridgeRole });
+
+  /**
+   * Text-only bridge: the popup's mode chooser lands here. Any participant, for their OWN row — no
+   * host check, as on the server. The one-way rule is checked before the server is asked (never
+   * text → voice while translation runs); the server still has the last word, and a 409
+   * BRIDGE_AUDIO_MODE_LOCKED there means this user IS text-only, whatever this window thought.
+   */
+  const bridgeAudioModeInFlightRef = useRef(false);
+  const handleSetBridgeAudioMode = useCallback(
+    async (next: BridgeAudioMode) => {
+      if (!isBridgeRoom || bridgeAudioModeInFlightRef.current) return;
+      const change = bridgeAudioModeChange({
+        current: bridgeAudioMode,
+        next,
+        translationActive: translationStarted,
+      });
+      if (change !== "allowed") return;
+      bridgeAudioModeInFlightRef.current = true;
+      try {
+        const result = await translationRoomService.setBridgeAudioMode(roomId, next);
+        setKnownBridgeAudioMode(roomId, result.mode);
+      } catch (error) {
+        if (bridgeAudioModeFailure({ status: getErrorStatus(error), code: apiErrorCode(error) }) === "locked") {
+          setKnownBridgeAudioMode(roomId, "text");
+        } else {
+          toast.error("Could not change how Google Meet hears you.", {
+            description: getErrorMessage(error, "Try again in a moment."),
+          });
+        }
+      } finally {
+        bridgeAudioModeInFlightRef.current = false;
+        void refetchParticipants();
+      }
+    },
+    [isBridgeRoom, bridgeAudioMode, translationStarted, roomId, setKnownBridgeAudioMode, refetchParticipants],
+  );
+
   const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
     enabled: isBridgeRoom,
@@ -2943,6 +3042,9 @@ export function PersistentMeetingSession({
     bridgeRole: isBridgeRoom ? bridgeLease.bridgeRole : undefined,
     bridgeCapturerAway: bridgeLease.capturerAway ?? undefined,
     onTakeOverCapture: isBridgeRoom ? () => void bridgeLease.takeOver() : undefined,
+    // Text-only bridge: how Meet hears this user, and the popup's switch (any participant).
+    audioMode: isBridgeRoom ? bridgeAudioMode : undefined,
+    onSetAudioMode: isBridgeRoom ? (mode) => void handleSetBridgeAudioMode(mode) : undefined,
     // web #646: another login of this account took the meeting over, and this window stopped
     // connecting. The main window's own "Use this device" card went with the in-window bridge
     // widget (WT-868), so the popup carries the offer, and this is the native take-over behind it.
@@ -4259,7 +4361,14 @@ export function PersistentMeetingSession({
           // their microphone. Anyone else in the room playing dubs or their own mic into a device of
           // the same name would be feeding a cable no Meet of theirs is listening to — or, on a
           // shared machine, a second voice into the same call.
-          bridgeOutboundDeviceId={isBridgeRoom && isHost ? bridgeOutboundDeviceId : null}
+          // Text-only bridge: NOTHING goes into the cable in text mode — Meet hears the real mic
+          // (bridgeOutboundSinkDeviceId). Null also drops the user's own dub from their ears.
+          bridgeOutboundDeviceId={bridgeOutboundSinkDeviceId({
+            isBridgeRoom,
+            isHost,
+            audioMode: bridgeAudioMode,
+            deviceId: bridgeOutboundDeviceId,
+          })}
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
         />
@@ -4850,6 +4959,7 @@ export function PersistentMeetingSession({
           open={bridgeSetupOpen}
           onOpenChange={setBridgeSetupOpen}
           translationStarted={translationStarted}
+          audioMode={bridgeAudioMode}
           loopbackFailed={loopbackFallbackActive}
           browserCaptureAnswer={browserCaptureAnswerForRoom}
           onFormatAligned={() => {
