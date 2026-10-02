@@ -52,6 +52,8 @@ interface BridgeConsentHostView {
   inboundPath: BridgeInboundPath | null;
   inboundReason: BridgeInboundReason | null;
   inboundHealth: InboundHealth | null;
+  /** WT-910: a cable could carry the far side, so "Stop listening" would not silence it. */
+  cableAvailable?: boolean;
 }
 
 export interface UseBridgeConsentHostOptions extends BridgeConsentHostView {
@@ -68,7 +70,8 @@ export interface UseBridgeConsentHostOptions extends BridgeConsentHostView {
    */
   meetOnScreen: boolean;
   onSelectSource: (sourceId: string) => void;
-  onAnswer: (granted: boolean) => void;
+  /** WT-910: `record` is the popup's recording checkbox, present only on an answer to the ask. */
+  onAnswer: (granted: boolean, record?: boolean) => void;
   onReask: () => void;
 }
 
@@ -94,6 +97,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
     inboundPath,
     inboundReason,
     inboundHealth,
+    cableAvailable,
   } = options;
 
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -106,6 +110,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
     inboundPath,
     inboundReason,
     inboundHealth,
+    cableAvailable,
   });
   const callbacksRef = useRef({
     onSelectSource: options.onSelectSource,
@@ -140,6 +145,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
       inboundPath,
       inboundReason,
       inboundHealth,
+      cableAvailable,
     };
     callbacksRef.current = {
       onSelectSource: options.onSelectSource,
@@ -185,7 +191,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
           callbacksRef.current.onSelectSource(action.sourceId);
           return;
         case "answer":
-          callbacksRef.current.onAnswer(action.granted);
+          callbacksRef.current.onAnswer(action.granted, action.record);
           return;
         case "reask":
           callbacksRef.current.onReask();
@@ -226,6 +232,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
       inboundPath,
       inboundReason,
       inboundHealth,
+      cableAvailable,
     });
   }, [
     enabled,
@@ -237,6 +244,7 @@ export function useBridgeConsentHost(options: UseBridgeConsentHostOptions): bool
     inboundPath,
     inboundReason,
     inboundHealth,
+    cableAvailable,
   ]);
 
   /**

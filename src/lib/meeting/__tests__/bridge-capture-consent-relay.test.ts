@@ -383,21 +383,126 @@ test("granted shows what is being listened to, or no name if it is no longer lis
   assert.deepEqual(bridgeConsentPromptView(snapshot({ consent: "granted" }), ROOM), {
     kind: "listening",
     sourceName: "Google Chrome",
+    cableAvailable: false,
   });
   assert.deepEqual(
     bridgeConsentPromptView(snapshot({ consent: "granted", selectedSourceId: "firefox" }), ROOM),
-    { kind: "listening", sourceName: null },
+    { kind: "listening", sourceName: null, cableAvailable: false },
   );
   assert.deepEqual(
     bridgeConsentPromptView(snapshot({ consent: "granted", selectedSourceId: null }), ROOM),
-    { kind: "listening", sourceName: null },
+    { kind: "listening", sourceName: null, cableAvailable: false },
   );
 });
 
 test("declined renders the declined view", () => {
   assert.deepEqual(bridgeConsentPromptView(snapshot({ consent: "declined" }), ROOM), {
     kind: "declined",
+    viaCable: false,
   });
+});
+
+// --- WT-910: what "Stop listening" costs, and the recording choice ---------------------------
+
+test("the views say whether a cable still carries the far side", () => {
+  // Listening, with a cable installed: stopping falls back to it.
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "granted", cableAvailable: true }), ROOM),
+    { kind: "listening", sourceName: "Google Chrome", cableAvailable: true },
+  );
+  // Declined with the leg on the device: the other side IS still heard.
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "declined", inboundPath: "device" }), ROOM),
+    { kind: "declined", viaCable: true },
+  );
+  // The hint alone is not the path: a cable that is installed but not carrying is not "via cable".
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "declined", cableAvailable: true }), ROOM),
+    { kind: "declined", viaCable: false },
+  );
+});
+
+test("cableAvailable is an optional hint: kept when boolean, dropped otherwise", () => {
+  const built = buildBridgeConsentSnapshot({
+    roomId: ROOM,
+    consent: "granted",
+    sources: [],
+    selectedSourceId: null,
+    loadingSources: false,
+    cableAvailable: true,
+  });
+  assert.equal(built.cableAvailable, true);
+  const parsed = parseBridgeConsentMessage(built);
+  assert.ok(parsed && parsed.kind === "snapshot");
+  assert.equal(parsed.cableAvailable, true);
+
+  const mistyped = parseBridgeConsentMessage({ ...built, cableAvailable: "yes" });
+  assert.ok(mistyped && mistyped.kind === "snapshot");
+  assert.equal("cableAvailable" in mistyped, false);
+
+  const unsaid = buildBridgeConsentSnapshot({
+    roomId: ROOM,
+    consent: "granted",
+    sources: [],
+    selectedSourceId: null,
+    loadingSources: false,
+  });
+  assert.equal("cableAvailable" in unsaid, false);
+});
+
+test("a decide may carry the recording choice; a mistyped one rejects the message", () => {
+  assert.deepEqual(
+    parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true, record: false }),
+    { v: 1, kind: "decide", roomId: ROOM, granted: true, record: false },
+  );
+  // An older popup says nothing about recording, and nothing is invented for it.
+  assert.deepEqual(parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true }), {
+    v: 1,
+    kind: "decide",
+    roomId: ROOM,
+    granted: true,
+  });
+  for (const record of ["true", 1, null]) {
+    assert.equal(
+      parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true, record }),
+      null,
+    );
+  }
+});
+
+test("the recording choice rides only on an answer to an open question", () => {
+  const withRecord = (granted: boolean, record: boolean): BridgeConsentIntent => ({
+    v: 1,
+    kind: "decide",
+    roomId: ROOM,
+    granted,
+    record,
+  });
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(true, true), host()), {
+    type: "answer",
+    granted: true,
+    record: true,
+  });
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(true, false), host()), {
+    type: "answer",
+    granted: true,
+    record: false,
+  });
+  // Declining the browser still answers the checkbox: a cable may carry the call instead.
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(false, true), host()), {
+    type: "answer",
+    granted: false,
+    record: true,
+  });
+  // "Stop listening" is not the ask: the stop is honoured, the choice is dropped.
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(false, true), host({ consent: "granted" })), {
+    type: "answer",
+    granted: false,
+  });
+  // A grant main would ignore anyway carries nothing either.
+  assert.equal(resolveBridgeConsentIntent(withRecord(true, true), host({ consent: "declined" })), null);
+  // No choice sent, none reported.
+  assert.deepEqual(resolveBridgeConsentIntent(grant, host()), { type: "answer", granted: true });
 });
 
 // --- shouldAcknowledgeConsentSnapshot --------------------------------------------------------

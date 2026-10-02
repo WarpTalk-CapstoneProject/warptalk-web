@@ -255,8 +255,9 @@
     "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
   },
   "bridgeFarSide": {
-    "label": "They speak",
-    "ariaLabel": "They speak {language}. Change what the other side of the call speaks",
+    "name": "Language the other side of the call speaks",
+    "ariaLabel": "Language the other side of the call speaks: {language}. Change it",
+    "ariaLabelNotSet": "Language the other side of the call speaks: not set. Choose it",
     "hint": "What the other side of the call speaks",
     "connecting": "Connecting to WarpTalk…",
     "notSet": "Set",
@@ -308,6 +309,10 @@
     },
     "devices": {
       "hint": "Opens device setup in the WarpTalk window"
+    },
+    "languagePolicy": {
+      "loading": "Loading your workspace's languages…",
+      "error": "Couldn't load your workspace's languages. Only this meeting's languages are shown."
     },
     "startStep": {
       "title": "Translate this call",

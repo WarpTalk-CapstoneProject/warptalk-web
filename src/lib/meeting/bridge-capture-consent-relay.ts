@@ -96,6 +96,13 @@ export interface BridgeConsentSnapshot {
   inboundPath?: BridgeInboundPath;
   inboundReason?: BridgeInboundReason;
   inboundHealth?: InboundHealth;
+  /**
+   * WT-910, optional for the same reason: a virtual cable is installed that the far side can come
+   * in through. It decides what "Stop listening" is said to cost — with a cable the other side is
+   * still heard, without one it is not. Absent means "not said", and the popup words it for the
+   * case where nothing else carries the call.
+   */
+  cableAvailable?: boolean;
 }
 
 /** Popup to main: what the host asked for. A request, never a statement of state. */
@@ -105,7 +112,12 @@ export type BridgeConsentIntent =
   /** The popup is visibly showing the "required" prompt, so main need not raise it. */
   | { v: 1; kind: "ack"; roomId: string }
   | { v: 1; kind: "select-source"; roomId: string; sourceId: string }
-  | { v: 1; kind: "decide"; roomId: string; granted: boolean }
+  /**
+   * WT-910: `record` is the "Record this meeting" checkbox beside the question (default on,
+   * opt-out; see bridge-recording.ts). Optional: an older popup, the compact ask's "Keep cable"
+   * and "Stop listening" send none, and none means "nothing was said about recording".
+   */
+  | { v: 1; kind: "decide"; roomId: string; granted: boolean; record?: boolean }
   /** Declined, and now the host wants to be asked again. */
   | { v: 1; kind: "reconsider"; roomId: string };
 
@@ -210,6 +222,7 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
         if (inboundPath) snapshot.inboundPath = inboundPath;
         if (inboundReason) snapshot.inboundReason = inboundReason;
         if (inboundHealth) snapshot.inboundHealth = inboundHealth;
+        if (typeof data.cableAvailable === "boolean") snapshot.cableAvailable = data.cableAvailable;
         return snapshot;
       }
       case "hello":
@@ -221,7 +234,11 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
         return { v, kind: "select-source", roomId, sourceId: data.sourceId };
       case "decide":
         if (typeof data.granted !== "boolean") return null;
-        return { v, kind: "decide", roomId, granted: data.granted };
+        // Unlike the snapshot's hints, a mistyped `record` rejects the message: it is an
+        // instruction with a consequence (a recording starts), not a hint about how to draw.
+        if (data.record === undefined) return { v, kind: "decide", roomId, granted: data.granted };
+        if (typeof data.record !== "boolean") return null;
+        return { v, kind: "decide", roomId, granted: data.granted, record: data.record };
       case "reconsider":
         return { v, kind: "reconsider", roomId };
       default:
@@ -250,6 +267,7 @@ export function buildBridgeConsentSnapshot(input: {
   inboundPath?: BridgeInboundPath | null;
   inboundReason?: BridgeInboundReason | null;
   inboundHealth?: InboundHealth | null;
+  cableAvailable?: boolean | null;
 }): BridgeConsentSnapshot {
   const snapshot: BridgeConsentSnapshot = {
     v: BRIDGE_CONSENT_PROTOCOL_VERSION,
@@ -263,6 +281,7 @@ export function buildBridgeConsentSnapshot(input: {
   if (input.inboundPath) snapshot.inboundPath = input.inboundPath;
   if (input.inboundReason) snapshot.inboundReason = input.inboundReason;
   if (input.inboundHealth) snapshot.inboundHealth = input.inboundHealth;
+  if (typeof input.cableAvailable === "boolean") snapshot.cableAvailable = input.cableAvailable;
   return snapshot;
 }
 
@@ -296,7 +315,8 @@ export type BridgeConsentAction =
   | { type: "republish" }
   | { type: "acknowledged" }
   | { type: "select-source"; sourceId: string }
-  | { type: "answer"; granted: boolean }
+  /** `record` only where the checkbox was on screen: an answer to an open question. */
+  | { type: "answer"; granted: boolean; record?: boolean }
   | { type: "reask" };
 
 /**
@@ -313,6 +333,9 @@ export type BridgeConsentAction =
  * - a refusal is honoured while asked (decline) and while listening (revoke, "Stop listening"),
  *   because stopping a capture must never need a precondition; it is ignored where there is
  *   nothing to refuse;
+ * - the recording choice (WT-910) rides only on an answer to an OPEN question, grant or decline,
+ *   because that is the only state in which the checkbox is on screen. A "Stop listening" carrying
+ *   one is a stale or forged press, and the choice is dropped rather than the stop refused;
  * - asking again only makes sense after a decline.
  */
 export function resolveBridgeConsentIntent(
@@ -336,17 +359,25 @@ export function resolveBridgeConsentIntent(
         if (host.consent !== "required") return null;
         if (host.selectedSourceId === null) return null;
         if (!host.sourceIds.includes(host.selectedSourceId)) return null;
-        return { type: "answer", granted: true };
+        return withRecordChoice({ type: "answer", granted: true }, message.record);
       }
-      if (host.consent === "required" || host.consent === "granted") {
-        return { type: "answer", granted: false };
+      if (host.consent === "required") {
+        return withRecordChoice({ type: "answer", granted: false }, message.record);
       }
+      if (host.consent === "granted") return { type: "answer", granted: false };
       return null;
     case "reconsider":
       return host.consent === "declined" ? { type: "reask" } : null;
     default:
       return null;
   }
+}
+
+function withRecordChoice(
+  action: { type: "answer"; granted: boolean },
+  record: boolean | undefined,
+): BridgeConsentAction {
+  return record === undefined ? action : { ...action, record };
 }
 
 /** Where the consent question is shown, if anywhere. */
@@ -404,8 +435,14 @@ export type BridgeConsentPromptView =
    * connection without any of them changing the answer, so a surface that renders this as
    * "listening right now" will say so while nothing is being captured.
    */
-  | { kind: "listening"; sourceName: string | null }
-  | { kind: "declined" };
+  | {
+      kind: "listening";
+      sourceName: string | null;
+      /** WT-910: a cable would still carry the far side after "Stop listening". */
+      cableAvailable: boolean;
+    }
+  /** `viaCable`: the far side is coming in through the cable instead, so it IS still heard. */
+  | { kind: "declined"; viaCable: boolean };
 
 /**
  * snapshot null, for another room, or "not-required" → hidden. required → ask (canConfirm =
@@ -437,9 +474,15 @@ export function bridgeConsentPromptView(
         compact: isCompactConsentAsk(snapshot),
       };
     case "granted":
-      return { kind: "listening", sourceName: selected?.name ?? null };
+      return {
+        kind: "listening",
+        sourceName: selected?.name ?? null,
+        cableAvailable: snapshot.cableAvailable === true,
+      };
     case "declined":
-      return { kind: "declined" };
+      // The path main is actually on, not the hint: "declined" with the leg on the device is the
+      // cable carrying Meet (WT-900), and saying "not translated" there would be false.
+      return { kind: "declined", viaCable: snapshot.inboundPath === "device" };
     default:
       return { kind: "hidden" };
   }
