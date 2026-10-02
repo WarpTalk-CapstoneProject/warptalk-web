@@ -120,10 +120,9 @@ export interface UpdatePricingConfigRequest {
    * Never sent by the admin UI (WT-690): Stripe owns pricing, and omitted means the backend keeps
    * the stored value, which billing still reads to price top-ups.
    */
-  creditValueVnd?: number;
+  creditValueUsd?: number;
   /** Never sent by the admin UI (WT-690); omitted keeps the stored plan/contract price floor. */
-  minimumPricePerCreditVnd?: number;
-  minimumContractPriceVnd: number;
+  minimumPricePerCreditUsd?: number;
   minimumContractPriceUsd: number;
   salesUsageWeight: number;
   salesMembersWeight: number;
@@ -141,10 +140,12 @@ export interface UpdatePricingConfigRequest {
 
 /** Platform-wide pricing knobs. Editable through `PUT /usages/pricing-config`. */
 export interface PricingConfigDto {
+  /** VND per US dollar. Not a pricing input: it reads VND amounts (old payments, VND sales) in USD. */
   fxRateUsdVnd: number;
-  creditValueVnd: number;
-  minimumPricePerCreditVnd: number;
-  minimumContractPriceVnd: number;
+  /** USD one credit is worth. */
+  creditValueUsd: number;
+  /** The lowest USD per credit a USD plan or contract may be sold at. */
+  minimumPricePerCreditUsd: number;
   minimumContractPriceUsd: number;
   salesUsageWeight: number;
   salesMembersWeight: number;
@@ -157,7 +158,7 @@ export interface PricingConfigDto {
   resolverKey: string;
   /**
    * USD per Cartesia credit (`cartesia_usd_per_credit`). Insights price dubbing as measured Cartesia
-   * credits × this × `fxRateUsdVnd`. Default 0.0000392, the Startup plan's $49 / 1,250,000 credits.
+   * credits × this. Default 0.0000392, the Startup plan's $49 / 1,250,000 credits.
    * Absent from a backend that predates the Cartesia usage sync.
    */
   cartesiaUsdPerCredit?: number;

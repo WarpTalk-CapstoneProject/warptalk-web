@@ -37,7 +37,7 @@ import type { PlanDto } from "@/types/billing";
 export const PLAN_BILLING_CYCLE = "monthly";
 
 /** The currencies `ValidatePlanRequest` accepts. Anything else is refused before it reaches a row. */
-export const PLAN_CURRENCIES = ["VND", "USD"] as const;
+export const PLAN_CURRENCIES = ["USD", "VND"] as const;
 
 export type PlanCurrency = (typeof PLAN_CURRENCIES)[number];
 
@@ -134,7 +134,7 @@ export function validatePlanRequest(request: PlanRequest): string | null {
   if (tier.length > 20) return "Tier must be 20 characters or fewer.";
 
   if (!PLAN_CURRENCIES.includes(request.currency as PlanCurrency))
-    return "Currency must be VND or USD.";
+    return "Currency must be USD or VND.";
 
   if (request.billingCycle !== PLAN_BILLING_CYCLE)
     return "Billing cycle must be monthly — the update endpoint accepts no other value.";

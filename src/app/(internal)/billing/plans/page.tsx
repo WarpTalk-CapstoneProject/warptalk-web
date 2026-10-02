@@ -101,13 +101,13 @@ const initialFormState: PlanFormState = {
   slug: "",
   tier: "Startup",
   price: 0,
-  currency: "VND",
+  currency: "USD",
   billingCycle: "monthly",
   creditsPerCycle: 1000,
   // Mirrors SubscriptionConstants.PlanDefaults, so a plan created here starts where the server
   // would have put it rather than somewhere this file invented.
   overageCapCredits: 0,
-  overagePricePerCredit: 4,
+  overagePricePerCredit: 0.0001520913,
   lowBalanceThresholdCredits: 0,
   rolloverCapCredits: 0,
   invoiceTermsDays: 15,
@@ -209,7 +209,7 @@ export default function AdminPlansPage() {
       slug: plan.slug,
       tier: plan.tier || "Startup",
       price: plan.price,
-      currency: plan.currency || "VND",
+      currency: plan.currency || "USD",
       billingCycle: plan.billingCycle || "monthly",
       creditsPerCycle: plan.creditsPerCycle || 0,
       // Read as stored and written back unchanged — see the note on PlanFormState.
@@ -583,8 +583,8 @@ export default function AdminPlansPage() {
                     <SelectValue placeholder={t("dialog.fields.currencyPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="VND">VND</SelectItem>
                     <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="VND">VND</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

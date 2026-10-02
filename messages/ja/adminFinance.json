@@ -98,7 +98,7 @@
     "record": "経費を記録",
     "emptyTitle": "この期間の経費はありません",
     "emptyDescription": "記録するか CSV をインポートしてください。",
-    "unconverted": "{count, plural, other {# 件の USD 経費}}はその日のレートがなく、VND 合計に含まれていません。"
+    "unconverted": "{count, plural, other {# 件の VND 経費}}はその日のレートがなく、USD 合計に含まれていません。"
   },
   "tiles": {
     "total": "合計",
@@ -111,9 +111,9 @@
     "invalid": "{month} の予算が有効な金額ではありません。",
     "saved": "{count, plural, other {# 件の予算を保存しました}}",
     "saveFailed": "予算を保存できませんでした。",
-    "alertOver": "{category} は {month} の予算を超過：{budget} VND 中 {actual}（{percent}%）。",
-    "alertNear": "{category} は {month} の予算の {percent}% を使用：{budget} VND 中 {actual}。",
-    "hint": "月次予算（VND）。各セルの下は支出額と予算比です。",
+    "alertOver": "{category} は {month} の予算を超過：{budget} USD 中 {actual}（{percent}%）。",
+    "alertNear": "{category} は {month} の予算の {percent}% を使用：{budget} USD 中 {actual}。",
+    "hint": "月次予算（USD）。各セルの下は支出額と予算比です。",
     "unsaved": "{count, plural, other {未保存のセル # 件}}",
     "discard": "破棄",
     "save": "予算を保存",
@@ -199,7 +199,7 @@
     "validating": "検証中…",
     "validRows": "{count, plural, other {# 行が準備完了}}",
     "invalidRows": "{count, plural, other {# 行にエラー}}",
-    "totalVnd": "合計 {total}",
+    "totalUsd": "合計 {total}",
     "unknownColumns": "無視された列：{columns}",
     "cancel": "キャンセル",
     "importAll": "{count, plural, other {# 件の経費}}をインポート",

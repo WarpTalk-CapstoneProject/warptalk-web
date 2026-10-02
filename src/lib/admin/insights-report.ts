@@ -354,13 +354,12 @@ export function buildInsightsReport(
     if (pnl?.providers.length) {
       tables.push({
         title: "AI provider cost",
-        columns: ["Provider", "Credits", "Cost (USD)", "Cost (VND)", "Cost covered"],
-        numericColumns: [1, 2, 3, 4],
+        columns: ["Provider", "Credits", "Cost (USD)", "Cost covered"],
+        numericColumns: [1, 2, 3],
         rows: pnl.providers.map((p) => [
           providerLabel(p.provider),
           formatCount(p.credits),
           p.costUsd.toFixed(2),
-          formatInsightValue(p.costVnd, "money"),
           `${p.coveragePercent.toFixed(0)}%`,
         ]),
       });

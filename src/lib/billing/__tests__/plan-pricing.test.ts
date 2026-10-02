@@ -100,3 +100,9 @@ test("a multiplier that is not a discount claims no saving", () => {
   assert.equal(yearlySavingPercent(0), 0);
   assert.equal(yearlySavingPercent(Number.NaN), 0);
 });
+
+test("a purchase with no plan (a credit top-up) is denominated in USD, the accounting currency", async () => {
+  const { checkoutCurrency } = await import("../plan-pricing.ts");
+  assert.equal(checkoutCurrency(null), "usd");
+  assert.equal(checkoutCurrency(undefined), "usd");
+});

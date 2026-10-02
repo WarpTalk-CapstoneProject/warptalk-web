@@ -66,7 +66,7 @@ const ACCESSORS = {
   },
   sort: {
     date: (row: OperatingExpenseDto) => row.expenseDate,
-    amount: (row: OperatingExpenseDto) => row.amountVnd,
+    amount: (row: OperatingExpenseDto) => row.amountUsd,
     vendor: (row: OperatingExpenseDto) => row.vendor.toLowerCase(),
   },
 };
@@ -93,7 +93,7 @@ export function ExpenseList({ range, canManage }: { range: { from: string; to: s
   const rows = useMemo(() => applyClientListState(items, list.state, ACCESSORS, matchesSearch), [items, list.state]);
   const tags = useMemo(() => Array.from(new Set(items.flatMap((item) => item.tags))).sort(), [items]);
   const totals = expenses.data?.totals;
-  const shownVnd = rows.reduce((sum, row) => sum + (row.amountVnd ?? 0), 0);
+  const shownUsd = rows.reduce((sum, row) => sum + (row.amountUsd ?? 0), 0);
 
   const filters: AdminFilterField[] = [
     {
@@ -189,9 +189,9 @@ export function ExpenseList({ range, canManage }: { range: { from: string; to: s
       cell: (row) => (
         <div className="text-right tabular-nums">
           <p className="text-[13px] text-ink">{formatMoney(row.amount, row.currency)}</p>
-          {row.currency !== "VND" ? (
+          {row.currency !== "USD" ? (
             <p className="text-[11px] text-ink-subtle" title={row.fxRate ? t("list.fxTitle", { rate: row.fxRate, date: row.fxRateDate ?? "" }) : undefined}>
-              {row.amountVnd === null ? t("list.noRate") : formatMoney(row.amountVnd, "VND")}
+              {row.amountUsd === null ? t("list.noRate") : formatMoney(row.amountUsd, "USD")}
             </p>
           ) : null}
         </div>
@@ -265,10 +265,10 @@ export function ExpenseList({ range, canManage }: { range: { from: string; to: s
     <>
       {totals ? (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Tile label={t("tiles.total")} value={formatMoney(totals.totalVnd, "VND")} />
-          <Tile label={t("tiles.paid")} value={formatMoney(totals.paidVnd, "VND")} />
-          <Tile label={t("tiles.planned")} value={formatMoney(totals.plannedVnd, "VND")} tone={totals.plannedVnd > 0 ? "warn" : undefined} />
-          <Tile label={t("tiles.shown")} value={formatMoney(shownVnd, "VND")} caption={t("tiles.shownCaption", { count: rows.length })} />
+          <Tile label={t("tiles.total")} value={formatMoney(totals.totalUsd, "USD")} />
+          <Tile label={t("tiles.paid")} value={formatMoney(totals.paidUsd, "USD")} />
+          <Tile label={t("tiles.planned")} value={formatMoney(totals.plannedUsd, "USD")} tone={totals.plannedUsd > 0 ? "warn" : undefined} />
+          <Tile label={t("tiles.shown")} value={formatMoney(shownUsd, "USD")} caption={t("tiles.shownCaption", { count: rows.length })} />
         </div>
       ) : null}
       {expenses.data?.fxNote ? <p className="mb-2 text-[12px] text-ink-muted">{expenses.data.fxNote}</p> : null}

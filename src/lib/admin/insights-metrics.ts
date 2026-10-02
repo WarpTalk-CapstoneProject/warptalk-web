@@ -128,7 +128,7 @@ export function formatInsightValue(value: number | null | undefined, unit: Insig
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   switch (unit) {
     case "money":
-      return formatMoney(Math.round(value), "VND");
+      return formatMoney(Math.round(value * 100) / 100, "USD");
     case "hours":
       return `${oneDecimal.format(value)} h`;
     case "percent":
@@ -193,7 +193,7 @@ export function valueTone(id: string, value: number | null | undefined): ValueTo
 // month start). The value then renders "—" through formatInsightValue, and the sub-line below it
 // carries the server's note, so a dash is never left unexplained and never reads as 0.
 
-/** "yesterday 4,480,000 ₫" plus whatever today's and yesterday's notes say. */
+/** "yesterday 179.20 USD" plus whatever today's and yesterday's notes say. */
 export function revenueTodaySub(
   snapshot: Pick<BillingSnapshotDto, "revenueToday" | "revenueTodayNote" | "revenueYesterday" | "revenueYesterdayNote">,
   t?: InsightsTranslator,
@@ -213,7 +213,7 @@ export function revenueTodaySub(
 export function mrrSub(snapshot: Pick<BillingSnapshotDto, "mrr" | "mrrNote">, t?: InsightsTranslator): string {
   return (
     snapshot.mrrNote?.trim() ||
-    (snapshot.mrr === null ? say(t, "mrr.cannotTotal", "Cannot be totalled in VND") : say(t, "mrr.note", "Monthly recurring revenue"))
+    (snapshot.mrr === null ? say(t, "mrr.cannotTotal", "Cannot be totalled in USD") : say(t, "mrr.note", "Monthly recurring revenue"))
   );
 }
 
@@ -235,11 +235,11 @@ export function outstandingSub(invoices: BillingSnapshotDto["outstandingInvoices
       count: invoices.count,
     }),
     say(t, "outstanding.pastDueCount", `${formatCount(invoices.pastDueCount)} past due`, { count: invoices.pastDueCount }),
-    invoices.amountNote ?? (invoices.amount === null ? say(t, "outstanding.cannotTotal", "amount cannot be totalled in VND") : null),
+    invoices.amountNote ?? (invoices.amount === null ? say(t, "outstanding.cannotTotal", "amount cannot be totalled in USD") : null),
   ) as string;
 }
 
-/** "N,NNN ₫ outstanding", or what is known when the amount could not be totalled. */
+/** "N.NN USD outstanding", or what is known when the amount could not be totalled. */
 function outstandingAmountText(invoices: BillingSnapshotDto["outstandingInvoices"], t?: InsightsTranslator): string {
   if (invoices.amount === null) {
     if (invoices.amountNote) {
@@ -432,7 +432,7 @@ export function periodCardView(spec: PeriodCardSpec, sources: PeriodSources, t?:
 export const INSIGHTS_CSV_HEADER = ["Metric", "This period", "Previous period", "Change", "Unit"] as const;
 
 const CSV_UNIT: Record<InsightsUnit, string> = {
-  money: "VND",
+  money: "USD",
   count: "count",
   credits: "credits",
   hours: "hours",

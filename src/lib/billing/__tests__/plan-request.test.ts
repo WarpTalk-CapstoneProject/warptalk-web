@@ -114,7 +114,7 @@ describe("validatePlanRequest", () => {
   });
 
   it("refuses a currency the plan validator does not accept", () => {
-    assert.match(String(withEdits({ currency: "EUR" })), /VND or USD/);
+    assert.match(String(withEdits({ currency: "EUR" })), /USD or VND/);
   });
 
   it("refuses a slug that is not a slug", () => {

@@ -60,7 +60,6 @@ import {
   providerColors,
   providerCostSeries,
   providerLabel,
-  type CostCurrency,
 } from "@/lib/admin/insights-pnl";
 import {
   monthKeyLabel,
@@ -591,8 +590,9 @@ function dayKeyTitle(key: string): string {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(year, month - 1, day));
 }
 
-const moneyVnd = (value: number) => formatMoney(value, "VND");
-const moneyAxis = (value: number) => compactMoney(value, "VND");
+/** Every figure on this page is USD, the accounting currency (VND payments arrive converted). */
+const money = (value: number) => formatMoney(value, "USD");
+const moneyAxis = (value: number) => compactMoney(value, "USD");
 
 function subscriptionSegments(t: ReturnType<typeof useTranslations>) {
   return [
@@ -675,7 +675,7 @@ const instantText = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
 /**
- * Where the USD→VND rate every figure below converts with came from, and when. Amber, with the
+ * Where the USD→VND rate the VND payments below were converted with came from, and when. Amber, with the
  * server's own warning, whenever Stripe has not answered for a day — the rate is then the last known
  * one, and the admin is told, not left to assume.
  */
@@ -707,7 +707,6 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
   const pnl = dataOf(state);
   const meetings = dataOf(props.meetings);
   const { period } = props;
-  const [currency, setCurrency] = useState<CostCurrency>("VND");
   const cards = pnlCards(pnl, meetings);
   const loading = state.status === "loading";
 
@@ -772,7 +771,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         { key: "revenue", label: "Revenue", values: days.map((d) => d.row?.revenue ?? null) },
                         { key: "aiCost", label: "AI provider cost", values: days.map((d) => d.row?.aiCost ?? null) },
                       ]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
                       tooltipFooter={(index) => {
@@ -781,7 +780,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         const hourCost = perHourByKey.get(row.key);
                         return [
                           `Margin ${percentText(row.marginPercent)}`,
-                          hourCost != null ? `${moneyVnd(hourCost)} per meeting-hour` : null,
+                          hourCost != null ? `${money(hourCost)} per meeting-hour` : null,
                           row.fxRate ? `${new Intl.NumberFormat("en-US").format(row.fxRate)} VND/USD` : null,
                         ].filter(Boolean).join(" · ");
                       }}
@@ -813,7 +812,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         { key: "revenue", label: "Revenue", values: months.map((m) => m.revenue) },
                         { key: "aiCost", label: "AI provider cost", values: months.map((m) => m.aiCost) },
                       ]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       tooltipFooter={(index) => {
                         const row = months[index];
@@ -837,34 +836,20 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
               {(data) => {
                 const days = seriesAxis(data.days.map((row) => ({ ...row, date: row.key })), period.axisEndDay);
                 const rows = days.map((d) => d.row).filter((row): row is NonNullable<typeof row> => row !== null);
-                const series = providerCostSeries(rows, currency);
+                const series = providerCostSeries(rows);
                 const colors = providerColors(series.map((s) => s.key));
                 const pad = days.length - rows.length;
-                const format = currency === "USD" ? moneyUsd : moneyVnd;
                 return (
                   <>
                     <div className="mb-1 flex items-start justify-between gap-3">
                       <ChartFigure
-                        value={currency === "USD" ? moneyUsd(data.aiCostUsd) : formatInsightValue(findPnlMetric(data, "aiProviderCost")?.value, "money")}
+                        value={moneyUsd(data.aiCostUsd)}
                         caption="AI provider cost, by provider"
                       />
-                      <div role="group" aria-label="Currency" className="inline-flex overflow-hidden rounded-md border border-hairline">
-                        {(["VND", "USD"] as const).map((code) => (
-                          <button
-                            key={code}
-                            type="button"
-                            aria-pressed={currency === code}
-                            onClick={() => setCurrency(code)}
-                            className="px-2.5 py-1 text-[11px] font-medium text-ink-muted aria-pressed:bg-surface-3 aria-pressed:text-ink"
-                          >
-                            {code}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                     <TimeSeriesChart
                       variant="line"
-                      ariaLabel={`AI provider cost per day in ${currency}, by provider`}
+                      ariaLabel="AI provider cost per day in USD, by provider"
                       height={200}
                       labels={days.map((d) => d.label)}
                       titles={days.map((d) => dayKeyTitle(d.key))}
@@ -874,9 +859,9 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         color: colors[s.key],
                         values: [...s.values, ...Array<number | null>(pad).fill(null)],
                       }))}
-                      formatValue={format}
-                      formatAxis={currency === "USD" ? usdAxis : moneyAxis}
-                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No USD→VND rate")}
+                      formatValue={moneyUsd}
+                      formatAxis={usdAxis}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No cost recorded")}
                     />
                   </>
                 );
@@ -904,7 +889,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                       rows={data.providers.map((provider) => ({
                         key: provider.provider,
                         label: providerLabel(provider.provider),
-                        valueText: `${formatCount(provider.credits)} · ${moneyUsd(provider.costUsd)}${provider.costVnd === null ? "" : ` · ${moneyVnd(provider.costVnd)}`}`,
+                        valueText: `${formatCount(provider.credits)} · ${moneyUsd(provider.costUsd)}`,
                         segments: provider.services.map((service) => ({
                           key: `${provider.provider}-${service.chargeType}`,
                           label: `${service.service} (${service.chargeType})`,
@@ -1292,7 +1277,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                       height={180}
                       labels={months.map((row) => monthKeyLabel(row.month))}
                       series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: months.map((row) => row.revenue) }]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                     />
                   </>
@@ -1328,7 +1313,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                       labels={days.map((day) => day.label)}
                       titles={days.map((day) => dayKeyTitle(day.key))}
                       series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: days.map((day) => day.row?.revenue ?? null) }]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
                     />

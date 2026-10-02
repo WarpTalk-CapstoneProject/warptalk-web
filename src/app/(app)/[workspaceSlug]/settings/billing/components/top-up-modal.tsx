@@ -11,7 +11,7 @@
  * WHAT THIS COMPONENT MUST NOT DO: price the purchase. The request carries the CREDIT COUNT and
  * the server prices it against billing_pricing_config, overwriting whatever amount we send. The
  * rate below is for the on-screen estimate only. A previous version of this UI quoted a
- * 10/9/8.5/8 VND volume ladder that existed nowhere else in the system and overcharged by 2–2.5×;
+ * 10/9/8.5/8 VND-per-credit volume ladder that existed nowhere else in the system and overcharged by 2–2.5×;
  * keeping the number display-only is what stops that recurring.
  */
 
@@ -36,11 +36,17 @@ import { cn } from "@/lib/utils";
 
 import { BillingButton, Row, RowGroup, Section } from "./billing-primitives";
 
-/** Stripe refuses a charge under 15,000 VND, which is 1,500 credits at the documented rate. */
-const TOP_UP_MINIMUM_CREDITS = 1500;
+/**
+ * Stripe refuses a USD charge under $0.50. Mirrors PaymentAppService.MinimumTopUpCredits (5,000 credits
+ * is ~$0.77); the server raises it further if the credit value ever drops, and its message says so.
+ */
+const TOP_UP_MINIMUM_CREDITS = 5000;
 
-/** Retail rate from docs/credit-economics.md §4.2. Display only — the server sets the price. */
-const DOCUMENTED_VND_PER_CREDIT = 4;
+/**
+ * USD one credit is worth: the documented 4 VND at Stripe's rate when the system moved to USD
+ * (2 Oct 2026). Display only — the server prices the purchase against credit_value_usd.
+ */
+const DOCUMENTED_USD_PER_CREDIT = 0.000154;
 
 /** Round numbers a person recognises, not a ladder of discounts we do not give. */
 const TOP_UP_PACKAGES = [10_000, 25_000, 50_000, 100_000] as const;
@@ -61,7 +67,7 @@ export function TopUpModal({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const belowMinimum = credits > 0 && credits < TOP_UP_MINIMUM_CREDITS;
-  const estimate = credits * DOCUMENTED_VND_PER_CREDIT;
+  const estimate = Math.round(credits * DOCUMENTED_USD_PER_CREDIT * 100) / 100;
 
   const startCheckout = async () => {
     if (!user) return;
@@ -80,7 +86,7 @@ export function TopUpModal({
         userId: user.id,
         workspaceId,
         amount: estimate,
-        currency: "vnd",
+        currency: "usd",
         paymentType: "CreditTopUp",
         credits,
       });
@@ -138,7 +144,7 @@ export function TopUpModal({
                     {formatAmount(amount)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-ink-muted">
-                    ≈ {formatMoney(amount * DOCUMENTED_VND_PER_CREDIT, "VND")}
+                    ≈ {formatMoney(Math.round(amount * DOCUMENTED_USD_PER_CREDIT * 100) / 100, "USD")}
                   </p>
                 </button>
               );
@@ -170,7 +176,7 @@ export function TopUpModal({
               <Row label={t("topUpModal.credits")} value={formatAmount(credits)} />
               <Row
                 label={t("topUpModal.estimatedTotal")}
-                value={formatMoney(estimate, "VND")}
+                value={formatMoney(estimate, "USD")}
                 hint={t("topUpModal.estimatedHint")}
               />
             </RowGroup>
@@ -180,7 +186,7 @@ export function TopUpModal({
             <p className="mt-3 text-[12px] text-amber-500">
               {t("topUpModal.belowMinimum", {
                 min: formatAmount(TOP_UP_MINIMUM_CREDITS),
-                amount: formatMoney(TOP_UP_MINIMUM_CREDITS * DOCUMENTED_VND_PER_CREDIT, "VND"),
+                amount: formatMoney(Math.ceil(TOP_UP_MINIMUM_CREDITS * DOCUMENTED_USD_PER_CREDIT * 100) / 100, "USD"),
               })}
             </p>
           ) : null}

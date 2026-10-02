@@ -179,7 +179,7 @@
       "cartesiaUsdPerCreditValue": "${price} per credit",
       "minimumContractPriceLabel": "Minimum contract price",
       "minimumContractPriceHint": "Per cycle, before a plan is valid.",
-      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "Default invoice terms",
       "defaultInvoiceTermsHint": "Days to pay, and the grace window after that, for plans that do not override them.",
       "defaultInvoiceTermsValue": "{days} days · {hours} h grace",
@@ -350,8 +350,7 @@
         "customerPrice": "Customer price",
         "providerCost": "Provider cost",
         "margin": "Margin",
-        "formulaLine": "{formula} · FX {fx} · credit {credit} VND",
-        "vndSuffix": "(VND)"
+        "formulaLine": "{formula} · credit {credit} USD"
       },
       "errors": {
         "previewStale": "Cost or markup changed since the preview. Preview again before saving.",
@@ -396,7 +395,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "FX rate USD→VND", "hint": "How a USD provider cost is read in VND." },
-        "minimumContractPriceVnd": { "label": "Minimum contract price (VND)" },
         "minimumContractPriceUsd": { "label": "Minimum contract price (USD)" },
         "salesUsageWeight": { "label": "Sales weight · usage" },
         "salesMembersWeight": { "label": "Sales weight · members" },

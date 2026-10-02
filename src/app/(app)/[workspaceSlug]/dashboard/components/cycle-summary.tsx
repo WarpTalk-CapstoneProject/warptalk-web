@@ -206,7 +206,7 @@ export function CycleSummary({
                 {/* With its currency, like the billing page. A bare "1,290,000" beside a credit
                     count reads as more credits. */}
                 {subscription.price > 0
-                  ? ` · ${formatMoney(subscription.price, "VND")}/${t("cells.cyclePerUnit")}`
+                  ? ` · ${formatMoney(subscription.price, subscription.planCurrency)}/${t("cells.cyclePerUnit")}`
                   : ""}
                 {subscription.cancelAtPeriodEnd
                   ? ` · ${t("cancelsAtPeriodEnd")}`
