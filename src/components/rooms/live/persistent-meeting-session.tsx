@@ -191,7 +191,11 @@ import {
   type BridgeAudioMode,
 } from "@/lib/meeting/bridge-audio-mode";
 import { useBridgeAudioModeStore } from "@/stores/bridge-audio-mode-store";
-import { bridgeConsentSurface, isCompactConsentAsk } from "@/lib/meeting/bridge-capture-consent-relay";
+import {
+  bridgeConsentSurface,
+  isBridgeMeetCallOnScreen,
+  isCompactConsentAsk,
+} from "@/lib/meeting/bridge-capture-consent-relay";
 import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import {
   canCaptureBrowserLoopback,
@@ -1131,6 +1135,12 @@ export function PersistentMeetingSession({
   // "required" during SSR — it needs a loaded room, which no server render has — so the surface is
   // "none" on the server either way and cannot mismatch on hydration.
   const consentPopupAvailable = isBridgeRoom && canOpenTranscriptWindow();
+  // popspam1002: the popup is never raised over a Meet call that is not on screen (left, closed,
+  // another tab). No sensor reading is "unknown", which keeps raising as before.
+  const consentMeetOnScreen = isBridgeMeetCallOnScreen({
+    sensor: meetSensor,
+    roomMeetCode: extractMeetCodeFromUrl(room?.externalMeetingUrl),
+  });
 
   // The relay to the popup. Main stays the one source of truth: it publishes this state and
   // applies only the intents it has re-checked against it (lib/meeting/bridge-capture-consent-relay).
@@ -1144,6 +1154,7 @@ export function PersistentMeetingSession({
     selectedSourceId: selectedLoopbackSourceId,
     loadingSources: loopbackSourcesLoading,
     popupAvailable: consentPopupAvailable,
+    meetOnScreen: consentMeetOnScreen,
     inboundPath: bridgeInbound.path,
     inboundReason: bridgeInbound.reason,
     inboundHealth,

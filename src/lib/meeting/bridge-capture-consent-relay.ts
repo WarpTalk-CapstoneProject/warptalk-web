@@ -61,6 +61,18 @@ export const CONSENT_POPUP_RECHECK_MS = 60_000;
 /** WT-900. Raises in a row that no `ack` followed before the question moves to the main window. */
 export const CONSENT_POPUP_MAX_UNANSWERED_RAISES = 2;
 
+/**
+ * Raises one question may cost in total, acknowledged or not, before it moves to the main window.
+ *
+ * CONSENT_POPUP_MAX_UNANSWERED_RAISES alone did not bound anything. Every raise opens the popup, the
+ * opened popup acks the moment it is on screen, and an ack resets that count at the next check. So
+ * a host who closed the popup without answering got it back - focused, with the OS notification -
+ * one recheck later, for as long as the question stayed open: in production, long after they had
+ * left the Meet call. This count is never reset by an ack, only by an answer or another room, and
+ * it outlives the raise loop's restarts (see ConsentRaiseBudget).
+ */
+export const CONSENT_POPUP_MAX_RAISES_PER_QUESTION = 3;
+
 /** A process the loopback could listen to, reduced to what the popup needs to offer it. */
 export interface BridgeConsentSource {
   id: string;
@@ -475,11 +487,26 @@ export function shouldAcknowledgeConsentSnapshot(
  *
  * An acknowledged check costs nothing the host can see: a republish of the same state, no raise,
  * and so no OS notification over a popup they are already reading.
+ *
+ * TWO MORE LIMITS (popspam1002)
+ *   - Never while the Meet call is off screen. WarpTalk follows Meet silently: a raise is a focus
+ *     steal plus a notification, and once the host has left the call (or is looking at another tab)
+ *     it lands on top of whatever they are doing instead. A due raise is held ("hold") and goes out
+ *     when Meet is back on screen - if the question is still open by then.
+ *   - At most CONSENT_POPUP_MAX_RAISES_PER_QUESTION raises per question, counted in
+ *     `raisesThisQuestion`, which an ack does not reset.
  */
 export interface ConsentRaiseState {
   consent: BrowserCaptureConsentState;
   /** `canOpenTranscriptWindow()` in a bridge room. */
   popupAvailable: boolean;
+  /**
+   * This room's Google Meet call is on screen (isBridgeMeetCallOnScreen). Read live, like
+   * `acknowledged`: the hook refreshes it before every decision.
+   */
+  meetOnScreen: boolean;
+  /** Raises already spent on this question, across restarts of the loop. Never reset by an ack. */
+  raisesThisQuestion: number;
   phase: "check" | "raised";
   /** When the current check or raise went out. */
   sentAtMs: number;
@@ -498,18 +525,29 @@ export type ConsentRaiseDecision =
   | { type: "wait"; atMs: number }
   /** Republish and start a new check. */
   | { type: "check" }
+  /**
+   * A raise is due but the Meet call is not on screen. Nothing is raised and nothing changes; ask
+   * again when Meet comes back (or at the next recheck).
+   */
+  | { type: "hold" }
   /** Raise the popup. */
   | { type: "raise" };
 
-/** The state of a question that has just been asked. */
+/** The state of a question that has just been asked (or whose raise loop has just restarted). */
 export function initialConsentRaiseState(input: {
   consent: BrowserCaptureConsentState;
   popupAvailable: boolean;
   nowMs: number;
+  /** Defaults to true: no reading is not a reading of "gone" (see isBridgeMeetCallOnScreen). */
+  meetOnScreen?: boolean;
+  /** Raises this question already cost before the loop (re)started. See ConsentRaiseBudget. */
+  raisesThisQuestion?: number;
 }): ConsentRaiseState {
   return {
     consent: input.consent,
     popupAvailable: input.popupAvailable,
+    meetOnScreen: input.meetOnScreen ?? true,
+    raisesThisQuestion: input.raisesThisQuestion ?? 0,
     phase: "check",
     sentAtMs: input.nowMs,
     acknowledged: false,
@@ -520,11 +558,17 @@ export function initialConsentRaiseState(input: {
 export function nextConsentRaise(
   state: ConsentRaiseState,
   nowMs: number,
-  options: { graceMs?: number; recheckMs?: number; maxUnansweredRaises?: number } = {},
+  options: {
+    graceMs?: number;
+    recheckMs?: number;
+    maxUnansweredRaises?: number;
+    maxRaisesPerQuestion?: number;
+  } = {},
 ): ConsentRaiseDecision {
   const graceMs = options.graceMs ?? CONSENT_POPUP_RAISE_GRACE_MS;
   const recheckMs = options.recheckMs ?? CONSENT_POPUP_RECHECK_MS;
   const maxUnanswered = options.maxUnansweredRaises ?? CONSENT_POPUP_MAX_UNANSWERED_RAISES;
+  const maxPerQuestion = options.maxRaisesPerQuestion ?? CONSENT_POPUP_MAX_RAISES_PER_QUESTION;
 
   if (state.consent !== "required") return { type: "idle" };
   if (!state.popupAvailable) return { type: "use-main" };
@@ -537,7 +581,11 @@ export function nextConsentRaise(
 
   const atMs = state.sentAtMs + (state.phase === "check" ? graceMs : recheckMs);
   if (nowMs < atMs) return { type: "wait", atMs };
+  // Before either budget: with Meet off screen nothing is raised, and nothing is handed over either
+  // - the question is still the popup's for when the host is back in the call.
+  if (!state.meetOnScreen) return { type: "hold" };
   if (state.phase === "raised" && state.unansweredRaises >= maxUnanswered) return { type: "use-main" };
+  if (state.raisesThisQuestion >= maxPerQuestion) return { type: "use-main" };
   return { type: "raise" };
 }
 
@@ -561,8 +609,57 @@ export function applyConsentRaise(
         sentAtMs: nowMs,
         acknowledged: false,
         unansweredRaises: state.unansweredRaises + 1,
+        raisesThisQuestion: state.raisesThisQuestion + 1,
       };
     default:
       return state;
   }
+}
+
+/**
+ * Is this bridge room's Google Meet call on screen, as far as the desktop sensor can tell?
+ *
+ * The same test the idle reaper uses (lastSignOfLife): a sighting counts unless its code names a
+ * DIFFERENT call from the room's; a code that is merely absent (picture-in-picture, a named event)
+ * proves nothing either way. No reading at all - a browser tab, macOS, a desktop build without the
+ * sensor, the first poll not back yet - is "unknown", and unknown keeps the old behaviour: it must
+ * never be read as "Meet is gone", or those hosts would never be asked at all.
+ */
+export function isBridgeMeetCallOnScreen(input: {
+  sensor: { meetWindowVisible: boolean; meetCode?: string } | null;
+  roomMeetCode?: string;
+}): boolean {
+  const { sensor, roomMeetCode } = input;
+  if (sensor === null) return true;
+  const differentCall =
+    Boolean(sensor.meetCode) && Boolean(roomMeetCode) && sensor.meetCode !== roomMeetCode;
+  return sensor.meetWindowVisible && !differentCall;
+}
+
+/**
+ * The raise count that has to outlive the raise loop.
+ *
+ * The loop is an effect, and it restarts whenever the question flickers - `consent` leaving and
+ * re-entering "required" as the loopback falls back and recovers, or the popup's availability
+ * moving. Each restart used to start from zero, so a question nobody answered could be raised
+ * without end across restarts. This is held per room by the hook, spent by every raise, and given
+ * back only when the question is really over: answered (granted or declined), or another room.
+ */
+export interface ConsentRaiseBudget {
+  roomId: string;
+  raises: number;
+}
+
+/** What is left of `budget` for `roomId` while the consent state is `consent`. */
+export function consentRaiseBudgetFor(
+  budget: ConsentRaiseBudget | null,
+  roomId: string,
+  consent: BrowserCaptureConsentState,
+): ConsentRaiseBudget {
+  // An answer closes the question; "reconsider" after it is a new one with a full budget.
+  // "not-required" does NOT: that is the question going quiet (a fallback, a device), not answered.
+  if (!budget || budget.roomId !== roomId || consent === "granted" || consent === "declined") {
+    return { roomId, raises: 0 };
+  }
+  return budget;
 }
