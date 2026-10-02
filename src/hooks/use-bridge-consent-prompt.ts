@@ -44,7 +44,11 @@ import {
 export interface BridgeConsentPrompt {
   view: BridgeConsentPromptView;
   selectSource: (sourceId: string) => void;
-  decide: (granted: boolean) => void;
+  /**
+   * WT-910: `record` is the "Record this meeting" checkbox, sent only from the ask (where the
+   * checkbox is). Left out, nothing is said about recording — "Stop listening" leaves it out.
+   */
+  decide: (granted: boolean, options?: { record?: boolean }) => void;
   reconsider: () => void;
 }
 
@@ -120,8 +124,12 @@ export function useBridgeConsentPrompt(roomId: string): BridgeConsentPrompt {
   );
 
   const decide = useCallback(
-    (granted: boolean) =>
-      post({ v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted }),
+    (granted: boolean, options?: { record?: boolean }) =>
+      post(
+        typeof options?.record === "boolean"
+          ? { v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted, record: options.record }
+          : { v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted },
+      ),
     [post, roomId],
   );
 
