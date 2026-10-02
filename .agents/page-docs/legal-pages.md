@@ -93,7 +93,7 @@ Still not legal advice — have a qualified reviewer sign off before relying on 
   permission, no impersonation); acceptable use; content ownership and licence (no training of
   general-purpose models); plans, Stripe payments, auto-renewal, credits, refunds, 30-day price
   notice; third-party integrations; IP; suspension/termination; disclaimers; liability cap
-  for business use only (greater of 12 months' fees or 1,000,000 VND), consumers keep statutory rights; indemnity; changes (30-day notice for material
+  for business use only (greater of 12 months' fees or 40 USD), consumers keep statutory rights; indemnity; changes (30-day notice for material
   changes); Vietnamese law, 30-day negotiation then Vietnamese courts, consumer-favourable interpretation,
   Vietnamese version prevails; contact.
 - **Privacy:** scope (Law 91/2025/QH15 + Decree 356/2025/ND-CP, GDPR where applicable); WarpTalk vs Workspace Owner
@@ -113,7 +113,7 @@ shows and should be checked by the team:
 - Contact mailbox `support@warptalk.io.vn` (`src/lib/legal/legal-contact.ts`) — confirm it exists.
 - Operator identity: the documents say "WarpTalk"; no legal entity name, address or registration
   number is given.
-- Minimum age 16, liability cap 1,000,000 VND, 30-day deletion, 90-day backups, 12-month logs,
+- Minimum age 16, liability cap 40 USD, 30-day deletion, 90-day backups, 12-month logs,
   30-day notice periods, refund policy, credit expiry.
 - "Providers do not train on your content" and "live audio is not stored" depend on provider
   contracts and backend behaviour.

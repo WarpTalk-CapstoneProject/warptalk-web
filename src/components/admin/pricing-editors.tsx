@@ -48,7 +48,7 @@ import {
 } from "@/lib/billing/rate-card-preview";
 import {
   PLAN_BILLING_CYCLE,
-  PLAN_CURRENCIES,
+  planCurrencyOptions,
   applyPlanEdits,
   validatePlanRequest,
 } from "@/lib/billing/plan-request";
@@ -433,7 +433,7 @@ function PlanEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {planCurrencyOptions(plan.id ? plan.currency : null).map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>
@@ -798,7 +798,8 @@ function RateCardEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {/* Part of the card's identity: the service matches on it and refuses any other. */}
+                  {[card.currency.toUpperCase()].map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>

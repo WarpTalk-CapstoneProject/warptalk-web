@@ -57,6 +57,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
+import { planCurrencyOptions } from "@/lib/billing/plan-request";
 
 /**
  * The six columns below are carried, not edited, on this screen.
@@ -583,8 +584,14 @@ export default function AdminPlansPage() {
                     <SelectValue placeholder={t("dialog.fields.currencyPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="VND">VND</SelectItem>
+                    {/* New plans are USD; only a plan already sold in VND may keep it. */}
+                    {planCurrencyOptions(
+                      editingPlanId ? plans.find((plan) => plan.id === editingPlanId)?.currency : null,
+                    ).map((currency) => (
+                      <SelectItem key={currency} value={currency}>
+                        {currency}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -42,6 +42,17 @@ export const PLAN_CURRENCIES = ["USD", "VND"] as const;
 export type PlanCurrency = (typeof PLAN_CURRENCIES)[number];
 
 /**
+ * What the plan form offers. Every NEW plan is priced in USD, the accounting currency since
+ * 2 Oct 2026; a plan already sold in VND may keep VND when edited (its subscribers' Stripe prices
+ * are VND) or move to USD. Nothing moves into VND. Mirrors PlanService.ValidatePlanRequest.
+ *
+ * `existingCurrency` is the STORED plan's currency, or null/"" for a plan being created.
+ */
+export function planCurrencyOptions(existingCurrency?: string | null): PlanCurrency[] {
+  return existingCurrency?.trim().toUpperCase() === "VND" ? ["USD", "VND"] : ["USD"];
+}
+
+/**
  * Every key the request carries. Kept beside the builder so the test can assert the two agree —
  * the failure this guards is a NEW column being added to `PlanRequest` and forgotten here, which
  * would send it as a default and reset it on every save, exactly as the six above were.

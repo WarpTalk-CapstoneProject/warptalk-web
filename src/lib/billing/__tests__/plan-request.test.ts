@@ -7,6 +7,7 @@ import {
   planRequestFields,
   planRequestFromDto,
   validatePlanRequest,
+  planCurrencyOptions,
 } from "../plan-request.ts";
 import type { PlanRequest } from "../../../types/admin-pricing.ts";
 import type { PlanDto } from "../../../types/billing.ts";
@@ -153,5 +154,20 @@ describe("validatePlanRequest", () => {
     assert.match(String(withEdits({ features: "Voice cloning" })), /JSON/);
     assert.equal(withEdits({ features: "" }), null);
     assert.equal(withEdits({ features: "{}" }), null);
+  });
+});
+
+describe("planCurrencyOptions", () => {
+  it("offers only USD for a new plan", () => {
+    assert.deepEqual(planCurrencyOptions(null), ["USD"]);
+    assert.deepEqual(planCurrencyOptions(""), ["USD"]);
+  });
+
+  it("lets a plan already sold in VND keep VND, or move to USD", () => {
+    assert.deepEqual(planCurrencyOptions("vnd"), ["USD", "VND"]);
+  });
+
+  it("never offers VND to a USD plan", () => {
+    assert.deepEqual(planCurrencyOptions("USD"), ["USD"]);
   });
 });
