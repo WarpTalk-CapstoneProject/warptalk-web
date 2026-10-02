@@ -354,7 +354,6 @@ export default function TranscriptPreviewPage() {
               <MeetingTranscriptArtifact
                 segments={SEGMENTS}
                 translations={TRANSLATIONS}
-                preferredLanguage="vi-VN"
                 baseTime="2026-08-21T00:16:00.000Z"
                 roomId="preview-room"
                 currentUserId={TU}
@@ -379,7 +378,6 @@ export default function TranscriptPreviewPage() {
           <MeetingTranscriptArtifact
             segments={SEGMENTS}
             translations={TRANSLATIONS}
-            preferredLanguage="vi-VN"
             baseTime="2026-08-21T00:16:00.000Z"
             roomId="preview-room"
             currentUserId={TU}
@@ -403,7 +401,6 @@ export default function TranscriptPreviewPage() {
           <MeetingTranscriptArtifact
             segments={SEGMENTS}
             translations={TRANSLATIONS}
-            preferredLanguage="ja"
             baseTime="2026-08-21T00:16:00.000Z"
             roomId="preview-room"
             currentUserId={TUAN}
@@ -425,7 +422,6 @@ export default function TranscriptPreviewPage() {
           <MeetingTranscriptArtifact
             segments={SEGMENTS.slice(6)}
             translations={[]}
-            preferredLanguage="vi-VN"
             baseTime="2026-08-21T00:16:00.000Z"
             roomId="preview-room"
             currentUserId={TU}

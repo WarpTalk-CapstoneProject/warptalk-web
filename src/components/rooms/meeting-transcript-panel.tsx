@@ -138,8 +138,8 @@ import { planLineCorrection, type PlannedCorrection } from "@/lib/transcript/mer
 import {
   AS_SPOKEN,
   assembleTranscriptText,
-  defaultTranscriptLanguage,
   indexTranslationsBySegment,
+  withSpokenSegmentText,
   resolveTranscriptLine,
   transcriptLanguageOptions,
   withOfferableLanguages,
@@ -279,7 +279,6 @@ function FollowPlaybackChip({
 export function MeetingTranscriptArtifact({
   segments,
   translations,
-  preferredLanguage,
   onSeekToRecording,
   canSeekAt,
   baseTime,
@@ -303,8 +302,6 @@ export function MeetingTranscriptArtifact({
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
   translations: TranscriptTranslationDto[];
-  /** The reader's own language, so the transcript opens on it when the meeting has it. */
-  preferredLanguage?: string;
   /** Move the recording to this line. Omitted when the two clocks cannot be reconciled, which is
    *  how the timestamp stays plain text instead of becoming a button that does nothing. */
   onSeekToRecording?: (atMs: number) => void;
@@ -434,8 +431,9 @@ export function MeetingTranscriptArtifact({
     return cleanView ? withAbsorbedSegmentIds(rows, cleanView) : rows;
   }, [cleanView, orderedSegments]);
   const translationIndex = useMemo(
-    () => indexTranslationsBySegment(translations),
-    [translations],
+    // WT-925: with each segment's own words in its own language — see withSpokenSegmentText.
+    () => withSpokenSegmentText(indexTranslationsBySegment(translations), segments),
+    [translations, segments],
   );
   const languageOptions = useMemo(
     () => transcriptLanguageOptions(grouped, translationIndex),
@@ -539,10 +537,10 @@ export function MeetingTranscriptArtifact({
   });
   const base = baseTime ? new Date(baseTime) : null;
 
-  // Null means "the reader has not chosen", which is not the same as choosing as-spoken — the
-  // default is derived, so it follows the transcript as it loads instead of being frozen by an
-  // effect that ran while the segments were still in flight.
-  const [chosenLanguage, setChosenLanguage] = useState<string | null>(null);
+  // WT-924: a finished meeting opens AS SPOKEN, always — every line as the person said it. It
+  // used to open on the reader's own language, or the best-covered one, whenever the meeting was
+  // multilingual; reading the record in one language is now something the reader picks.
+  const [displayLanguage, setDisplayLanguage] = useState<string>(AS_SPOKEN);
   /**
    * The rail beside this column, when there is one.
    *
@@ -566,9 +564,6 @@ export function MeetingTranscriptArtifact({
   /** Whether the download is being built, so the button can say so and refuse a second click. */
   const [buildingDocument, setBuildingDocument] = useState(false);
 
-  const displayLanguage =
-    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
-
   /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
      transcript id — the live tab has neither a saved transcript to work on nor an id to name it
      by, and it must keep marking the gap rather than pretending it can close it. */
@@ -585,7 +580,7 @@ export function MeetingTranscriptArtifact({
    * for any missing entries when the user has translation authority.
    */
   function chooseLanguage(code: string) {
-    setChosenLanguage(code);
+    setDisplayLanguage(code);
     const normalized = normalizeLanguageCode(code);
     if (code !== AS_SPOKEN && canTranslate && translatableCodes.has(normalized)) {
       autoRequestedLanguages.current.add(normalized);
