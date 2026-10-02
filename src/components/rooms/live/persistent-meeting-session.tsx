@@ -156,6 +156,7 @@ import {
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
+import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
 import { canControlBridge } from "@/lib/meeting/bridge-capturer";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { bridgeMeetingConnection } from "@/lib/meeting/bridge-meeting-connection";
@@ -2032,6 +2033,17 @@ export function PersistentMeetingSession({
    * retried instead of silently kept.
    */
   const [hubGeneration, setHubGeneration] = useState(0);
+
+  // Live Meet speaker names (desktop #44 -> hub ReportFarSpeakerHints, backend #499): the
+  // capturer's desktop reads Meet's CC and this window forwards the names on its hub connection.
+  // Same gate as the far side's capture itself: a bridge room, open, this desktop the capturer.
+  useFarSpeakerHints({
+    roomId,
+    meetCode: roomMeetCode,
+    enabled: bridgeAudioOwner && bridgeListening && !meetingIsIdleReaped,
+    connectionRef: translationConnectionRef,
+    hubGeneration,
+  });
 
   // "Use this device". Clearing the flag re-enables <LiveKitRoom connect>, and the LiveKit join
   // evicts the other device; the hub rejoin kicks the other device's hub connection. Each eviction

@@ -221,6 +221,64 @@ export interface DesktopBridge {
    */
   setMeetMicStream?: (enabled: boolean, options?: { browserPid?: number }) => Promise<void>;
   onMeetMicState?: (callback: (state: MeetMicState) => void) => () => void;
+  /**
+   * Desktop #44: speaker names from Google Meet's own captions, for the meeting being bridged
+   * (Windows only, behind the desktop's `bridgeMeetCaptionNames` flag). `setMeetCaptionsStream`
+   * starts/stops the read; only a call from the MAIN window subscribes it, and events go to the
+   * main window only. All four are absent on desktop builds that predate them.
+   */
+  onMeetCaption?: (callback: (event: MeetCaptionEvent) => void) => () => void;
+  onMeetCaptionStatus?: (callback: (status: MeetCaptionStatus) => void) => () => void;
+  setMeetCaptionsStream?: (meetCode: string, enabled: boolean) => Promise<void>;
+  /** Turns Meet's CC on in the capturer's Chrome window if it is off (never off). */
+  ensureMeetCaptions?: (meetCode: string) => Promise<EnsureMeetCaptionsResult>;
+}
+
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `MeetCaptionEvent` (desktop #44).
+ *
+ * One caption block from Google Meet's CC, final enough to attribute a speaker. A speaker-name
+ * ANCHOR for attribution, not a transcript: WarpTalk's own STT writes the text.
+ *
+ * Times are ms on the Date.now() axis (monotonic within a session): `tStartMs` when the block
+ * first appeared, `tEndMs` when its final text was first seen, `tStableMs` when it was judged
+ * final. `tConfidence:"batch"` means the text arrived in a burst, so its times are not when it was
+ * said. `stale` is true when the sensor was not `live` at emission.
+ */
+export interface MeetCaptionEvent {
+  meetCode: string;
+  /** Stable for the block's life; an `update` replaces the earlier text of the same id. */
+  blockId: string;
+  kind: "caption" | "update";
+  speaker: string;
+  text: string;
+  tStartMs: number;
+  tEndMs: number;
+  tStableMs: number;
+  tConfidence: "live" | "batch";
+  stale: boolean;
+  source: "meet_caption";
+}
+
+/** Mirrors warptalk-desktop src/shared/types.ts `MeetCaptionStatus` (desktop #44). */
+export interface MeetCaptionStatus {
+  meetCode: string;
+  running: boolean;
+  state: "live" | "unavailable_tab_inactive" | "unavailable_minimized" | "stale";
+  captionsVisible: boolean;
+  lastChangeMs: number | null;
+  error?: string;
+}
+
+/** Mirrors warptalk-desktop src/shared/types.ts `EnsureMeetCaptionsResult` (desktop #44). */
+export interface EnsureMeetCaptionsResult {
+  ok: boolean;
+  state: "on" | "off" | "unknown";
+  /**
+   * Why not, e.g. "cc-button-hidden" (narrow window: CC is inside More options), "unknown-locale",
+   * "meet-tab-not-found", "verify-button-not-flipped", "disabled", "unsupported-platform".
+   */
+  reason?: string;
 }
 
 /**
@@ -527,4 +585,55 @@ export function reportDesktopSignedIn(signedIn: boolean): void {
   } catch {
     // Nothing to do: the shell keeps whatever it last knew.
   }
+}
+
+/**
+ * Turn Meet's CC on for the bridged meeting (desktop #44). Null off the desktop shell and on a
+ * build without the method; never throws — a CC that stays off only costs the speaker names.
+ */
+export async function ensureMeetCaptionsOn(meetCode: string): Promise<EnsureMeetCaptionsResult | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.ensureMeetCaptions) return null;
+  try {
+    return await bridge.ensureMeetCaptions(meetCode);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stream Meet caption blocks for `meetCode` into `onCaption` (desktop #44). MAIN WINDOW ONLY: the
+ * desktop subscribes only the main window's renderer and sends events there alone.
+ *
+ * Subscribes before arming, so the 30 s the desktop buffered while this renderer was away (a
+ * reload) lands in the callback. The returned function stops the read for this meeting and then
+ * unsubscribes — in that order, because the stop's final flush still reaches a subscribed
+ * renderer. The promise settles once both are done (never rejects). Null off the desktop shell and
+ * on a build without both methods.
+ */
+export function streamMeetCaptions(
+  meetCode: string,
+  onCaption: (event: MeetCaptionEvent) => void,
+): (() => Promise<void>) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.setMeetCaptionsStream || !bridge.onMeetCaption) return null;
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = bridge.onMeetCaption(onCaption);
+  } catch {
+    return null;
+  }
+  void bridge.setMeetCaptionsStream(meetCode, true).catch(() => undefined);
+  return () => {
+    const stopped = bridge.setMeetCaptionsStream?.(meetCode, false) ?? Promise.resolve();
+    return Promise.resolve(stopped)
+      .catch(() => undefined)
+      .finally(() => {
+        try {
+          unsubscribe();
+        } catch {
+          // Nothing to do: the listener goes with the renderer.
+        }
+      });
+  };
 }
