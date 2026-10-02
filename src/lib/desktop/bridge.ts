@@ -125,6 +125,42 @@ export interface MeetMicState {
   at: number;
 }
 
+/**
+ * Mirrors warptalk-desktop src/shared/types.ts `MeetCallState` (`bridge:meet-call-state`): whether
+ * the user is IN the Google Meet call, read from Meet's own buttons by UI Automation.
+ *
+ *   lobby    the "Join now" screen: not joined yet.
+ *   in-call  in the call, in the main tab (`via:"tab"`) or Chrome's Picture-in-Picture window.
+ *   left     the "You left the meeting / Rejoin" page, or the Meet tab closed after being in call.
+ *            A page that was never joined can look the same, so a room is ended on it only after
+ *            an `in-call` (lib/meeting/bridge-meet-follow).
+ *   unknown  nothing readable: Meet is a background tab with no PiP, the read failed, the watch is
+ *            off, or the platform has no sensor (macOS). It NEVER means the call ended.
+ *
+ * `reason` is for logs only; nothing may branch on it.
+ */
+export interface MeetCallState {
+  phase: "lobby" | "in-call" | "left" | "unknown";
+  via: "tab" | "pip" | null;
+  meetCode: string | null;
+  reason: string;
+  atMs: number;
+}
+
+/**
+ * Mirrors warptalk-desktop `MeetSelfMic` (`bridge:meet-self-mic`): what Meet's own microphone
+ * button says. NOT `MeetMicState` above, which answers which DEVICE the browser records from and
+ * cannot see mute. `muted: null` is unknown; `stale: true` means `muted` is the last value read,
+ * not a current one, and must not be treated as the user pressing the button.
+ */
+export interface MeetSelfMic {
+  muted: boolean | null;
+  stale: boolean;
+  via: "class" | "name" | null;
+  meetCode: string | null;
+  atMs: number;
+}
+
 /** One Windows endpoint's shared-mode format, as the desktop app read it from the registry. */
 export interface EndpointFormat {
   sampleRate: number;
@@ -275,6 +311,16 @@ export interface DesktopBridge {
    */
   setMeetMicStream?: (enabled: boolean, options?: { browserPid?: number }) => Promise<void>;
   onMeetMicState?: (callback: (state: MeetMicState) => void) => () => void;
+  /**
+   * In the Meet call or not, and Meet's own mute button (desktop meet-call-state.ts, Windows only).
+   * Both events run while the desktop watches Meet presence and fire only on change, so a late
+   * subscriber reads the getters once. Sent to the main window and the popup. Absent on older
+   * builds; on macOS the phase is always "unknown".
+   */
+  onMeetCallState?: (callback: (state: MeetCallState) => void) => () => void;
+  getMeetCallState?: () => Promise<MeetCallState>;
+  onMeetSelfMic?: (callback: (mic: MeetSelfMic) => void) => () => void;
+  getMeetSelfMic?: () => Promise<MeetSelfMic>;
   /**
    * Desktop #44: speaker names from Google Meet's own captions, for the meeting being bridged
    * (Windows only, behind the desktop's `bridgeMeetCaptionNames` flag). `setMeetCaptionsStream`
@@ -615,6 +661,56 @@ export function watchMeetMicState(
   return () => {
     unsubscribe();
     void bridge.setMeetMicStream?.(false).catch(() => undefined);
+  };
+}
+
+/**
+ * Follow the Meet call itself: in the call or not, and Meet's mute button (WT-912 / WT-913).
+ *
+ * Nothing to arm: the desktop reads both for as long as it watches Meet presence, which the app
+ * shell does for the whole session (use-bridge-trigger). The events fire only on change, so the
+ * current values are read once on subscribe; a getter that answers after a newer event is dropped.
+ * Null off the desktop shell and on a build without the sensor: the caller then knows it will
+ * never be told, which is different from being told "unknown".
+ */
+export function watchMeetCall(handlers: {
+  onCallState: (state: MeetCallState) => void;
+  onSelfMic: (mic: MeetSelfMic) => void;
+}): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onMeetCallState || !bridge.onMeetSelfMic) return null;
+  let stopped = false;
+  let callAtMs = Number.NEGATIVE_INFINITY;
+  let micAtMs = Number.NEGATIVE_INFINITY;
+  const onCall = (state: MeetCallState) => {
+    if (stopped || !state || state.atMs < callAtMs) return;
+    callAtMs = state.atMs;
+    handlers.onCallState(state);
+  };
+  const onMic = (mic: MeetSelfMic) => {
+    if (stopped || !mic || mic.atMs < micAtMs) return;
+    micAtMs = mic.atMs;
+    handlers.onSelfMic(mic);
+  };
+  let stopCall: () => void;
+  let stopMic: () => void;
+  try {
+    stopCall = bridge.onMeetCallState(onCall);
+  } catch {
+    return null;
+  }
+  try {
+    stopMic = bridge.onMeetSelfMic(onMic);
+  } catch {
+    stopCall();
+    return null;
+  }
+  void bridge.getMeetCallState?.().then(onCall).catch(() => undefined);
+  void bridge.getMeetSelfMic?.().then(onMic).catch(() => undefined);
+  return () => {
+    stopped = true;
+    stopCall();
+    stopMic();
   };
 }
 

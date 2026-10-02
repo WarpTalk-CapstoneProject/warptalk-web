@@ -181,8 +181,10 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   const neverStarted = sessions !== undefined && sessions.length === 0 && !translationStarted;
 
   /**
-   * The popup does not end the meeting (PO, 2026-10-01): a bridge room ends when its Google Meet
-   * conference does, which the backend learns from Google, or from the main window's own End. The
+   * The popup has no End button (PO, 2026-10-01). A bridge room follows its Google Meet call: the
+   * desktop reads Meet's own buttons, and when the host leaves the call the MAIN WINDOW ends the
+   * room (WT-913, lib/meeting/bridge-meet-follow); the server's sweeps end one everybody has left.
+   * Not "the backend learns it from Google", as this said before: nothing here relies on that. The
    * popup only notices that it has — the room record says ENDED — and then shows EndedView.
    *
    * The room is re-read on the slow tick below only while no main window is connected: one that is

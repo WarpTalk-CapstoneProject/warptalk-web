@@ -28,6 +28,9 @@
  *     gate its controls on host-or-capturer and offer the takeover when the capturer has gone;
  *   - text-only bridge: says this user's audio mode (`audioMode`) and dispatches the popup's
  *     `set-audio-mode` to the session, which re-checks the one-way rule and calls the server;
+ *   - WT-912 / WT-913: says the WarpTalk microphone and who decides it (`mic`), and that the user
+ *     left the Meet call (`meetLeave`); dispatches the fallback chip's `set-mic-enabled` only while
+ *     Meet's mute button cannot be read, and `answer-meet-left` only while a countdown is running;
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
  *     controls that would reach nobody;
  *   - W4a: `announceEnded()` (returned) says the room ENDED, synchronously, for the moment the
@@ -49,11 +52,13 @@ import type { BrowserCaptureConsentState } from "@/lib/audio/browser-capture-con
 import type { InboundHealth } from "@/lib/audio/bridge-inbound-health";
 import {
   acceptsBrowserCaptureAnswer,
+  acceptsMeetLeftAnswer,
   acceptsRejoin,
   acceptsSessionTakeOver,
   buildBridgeWidgetSnapshot,
   openBridgeWidgetRelay,
   type BridgeWidgetMeetingConnection,
+  type BridgeWidgetMicSnapshot,
   type BridgeWidgetRelay,
   type BridgeWidgetSnapshotFields,
   type BridgeWidgetTranscriptPauseSnapshot,
@@ -62,6 +67,7 @@ import {
 } from "@/lib/meeting/bridge-widget-relay";
 import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
 import type { BridgeAudioMode } from "@/lib/meeting/bridge-audio-mode";
+import { acceptsManualMic, type MeetLeavePrompt } from "@/lib/meeting/bridge-meet-follow";
 
 export type BridgeWidgetRelayHostOptions = {
   roomId: string;
@@ -153,6 +159,15 @@ export type BridgeWidgetRelayHostOptions = {
   // ── Meet captions. Optional, like the rest. ───────────────────────────────
   /** Meet's CC looks off on the captured call (useFarSpeakerHints). Capturer only. */
   meetCaptionsOff?: boolean;
+  // ── WT-912 / WT-913: the room follows the Meet call. Optional, like the rest. ──
+  /** The WarpTalk microphone and who decides it (use-bridge-meet-follow). */
+  mic?: BridgeWidgetMicSnapshot;
+  /** The fallback chip's press. Called only while `mic.control === "manual"`. */
+  onSetMicEnabled?: (enabled: boolean) => void;
+  /** The user left the Meet call: the countdown, or "kept". Only for someone who may end the room. */
+  meetLeave?: MeetLeavePrompt;
+  /** "End now" (true) / "Keep open" (false). Called only while a countdown is running. */
+  onAnswerMeetLeft?: (end: boolean) => void;
 };
 
 export type BridgeWidgetRelayHost = {
@@ -188,6 +203,10 @@ export function useBridgeWidgetRelayHost({
   audioMode,
   sessionDisplaced,
   meetCaptionsOff,
+  mic,
+  meetLeave,
+  onSetMicEnabled,
+  onAnswerMeetLeft,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -227,6 +246,8 @@ export function useBridgeWidgetRelayHost({
     audioMode,
     sessionDisplaced,
     meetCaptionsOff,
+    mic,
+    meetLeave,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -244,6 +265,8 @@ export function useBridgeWidgetRelayHost({
     onTakeOverCapture,
     onSetAudioMode,
     onTakeOverSession,
+    onSetMicEnabled,
+    onAnswerMeetLeft,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -265,6 +288,8 @@ export function useBridgeWidgetRelayHost({
       onTakeOverCapture,
       onSetAudioMode,
       onTakeOverSession,
+      onSetMicEnabled,
+      onAnswerMeetLeft,
     };
   });
 
@@ -276,6 +301,11 @@ export function useBridgeWidgetRelayHost({
   const pauseKnown = transcriptPause?.known;
   const pausePaused = transcriptPause?.paused;
   const pauseSince = transcriptPause?.since;
+  // And for the two WT-912 / WT-913 objects.
+  const micEnabled = mic?.enabled;
+  const micControl = mic?.control;
+  const meetLeaveState = meetLeave?.state;
+  const meetLeaveEndsAtMs = meetLeave?.state === "countdown" ? meetLeave.endsAtMs : undefined;
 
   // Declared BEFORE the channel effect on purpose. On mount it only records the fields (the
   // channel is not open yet, and the channel effect announces them); after that it is what
@@ -303,12 +333,15 @@ export function useBridgeWidgetRelayHost({
       audioMode,
       sessionDisplaced,
       meetCaptionsOff,
+      mic,
+      meetLeave,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
     fieldsRef.current = fields;
     relayRef.current?.send(buildBridgeWidgetSnapshot(fields, Date.now()));
-    // `voice` is represented by `voiceKey`, `translation` and `transcriptPause` by their values.
+    // `voice` is represented by `voiceKey`; `translation`, `transcriptPause`, `mic` and `meetLeave`
+    // by their values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     speakLanguage,
@@ -334,6 +367,10 @@ export function useBridgeWidgetRelayHost({
     audioMode,
     sessionDisplaced,
     meetCaptionsOff,
+    micEnabled,
+    micControl,
+    meetLeaveState,
+    meetLeaveEndsAtMs,
   ]);
 
   useEffect(() => {
@@ -424,6 +461,24 @@ export function useBridgeWidgetRelayHost({
         case "take-over-session":
           if (handlers.onTakeOverSession && acceptsSessionTakeOver(fieldsRef.current.sessionDisplaced)) {
             handlers.onTakeOverSession();
+          } else {
+            sendSnapshot();
+          }
+          break;
+        // WT-912. Stale once the mic follows Meet's own button (or the user is out of the call):
+        // the chip the press came from no longer exists, so say what is true instead.
+        case "set-mic-enabled":
+          if (handlers.onSetMicEnabled && acceptsManualMic(fieldsRef.current.mic?.control)) {
+            handlers.onSetMicEnabled(message.enabled);
+          } else {
+            sendSnapshot();
+          }
+          break;
+        // WT-913. Stale once nothing is counting down: answered already, or the user rejoined the
+        // call. An old "End now" must never end a room whose user is back in the meeting.
+        case "answer-meet-left":
+          if (handlers.onAnswerMeetLeft && acceptsMeetLeftAnswer(fieldsRef.current.meetLeave)) {
+            handlers.onAnswerMeetLeft(message.end);
           } else {
             sendSnapshot();
           }

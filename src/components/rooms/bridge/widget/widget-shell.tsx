@@ -55,6 +55,7 @@ import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
 import { MeetCaptionsNotice } from "./meet-captions-notice";
+import { MeetFollowNotices } from "./meet-follow-notices";
 import { MeetingNotices } from "./meeting-notices";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
@@ -86,6 +87,9 @@ export function WidgetShell() {
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-canvas text-ink">
+      {/* WT-912 / WT-913: "You left the Meet call" and the mic fallback chip. Above both screens
+          (the language step and the tabs), and nothing at all while the room simply follows Meet. */}
+      <MeetFollowNotices />
       {ended ? (
         <EndedView />
       ) : startStep ? (
