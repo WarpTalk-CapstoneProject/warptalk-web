@@ -104,6 +104,11 @@ export interface SetRateCardProviderCostRequest {
   providerUnitCostUsd: number;
 }
 
+/** The body `PUT /usages/rate-card/{id}/credit-price` takes: credits charged per unit. */
+export interface SetRateCardCreditPriceRequest {
+  unitPrice: number;
+}
+
 /**
  * The body `PUT /usages/pricing-config` takes.
  *

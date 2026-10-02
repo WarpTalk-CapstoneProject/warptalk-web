@@ -6,6 +6,7 @@ import type {
   BillingPolicyDto,
   PlanRequest,
   PricingConfigDto,
+  SetRateCardCreditPriceRequest,
   SetRateCardProviderCostRequest,
   UpdatePricingConfigRequest,
   UpsertUsageRateCardRequest,
@@ -107,6 +108,21 @@ export const adminPricingService = {
   ): Promise<UsageRateCardDto> => {
     const { data } = await apiClient.put<UsageRateCardDto>(
       API.adminPricing.rateCardProviderCost(id),
+      request,
+    );
+    return data;
+  },
+
+  /**
+   * Sets what a credit-unit (CRD) card charges per unit. Returns the card now in force — a new
+   * version, since a price is never edited in place.
+   */
+  setRateCardCreditPrice: async (
+    id: string,
+    request: SetRateCardCreditPriceRequest,
+  ): Promise<UsageRateCardDto> => {
+    const { data } = await apiClient.put<UsageRateCardDto>(
+      API.adminPricing.rateCardCreditPrice(id),
       request,
     );
     return data;
