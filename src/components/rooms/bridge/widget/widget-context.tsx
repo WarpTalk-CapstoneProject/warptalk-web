@@ -224,6 +224,11 @@ export type BridgeWidgetState = {
    * (web #646); "Use this device" takes it back. False without a main window that says so.
    */
   sessionDisplaced: boolean;
+  /**
+   * The capturer's main window says Google Meet's captions (CC) look off, so the far side's
+   * speaker names cannot be read. False without a main window that says so.
+   */
+  meetCaptionsOff: boolean;
   /** Translation was stopped because the workspace cannot pay for it (WT-699). */
   creditsSuspended: boolean;
   /** The reason billing gave, for `translationSuspendedNotice`. */

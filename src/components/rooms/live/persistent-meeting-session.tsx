@@ -156,6 +156,7 @@ import {
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
+import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
 import { canControlBridge } from "@/lib/meeting/bridge-capturer";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { bridgeMeetingConnection } from "@/lib/meeting/bridge-meeting-connection";
@@ -2033,6 +2034,17 @@ export function PersistentMeetingSession({
    */
   const [hubGeneration, setHubGeneration] = useState(0);
 
+  // Live Meet speaker names (desktop #44 -> hub ReportFarSpeakerHints, backend #499): the
+  // capturer's desktop reads Meet's CC and this window forwards the names on its hub connection.
+  // Same gate as the far side's capture itself: a bridge room, open, this desktop the capturer.
+  const { meetCaptionsOff } = useFarSpeakerHints({
+    roomId,
+    meetCode: roomMeetCode,
+    enabled: bridgeAudioOwner && bridgeListening && !meetingIsIdleReaped,
+    connectionRef: translationConnectionRef,
+    hubGeneration,
+  });
+
   // "Use this device". Clearing the flag re-enables <LiveKitRoom connect>, and the LiveKit join
   // evicts the other device; the hub rejoin kicks the other device's hub connection. Each eviction
   // is what shows the OTHER side this same notice, so the hand-over happens exactly once.
@@ -3042,6 +3054,9 @@ export function PersistentMeetingSession({
     bridgeRole: isBridgeRoom ? bridgeLease.bridgeRole : undefined,
     bridgeCapturerAway: bridgeLease.capturerAway ?? undefined,
     onTakeOverCapture: isBridgeRoom ? () => void bridgeLease.takeOver() : undefined,
+    // Meet's CC looks off on the call this desktop captures (useFarSpeakerHints, capturer only):
+    // the popup asks the user to turn it on, since this window is hidden while bridging.
+    meetCaptionsOff: isBridgeRoom ? meetCaptionsOff : undefined,
     // Text-only bridge: how Meet hears this user, and the popup's switch (any participant).
     audioMode: isBridgeRoom ? bridgeAudioMode : undefined,
     onSetAudioMode: isBridgeRoom ? (mode) => void handleSetBridgeAudioMode(mode) : undefined,
