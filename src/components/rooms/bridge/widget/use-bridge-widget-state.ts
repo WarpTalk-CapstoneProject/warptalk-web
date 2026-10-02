@@ -150,7 +150,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       : sessions.length > 0
         ? "stopped"
         : "ready";
-  // Both halves, as bridge-overlay-controls and every other host check in the app does it — or,
+  // Both halves, as every other host check in the app does it — or,
   // better, the main window's `isRoomHost`, which also follows a live host transfer.
   const isHost = bridgeWidgetIsRoomHost(
     relayView,

@@ -87,7 +87,7 @@ export type BridgeWidgetState = {
    * Whether this user is the room's ACTUAL host — the one /resume, /stop-translation and the pause
    * endpoints accept. The main window's `isRoomHost` when it sends one (it follows a live host
    * transfer); otherwise `user.id === room.hostId || room.isHost === true`, the same two halves as
-   * bridge-overlay-controls.tsx. Never the workspace owner/admin widening `isHost` has in the
+   * every other host check in the app. Never the workspace owner/admin widening `isHost` has in the
    * meeting: the server refuses them. False while the room is loading.
    */
   isHost: boolean;
