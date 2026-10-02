@@ -150,6 +150,9 @@ export type BridgeWidgetRelayHostOptions = {
   sessionDisplaced?: boolean;
   /** "Use this device" in the popup. Called only while `sessionDisplaced` is true. */
   onTakeOverSession?: () => void;
+  // ── Meet captions. Optional, like the rest. ───────────────────────────────
+  /** Meet's CC looks off on the captured call (useFarSpeakerHints). Capturer only. */
+  meetCaptionsOff?: boolean;
 };
 
 export type BridgeWidgetRelayHost = {
@@ -184,6 +187,7 @@ export function useBridgeWidgetRelayHost({
   bridgeCapturerAway,
   audioMode,
   sessionDisplaced,
+  meetCaptionsOff,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -222,6 +226,7 @@ export function useBridgeWidgetRelayHost({
     bridgeCapturerAway,
     audioMode,
     sessionDisplaced,
+    meetCaptionsOff,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -297,6 +302,7 @@ export function useBridgeWidgetRelayHost({
       bridgeCapturerAway,
       audioMode,
       sessionDisplaced,
+      meetCaptionsOff,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
@@ -327,6 +333,7 @@ export function useBridgeWidgetRelayHost({
     bridgeCapturerAway,
     audioMode,
     sessionDisplaced,
+    meetCaptionsOff,
   ]);
 
   useEffect(() => {

@@ -358,6 +358,11 @@
         "body": "Meet đang dùng micro thật của bạn. Hãy chọn “CABLE Output (VB-Audio Virtual Cable)” làm micro của Meet, hoặc chuyển sang giọng thật.",
         "action": "Dùng giọng thật của tôi"
       }
+    },
+    "meetCaptions": {
+      "title": "Hãy bật phụ đề (CC) trong Google Meet.",
+      "body": "WarpTalk lấy tên người nói từ phụ đề của Meet, mà lúc này Meet chưa hiện phụ đề. Bấm CC trên thanh công cụ của Meet để các câu của phía bên kia hiện đúng tên người nói.",
+      "dismiss": "Đóng"
     }
   }
 }

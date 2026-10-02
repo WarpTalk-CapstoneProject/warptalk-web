@@ -55,6 +55,7 @@ import { DockLanguagePill } from "./dock-language-pill";
 import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndedView } from "./ended-view";
+import { MeetCaptionsNotice } from "./meet-captions-notice";
 import { MeetingNotices } from "./meeting-notices";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
@@ -104,6 +105,7 @@ export function WidgetShell() {
           <InboundNoSignalNotice />
           <MeetingNotices />
           <BridgeMeetMicNotice />
+          <MeetCaptionsNotice />
         </WidgetTabs>
       )}
       {ended || startStep ? null : <WidgetDock />}

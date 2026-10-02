@@ -60,7 +60,8 @@
  *                                                 creditsSuspended?, creditsSuspendedReason?,
  *                                                 meetingError?, idleReaped?, connection?,
  *                                                 isRoomHost?, roomEnded?, bridgeRole?,
- *                                                 bridgeCapturerAway?, audioMode?, sessionDisplaced?, at }
+ *                                                 bridgeCapturerAway?, audioMode?, sessionDisplaced?,
+ *                                                 meetCaptionsOff?, at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -231,6 +232,13 @@ export type BridgeWidgetSnapshot = {
    * rather than evict it back (web #646). Only `take-over-session` brings it back.
    */
   sessionDisplaced?: boolean;
+  /**
+   * Google Meet's captions (CC) look off on the call this desktop captures, so the far side's
+   * speaker names cannot be read (lib/meeting/meet-captions-off). Sent only by the CAPTURER's main
+   * window, the one reading Meet's captions. Absent from a main window that predates it, which
+   * the popup reads as "not said": no notice.
+   */
+  meetCaptionsOff?: boolean;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
@@ -391,6 +399,7 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
   }
   if (typeof raw.idleReaped === "boolean") snapshot.idleReaped = raw.idleReaped;
   if (typeof raw.sessionDisplaced === "boolean") snapshot.sessionDisplaced = raw.sessionDisplaced;
+  if (typeof raw.meetCaptionsOff === "boolean") snapshot.meetCaptionsOff = raw.meetCaptionsOff;
   if (typeof raw.connection === "string" && MEETING_CONNECTIONS.has(raw.connection)) {
     snapshot.connection = raw.connection as BridgeWidgetMeetingConnection;
   }
@@ -640,6 +649,8 @@ export type BridgeWidgetSnapshotFields = {
   audioMode?: BridgeAudioMode;
   /** web #646: see `BridgeWidgetSnapshot.sessionDisplaced`. */
   sessionDisplaced?: boolean;
+  /** See `BridgeWidgetSnapshot.meetCaptionsOff`. */
+  meetCaptionsOff?: boolean;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -682,6 +693,7 @@ export function buildBridgeWidgetSnapshot(
   if (fields.bridgeCapturerAway !== undefined) snapshot.bridgeCapturerAway = fields.bridgeCapturerAway;
   if (fields.audioMode) snapshot.audioMode = fields.audioMode;
   if (fields.sessionDisplaced !== undefined) snapshot.sessionDisplaced = fields.sessionDisplaced;
+  if (fields.meetCaptionsOff !== undefined) snapshot.meetCaptionsOff = fields.meetCaptionsOff;
   return snapshot;
 }
 
@@ -972,6 +984,8 @@ export type BridgeWidgetMeetingStatus = {
   /** Another login took the meeting over; the popup offers "Use this device". */
   sessionDisplaced: boolean;
   connection: BridgeWidgetMeetingConnection | null;
+  /** Meet's CC looks off on the captured call; the popup asks to turn it on. */
+  meetCaptionsOff: boolean;
 };
 
 export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWidgetMeetingStatus {
@@ -983,6 +997,7 @@ export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWi
     idleReaped: snapshot?.idleReaped === true,
     sessionDisplaced: snapshot?.sessionDisplaced === true,
     connection: snapshot?.connection ?? null,
+    meetCaptionsOff: snapshot?.meetCaptionsOff === true,
   };
 }
 

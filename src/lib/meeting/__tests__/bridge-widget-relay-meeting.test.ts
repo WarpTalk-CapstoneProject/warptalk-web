@@ -127,6 +127,7 @@ test("an old main window's snapshot, with none of the new fields, still parses u
     "meetingError",
     "idleReaped",
     "sessionDisplaced",
+    "meetCaptionsOff",
     "connection",
     "isRoomHost",
   ]) {
@@ -299,6 +300,7 @@ test("meeting status claims nothing without a main window, and reads what one sa
     idleReaped: false,
     sessionDisplaced: false,
     connection: null,
+    meetCaptionsOff: false,
   });
   const view = connected(
     parsedSnapshot({
@@ -317,5 +319,19 @@ test("meeting status claims nothing without a main window, and reads what one sa
     idleReaped: true,
     sessionDisplaced: true,
     connection: "disconnected",
+    meetCaptionsOff: false,
   });
+});
+
+test("meetCaptionsOff: built only when given, round-trips, an unreadable value is dropped alone", () => {
+  assert.equal("meetCaptionsOff" in buildBridgeWidgetSnapshot(baseFields, 1), false);
+  const built = buildBridgeWidgetSnapshot({ ...baseFields, meetCaptionsOff: true }, 1);
+  assert.equal(built.meetCaptionsOff, true);
+  const roundTrip = parsedSnapshot({ meetCaptionsOff: true });
+  assert.equal(roundTrip.meetCaptionsOff, true);
+  assert.equal(bridgeWidgetMeetingStatus(connected(roundTrip)).meetCaptionsOff, true);
+  assert.equal(parsedSnapshot({ meetCaptionsOff: false }).meetCaptionsOff, false);
+  const junk = parsedSnapshot({ meetCaptionsOff: "yes", idleReaped: true });
+  assert.equal("meetCaptionsOff" in junk, false);
+  assert.equal(junk.idleReaped, true, "the rest of the snapshot survives");
 });
