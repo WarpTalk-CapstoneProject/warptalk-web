@@ -326,10 +326,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // MEETINGS, this lists what they wrote down.
     { icon: Files, label: t("nav.artifacts"), href: `/${slug}/artifacts` },
     { icon: Waveform, label: t("nav.voiceProfiles"), href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
-    // What WarpBot can do here: its built-in tools and the plugins this member connected. For every
-    // member, because every member talks to WarpBot. Before this row the page was reachable only
-    // from links inside the WarpBot panel (owner, 2026-10-01).
-    { icon: Toolbox, label: t("nav.tools"), href: `/${slug}/tools` },
+    // My connections sits with the personal rows (owner, 2026-10-02): a connection is a person's
+    // own, for every member, and it is not workspace-shaped — hence the exact match rather than
+    // NavLink's prefix match. It was in the Settings sidebar, then under Workspace; neither is
+    // where a member looks for something that is theirs.
+    {
+      icon: PlugsConnected,
+      label: t("settingsNav.myConnections"),
+      href: "/settings/plugins",
+      exact: true,
+    },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -421,15 +427,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // its old address forwards home in proxy.ts. Action items still live on each meeting's record.
   );
 
-  // Every member, not just Owner/Admin: a connection is a person's own. It used to sit in the
-  // Settings sidebar, where a plain member had no reason to look (2026-10-01). The page is not
-  // workspace-shaped, so the row is active by exact path rather than by NavLink's prefix match.
-  workspaceNav.push({
-    icon: PlugsConnected,
-    label: t("settingsNav.myConnections"),
-    href: "/settings/plugins",
-    exact: true,
-  });
+  // What WarpBot can do in THIS workspace: its built-in tools and the plugins the workspace allows.
+  // For every member, because every member talks to WarpBot. Under Workspace, not with the
+  // personal rows above (owner, 2026-10-02): the list is the workspace's, not the member's.
+  workspaceNav.push({ icon: Toolbox, label: t("nav.tools"), href: `/${slug}/tools` });
 
   if (isOwnerOrAdmin) {
     // No Invitations entry: invitations and join requests are rows on Members now, because
