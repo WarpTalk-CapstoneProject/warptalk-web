@@ -475,6 +475,22 @@ export const WorkspaceService = {
     return data;
   },
 
+  /** The PII-masked copy of a restricted document — what an ordinary member reads and downloads. */
+  async downloadMaskedDocument(workspaceId: string, docId: string): Promise<Blob> {
+    const { data } = await apiClient.get<Blob>(API.workspaces.documentMaskedDownload(workspaceId, docId), {
+      responseType: "blob",
+    });
+    return data;
+  },
+
+  /** Owner/Admin. Returns the document with `maskedVersionStatus: "pending"`. */
+  async rescanMaskedVersion(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(
+      API.workspaces.documentMaskedRescan(workspaceId, docId),
+    );
+    return data;
+  },
+
   async deleteDocument(workspaceId: string, docId: string): Promise<void> {
     await apiClient.delete(API.workspaces.documentDetail(workspaceId, docId));
   },

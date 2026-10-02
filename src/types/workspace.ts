@@ -308,7 +308,38 @@ export interface WorkspaceDocumentDto {
    * from `documentPendingRevisionDownload`, for reviewers and the uploader only.
    */
   pendingRevision?: WorkspaceDocumentPendingRevisionDto | null;
+  /**
+   * Which version of the content THIS caller gets. `masked` is the PII-masked copy of a document
+   * the security scan restricted, in the format it was uploaded in; an ordinary member gets only
+   * that, the original download answers 403 for them and `downloadUrl` is null. `none` is a
+   * document listed for the caller that has no readable version yet. Absent on older APIs, which
+   * means `original`.
+   */
+  contentAccess?: DocumentContentAccess;
+  /** A masked copy exists and this caller may read it (`documentMaskedDownload`). */
+  maskedVersionAvailable?: boolean;
+  /** Why the document does or does not have a masked copy; null when it is not restricted. Detail route only. */
+  maskedVersionStatus?: DocumentMaskedVersionStatus | null;
+  /** Owner/Admin on a restricted document: may ask for the scan to run again. Detail route only. */
+  canRescanMaskedVersion?: boolean;
 }
+
+export type DocumentContentAccess = "original" | "masked" | "none";
+
+/** Mirrors the backend's WorkspaceDocumentMaskedVersionStatuses. */
+export type DocumentMaskedVersionStatus =
+  | "available"
+  | "not_generated"
+  | "pending"
+  | "no_pii_found"
+  | "dlp_blocked"
+  | "masked_text_unavailable"
+  | "unsupported_format"
+  | "unsupported_content"
+  | "alignment_failed"
+  | "verification_failed"
+  | "converter_unavailable"
+  | "error";
 
 /** WT-854 — see `WorkspaceDocumentDto.pendingRevision`. */
 export interface WorkspaceDocumentPendingRevisionDto {

@@ -26,9 +26,17 @@ assert.match(
   /const previewRevision =\s+showingPending && pendingFileRevision \? pendingFileRevision : fileRevision;/,
   "the preview revision must be the approved file's unless the pending revision is being shown",
 );
+// The PII-masked copy of a restricted document is a third file from a third route, with its own
+// revision (maskedFileRevision), so an owner switching between Original and Masked never sees the
+// other file's bytes or parsed state.
 assert.match(
   page,
-  /<DocumentPreview\s+key=\{previewRevision\}[\s\S]{0,500}revision=\{previewRevision\}/,
+  /const readerRevision = version === "masked" \? maskedFileRevision\(doc\) : previewRevision;/,
+  "the reader revision must be the masked copy's when it is shown, otherwise the preview revision",
+);
+assert.match(
+  page,
+  /<DocumentPreview\s+key=\{readerRevision\}[\s\S]{0,500}revision=\{readerRevision\}/,
   "the preview must remount on a new file (parsed Word/sheet state must not outlive it) and receive the revision",
 );
 

@@ -401,6 +401,12 @@ export const API = {
     /** A document's approval and feedback history, newest first. WT-633. */
     documentHistory: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/history`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
+    /** The PII-masked copy of a restricted document, in its uploaded format. */
+    documentMaskedDownload: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/masked/download`,
+    /** Owner/Admin: scan a restricted document again so its masked copy is produced. */
+    documentMaskedRescan: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/masked/rescan`,
     documentPolicies: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies`,
     documentPolicyDetail: (workspaceId: string, docId: string, policyId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies/${policyId}`,
   },

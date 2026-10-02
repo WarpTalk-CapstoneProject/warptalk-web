@@ -305,7 +305,7 @@
     "test:traceable-narrative": "node scripts/check-traceable-narrative-contract.mjs",
     "test:document-visibility": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/document-visibility.test.ts",
     "test:document-preview-revision": "node scripts/check-document-preview-revision.mjs",
-    "test:document-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/document-review.test.ts",
+    "test:document-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/document-review.test.ts src/lib/documents/__tests__/document-masking.test.ts",
     "test:record-documents": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/documents/__tests__/record-document-layout.test.ts src/lib/documents/__tests__/record-file-name.test.ts",
     "test:voice-library-languages": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/voice/__tests__/library-languages.test.ts",
     "test:voice-enrollment-challenge": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/voice/__tests__/voice-enrollment-challenge.test.ts",
