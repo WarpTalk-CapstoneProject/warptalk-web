@@ -132,5 +132,80 @@
       "updated": "Updated",
       "created": "Created"
     }
+  },
+  "tabs": {
+    "terms": "Terms",
+    "importTemplate": "Import template",
+    "label": "Global glossary sections"
+  },
+  "importTemplate": {
+    "description": "The file every workspace downloads to import a glossary. It is a file shape, not a list of terms: columns grouped Source, Target and General, built for any language pair from the per-language samples below.",
+    "statusDefault": "Built-in default — no changes saved yet.",
+    "statusSaved": "Last saved {date}.",
+    "unsaved": "Unsaved changes",
+    "resetToDefault": "Reset to default",
+    "discard": "Discard changes",
+    "save": "Save",
+    "readOnly": "Read only",
+    "saved": "Import template saved.",
+    "saveFailed": "Could not save the import template.",
+    "resetDone": "Import template reset to the default.",
+    "resetFailed": "Could not reset the import template.",
+    "loadFailed": "The import template could not be loaded. Nothing is shown so nothing can be overwritten by accident; reload to try again.",
+    "problems": {
+      "nameRequired": "Every column needs a name.",
+      "duplicateHeader": "“{label}” is used by both {first} and {second}. A header name or alias may belong to one column only.",
+      "priorityNumber": "The Priority sample for {language} must be a whole number."
+    },
+    "columns": {
+      "title": "Columns",
+      "description": "Group, order, header name and accepted aliases of each column. Term and Translation are required by the importer, so they stay in their groups and cannot be hidden.",
+      "order": "Order",
+      "name": "Header name",
+      "aliases": "Also accepted as",
+      "aliasesPlaceholder": "comma-separated",
+      "group": "Group",
+      "shown": "In file",
+      "required": "Required",
+      "emptyGroup": "No columns in this group.",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "nameFor": "Header name of {key}",
+      "aliasesFor": "Aliases of {name}",
+      "shownFor": "Include {name} in the file",
+      "groupHint": {
+        "source": "written in the source language",
+        "target": "written in the target language",
+        "general": "language-neutral"
+      }
+    },
+    "languages": {
+      "title": "Language samples",
+      "description": "Sample values for the faint sample row, one block per language. A pair's file takes the Source columns from the source language's block and the Target columns from the target language's block.",
+      "add": "Add a language",
+      "edit": "Edit",
+      "removeFor": "Remove the {language} samples",
+      "notPublished": "Not published",
+      "noTerm": "No sample term yet",
+      "filled": "{filled} of {total} values",
+      "empty": "No language has samples yet.",
+      "missingNote": "A language without samples still gets a file: its Term and Translation cells show a placeholder such as '<translation in Korean>', never an invented word."
+    },
+    "preview": {
+      "title": "Preview",
+      "description": "Exactly what a workspace downloads for this pair, including unsaved changes."
+    },
+    "sampleDialog": {
+      "title": "{language} samples",
+      "description": "Values shown in the sample row when this language is the source (Source and General columns) or the target (Target columns).",
+      "hidden": "hidden",
+      "done": "Done"
+    },
+    "resetDialog": {
+      "title": "Reset the import template?",
+      "description": "Columns, names, aliases and samples go back to the built-in default for every workspace. This cannot be undone.",
+      "cancel": "Cancel",
+      "confirm": "Reset"
+    }
   }
 }

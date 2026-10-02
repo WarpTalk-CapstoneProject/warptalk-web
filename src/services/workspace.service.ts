@@ -2,6 +2,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { WorkspaceEntitlementsDto } from "@/types/workspace-entitlements";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
+import type { GlossaryWarpBotStatus } from "@/lib/glossary/warpbot-status";
 import type { DuplicateStrategy } from "@/lib/documents/document-review";
 import type {
   UpdateKnowledgeChunkRequest,
@@ -542,6 +543,27 @@ export const WorkspaceService = {
     isActive: boolean;
   }): Promise<void> {
     await apiClient.put(API.glossaries.get(id), request);
+  },
+
+  /**
+   * PO 2026-10-02: change a glossary's language pair after creation. Owner/Admin only; the
+   * existing terms are not re-translated or changed. Answers the updated glossary.
+   */
+  async updateGlossaryLanguages(
+    id: string,
+    request: { sourceLanguage: string; targetLanguage: string },
+  ): Promise<GlossaryDto> {
+    const { data } = await apiClient.put<GlossaryDto>(API.glossaries.languages(id), request);
+    return data;
+  },
+
+  /**
+   * PO 2026-10-02: the real state of loading this glossary's terms into WarpBot's knowledge
+   * (idle | loading | stalled | failed | ready, with counts). Any workspace member.
+   */
+  async getGlossaryWarpBotStatus(id: string): Promise<GlossaryWarpBotStatus> {
+    const { data } = await apiClient.get<GlossaryWarpBotStatus>(API.glossaries.warpbotStatus(id));
+    return data;
   },
 
   async deleteGlossary(id: string): Promise<void> {

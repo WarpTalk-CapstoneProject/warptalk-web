@@ -26,7 +26,7 @@
     "test:admin-command-palette": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/admin/__tests__/command-palette.test.ts && node scripts/check-admin-command-palette-contract.mjs",
     "test:system-health": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/admin/__tests__/system-health.test.ts",
     "test:workspace-audit-log": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/audit-log.test.ts",
-    "test:glossary-template": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/glossary/__tests__/sample-template.test.ts",
+    "test:glossary-template": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/glossary/__tests__/import-template.test.ts src/lib/glossary/__tests__/glossary-pairs.test.ts src/lib/glossary/__tests__/warpbot-status.test.ts",
     "test:transcript-absence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/transcript-absence.test.ts",
     "test:mention-completion": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/assistant/__tests__/mention-completion.test.ts",
     "test:mention-trigger": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/assistant/__tests__/mention-trigger.test.ts",

@@ -61,10 +61,10 @@
     "pendingApproval": "Pending Approval",
     "revisionPending": "Revision pending",
     "administrative": "Administrative",
-    "aiReady": "AI Ready",
-    "aiFailed": "AI Failed",
-    "aiIngestionFailed": "AI Ingestion Failed",
-    "processingAi": "Processing AI...",
+    "aiReady": "Ready in WarpBot knowledgebase",
+    "aiFailed": "Couldn't load into WarpBot knowledgebase",
+    "aiIngestionFailed": "Couldn't load into WarpBot knowledgebase",
+    "processingAi": "Loading into WarpBot knowledgebase…",
     "aiContext": "AI Context"
   },
   "actions": {

@@ -1,29 +1,18 @@
 /**
- * Curated Glossary Templates Catalog.
- * // i18n-allow-file: curated multilingual templates catalog (EN, VI, JA)
+ * Six curated domain term packs (IT, Business, Gaming, General; EN, VI, JA).
+ * // i18n-allow-file: curated multilingual term packs (EN, VI, JA) — genuine language data.
  *
- * Provides standardized templates across key domains (IT, Business, Gaming, General)
- * and languages (EN, VI, JA).
- * Used by Admin Master Portal (/admin/glossary-templates) and Consumer Galleries (Workspace / Global Glossary).
+ * WT-880: these used to be called "glossary templates" and were offered as one-click imports
+ * ("Templates Catalog"). The PO ruled a template is a FILE SHAPE (see ./import-template), not a
+ * pack of terms: domain is a value in a row, and loading a pack poured terms of a fixed language
+ * pair into whatever glossary was open (WT-522 again). The packs are kept as data, renamed away
+ * from "template", and deliberately not wired to any UI in this wave.
  */
 
-import ExcelJS from "exceljs";
+export type DomainTermPackCategory = "IT" | "BUSINESS" | "GAMING" | "GENERAL";
+export type DomainTermPackLanguage = "en" | "vi" | "ja";
 
-export const GLOSSARY_TEMPLATE_COLUMNS = [
-  "Term",
-  "Translation",
-  "Context",
-  "Field",
-  "Definition",
-  "Note",
-  "Part of speech",
-  "Priority",
-] as const;
-
-export type GlossaryTemplateCategory = "IT" | "BUSINESS" | "GAMING" | "GENERAL";
-export type GlossaryTemplateLanguage = "en" | "vi" | "ja";
-
-export interface GlossaryTemplateTermItem {
+export interface DomainTermPackTerm {
   term: string;
   translation: string;
   context: string;
@@ -34,20 +23,20 @@ export interface GlossaryTemplateTermItem {
   priority?: number;
 }
 
-export interface GlossaryTemplateDefinition {
+export interface DomainTermPack {
   key: string;
   name: string;
   description: string;
-  category: GlossaryTemplateCategory;
-  sourceLanguage: GlossaryTemplateLanguage;
-  targetLanguage: GlossaryTemplateLanguage;
-  sampleTerms: GlossaryTemplateTermItem[];
+  category: DomainTermPackCategory;
+  sourceLanguage: DomainTermPackLanguage;
+  targetLanguage: DomainTermPackLanguage;
+  sampleTerms: DomainTermPackTerm[];
   status: "published" | "draft" | "archived";
   isDefault?: boolean;
   updatedAt: string;
 }
 
-export const BUILT_IN_GLOSSARY_TEMPLATES: GlossaryTemplateDefinition[] = [
+export const BUILT_IN_DOMAIN_TERM_PACKS: DomainTermPack[] = [
   {
     key: "it-software-devops-en-vi",
     name: "IT & Software DevOps (EN → VI)",
@@ -397,77 +386,3 @@ export const BUILT_IN_GLOSSARY_TEMPLATES: GlossaryTemplateDefinition[] = [
     ],
   },
 ];
-
-/**
- * Generates an Excel (.xlsx) Blob for a given glossary template.
- */
-export async function generateTemplateXlsx(template: GlossaryTemplateDefinition): Promise<Blob> {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(`${template.sourceLanguage.toUpperCase()}-${template.targetLanguage.toUpperCase()}`);
-
-  // Headers
-  sheet.columns = [
-    { header: "Term", key: "term", width: 22 },
-    { header: "Translation", key: "translation", width: 26 },
-    { header: "Context", key: "context", width: 35 },
-    { header: "Field", key: "domain", width: 18 },
-    { header: "Definition", key: "definition", width: 35 },
-    { header: "Note", key: "usageNote", width: 25 },
-    { header: "Part of speech", key: "partOfSpeech", width: 16 },
-    { header: "Priority", key: "priority", width: 12 },
-  ];
-
-  // Header styling
-  const headerRow = sheet.getRow(1);
-  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  headerRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF4F46E5" }, // Indigo primary color
-  };
-  headerRow.alignment = { vertical: "middle", horizontal: "center" };
-  headerRow.height = 24;
-
-  // Add rows
-  for (const item of template.sampleTerms) {
-    const row = sheet.addRow({
-      term: item.term,
-      translation: item.translation,
-      context: item.context || "",
-      domain: item.domain || "",
-      definition: item.definition || "",
-      usageNote: item.usageNote || "",
-      partOfSpeech: item.partOfSpeech || "",
-      priority: item.priority ?? 5,
-    });
-    row.alignment = { vertical: "middle", wrapText: true };
-  }
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  return new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-}
-
-/**
- * Generates a UTF-8 BOM CSV string for a given glossary template.
- */
-export function generateTemplateCsv(template: GlossaryTemplateDefinition): string {
-  const header = [...GLOSSARY_TEMPLATE_COLUMNS].join(",");
-  const rows = template.sampleTerms.map((item) => {
-    const cells = [
-      item.term,
-      item.translation,
-      item.context || "",
-      item.domain || "",
-      item.definition || "",
-      item.usageNote || "",
-      item.partOfSpeech || "",
-      String(item.priority ?? 5),
-    ];
-    return cells.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",");
-  });
-
-  // UTF-8 BOM prefix
-  return "\uFEFF" + [header, ...rows].join("\r\n");
-}

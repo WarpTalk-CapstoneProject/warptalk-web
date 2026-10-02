@@ -360,7 +360,9 @@
       "setting_reset": "プラットフォーム設定をリセット",
       "setting_reverted": "プラットフォーム設定を元に戻す",
       "setting_imported": "プラットフォーム設定をインポート",
-      "settings_exported": "プラットフォーム設定をエクスポート"
+      "settings_exported": "プラットフォーム設定をエクスポート",
+      "glossary_template_updated": "用語集インポート用テンプレートを保存",
+      "glossary_template_reset": "用語集インポート用テンプレートを既定に戻す"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -393,7 +395,8 @@
       "credit_pack": "クレジットパック",
       "addon": "アドオン",
       "coupon": "クーポン",
-      "platform_setting": "プラットフォーム設定"
+      "platform_setting": "プラットフォーム設定",
+      "glossary_import_template": "用語集インポート用テンプレート"
     },
     "sources": {
       "workspace_service": "ワークスペース",

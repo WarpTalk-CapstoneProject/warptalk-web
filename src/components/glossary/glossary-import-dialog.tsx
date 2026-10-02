@@ -21,18 +21,22 @@
  * The preview exists so the mapping is visible before anything is written. A header row that was
  * read as data, or a file whose columns are in another language, shows up here rather than as 200
  * junk terms in the dictionary.
+ *
+ * WT-880: the columns come from the admin-configured import template (see
+ * lib/glossary/import-template). The header aliases are the template's names and aliases layered
+ * over the importer's historical ones, so old files keep importing; the template's faint sample
+ * row is skipped. The "Templates Catalog" toggle is gone — a template is a file shape, not a pack
+ * of terms — and one line remains: download the template for THIS glossary's pair, or open the
+ * page's "Import template" tab.
  */
 
 import { useTranslations } from "next-intl";
-import { FileArrowUp, Spinner, Warning, Sparkle, UploadSimple } from "@phosphor-icons/react";
-import {
-  buildSampleTemplateRows,
-  describeExpectedPair,
-} from "@/lib/glossary/sample-template";
-import { GlossaryTemplateGallery } from "./glossary-template-gallery";
+import { FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
 import ExcelJS from "exceljs";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
+import { useBandLabel } from "@/components/glossary/import-template-preview";
 import {
   Dialog,
   DialogContent,
@@ -42,56 +46,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  useGlossaryImportTemplate,
+  usePublishedTemplateLanguages,
+} from "@/hooks/use-glossary-import-template";
+import {
+  baseLanguage,
+  buildHeaderAliases,
+  buildImportTemplateLayout,
+  describeExpectedPair,
+  knownSamplePairs,
+  parseGlossaryMatrix,
+  type ParsedGlossaryRow,
+} from "@/lib/glossary/import-template";
+import {
+  downloadImportTemplateXlsx,
+  isSampleStyledCell,
+} from "@/lib/glossary/import-template-file";
+import { getLanguageName } from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 
-/** One parsed row, in the shape the bulk endpoint takes. */
-export interface ParsedGlossaryRow {
-  sourceTerm: string;
-  targetTerm: string;
-  context?: string | null;
-  domain?: string | null;
-  definition?: string | null;
-  usageNote?: string | null;
-  partOfSpeech?: string | null;
-  priority?: number;
-}
-
-/**
- * Header aliases, lowercased. A vocabulary owner's spreadsheet is not going to use our column
- * names, and "Term"/"Translation" are the two that matter — the rest are optional enrichment.
- */
-const HEADER_ALIASES: Record<string, keyof ParsedGlossaryRow> = {
-  term: "sourceTerm",
-  "source term": "sourceTerm",
-  sourceterm: "sourceTerm",
-  source: "sourceTerm",
-  translation: "targetTerm",
-  "target term": "targetTerm",
-  targetterm: "targetTerm",
-  target: "targetTerm",
-  "translate as": "targetTerm",
-  context: "context",
-  "usage context": "context",
-  "context sentence": "context",
-  // i18n-allow: Vietnamese column aliases supported by spreadsheet importer
-  "ngữ cảnh": "context",
-  "ngu canh": "context",
-  "câu ví dụ": "context",
-  "ví dụ": "context",
-  example: "context",
-  "example sentence": "context",
-  domain: "domain",
-  field: "domain",
-  "business domain": "domain",
-  definition: "definition",
-  meaning: "definition",
-  note: "usageNote",
-  "usage note": "usageNote",
-  usagenote: "usageNote",
-  "part of speech": "partOfSpeech",
-  partofspeech: "partOfSpeech",
-  priority: "priority",
-};
+export type { ParsedGlossaryRow } from "@/lib/glossary/import-template";
 
 function cellText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -109,85 +84,14 @@ function cellText(value: unknown): string {
 }
 
 /**
- * WT-505: the header row is FOUND, not assumed to be row 1.
- *
- * Real vocabulary spreadsheets routinely open with a title, an export timestamp, or a blank
- * spacer before the column names — none of which the person exporting them thinks of as data.
- * Reading row 1 unconditionally turned every one of those into "this file has no Term column",
- * which is a true statement about row 1 and a false one about the file.
- *
- * Bounded to the first few rows: beyond that, a file with no recognisable header really does not
- * have one, and scanning further would start matching a stray cell in the body.
- */
-const MAX_HEADER_SCAN_ROWS = 10;
-
-function findHeaderRow(matrix: string[][]): {
-  index: number;
-  columns: (keyof ParsedGlossaryRow | undefined)[];
-} | null {
-  const limit = Math.min(matrix.length, MAX_HEADER_SCAN_ROWS);
-  for (let index = 0; index < limit; index += 1) {
-    const columns = (matrix[index] ?? [])
-      .map((cell) => cell.trim().toLowerCase())
-      .map((name) => HEADER_ALIASES[name]);
-    if (columns.includes("sourceTerm") && columns.includes("targetTerm")) {
-      return { index, columns };
-    }
-  }
-  return null;
-}
-
-function toRows(
-  matrix: string[][],
-  t: (key: string) => string,
-): { rows: ParsedGlossaryRow[]; error?: string } {
-  const found = findHeaderRow(matrix);
-  const columns = found?.columns ?? [];
-
-  const termIndex = columns.indexOf("sourceTerm");
-  const translationIndex = columns.indexOf("targetTerm");
-
-  // A wrong FILE, not a wrong row. Importing nothing from a file the user believes is correct,
-  // without saying why, is the worst available outcome.
-  if (termIndex === -1 || translationIndex === -1) {
-    return {
-      rows: [],
-      error: t("missingColumns"),
-    };
-  }
-
-  const rows: ParsedGlossaryRow[] = [];
-  for (const raw of matrix.slice((found?.index ?? 0) + 1)) {
-    const sourceTerm = (raw[termIndex] ?? "").trim();
-    const targetTerm = (raw[translationIndex] ?? "").trim();
-    // A blank line in the middle of a spreadsheet is punctuation, not data.
-    if (!sourceTerm && !targetTerm) continue;
-
-    const row: ParsedGlossaryRow = { sourceTerm, targetTerm };
-    columns.forEach((field, index) => {
-      if (!field || field === "sourceTerm" || field === "targetTerm") return;
-      const value = (raw[index] ?? "").trim();
-      if (!value) return;
-      if (field === "priority") {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) row.priority = parsed;
-        return;
-      }
-      row[field] = value as never;
-    });
-    rows.push(row);
-  }
-
-  return { rows };
-}
-
-/**
  * A deliberately small CSV reader: quoted fields with embedded commas and doubled quotes, which is
  * what Excel emits. Not a general RFC-4180 parser — a `.csv` with embedded newlines inside quotes
  * should be imported as `.xlsx`, and saying so is better than half-parsing it.
  */
 function parseCsv(text: string): string[][] {
   return text
+    // A BOM on the first header cell would stop "Term" from matching.
+    .replace(/^﻿/, "")
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0)
     .map((line) => {
@@ -215,11 +119,16 @@ function parseCsv(text: string): string[][] {
     });
 }
 
-async function parseWorkbook(file: File): Promise<string[][]> {
+/**
+ * The first sheet as a matrix, plus which rows carry the template's faint sample-row style (so
+ * the importer can skip that row even after somebody edited its text).
+ */
+async function parseWorkbook(file: File): Promise<{ matrix: string[][]; styledSampleRows: Set<number> }> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
   const sheet = workbook.worksheets[0];
-  if (!sheet) return [];
+  const styledSampleRows = new Set<number>();
+  if (!sheet) return { matrix: [], styledSampleRows };
 
   const matrix: string[][] = [];
   sheet.eachRow((row) => {
@@ -229,44 +138,10 @@ async function parseWorkbook(file: File): Promise<string[][]> {
     for (let column = 1; column <= sheet.columnCount; column += 1) {
       cells.push(cellText(row.getCell(column).value));
     }
+    if (isSampleStyledCell(row.getCell(1))) styledSampleRows.add(matrix.length);
     matrix.push(cells);
   });
-  return matrix;
-}
-
-/**
- * WT-505: a file the importer is guaranteed to accept, so "what shape should this be?" stops
- * being answered by trial and error against an error message.
- *
- * Built in the browser from the same column names the parser recognises, rather than shipped as
- * a static asset, so it cannot drift from HEADER_ALIASES the way a checked-in file would. CSV
- * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
- */
-function downloadSampleTemplate(
-  sourceLanguage: string | null | undefined,
-  targetLanguage: string | null | undefined,
-) {
-  // WT-522: for THIS glossary's languages. These two rows used to be hardcoded English →
-  // Vietnamese and handed to every glossary — an "English → English" one downloaded them and
-  // came back with 93 Vietnamese terms out of 94. The sample is the only instruction anyone
-  // gets about what belongs in the file, so it has to be right for the file being made.
-  const rows = buildSampleTemplateRows(sourceLanguage, targetLanguage);
-  const csv = rows
-    // Quote everything and double any embedded quote: a term legitimately containing a comma
-    // would otherwise produce a sample file the importer itself misreads.
-    .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","))
-    .join("\r\n");
-
-  // BOM, deliberately. Excel opens a UTF-8 CSV without one as Windows-1252 and renders "việt vị"
-  // as mojibake — for a glossary tool whose whole subject is non-ASCII vocabulary, a sample that
-  // demonstrates broken encoding is worse than none.
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "warptalk-glossary-template.csv";
-  link.click();
-  URL.revokeObjectURL(url);
+  return { matrix, styledSampleRows };
 }
 
 export function GlossaryImportDialog({
@@ -277,32 +152,51 @@ export function GlossaryImportDialog({
   targetLanguage,
   isImporting,
   onImport,
+  onViewTemplate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   glossaryName: string;
   /**
-   * WT-522: the pair this glossary was configured for. The sample template is built from it, and
-   * it is stated on screen — the sample used to be the only instruction a reader got, and it was
+   * WT-522: the pair this glossary was configured for. The template is built from it, and it is
+   * stated on screen — the sample used to be the only instruction a reader got, and it was
    * hardcoded to a pair that had nothing to do with their glossary.
    */
   sourceLanguage?: string | null;
   targetLanguage?: string | null;
   isImporting: boolean;
   onImport: (rows: ParsedGlossaryRow[]) => Promise<void>;
+  /** WT-880: opens the page's "Import template" tab. */
+  onViewTemplate?: () => void;
 }) {
   const t = useTranslations("glossary.dialogs.import");
+  const tTemplate = useTranslations("glossary.importTemplate");
+  const template = useGlossaryImportTemplate();
+  const { languages } = usePublishedTemplateLanguages();
+  const bandLabel = useBandLabel();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [rows, setRows] = useState<ParsedGlossaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"upload" | "templates">("upload");
+  const [skippedSample, setSkippedSample] = useState(false);
+
+  const languageName = (code: string) =>
+    languages.find((language) => language.code === code)?.name ?? getLanguageName(code);
+
+  const parseOptions = useMemo(
+    () => ({
+      aliases: buildHeaderAliases(template.config.columns),
+      samples: knownSamplePairs(template.config),
+    }),
+    [template.config],
+  );
 
   const reset = () => {
     setFileName(null);
     setRows([]);
     setError(null);
+    setSkippedSample(false);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -310,9 +204,10 @@ export function GlossaryImportDialog({
     setIsParsing(true);
     setError(null);
     setRows([]);
+    setSkippedSample(false);
     try {
-      const matrix = file.name.toLowerCase().endsWith(".csv")
-        ? parseCsv(await file.text())
+      const { matrix, styledSampleRows } = file.name.toLowerCase().endsWith(".csv")
+        ? { matrix: parseCsv(await file.text()), styledSampleRows: new Set<number>() }
         : await parseWorkbook(file);
 
       if (matrix.length === 0) {
@@ -321,12 +216,13 @@ export function GlossaryImportDialog({
         return;
       }
 
-      const parsed = toRows(matrix, t);
+      const parsed = parseGlossaryMatrix(matrix, { ...parseOptions, styledSampleRows });
       setFileName(file.name);
       if (parsed.error) {
-        setError(parsed.error);
+        setError(t("missingColumns"));
         return;
       }
+      setSkippedSample(parsed.skippedSample);
       if (parsed.rows.length === 0) {
         setError(t("columnsFoundButEmpty"));
         return;
@@ -351,6 +247,18 @@ export function GlossaryImportDialog({
     reset();
   };
 
+  /** WT-880: the admin's template for THIS glossary's pair (WT-522: never another pair's). */
+  const downloadTemplate = async () => {
+    const layout = buildImportTemplateLayout(template.config, sourceLanguage, targetLanguage, languageName);
+    try {
+      await downloadImportTemplateXlsx(layout, (group, language) =>
+        bandLabel(group, language ? languageName(language) : ""),
+      );
+    } catch {
+      toast.error(tTemplate("downloadFailed"));
+    }
+  };
+
   const expectedPair = describeExpectedPair(sourceLanguage, targetLanguage, (key, values) =>
     t(key, values),
   );
@@ -359,10 +267,7 @@ export function GlossaryImportDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          reset();
-          setActiveTab("upload");
-        }
+        if (!next) reset();
         onOpenChange(next);
       }}
     >
@@ -370,45 +275,15 @@ export function GlossaryImportDialog({
           min-content, so one unbreakable term in the preview used to push the whole column past
           the dialog edge. `minmax(0,1fr)` pins the column to the dialog width. The width override
           must carry the `sm:` variant, or the base `sm:max-w-sm` keeps the dialog at 24rem.
-          WT-907: the base DialogContent has no height cap, so a long template preview grew the
-          dialog past the viewport (it is centred with translate-y, so it spilled off both edges
-          and nothing scrolled). Cap it to the viewport and give the body row `minmax(0,1fr)` so
-          only the body scrolls while the header/tabs and the Import/Cancel footer stay visible. */}
+          WT-907: the base DialogContent has no height cap, so a long preview grew the dialog past
+          the viewport (it is centred with translate-y, so it spilled off both edges and nothing
+          scrolled). Cap it to the viewport and give the body row `minmax(0,1fr)` so only the body
+          scrolls while the header and the Import/Cancel footer stay visible. */}
       <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[14px] border-border bg-surface-1 shadow-none sm:max-h-[90dvh] sm:max-w-[760px]">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-[16px] font-semibold text-ink">
-              {t("title")}
-            </DialogTitle>
-            <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-[11.5px]">
-              <button
-                type="button"
-                onClick={() => setActiveTab("upload")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
-                  activeTab === "upload"
-                    ? "bg-surface-1 text-ink shadow-sm"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                <UploadSimple className="h-3.5 w-3.5" />
-                Upload file
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("templates")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
-                  activeTab === "templates"
-                    ? "bg-surface-1 text-ink shadow-sm"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                <Sparkle className="h-3.5 w-3.5 text-primary" weight="fill" />
-                Templates Catalog
-              </button>
-            </div>
-          </div>
+          <DialogTitle className="text-[16px] font-semibold text-ink">
+            {t("title")}
+          </DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted [overflow-wrap:anywhere]">
             {t.rich("description", {
               glossaryName: () => <span className="font-medium text-ink">{glossaryName}</span>,
@@ -419,130 +294,127 @@ export function GlossaryImportDialog({
         </DialogHeader>
 
         <div className="-mx-4 min-h-0 overflow-y-auto overscroll-contain px-4">
-          {activeTab === "templates" ? (
-            <div className="min-w-0 py-1">
-              <GlossaryTemplateGallery
-                onSelectTemplate={(template, loadedRows) => {
-                  setRows(loadedRows);
-                  setFileName(`${template.name} (Template)`);
-                  setActiveTab("upload");
-                }}
-              />
-            </div>
-          ) : (
-            <div className="min-w-0">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
-                {expectedPair ? (
-                  <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
-                ) : <span />}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
-                    className="font-medium text-primary underline-offset-2 hover:underline"
-                  >
-                    {t("downloadSample")} (.csv)
-                  </button>
-                  <span className="text-border">|</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("templates")}
-                    className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
-                  >
-                    <Sparkle className="h-3.5 w-3.5" />
-                    Templates Catalog (.xlsx / .csv)
-                  </button>
-                </div>
-              </div>
-
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".xlsx,.csv"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void handleFile(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className={cn(
-                  "flex w-full flex-col items-center gap-2 rounded-[10px] border border-dashed border-border px-4 py-6 text-center shadow-none transition-colors hover:bg-surface-2",
-                )}
-              >
-                <FileArrowUp className="h-6 w-6 text-ink-muted" />
-                <span
-                  className="max-w-full truncate text-[13px] font-medium text-ink"
-                  title={fileName ?? undefined}
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-col gap-1.5 text-[12px]">
+              {expectedPair ? (
+                <p className="leading-relaxed text-ink-muted">{expectedPair}</p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <button
+                  type="button"
+                  onClick={() => void downloadTemplate()}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
                 >
-                  {fileName ?? t("chooseFile")}
-                </span>
-                <span className="text-[11px] text-ink-subtle">
-                  {fileName ? t("chooseDifferentFile") : t("excelOrCsv")}
-                </span>
-              </button>
-
-              {isParsing ? (
-                <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-muted">
-                  <Spinner className="h-3.5 w-3.5 animate-spin" />
-                  {t("readingFile")}
-                </p>
-              ) : null}
-
-              {error ? (
-                <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
-                  <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{error}</span>
-                </p>
-              ) : null}
-
-              {rows.length > 0 ? (
-                <div className="mt-4">
-                  <p className="text-[12px] text-ink-muted">{t("rowsReady", { count: rows.length })}</p>
-                  {/* The preview is what catches a header row read as data, or a file whose columns
-                      are in another language — before it becomes 200 junk terms. */}
-                  <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
-                    {/* WT-886: `table-fixed` + explicit column widths, so a cell's content can never
-                        widen its column. Term/translation wrap anywhere (the preview exists to show
-                        what was parsed); context/field truncate with the full text in `title`. */}
-                    <table className="w-full table-fixed text-left text-[12px]">
-                      <colgroup>
-                        <col className="w-[30%]" />
-                        <col className="w-[30%]" />
-                        <col className="w-[25%]" />
-                        <col className="w-[15%]" />
-                      </colgroup>
-                      <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
-                        <tr>
-                          <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
-                          <th className="px-2.5 py-1.5 font-medium">{t("translation")}</th>
-                          <th className="px-2.5 py-1.5 font-medium">Context</th>
-                          <th className="px-2.5 py-1.5 font-medium">{t("field")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.slice(0, 50).map((row, index) => (
-                          <tr key={`${row.sourceTerm}-${index}`} className="border-t border-hairline">
-                            <td className="px-2.5 py-1.5 align-top text-ink font-medium [overflow-wrap:anywhere]">{row.sourceTerm || "—"}</td>
-                            <td className="px-2.5 py-1.5 align-top text-ink font-semibold text-primary [overflow-wrap:anywhere]">{row.targetTerm || "—"}</td>
-                            <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.context || undefined}>{row.context || "—"}</td>
-                            <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.domain || undefined}>{row.domain || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {rows.length > 50 ? (
-                    <p className="mt-1.5 text-[11px] text-ink-subtle">
-                      {t("showingFirst", { count: rows.length })}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+                  {t("downloadTemplate", {
+                    source: languageName(baseLanguage(sourceLanguage)),
+                    target: languageName(baseLanguage(targetLanguage)),
+                  })}
+                </button>
+                {onViewTemplate ? (
+                  <>
+                    <span className="text-border">|</span>
+                    <button
+                      type="button"
+                      onClick={onViewTemplate}
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      {t("viewTemplate")}
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
-          )}
+
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.csv"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleFile(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className={cn(
+                "flex w-full flex-col items-center gap-2 rounded-[10px] border border-dashed border-border px-4 py-6 text-center shadow-none transition-colors hover:bg-surface-2",
+              )}
+            >
+              <FileArrowUp className="h-6 w-6 text-ink-muted" />
+              <span
+                className="max-w-full truncate text-[13px] font-medium text-ink"
+                title={fileName ?? undefined}
+              >
+                {fileName ?? t("chooseFile")}
+              </span>
+              <span className="text-[11px] text-ink-subtle">
+                {fileName ? t("chooseDifferentFile") : t("excelOrCsv")}
+              </span>
+            </button>
+
+            {isParsing ? (
+              <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-muted">
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
+                {t("readingFile")}
+              </p>
+            ) : null}
+
+            {error ? (
+              <p className="mt-3 flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
+                <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{error}</span>
+              </p>
+            ) : null}
+
+            {rows.length > 0 ? (
+              <div className="mt-4">
+                <p className="text-[12px] text-ink-muted">
+                  {t("rowsReady", { count: rows.length })}
+                  {skippedSample ? ` ${t("sampleSkipped")}` : null}
+                </p>
+                {/* The preview is what catches a header row read as data, or a file whose columns
+                    are in another language — before it becomes 200 junk terms. */}
+                <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
+                  {/* WT-886: `table-fixed` + explicit column widths, so a cell's content can never
+                      widen its column. Term/translation wrap anywhere (the preview exists to show
+                      what was parsed); context/field truncate with the full text in `title`. */}
+                  <table className="w-full table-fixed text-left text-[12px]">
+                    <colgroup>
+                      <col className="w-[30%]" />
+                      <col className="w-[30%]" />
+                      <col className="w-[25%]" />
+                      <col className="w-[15%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
+                      <tr>
+                        <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
+                        <th className="px-2.5 py-1.5 font-medium">{t("translation")}</th>
+                        <th className="px-2.5 py-1.5 font-medium">{t("context")}</th>
+                        <th className="px-2.5 py-1.5 font-medium">{t("field")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.slice(0, 50).map((row, index) => (
+                        <tr key={`${row.sourceTerm}-${index}`} className="border-t border-hairline">
+                          <td className="px-2.5 py-1.5 align-top text-ink font-medium [overflow-wrap:anywhere]">{row.sourceTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink font-semibold text-primary [overflow-wrap:anywhere]">{row.targetTerm || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.context || undefined}>{row.context || "—"}</td>
+                          <td className="px-2.5 py-1.5 align-top text-ink-muted truncate" title={row.domain || undefined}>{row.domain || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.length > 50 ? (
+                  <p className="mt-1.5 text-[11px] text-ink-subtle">
+                    {t("showingFirst", { count: rows.length })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <DialogFooter className="mt-2">

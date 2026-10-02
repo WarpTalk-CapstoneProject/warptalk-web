@@ -31,6 +31,27 @@
   zooming out. Now only the body scrolls; header, tabs, and footer stay pinned. Same fix as the
   workspace import dialog (see `workspace-glossary.md`).
 
+## Tabs: Terms + Import template (WT-880 follow-up, 2026-10-02)
+
+- The page has two tabs (`CmsTabBar`, URL `?tab=import-template`): **Terms** (everything above) and
+  **Import template** (`src/components/admin/glossary/import-template-editor.tsx`). The header's
+  Bulk import / New term buttons show on Terms only.
+- `/admin/glossary-templates` and its sidebar/palette/title/permission entries are removed (that
+  page held `useState` only and saved nothing); `src/proxy.ts` forwards the old address to
+  `/admin/global-glossary?tab=import-template`; `scripts/check-retired-admin-pages.mjs` pins both.
+- The editor configures the glossary import FILE SHAPE every workspace downloads (no term
+  content): per column group (Source/Target/General), order (up/down), shown/hidden, header name,
+  aliases (comma-separated); per-language sample blocks as a card grid with an edit dialog, added
+  from the published languages; and a live preview/download for any pair (same component as the
+  workspace tab, unsaved changes included). Term and Translation are locked to their groups and
+  cannot be hidden. Duplicate header names/aliases and a non-integer Priority sample are flagged
+  before Save; the server re-validates.
+- API (TranscriptService): `GET/PUT/DELETE /admin/global-glossary/import-template`
+  (glossary:read / glossary:manage; PUT and DELETE audited as `glossary.template_updated` /
+  `glossary.template_reset` on `glossary_import_template`). DELETE = "Reset to default". Staff
+  without glossary:manage see it read-only.
+- The bulk-import dialog lost its "Templates Catalog" tab; it is the CSV textarea only.
+
 ## Data and AI Flow
 
 - UI uses `src/hooks/use-global-glossary.ts` and `src/services/global-glossary.service.ts`.
@@ -53,9 +74,9 @@
 
 - Create a draft, edit every field, publish it, view its audit history, archive it, and delete it.
 - Bulk-import a CSV containing `Term` and `Translation` headers.
-- WT-907: at a short viewport (e.g. 1280×600) open Bulk import → Templates Catalog, preview a long
-  template, and confirm the dialog stays inside the viewport, the body scrolls, and the
-  Cancel/Import buttons remain visible.
+- Import template tab: rename a column, move Definition to General, hide Part of speech, add a
+  language block, Save, reload; the workspace tab shows the same file. Reset to default restores it.
+  A duplicate alias blocks Save. /admin/glossary-templates forwards to the tab.
 - Confirm non-system-admin users see the access-required state.
 - Run `npm run test:2807-hotfix`, `npm run typecheck`, and the production build.
 - Real prompt behavior still requires a live meeting/assistant run with published terms; source,

@@ -31,7 +31,6 @@ export const ADMIN_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
   plugins: "plugins",
   "warpbot-tools": "warpbotTools",
   "global-glossary": "globalGlossary",
-  "glossary-templates": "glossaryTemplates",
   staff: "staff",
   roles: "roles",
 };

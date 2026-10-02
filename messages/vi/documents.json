@@ -61,10 +61,10 @@
     "pendingApproval": "Chờ duyệt",
     "revisionPending": "Bản sửa chờ duyệt",
     "administrative": "Hành chính",
-    "aiReady": "AI sẵn sàng",
-    "aiFailed": "AI thất bại",
-    "aiIngestionFailed": "Nạp AI thất bại",
-    "processingAi": "Đang xử lý AI...",
+    "aiReady": "Đã sẵn sàng trong knowledgebase của WarpBot",
+    "aiFailed": "Không nạp được vào knowledgebase của WarpBot",
+    "aiIngestionFailed": "Không nạp được vào knowledgebase của WarpBot",
+    "processingAi": "Đang nạp vào knowledgebase của WarpBot…",
     "aiContext": "Ngữ cảnh AI"
   },
   "actions": {

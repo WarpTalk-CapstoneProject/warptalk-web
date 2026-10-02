@@ -45,7 +45,6 @@
       "description": "Vào <glossaryName></glossaryName>. Một hàng gần đầu file phải đặt tên cột; cần có cột <term>Term</term> và <translation>Translation</translation>. Field, Definition, Note, Part of speech và Priority sẽ được dùng nếu có.",
       "expectedPairSame": "Bộ thuật ngữ này là {source} → {target}, nên cột thứ hai là ý nghĩa của mỗi từ chứ không phải bản dịch.",
       "expectedPairDifferent": "Bộ thuật ngữ này là {source} → {target}. Cột thứ hai nên là {target}.",
-      "downloadSample": "Tải file mẫu",
       "chooseFile": "Chọn file .xlsx hoặc .csv",
       "chooseDifferentFile": "Chọn file khác",
       "excelOrCsv": "Excel hoặc phân tách bằng dấu phẩy",
@@ -61,7 +60,11 @@
       "field": "Field",
       "cancel": "Hủy",
       "importing": "Đang nhập…",
-      "importCount": "{count, plural, other {Nhập # thuật ngữ}}"
+      "importCount": "{count, plural, other {Nhập # thuật ngữ}}",
+      "downloadTemplate": "Tải mẫu cho {source} → {target} (.xlsx)",
+      "viewTemplate": "Xem mẫu",
+      "sampleSkipped": "Đã bỏ qua hàng mẫu của template.",
+      "context": "Ngữ cảnh"
     }
   },
   "toasts": {
@@ -84,7 +87,8 @@
   },
   "tabs": {
     "custom": "Thuật ngữ tùy chỉnh",
-    "global": "Thuật ngữ hệ thống"
+    "global": "Thuật ngữ hệ thống",
+    "importTemplate": "Mẫu import"
   },
   "grouping": {
     "label": "Gom nhóm",
@@ -125,5 +129,52 @@
     "useThisInLanguage": "Dùng từ này trong {language}",
     "removeTerm": "Xóa thuật ngữ {index}",
     "addTerm": "Thêm thuật ngữ"
+  },
+  "importTemplate": {
+    "title": "Mẫu import",
+    "description": "Một khuôn file dùng cho mọi glossary. Chọn cặp ngôn ngữ bạn sẽ import; các cột Nguồn và Đích đổi theo hai ngôn ngữ đó. Mỗi hàng bên dưới tiêu đề là một thuật ngữ.",
+    "sourceLanguage": "Ngôn ngữ nguồn",
+    "targetLanguage": "Ngôn ngữ đích",
+    "groups": {
+      "source": "Nguồn",
+      "target": "Đích",
+      "general": "Chung"
+    },
+    "band": "{group} · {language}",
+    "sampleNote": "Hàng màu xám là hàng mẫu. Nó chỉ minh hoạ định dạng và được bỏ qua khi import.",
+    "downloadXlsx": "Tải .xlsx",
+    "downloadCsv": "Tải .csv",
+    "downloadFailed": "Không tạo được file. Hãy thử tải .csv.",
+    "fallbackNotice": "Đang hiện mẫu mặc định: không tải được mẫu đã lưu.",
+    "columnsTitle": "Các cột",
+    "columnHeader": "Cột",
+    "groupHeader": "Nhóm",
+    "acceptsHeader": "Cũng nhận tên",
+    "required": "Bắt buộc",
+    "columnsNote": "Tiêu đề được so khớp không phân biệt hoa thường và bỏ qua ngôn ngữ trong ngoặc, nên “Translation (Japanese)” và “translation” là cùng một cột. File làm theo tiêu đề cũ Term / Translation vẫn import được."
+  },
+  "pairs": {
+    "filterLabel": "Lọc glossary theo cặp ngôn ngữ",
+    "all": "Mọi cặp ({count})",
+    "option": "{source} → {target} ({count})"
+  },
+  "pairEditor": {
+    "label": "Cặp ngôn ngữ",
+    "source": "Ngôn ngữ nguồn",
+    "target": "Ngôn ngữ đích",
+    "changed": "Đã đổi cặp ngôn ngữ thành {source} → {target}.",
+    "changeFailed": "Không đổi được cặp ngôn ngữ.",
+    "confirm": "Các bản dịch hiện có được giữ nguyên. Đổi sang {source} → {target}?",
+    "confirmButton": "Đổi",
+    "cancel": "Huỷ"
+  },
+  "warpbot": {
+    "loading": "Đang nạp vào knowledgebase của WarpBot…",
+    "loadingProgress": "Đã nạp {done}/{total} thuật ngữ",
+    "ready": "Đã sẵn sàng trong knowledgebase của WarpBot",
+    "readyDescription": "WarpBot đã dùng được các thuật ngữ trong \"{name}\".",
+    "failed": "Không nạp được vào knowledgebase của WarpBot",
+    "failedDetail": "{count} thuật ngữ chưa được nạp. Sửa hoặc import lại để thử lại.",
+    "unconfirmedDetail": "WarpBot chưa xác nhận {count} thuật ngữ. Import lại để thử lại."
   }
 }

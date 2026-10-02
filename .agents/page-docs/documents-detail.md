@@ -29,8 +29,18 @@
 - Word preview: mammoth → DOMPurify → dangerouslySetInnerHTML. Any parse failure falls back to the
   "download the file" notice.
 
+## Documents list: WarpBot knowledgebase wording (WT-880 follow-up, 2026-10-02)
+
+The list's AI status badge (`documents/page.tsx`, from the real `ingestionStatus`) now reads
+"Loading into WarpBot knowledgebase…" / "Ready in WarpBot knowledgebase" / "Couldn't load into
+WarpBot knowledgebase" (`documents.status.*` in en/vi/ja), and the realtime toast uses the same
+wording, with a new error toast on `DocumentFailed`. No logic change to the status itself. See
+`workspace-glossary.md` for the glossary side.
+
 ## Known limitations
 
+- The realtime toasts in `realtime-notification-provider.tsx` are English-only (that provider has no
+  message bundle).
 - Server error messages (`response.data.error`) are not localized.
 - Other preview kinds (PDF, sheet, text) were not touched.
 
