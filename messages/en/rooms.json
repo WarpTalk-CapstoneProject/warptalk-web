@@ -273,6 +273,17 @@
     "suspended": "Translation stopped: this workspace's AI service is suspended. Ask a workspace owner to check billing.",
     "restored": "Translation is available again — the workspace's billing was restored."
   },
+  "languagePolicy": {
+    "narrowedTitle": "{dropped} left out of this meeting",
+    "narrowedDescription": "Your workspace no longer allows {dropped}, so this meeting is running in {effective} only. Ask a workspace admin to allow it again, or edit the meeting's languages.",
+    "startRefused": "This meeting can't start: its languages ({meeting}) are no longer allowed by your workspace, which now allows {allowed}. Edit the meeting's languages, or ask a workspace admin to allow these again.",
+    "none": "no languages"
+  },
+  "seriesBlockedNotice": {
+    "title": "\"{title}\" has stopped scheduling",
+    "body": "No new meetings are being created for this series: its languages are no longer allowed by your workspace. Edit the meeting's languages, or ask a workspace admin to allow them again.",
+    "openFailed": "Could not open this series. Try again in a moment."
+  },
   "bridgeWidget": {
     "relay": {
       "waiting": "Connecting to WarpTalk…",
