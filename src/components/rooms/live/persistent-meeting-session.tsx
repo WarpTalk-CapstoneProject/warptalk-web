@@ -5267,15 +5267,13 @@ export function PersistentMeetingSession({
                       isHost ? handleToggleMuteOnEntry : undefined
                     }
                     onMuteAll={isHost ? handleMuteAll : undefined}
-                    // Not gated on isHost, unlike the three host controls above it.
-                    //
-                    // Recording belongs to the room rather than to whoever booked it: the person
-                    // who needs the transcript timestamped is usually not the person who created
-                    // the meeting. MeetingRoomService.SetRecordingAsync accepts any participant
-                    // (IsInMeetingAsync), and every participant is told the moment it starts or
-                    // stops by the RecordingStateChanged toast above — that notice, not the
-                    // permission check, is what makes this safe to open up.
-                    onToggleRecording={handleToggleRecording}
+                    // Host only (owner decision, 2026-10-02). isRoomHost, not isHost: the server
+                    // gate (MeetingRoomService.SetRecordingAsync → IsHostAsync) is the room's
+                    // booker or its active host, so a workspace admin — host-like elsewhere in
+                    // this bar — would be handed a button that answers 403. In a Google Meet
+                    // bridge room the current capturer may too (WT-910), which is bridgeCanControl.
+                    // Everyone is still told when it starts or stops (RecordingStateChanged toast).
+                    onToggleRecording={isRoomHost || bridgeCanControl ? handleToggleRecording : undefined}
                     // isRoomHost, not isHost, for the reason the flash-mode and Stop Translation
                     // props above give: TranscriptRecordingService gates on IsRoomHostAsync, so a
                     // workspace admin — host-like everywhere else in this bar — would be handed a

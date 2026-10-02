@@ -312,8 +312,9 @@ export function MeetingControlBar({
   onToggleMuteOnEntry?: (enabled: boolean) => void;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
-  /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
-   * is told by toast either way. Omit to hide the record button. */
+  /** WT-06: starts/stops LiveKit Egress recording for the room. Host only — the caller passes it
+   * for the room host (or a bridge room's capturer) and omits it for everyone else, which hides
+   * the record button. */
   onToggleRecording?: () => void;
   /**
    * WT-605, host-only: opens the transcript panel and then stops/resumes writing it down.
@@ -537,9 +538,8 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      {/* No isHost clause, unlike Host controls above: recording is open to everyone in the
-          meeting (MeetingRoomService.IsInMeetingAsync), and every participant is toasted when it
-          starts or stops. The caller decides who sees this by passing onToggleRecording or not. */}
+      {/* No isHost clause here: the caller decides who sees this by passing onToggleRecording
+          or not, and it passes it for the room host only (isRoomHost is narrower than isHost). */}
       {onToggleRecording ? (
         <MeetControl
           label={
