@@ -2,6 +2,8 @@
 
 /**
  * SLOT: "Recording started. Tell everyone in the call." WT-916.
+ * And, in the same slot, "Recording didn't start · {reason}" with "Try again" when the default
+ * recording gave up (bridgeRecordingFailedView) — never both at once.
  *
  * WHY IT EXISTS
  *   The REC chip tells everyone on the WarpTalk side. People who are only in Google Meet see none
@@ -26,9 +28,37 @@ import { useBridgeWidget } from "./widget-context";
 
 export function RecordingStartNotice() {
   const { roomId, ended } = useBridgeWidget();
-  const { startNotice, dismissStartNotice } = useBridgeRecordingPrompt(roomId);
+  const { startNotice, dismissStartNotice, failed, retry } = useBridgeRecordingPrompt(roomId);
 
-  if (ended || !startNotice) return null;
+  if (ended) return null;
+
+  // WT-916: the same slot carries the other half of the story — the default recording gave up. The
+  // two never show together (one needs a recording, the other its absence). The main window, where
+  // the toast went, is hidden behind Meet, so this is where the host learns the call is NOT being
+  // recorded although the box was checked. "Try again" is a request main re-checks.
+  if (failed) {
+    return (
+      <div
+        data-bridge-recording-failed-notice
+        role="alert"
+        className="flex shrink-0 items-center gap-2 border-b border-border bg-destructive/10 px-3.5 py-1.5 text-[11px] leading-snug text-ink"
+      >
+        <span className="min-w-0 flex-1 truncate" title={failed.reason}>
+          <span className="font-medium">{BRIDGE_RECORD_CHOICE.failed}</span>
+          <span className="text-ink-muted"> · {failed.reason}</span>
+        </span>
+        <button
+          type="button"
+          onClick={retry}
+          className="shrink-0 rounded font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {BRIDGE_RECORD_CHOICE.retry}
+        </button>
+      </div>
+    );
+  }
+
+  if (!startNotice) return null;
 
   return (
     <div

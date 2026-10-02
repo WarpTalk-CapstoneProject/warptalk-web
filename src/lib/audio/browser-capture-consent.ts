@@ -214,4 +214,7 @@ export const BRIDGE_RECORD_CHOICE = {
   meetNotice: "People in the Meet call won't see that WarpTalk is recording. Let them know.",
   started: "Recording started. Tell everyone in the call.",
   dismiss: "Dismiss",
+  /** WT-916: the automatic start gave up. Host/capturer only; the reason is main's toast. */
+  failed: "Recording didn't start",
+  retry: "Try again",
 } as const;

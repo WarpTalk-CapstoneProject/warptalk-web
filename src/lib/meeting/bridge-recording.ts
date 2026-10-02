@@ -22,9 +22,16 @@
  *   "Start once" has to survive re-renders, a reconnect of the inbound leg, and a host who stops
  *   the recording by hand: none of those may start it again. But a host who stops listening and
  *   then answers the question again, with the box checked, HAS asked again. So every answer is a
- *   new token, and an automatic start is attempted at most once per token. Stopping by hand does
- *   not change the token, so nothing restarts; a failed start does not either, so a refusal (quota,
- *   403) is one toast rather than a loop.
+ *   new token, and an automatic start is attempted once per token. Stopping by hand does not
+ *   change the token, so nothing restarts; a refusal (quota, 403) does not either, so it is one
+ *   toast rather than a loop.
+ *
+ * WHEN THE START FAILS (WT-916)
+ *   A failure that says "not now" — 404 while the join is in flight, 503 from a cold room-type
+ *   lookup, 502/504/408/429, no answer at all — is retried on a bounded schedule (2 s, 5 s, 15 s,
+ *   30 s, then give up) for the SAME answer, re-checking the decision before each retry. A refusal
+ *   is not retried. Giving up is told once: a toast in main and a "Recording didn't start" line with
+ *   "Try again" in the popup, for host and capturer.
  *
  * WHAT THE POPUP IS TOLD
  *   The recording state lives in the main window (RecordingStateChanged on its hub connection; the
@@ -71,8 +78,25 @@ export interface BridgeAutoRecordingInput {
   recording: boolean;
   /** An automatic start is already in flight. */
   starting: boolean;
-  /** The token of the last answer an automatic start was attempted for in this room, if any. */
-  handledToken: { roomId: string; token: number } | null;
+  /**
+   * The token of the last answer an automatic start was attempted for in this room, if any.
+   * `attempts` (WT-916): how many starts of the current chain were made for it; absent = 1.
+   */
+  handledToken: { roomId: string; token: number; attempts?: number } | null;
+  /**
+   * WT-916: a retry that is due now (its backoff timer fired, or "Try again" was pressed). It opens
+   * the `already-handled` gate for exactly one more attempt of the SAME answer — and only that gate:
+   * every other check below still runs, so a retry never fires once the recording is on, the answer
+   * changed or was opted out, capture closed, or this user lost control.
+   */
+  retryDue?: BridgeRecordingRetry | null;
+}
+
+/** One scheduled retry of an automatic start. `attempt` is the number of the attempt it would make. */
+export interface BridgeRecordingRetry {
+  roomId: string;
+  token: number;
+  attempt: number;
 }
 
 export type BridgeAutoRecordingReason =
@@ -86,7 +110,8 @@ export type BridgeAutoRecordingReason =
   | "already-handled";
 
 export type BridgeAutoRecordingDecision =
-  | { type: "start"; token: number }
+  /** `attempt` is 1 for the answer's first start, and the retry's number for a retry. */
+  | { type: "start"; token: number; attempt: number }
   | { type: "none"; reason: BridgeAutoRecordingReason };
 
 /**
@@ -108,12 +133,20 @@ export function bridgeAutoRecordingDecision(
   if (!choice) return { type: "none", reason: "no-choice" };
   if (!choice.record) return { type: "none", reason: "opted-out" };
   if (!input.canControl) return { type: "none", reason: "cannot-control" };
-  if (
-    input.handledToken &&
-    input.handledToken.roomId === input.roomId &&
-    input.handledToken.token >= choice.token
-  ) {
-    return { type: "none", reason: "already-handled" };
+  let attempt = 1;
+  const handled = input.handledToken;
+  if (handled && handled.roomId === input.roomId && handled.token >= choice.token) {
+    // A retry counts only for this answer, and only as the NEXT attempt of the chain: a due retry
+    // that was already spent (or belongs to an older chain) opens nothing.
+    const retry = input.retryDue;
+    const retrying =
+      !!retry &&
+      retry.roomId === input.roomId &&
+      retry.token === choice.token &&
+      handled.token === choice.token &&
+      retry.attempt === (handled.attempts ?? 1) + 1;
+    if (!retrying) return { type: "none", reason: "already-handled" };
+    attempt = retry.attempt;
   }
   if (input.starting) return { type: "none", reason: "already-starting" };
   if (!input.inboundOpen) return { type: "none", reason: "capture-not-open" };
@@ -121,7 +154,88 @@ export function bridgeAutoRecordingDecision(
   // still stands. In practice a recording that is already on when capture opens was started by the
   // same answer on another window, or by hand — either way there is nothing to start.
   if (input.recording) return { type: "none", reason: "already-recording" };
-  return { type: "start", token: choice.token };
+  return { type: "start", token: choice.token, attempt };
+}
+
+// ── when a start fails (WT-916) ──────────────────────────────────────────────
+
+/**
+ * The waits before attempts 2, 3, 4 and 5. After the fifth failure the start gives up. Roughly
+ * a minute in all: long enough to outlast a join still in flight (404), a cold room-type lookup
+ * (503) or a gateway blip, short enough that a call is not silently unrecorded for long.
+ */
+export const BRIDGE_RECORDING_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
+
+/** What a failed start carries, from `getErrorStatus` and `apiErrorCode` (lib/api). */
+export interface BridgeRecordingStartFailure {
+  /** HTTP status; null when the request never got an answer (network, timeout). */
+  status: number | null;
+  code?: string | number | null;
+}
+
+/** HTTP statuses that say "not now" rather than "no". */
+const TRANSIENT_STATUSES = new Set([404, 408, 429, 502, 503, 504]);
+/**
+ * A reason about money or quota is never "not now", whatever status it came with. Not "LIMIT": a
+ * rate limit (429) IS "not now".
+ */
+const BILLING_CODE = /QUOTA|BUDGET|BILLING|CREDIT|PAYMENT|SUBSCRIPTION|EXHAUSTED/;
+
+/**
+ * Transient: worth asking again after a wait. Terminal: the server said no, or we cannot tell —
+ * asking again would only repeat the toast.
+ *
+ * 404 is transient HERE, not in general: for this endpoint it means the `MeetingRoom` row does not
+ * exist yet because the join is still in flight. 503 is the server failing closed on a room-type
+ * lookup it calls temporary. 429 is retried only on this long, bounded schedule (5 attempts in about
+ * a minute), never on the query client's quick one — see lib/api/retry-policy.
+ */
+export function classifyBridgeRecordingStartFailure(
+  failure: BridgeRecordingStartFailure,
+): "transient" | "terminal" {
+  const code = typeof failure.code === "string" ? failure.code.toUpperCase() : "";
+  if (code && BILLING_CODE.test(code)) return "terminal";
+  if (failure.status === null) return "transient";
+  return TRANSIENT_STATUSES.has(failure.status) ? "transient" : "terminal";
+}
+
+export type BridgeRecordingFailurePlan =
+  | { type: "retry"; attempt: number; delayMs: number }
+  | { type: "give-up"; reason: "terminal" | "exhausted" };
+
+/**
+ * After attempt number `failedAttempt` (1-based) failed: wait and try attempt `failedAttempt + 1`,
+ * or stop. Giving up is the only outcome that tells anybody (one toast, one line in the popup).
+ */
+export function bridgeRecordingFailurePlan(
+  failure: BridgeRecordingStartFailure,
+  failedAttempt: number,
+): BridgeRecordingFailurePlan {
+  if (classifyBridgeRecordingStartFailure(failure) === "terminal") {
+    return { type: "give-up", reason: "terminal" };
+  }
+  const index = Math.max(1, Math.floor(failedAttempt)) - 1;
+  const delayMs = BRIDGE_RECORDING_RETRY_DELAYS_MS[index];
+  if (delayMs === undefined) return { type: "give-up", reason: "exhausted" };
+  return { type: "retry", attempt: index + 2, delayMs };
+}
+
+/**
+ * Whether a scheduled retry may stay scheduled. Checked on every change while it waits, and the
+ * decision is checked again when it fires: false the moment the recording is on, the answer changed
+ * or was opted out, capture closed, this user lost control, or the room changed. A cancelled retry
+ * is gone — capture reopening later does not bring it back.
+ */
+export function shouldKeepBridgeRecordingRetry(
+  input: BridgeAutoRecordingInput,
+  retry: BridgeRecordingRetry,
+): boolean {
+  if (retry.roomId !== input.roomId) return false;
+  const choice = input.choice;
+  if (!choice || choice.roomId !== input.roomId || choice.token !== retry.token) return false;
+  // `starting` is ignored: the failing attempt is still winding down when its retry is scheduled.
+  const decision = bridgeAutoRecordingDecision({ ...input, starting: false, retryDue: retry });
+  return decision.type === "start" && decision.attempt === retry.attempt;
 }
 
 /**
@@ -197,13 +311,24 @@ export interface BridgeRecordingSnapshot {
    * recording, and from a main window that predates it — then no notice is shown.
    */
   startedAt?: number;
+  /**
+   * WT-916: the automatic start gave up (refused, or still failing after its retries). Only while
+   * not recording; `reason` is the sentence main toasted. Optional, version unchanged: a popup
+   * that predates it ignores it, and a malformed one is dropped, never the whole snapshot.
+   */
+  failed?: { reason: string };
 }
+
+/** Longest `failed.reason` carried; anything longer is cut. One line in a 435 px popup. */
+const MAX_FAILED_REASON_LENGTH = 200;
 
 /** Popup to main: a request, never a statement of state. */
 export type BridgeRecordingIntent =
   /** The popup mounted or became visible: please republish, because the channel does not replay. */
   | { v: 1; kind: "hello"; roomId: string }
-  | { v: 1; kind: "stop"; roomId: string };
+  | { v: 1; kind: "stop"; roomId: string }
+  /** WT-916: "Try again" after the automatic start gave up. Main re-checks everything. */
+  | { v: 1; kind: "retry"; roomId: string };
 
 export type BridgeRecordingMessage = BridgeRecordingSnapshot | BridgeRecordingIntent;
 
@@ -225,14 +350,19 @@ export function parseBridgeRecordingMessage(data: unknown): BridgeRecordingMessa
     switch (data.kind) {
       case "snapshot":
         if (typeof data.recording !== "boolean" || typeof data.canStop !== "boolean") return null;
-        return withStartedAt(
-          { v, kind: "snapshot", roomId, recording: data.recording, canStop: data.canStop },
-          data.startedAt,
+        return withFailed(
+          withStartedAt(
+            { v, kind: "snapshot", roomId, recording: data.recording, canStop: data.canStop },
+            data.startedAt,
+          ),
+          data.failed,
         );
       case "hello":
         return { v, kind: "hello", roomId };
       case "stop":
         return { v, kind: "stop", roomId };
+      case "retry":
+        return { v, kind: "retry", roomId };
       default:
         return null;
     }
@@ -249,25 +379,41 @@ function withStartedAt(snapshot: BridgeRecordingSnapshot, startedAt: unknown): B
   return snapshot;
 }
 
+/**
+ * WT-916: tolerant, like startedAt — kept only on a non-recording snapshot, as a fresh object with a
+ * non-empty, trimmed, length-capped `reason`; anything else is dropped and the snapshot stands.
+ */
+function withFailed(snapshot: BridgeRecordingSnapshot, failed: unknown): BridgeRecordingSnapshot {
+  if (snapshot.recording || !isRecord(failed)) return snapshot;
+  const reason = typeof failed.reason === "string" ? failed.reason.trim() : "";
+  if (reason.length === 0) return snapshot;
+  snapshot.failed = { reason: reason.slice(0, MAX_FAILED_REASON_LENGTH) };
+  return snapshot;
+}
+
 export function buildBridgeRecordingSnapshot(input: {
   roomId: string;
   recording: boolean;
   canStop: boolean;
   startedAt?: number | null;
+  failed?: { reason: string } | null;
 }): BridgeRecordingSnapshot {
-  return withStartedAt(
-    {
-      v: BRIDGE_RECORDING_RELAY_VERSION,
-      kind: "snapshot",
-      roomId: input.roomId,
-      recording: input.recording,
-      canStop: input.canStop,
-    },
-    input.startedAt,
+  return withFailed(
+    withStartedAt(
+      {
+        v: BRIDGE_RECORDING_RELAY_VERSION,
+        kind: "snapshot",
+        roomId: input.roomId,
+        recording: input.recording,
+        canStop: input.canStop,
+      },
+      input.startedAt,
+    ),
+    input.failed,
   );
 }
 
-export type BridgeRecordingAction = { type: "republish" } | { type: "stop" };
+export type BridgeRecordingAction = { type: "republish" } | { type: "stop" } | { type: "retry" };
 
 /**
  * Main side: what an incoming message may do. null = ignore.
@@ -277,7 +423,7 @@ export type BridgeRecordingAction = { type: "republish" } | { type: "stop" };
  */
 export function resolveBridgeRecordingIntent(
   message: BridgeRecordingMessage,
-  host: { roomId: string; recording: boolean; canStop: boolean },
+  host: { roomId: string; recording: boolean; canStop: boolean; failed?: { reason: string } | null },
 ): BridgeRecordingAction | null {
   if (message.kind === "snapshot") return null;
   if (message.roomId !== host.roomId) return null;
@@ -286,6 +432,10 @@ export function resolveBridgeRecordingIntent(
       return { type: "republish" };
     case "stop":
       return host.recording && host.canStop ? { type: "stop" } : null;
+    case "retry":
+      // Only what main says now: this user may control it, nothing is recording, and main itself
+      // still holds a give-up to retry. A stale popup's press after any of that moved is ignored.
+      return host.canStop && !host.recording && host.failed ? { type: "retry" } : null;
     default:
       return null;
   }
@@ -321,4 +471,17 @@ export function shouldShowRecordingStartNotice(
   if (!snapshot.recording || !snapshot.canStop) return false;
   if (typeof snapshot.startedAt !== "number") return false;
   return snapshot.startedAt !== dismissedStartedAt;
+}
+
+/**
+ * WT-916 — "Recording didn't start" with "Try again", to the room host or capturer only (`canStop`):
+ * they are the only ones the server lets start it. Nobody else is offered a line they cannot act on.
+ */
+export function bridgeRecordingFailedView(
+  snapshot: BridgeRecordingSnapshot | null,
+  roomId: string,
+): { reason: string } | null {
+  if (!snapshot || snapshot.roomId !== roomId) return null;
+  if (snapshot.recording || !snapshot.canStop || !snapshot.failed) return null;
+  return { reason: snapshot.failed.reason };
 }
