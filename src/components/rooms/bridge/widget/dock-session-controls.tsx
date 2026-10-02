@@ -163,8 +163,7 @@ function TranslationToggle() {
   const stopTranslation = useStopTranslation();
 
   /**
-   * The whole sequence, not just its mutations — the same reason as `starting` in
-   * bridge-overlay-controls.tsx, plus one of our own:
+   * The whole sequence, not just its mutations, for two reasons:
    *   - activation is awaited before either REST call is pending, and a second press in that gap
    *     would ask the main window twice and open the room twice;
    *   - the mutations settle before the sessions list has been re-read, and in that gap
@@ -201,7 +200,8 @@ function TranslationToggle() {
         setWorking(false);
         return;
       }
-      // Same mutation and the same two toasts as bridge-overlay-controls.tsx's Stop.
+      // /stop-translation, then a success toast that says the transcript keeps running or an
+      // error toast with the server's message.
       try {
         await stopTranslation.mutateAsync(room.id);
         await settle(room.id);

@@ -26,8 +26,8 @@
  *
  * PURE, LIKE ITS NEIGHBOUR
  *   No IPC, no DOM, no clock. Everything here is a function of one `VirtualAudioStatus` reading,
- *   which is what makes the whole ladder testable without a desktop build. The code that actually
- *   opens a device or a window lives in lib/audio/bridge-fallback-runtime.ts.
+ *   which is what makes the whole ladder testable without a desktop build. Opening a device or a
+ *   window is left to the callers that act on the chosen rung.
  */
 
 import type { VirtualAudioStatus } from "./bridge";
