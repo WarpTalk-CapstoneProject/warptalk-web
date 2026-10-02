@@ -10,6 +10,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  BRIDGE_RECORD_CHOICE,
+  LISTEN_SCOPE_COPY,
   browserCaptureAnswerKey,
   browserCaptureAnswerStorage,
   browserCaptureConsentState,
@@ -149,4 +151,42 @@ test("the stored answer is dropped when the meeting is over, not when it is paus
   for (const status of ["live", "paused", "waiting", "", null, undefined]) {
     assert.equal(shouldForgetBrowserCaptureAnswer(status), false, String(status));
   }
+});
+
+// WT-910. "Stop listening" was read as "stop WarpTalk": the words beside it named what was allowed
+// and never what the press would stop, or what it would leave running.
+test("the stop wording names the other side as the scope, and says the user's own speech is untouched", () => {
+  for (const sentence of [
+    LISTEN_SCOPE_COPY.stopEffect,
+    LISTEN_SCOPE_COPY.stopEffectWithCable,
+    LISTEN_SCOPE_COPY.declined,
+    LISTEN_SCOPE_COPY.declinedWithCable,
+  ]) {
+    assert.match(sentence, /other side/i, sentence);
+    assert.match(sentence, /your own speech/i, sentence);
+    assert.match(sentence, /not affected/i, sentence);
+    // It is not Stop Translation, and must not be worded as if translation as a whole stopped.
+    assert.doesNotMatch(sentence, /translation (is |has )?stopped|stops translation/i, sentence);
+  }
+});
+
+test("without a cable the effect is spelled out; with one the far side is said to be still heard", () => {
+  for (const sentence of [LISTEN_SCOPE_COPY.stopEffect, LISTEN_SCOPE_COPY.declined]) {
+    assert.match(sentence, /transcribed, translated or captioned/);
+  }
+  for (const sentence of [LISTEN_SCOPE_COPY.stopEffectWithCable, LISTEN_SCOPE_COPY.declinedWithCable]) {
+    assert.match(sentence, /still heard/);
+    assert.doesNotMatch(sentence, /no longer|is not transcribed/);
+  }
+});
+
+test("the recording line says Stop listening does not stop it, and where to stop it", () => {
+  assert.match(LISTEN_SCOPE_COPY.recordingUnaffected, /not stopped/);
+  assert.match(LISTEN_SCOPE_COPY.recordingUnaffected, /REC/);
+});
+
+test("the recording checkbox says when it starts and that it can be stopped", () => {
+  assert.equal(BRIDGE_RECORD_CHOICE.label, "Record this meeting");
+  assert.match(BRIDGE_RECORD_CHOICE.hint, /starts when/);
+  assert.match(BRIDGE_RECORD_CHOICE.hint, /stopped/);
 });
