@@ -397,20 +397,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   }, [activeWorkspaceName]);
 
   const workspaceNav: NavItem[] = [];
-  if (isOwnerOrAdmin) {
-    // First, not last. The overview of everything under it reads as an overview when it comes
-    // before the things it summarises.
-    //
-    // Insights, where Dashboard was (owner, 2026-10-01). Both were owner overviews of the same
-    // credits, meetings and spend, and two "overview" rows read as two different places. The
-    // Dashboard route stays and sends an Owner/Admin on to Insights; the tour id stays with the row.
-    workspaceNav.push({
-      icon: ChartBar,
-      label: t("nav.insights"),
-      href: `/${slug}/insights`,
-      tourId: "nav-dashboard",
-    });
-  }
   workspaceNav.push(
     { icon: Users, label: t("nav.members"), href: `/${slug}/members`, tourId: "nav-members" },
     { icon: FileText, label: t("nav.documents"), href: `/${slug}/documents`, tourId: "nav-documents" },
@@ -426,11 +412,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // No "My tasks" entry: taken off the main navigation on the owner's call (2026-09-23), and
     // its old address forwards home in proxy.ts. Action items still live on each meeting's record.
   );
-
-  // What WarpBot can do in THIS workspace: its built-in tools and the plugins the workspace allows.
-  // For every member, because every member talks to WarpBot. Under Workspace, not with the
-  // personal rows above (owner, 2026-10-02): the list is the workspace's, not the member's.
-  workspaceNav.push({ icon: Toolbox, label: t("nav.tools"), href: `/${slug}/tools` });
 
   if (isOwnerOrAdmin) {
     // No Invitations entry: invitations and join requests are rows on Members now, because
@@ -463,11 +444,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // every member, so it keeps that chrome. The workspace's own /<slug>/settings/plugins does not
   // start with "/settings", so it still lands in Settings.
   //
-  // Insights is not here: it moved from the Settings sidebar to the main one (2026-10-01), so it
-  // gets the main chrome like every other place in the workspace.
+  // Insights and Tools live in the Settings sidebar for workspace owners/admins.
   const isSettingsPage =
     (pathname.includes("/settings") && !pathname.startsWith("/settings/plugins")) ||
-    pathname.includes("/payment");
+    pathname.includes("/payment") ||
+    /^\/(?!admin\/)[^/]+\/insights(\/|$)/.test(pathname) ||
+    /^\/(?!admin\/)[^/]+\/tools(\/|$)/.test(pathname);
 
   // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
   // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
@@ -785,6 +767,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
+      settingsItems.push({
+        icon: ChartBar,
+        label: t("settingsNav.insights"),
+        href: `/${activeWorkspaceSlug}/insights`,
+      });
+      settingsItems.push({
+        icon: Toolbox,
+        label: t("settingsNav.tools"),
+        href: `/${activeWorkspaceSlug}/tools`,
+      });
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
@@ -988,6 +980,34 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.workspaceSettingsExpanded")}
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(
+                    pathname === `/${activeWorkspaceSlug}/insights` ||
+                      pathname.startsWith(`/${activeWorkspaceSlug}/insights/`),
+                  )
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/insights`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ChartBar size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      {t("settingsNav.insights")}
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(
+                    pathname === `/${activeWorkspaceSlug}/tools` ||
+                      pathname.startsWith(`/${activeWorkspaceSlug}/tools/`),
+                  )
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/tools`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Toolbox size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      {t("settingsNav.tools")}
                     </span>
                   </Link>
                 </div>
