@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 
 import {
   BRIDGE_CONSENT_PROTOCOL_VERSION,
+  CONSENT_POPUP_MAX_RAISES_PER_QUESTION,
   CONSENT_POPUP_MAX_UNANSWERED_RAISES,
   CONSENT_POPUP_RAISE_GRACE_MS,
   CONSENT_POPUP_RECHECK_MS,
   applyConsentRaise,
+  consentRaiseBudgetFor,
   initialConsentRaiseState,
+  isBridgeMeetCallOnScreen,
   isCompactConsentAsk,
   nextConsentRaise,
   bridgeConsentPromptView,
@@ -18,6 +21,7 @@ import {
   shouldAcknowledgeConsentSnapshot,
   shouldRaiseConsentPopup,
   type BridgeConsentHostView,
+  type ConsentRaiseDecision,
   type ConsentRaiseState,
   type BridgeConsentIntent,
   type BridgeConsentSnapshot,
@@ -379,21 +383,126 @@ test("granted shows what is being listened to, or no name if it is no longer lis
   assert.deepEqual(bridgeConsentPromptView(snapshot({ consent: "granted" }), ROOM), {
     kind: "listening",
     sourceName: "Google Chrome",
+    cableAvailable: false,
   });
   assert.deepEqual(
     bridgeConsentPromptView(snapshot({ consent: "granted", selectedSourceId: "firefox" }), ROOM),
-    { kind: "listening", sourceName: null },
+    { kind: "listening", sourceName: null, cableAvailable: false },
   );
   assert.deepEqual(
     bridgeConsentPromptView(snapshot({ consent: "granted", selectedSourceId: null }), ROOM),
-    { kind: "listening", sourceName: null },
+    { kind: "listening", sourceName: null, cableAvailable: false },
   );
 });
 
 test("declined renders the declined view", () => {
   assert.deepEqual(bridgeConsentPromptView(snapshot({ consent: "declined" }), ROOM), {
     kind: "declined",
+    viaCable: false,
   });
+});
+
+// --- WT-910: what "Stop listening" costs, and the recording choice ---------------------------
+
+test("the views say whether a cable still carries the far side", () => {
+  // Listening, with a cable installed: stopping falls back to it.
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "granted", cableAvailable: true }), ROOM),
+    { kind: "listening", sourceName: "Google Chrome", cableAvailable: true },
+  );
+  // Declined with the leg on the device: the other side IS still heard.
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "declined", inboundPath: "device" }), ROOM),
+    { kind: "declined", viaCable: true },
+  );
+  // The hint alone is not the path: a cable that is installed but not carrying is not "via cable".
+  assert.deepEqual(
+    bridgeConsentPromptView(snapshot({ consent: "declined", cableAvailable: true }), ROOM),
+    { kind: "declined", viaCable: false },
+  );
+});
+
+test("cableAvailable is an optional hint: kept when boolean, dropped otherwise", () => {
+  const built = buildBridgeConsentSnapshot({
+    roomId: ROOM,
+    consent: "granted",
+    sources: [],
+    selectedSourceId: null,
+    loadingSources: false,
+    cableAvailable: true,
+  });
+  assert.equal(built.cableAvailable, true);
+  const parsed = parseBridgeConsentMessage(built);
+  assert.ok(parsed && parsed.kind === "snapshot");
+  assert.equal(parsed.cableAvailable, true);
+
+  const mistyped = parseBridgeConsentMessage({ ...built, cableAvailable: "yes" });
+  assert.ok(mistyped && mistyped.kind === "snapshot");
+  assert.equal("cableAvailable" in mistyped, false);
+
+  const unsaid = buildBridgeConsentSnapshot({
+    roomId: ROOM,
+    consent: "granted",
+    sources: [],
+    selectedSourceId: null,
+    loadingSources: false,
+  });
+  assert.equal("cableAvailable" in unsaid, false);
+});
+
+test("a decide may carry the recording choice; a mistyped one rejects the message", () => {
+  assert.deepEqual(
+    parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true, record: false }),
+    { v: 1, kind: "decide", roomId: ROOM, granted: true, record: false },
+  );
+  // An older popup says nothing about recording, and nothing is invented for it.
+  assert.deepEqual(parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true }), {
+    v: 1,
+    kind: "decide",
+    roomId: ROOM,
+    granted: true,
+  });
+  for (const record of ["true", 1, null]) {
+    assert.equal(
+      parseBridgeConsentMessage({ v: 1, kind: "decide", roomId: ROOM, granted: true, record }),
+      null,
+    );
+  }
+});
+
+test("the recording choice rides only on an answer to an open question", () => {
+  const withRecord = (granted: boolean, record: boolean): BridgeConsentIntent => ({
+    v: 1,
+    kind: "decide",
+    roomId: ROOM,
+    granted,
+    record,
+  });
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(true, true), host()), {
+    type: "answer",
+    granted: true,
+    record: true,
+  });
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(true, false), host()), {
+    type: "answer",
+    granted: true,
+    record: false,
+  });
+  // Declining the browser still answers the checkbox: a cable may carry the call instead.
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(false, true), host()), {
+    type: "answer",
+    granted: false,
+    record: true,
+  });
+  // "Stop listening" is not the ask: the stop is honoured, the choice is dropped.
+  assert.deepEqual(resolveBridgeConsentIntent(withRecord(false, true), host({ consent: "granted" })), {
+    type: "answer",
+    granted: false,
+  });
+  // A grant main would ignore anyway carries nothing either.
+  assert.equal(resolveBridgeConsentIntent(withRecord(true, true), host({ consent: "declined" })), null);
+  // No choice sent, none reported.
+  assert.deepEqual(resolveBridgeConsentIntent(grant, host()), { type: "answer", granted: true });
 });
 
 // --- shouldAcknowledgeConsentSnapshot --------------------------------------------------------
@@ -558,4 +667,150 @@ test("custom timings are honoured", () => {
   state = applyConsentRaise(state, { type: "raise" }, 10);
   assert.deepEqual(nextConsentRaise(state, 109, options), { type: "wait", atMs: 110 });
   assert.deepEqual(nextConsentRaise(state, 110, options), { type: "use-main" });
+});
+
+// --- popspam1002: no raise once Meet is gone, and a bound that survives the loop restarting -----
+
+/**
+ * Plays the host side of the production loop: the popup acks whenever it is open, and the host
+ * closes it (without answering) right after every ack. Returns how many raises went out by `untilMs`.
+ * This is the 2026-10-02 sequence: close -> silence past the grace -> raise (focus + notification)
+ * -> the reopened popup acks -> next check resets the unanswered count -> close -> ...
+ */
+function hostWhoKeepsClosing(
+  start: ConsentRaiseState,
+  untilMs: number,
+  meetOnScreen: (nowMs: number) => boolean,
+): { raises: number; final: ConsentRaiseDecision["type"] } {
+  let state = start;
+  let now = 0;
+  let raises = 0;
+  let popupOpen = false;
+  let last: ConsentRaiseDecision["type"] = "idle";
+  while (now <= untilMs) {
+    state = { ...state, meetOnScreen: meetOnScreen(now), acknowledged: popupOpen };
+    const decision = nextConsentRaise(state, now);
+    last = decision.type;
+    if (decision.type === "use-main" || decision.type === "idle") break;
+    if (decision.type === "raise") {
+      raises += 1;
+      popupOpen = true; // raised: on screen, it acks
+    } else if (decision.type === "check") {
+      popupOpen = false; // the host closed it again after the last ack
+    }
+    state = applyConsentRaise(state, decision, now);
+    now = decision.type === "wait" ? decision.atMs : decision.type === "hold" ? now + CONSENT_POPUP_RECHECK_MS : now;
+  }
+  return { raises, final: last };
+}
+
+test("popspam1002: with Meet gone nothing is ever raised, however long the question stays open", () => {
+  const { raises, final } = hostWhoKeepsClosing(asked(), 6 * 60 * 60_000, () => false);
+  assert.equal(raises, 0);
+  assert.equal(final, "hold");
+});
+
+test("popspam1002: a raise due while Meet is off screen is held, and goes out when Meet is back", () => {
+  const due = asked({ meetOnScreen: false });
+  assert.deepEqual(nextConsentRaise(due, CONSENT_POPUP_RAISE_GRACE_MS), { type: "hold" });
+  // Holding changes nothing: no raise was spent.
+  assert.deepEqual(applyConsentRaise(due, { type: "hold" }, CONSENT_POPUP_RAISE_GRACE_MS), due);
+  assert.deepEqual(
+    nextConsentRaise({ ...due, meetOnScreen: true }, CONSENT_POPUP_RAISE_GRACE_MS + 5),
+    { type: "raise" },
+  );
+  // Not handed to the main window while Meet is gone either - not even with both budgets spent.
+  assert.deepEqual(
+    nextConsentRaise(
+      asked({ meetOnScreen: false, phase: "raised", unansweredRaises: 9, raisesThisQuestion: 9 }),
+      CONSENT_POPUP_RECHECK_MS,
+    ),
+    { type: "hold" },
+  );
+});
+
+test("popspam1002: an acked raise no longer re-arms the popup forever", () => {
+  // Before the fix this host was raised once a minute for as long as the room stayed open.
+  const { raises, final } = hostWhoKeepsClosing(asked(), 6 * 60 * 60_000, () => true);
+  assert.equal(raises, CONSENT_POPUP_MAX_RAISES_PER_QUESTION);
+  assert.equal(final, "use-main");
+});
+
+test("popspam1002: the per-question count is never reset by an ack or a check", () => {
+  let state = applyConsentRaise(asked(), { type: "raise" }, 1_500);
+  assert.equal(state.raisesThisQuestion, 1);
+  state = applyConsentRaise({ ...state, acknowledged: true }, { type: "check" }, 61_500);
+  assert.equal(state.unansweredRaises, 0);
+  assert.equal(state.raisesThisQuestion, 1);
+});
+
+test("popspam1002: a restarted loop starts from the raises the question already cost", () => {
+  const restarted = initialConsentRaiseState({
+    consent: "required",
+    popupAvailable: true,
+    nowMs: 0,
+    raisesThisQuestion: CONSENT_POPUP_MAX_RAISES_PER_QUESTION,
+  });
+  assert.equal(restarted.meetOnScreen, true, "no reading defaults to on screen");
+  assert.deepEqual(nextConsentRaise(restarted, CONSENT_POPUP_RAISE_GRACE_MS), { type: "use-main" });
+  // An acked popup is still only checked, never raised and never handed over.
+  assert.deepEqual(nextConsentRaise({ ...restarted, acknowledged: true }, CONSENT_POPUP_RAISE_GRACE_MS), {
+    type: "wait",
+    atMs: CONSENT_POPUP_RECHECK_MS,
+  });
+});
+
+test("popspam1002: the raise budget is kept until the question is answered or the room changes", () => {
+  let budget = consentRaiseBudgetFor(null, ROOM, "required");
+  assert.deepEqual(budget, { roomId: ROOM, raises: 0 });
+  budget = { roomId: ROOM, raises: 2 };
+  // The question going quiet (fallback, device) and coming back is the same question.
+  assert.deepEqual(consentRaiseBudgetFor(budget, ROOM, "not-required"), budget);
+  assert.deepEqual(consentRaiseBudgetFor(budget, ROOM, "required"), budget);
+  // An answer ends it; reconsidering afterwards is a new question.
+  assert.deepEqual(consentRaiseBudgetFor(budget, ROOM, "granted"), { roomId: ROOM, raises: 0 });
+  assert.deepEqual(consentRaiseBudgetFor(budget, ROOM, "declined"), { roomId: ROOM, raises: 0 });
+  assert.deepEqual(consentRaiseBudgetFor(budget, OTHER_ROOM, "required"), { roomId: OTHER_ROOM, raises: 0 });
+});
+
+test("popspam1002: Meet is on screen only for a sighting of this room's call; no reading is unknown", () => {
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: null }), true);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: null, roomMeetCode: "abc-defg-hij" }), true);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: false } }), false);
+  assert.equal(
+    isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: false, meetCode: "abc-defg-hij" }, roomMeetCode: "abc-defg-hij" }),
+    false,
+  );
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: true } }), true);
+  assert.equal(
+    isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: true }, roomMeetCode: "abc-defg-hij" }),
+    true,
+    "picture-in-picture carries no code and proves nothing either way",
+  );
+  assert.equal(
+    isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: true, meetCode: "abc-defg-hij" }, roomMeetCode: "abc-defg-hij" }),
+    true,
+  );
+  assert.equal(
+    isBridgeMeetCallOnScreen({ sensor: { meetWindowVisible: true, meetCode: "zzz-zzzz-zzz" }, roomMeetCode: "abc-defg-hij" }),
+    false,
+    "a different Meet call is not this room's call",
+  );
+});
+
+test("popspam1002: the desktop's Meet call phase (WT-911) comes first; unknown falls back to the URL sensor", () => {
+  const visible = { meetWindowVisible: true, meetCode: "abc-defg-hij" };
+  const gone = { meetWindowVisible: false };
+  // "left" wins even with the tab still on Meet's "You left the meeting" page.
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: visible, roomMeetCode: "abc-defg-hij", callPhase: "left" }), false);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: null, callPhase: "left" }), false);
+  // Readable call state means Meet is on screen (tab or picture-in-picture).
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase: "in-call" }), true);
+  assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase: "lobby" }), true);
+  // An older desktop (null) or an unreadable Meet ("unknown") leaves it to the URL sensor.
+  for (const callPhase of [null, undefined, "unknown"] as const) {
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: gone, callPhase }), false);
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: visible, roomMeetCode: "abc-defg-hij", callPhase }), true);
+    assert.equal(isBridgeMeetCallOnScreen({ sensor: null, callPhase }), true);
+  }
 });

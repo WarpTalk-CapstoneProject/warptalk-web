@@ -265,6 +265,28 @@ export interface WindowsLoopbackPcmChunk {
  * web app is prepared to find missing at runtime — hence the per-method guards in the helpers
  * below rather than one "is desktop" boolean that vouches for the whole surface.
  */
+/**
+ * WT-910. What the desktop answers when asked to arm a capture of the Google Meet window for this
+ * room's recording. Mirrors warptalk-desktop's preload exactly.
+ *
+ * After `ok: true`, the NEXT `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`
+ * from the main window within 10 seconds resolves to the Meet window with no picker. Any
+ * `ok: false` means no window video; the recording still runs, audio-only.
+ */
+export type ArmMeetWindowCaptureResult =
+  | { ok: true; sourceName: string }
+  | {
+      ok: false;
+      reason:
+        | "meet-sighting-missing"
+        | "meet-window-not-found"
+        /** B18: Meet is in Chrome's Picture-in-Picture window, which is never recorded. Desktop #51. */
+        | "meet-not-on-tab"
+        | "unsupported-platform"
+        | "not-main-window"
+        | "consent-required";
+    };
+
 export interface DesktopBridge {
   getVersion?: () => Promise<string>;
   getPlatform?: () => string;
@@ -332,6 +354,8 @@ export interface DesktopBridge {
   setMeetCaptionsStream?: (meetCode: string, enabled: boolean) => Promise<void>;
   /** Turns Meet's CC on in the capturer's Chrome window if it is off (never off). */
   ensureMeetCaptions?: (meetCode: string) => Promise<EnsureMeetCaptionsResult>;
+  /** WT-910: see ArmMeetWindowCaptureResult. Absent on desktop builds that predate it. */
+  armMeetWindowCapture?: (roomId: string) => Promise<ArmMeetWindowCaptureResult>;
 }
 
 /**
@@ -665,6 +689,15 @@ export function watchMeetMicState(
 }
 
 /**
+ * Whether this desktop build can say where the Meet call is (`onMeetCallState`, WT-911). False off
+ * the desktop shell and on older builds. WT-910 B18 keeps the pre-B18 recording rule without it.
+ */
+export function hasMeetCallSensor(): boolean {
+  const bridge = getDesktopBridge();
+  return typeof bridge?.onMeetCallState === "function";
+}
+
+/**
  * Follow the Meet call itself: in the call or not, and Meet's mute button (WT-912 / WT-913).
  *
  * Nothing to arm: the desktop reads both for as long as it watches Meet presence, which the app
@@ -821,4 +854,22 @@ export function streamMeetCaptions(
         }
       });
   };
+}
+
+/**
+ * WT-910. Asks the desktop to hand the Google Meet window to the next getDisplayMedia call, so a
+ * bridge recording can carry the call's picture (lib/meeting/bridge-recording).
+ *
+ * Returns null where there is nothing to ask — a browser tab, or a desktop build older than the
+ * method — and where the call itself threw. Null and every `ok: false` mean the same thing to the
+ * caller: record without the window, and say why in the log.
+ */
+export async function armMeetWindowCapture(roomId: string): Promise<ArmMeetWindowCaptureResult | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.armMeetWindowCapture) return null;
+  try {
+    return await bridge.armMeetWindowCapture(roomId);
+  } catch {
+    return null;
+  }
 }

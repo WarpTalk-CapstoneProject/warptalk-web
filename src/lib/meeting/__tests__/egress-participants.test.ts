@@ -10,7 +10,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isRecordableParticipant, resolveEgressDisplayName } from "../egress-participants.ts";
+import {
+  MEET_WINDOW_TRACK_NAME,
+  isMeetWindowTrack,
+  isRecordableParticipant,
+  resolveEgressDisplayName,
+  resolveEgressLayout,
+} from "../egress-participants.ts";
 
 test("a person is recorded", () => {
   assert.equal(isRecordableParticipant("019ff9e1-e3e2-7024-99b7-6e37c6a18392"), true);
@@ -63,4 +69,28 @@ test("resolveEgressDisplayName never returns an empty label", () => {
   assert.equal(resolveEgressDisplayName(null, null), "Participant");
   assert.equal(resolveEgressDisplayName("", ""), "Participant");
   assert.equal(resolveEgressDisplayName(undefined, undefined), "Participant");
+});
+
+// WT-910: a bridge recording shows the Google Meet window, full frame.
+
+test("only the track published under the agreed name is the Meet window", () => {
+  assert.equal(MEET_WINDOW_TRACK_NAME, "meet-window");
+  assert.equal(isMeetWindowTrack("meet-window"), true);
+  // An ordinary screen share, a camera, a nameless track: recorded as they always were.
+  assert.equal(isMeetWindowTrack("screen_share"), false);
+  assert.equal(isMeetWindowTrack("Meet-Window"), false);
+  assert.equal(isMeetWindowTrack(""), false);
+  assert.equal(isMeetWindowTrack(undefined), false);
+  assert.equal(isMeetWindowTrack(null), false);
+});
+
+test("the frame is the Meet window only while its video is subscribed", () => {
+  assert.equal(resolveEgressLayout([]), "grid");
+  assert.equal(resolveEgressLayout([{ kind: "audio" }, { kind: "video" }]), "grid");
+  assert.equal(
+    resolveEgressLayout([{ kind: "audio" }, { kind: "video", meetWindow: true }]),
+    "meet-window",
+  );
+  // A flag on an audio tile is not a picture.
+  assert.equal(resolveEgressLayout([{ kind: "audio", meetWindow: true }]), "grid");
 });

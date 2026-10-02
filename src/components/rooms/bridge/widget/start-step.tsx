@@ -6,7 +6,8 @@
  * When the host enters the Google Meet call and the popup opens on a room whose translation has
  * never run, it shows the meeting's own "My language" picker as one compact step with one Start —
  * no three-field form, no separate "I speak / Meet speaks" selects. What the far side speaks has a
- * planned default (the claim sends it) and the dock's "They speak" changes it once live.
+ * planned default (the claim sends it) and the dock's far-side language pill (people icon + code,
+ * no visible "They speak" label since WT-910) changes it once live.
  *
  *   - The pick goes through the relay (`set-language`) like the dock's pill: the same hook and the
  *     same menu (bridge-language-menu.tsx), so the step and the dock cannot disagree.
