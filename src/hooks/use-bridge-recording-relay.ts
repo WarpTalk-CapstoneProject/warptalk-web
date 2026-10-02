@@ -6,6 +6,7 @@ import {
   BRIDGE_RECORDING_RELAY_VERSION,
   bridgeRecordingChannelName,
   bridgeRecordingChipView,
+  bridgeRecordingFailedView,
   buildBridgeRecordingSnapshot,
   shouldShowRecordingStartNotice,
   parseBridgeRecordingMessage,
@@ -36,19 +37,33 @@ export interface UseBridgeRecordingHostOptions {
   /** Room host or capturer. The server refuses anybody else for a bridge room. */
   canStop: boolean;
   onStop: () => void;
+  /** WT-916: the automatic start gave up, with the sentence main toasted; null otherwise. */
+  failed?: { reason: string } | null;
+  /** WT-916: a checked "Try again" from the popup (canStop, not recording, `failed` set). */
+  onRetry?: () => void;
 }
 
 /** Main window: publish the recording state, and honour a checked Stop from the popup. */
 export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): void {
   const { roomId, enabled, recording, canStop } = options;
+  const failed = options.failed ?? null;
+  const failedReason = failed?.reason ?? null;
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const viewRef = useRef<{ roomId: string; recording: boolean; canStop: boolean; startedAt: number | null }>({
+  const viewRef = useRef<{
+    roomId: string;
+    recording: boolean;
+    canStop: boolean;
+    startedAt: number | null;
+    failed: { reason: string } | null;
+  }>({
     roomId,
     recording,
     canStop,
     startedAt: null,
+    failed,
   });
   const onStopRef = useRef(options.onStop);
+  const onRetryRef = useRef(options.onRetry);
 
   // Declared first so it has run before the effects below read the refs in the same commit.
   useEffect(() => {
@@ -60,8 +75,9 @@ export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): 
       : previous.recording && previous.roomId === roomId && previous.startedAt !== null
         ? previous.startedAt
         : Date.now();
-    viewRef.current = { roomId, recording, canStop, startedAt };
+    viewRef.current = { roomId, recording, canStop, startedAt, failed };
     onStopRef.current = options.onStop;
+    onRetryRef.current = options.onRetry;
   });
 
   useEffect(() => {
@@ -77,6 +93,10 @@ export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): 
       if (!action) return;
       if (action.type === "republish") {
         channel.postMessage(buildBridgeRecordingSnapshot(viewRef.current));
+        return;
+      }
+      if (action.type === "retry") {
+        onRetryRef.current?.();
         return;
       }
       onStopRef.current();
@@ -95,7 +115,7 @@ export function useBridgeRecordingHost(options: UseBridgeRecordingHostOptions): 
   useEffect(() => {
     // From the ref, which the effect above has just brought up to date: it carries `startedAt`.
     channelRef.current?.postMessage(buildBridgeRecordingSnapshot(viewRef.current));
-  }, [enabled, roomId, recording, canStop]);
+  }, [enabled, roomId, recording, canStop, failedReason]);
 }
 
 export interface BridgeRecordingPrompt {
@@ -104,6 +124,10 @@ export interface BridgeRecordingPrompt {
   /** WT-916: show "Recording started. Tell everyone in the call." (shouldShowRecordingStartNotice). */
   startNotice: boolean;
   dismissStartNotice: () => void;
+  /** WT-916: the automatic start gave up — host/capturer only (bridgeRecordingFailedView). */
+  failed: { reason: string } | null;
+  /** WT-916: "Try again" — a request; main re-checks it and the line goes when main says so. */
+  retry: () => void;
 }
 
 /**
@@ -151,6 +175,10 @@ export function useBridgeRecordingPrompt(roomId: string): BridgeRecordingPrompt 
     channelRef.current?.postMessage({ v: BRIDGE_RECORDING_RELAY_VERSION, kind: "stop", roomId });
   }, [roomId]);
 
+  const retry = useCallback(() => {
+    channelRef.current?.postMessage({ v: BRIDGE_RECORDING_RELAY_VERSION, kind: "retry", roomId });
+  }, [roomId]);
+
   const startedAt = snapshot?.startedAt ?? null;
   const dismissStartNotice = useCallback(() => setDismissedStartedAt(startedAt), [startedAt]);
 
@@ -159,5 +187,7 @@ export function useBridgeRecordingPrompt(roomId: string): BridgeRecordingPrompt 
     stop,
     startNotice: shouldShowRecordingStartNotice(snapshot, roomId, dismissedStartedAt),
     dismissStartNotice,
+    failed: bridgeRecordingFailedView(snapshot, roomId),
+    retry,
   };
 }

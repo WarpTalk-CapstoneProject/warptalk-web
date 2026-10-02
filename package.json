@@ -274,7 +274,7 @@
     "test:bridge-widget-relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-widget-relay.test.ts src/lib/meeting/__tests__/bridge-widget-relay-voice.test.ts src/lib/meeting/__tests__/bridge-widget-relay-meeting.test.ts src/lib/meeting/__tests__/bridge-widget-relay-ended.test.ts src/lib/meeting/__tests__/bridge-widget-relay-capturer.test.ts src/lib/meeting/__tests__/bridge-widget-relay-audio-mode.test.ts",
     "test:bridge-widget-relay-contract": "node scripts/check-bridge-widget-relay-contract.mjs",
     "test:bridge-w4a-wiring": "node scripts/check-bridge-w4a-wiring-contract.mjs",
-    "test:bridge-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-recording.test.ts",
+    "test:bridge-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-recording.test.ts src/lib/meeting/__tests__/bridge-recording-retry.test.ts",
     "test:bridge-capturer": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-capturer.test.ts",
     "test:bridge-language-options": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/bridge-language-options.test.ts",
     "test:bridge-popup-language": "node scripts/check-bridge-popup-language-contract.mjs",

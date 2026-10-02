@@ -41,7 +41,7 @@ function input(over: Partial<BridgeAutoRecordingInput> = {}): BridgeAutoRecordin
 }
 
 test("capture open, box checked, may control, nothing recording: start", () => {
-  assert.deepEqual(bridgeAutoRecordingDecision(input()), { type: "start", token: 1 });
+  assert.deepEqual(bridgeAutoRecordingDecision(input()), { type: "start", token: 1, attempt: 1 });
 });
 
 test("a native meeting is never recorded for you", () => {
@@ -117,14 +117,14 @@ test("answering the question again, box checked, is asking again", () => {
   assert.equal(second.token, 2);
   assert.deepEqual(
     bridgeAutoRecordingDecision(input({ choice: second, handledToken: { roomId: ROOM, token: 1 } })),
-    { type: "start", token: 2 },
+    { type: "start", token: 2, attempt: 1 },
   );
 });
 
 test("a handled token from another room does not count here, and a new room counts from one", () => {
   assert.deepEqual(
     bridgeAutoRecordingDecision(input({ handledToken: { roomId: OTHER, token: 9 } })),
-    { type: "start", token: 1 },
+    { type: "start", token: 1, attempt: 1 },
   );
   const previous = { roomId: OTHER, record: true, token: 7 };
   assert.deepEqual(nextBridgeRecordChoice(previous, { roomId: ROOM, record: false }), {

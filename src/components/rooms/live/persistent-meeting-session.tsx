@@ -197,10 +197,14 @@ import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import { useBridgeRecordingHost } from "@/hooks/use-bridge-recording-relay";
 import {
   bridgeAutoRecordingDecision,
+  bridgeRecordingFailurePlan,
   describeMeetWindowCaptureFailure,
   nextBridgeRecordChoice,
+  shouldKeepBridgeRecordingRetry,
   shouldPublishMeetWindow,
+  type BridgeAutoRecordingInput,
   type BridgeRecordChoice,
+  type BridgeRecordingRetry,
 } from "@/lib/meeting/bridge-recording";
 import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
 import {
@@ -3105,8 +3109,34 @@ export function PersistentMeetingSession({
     !meetingIsIdleReaped;
   /** An automatic start is in flight: the window is being captured, or the server is being asked. */
   const [bridgeRecordingStarting, setBridgeRecordingStarting] = useState(false);
-  /** The answer an automatic start was last attempted for. A ref: it only ever gates the effect. */
-  const bridgeRecordHandledRef = useRef<{ roomId: string; token: number } | null>(null);
+  /**
+   * The answer an automatic start was last attempted for, and how many starts its current chain has
+   * made (WT-916). A ref: it only ever gates the effect.
+   */
+  const bridgeRecordHandledRef = useRef<{ roomId: string; token: number; attempts: number } | null>(null);
+  // WT-916 — a failed start that says "not now" is retried for the same answer on a bounded
+  // schedule (bridgeRecordingFailurePlan). The ref is the scheduled retry (cleared = cancelled);
+  // the state is the retry whose timer fired, so the effect below re-runs and re-decides.
+  const bridgeRecordRetryRef = useRef<{
+    retry: BridgeRecordingRetry;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const [bridgeRecordRetryDue, setBridgeRecordRetryDue] = useState<BridgeRecordingRetry | null>(null);
+  /** The automatic start gave up for this answer: the sentence that was toasted. */
+  const [bridgeRecordFailure, setBridgeRecordFailure] = useState<
+    { roomId: string; token: number; reason: string } | null
+  >(null);
+  /** The room this window is running, for an attempt that settles after it left. */
+  const bridgeRecordRoomRef = useRef<string | null>(null);
+  useEffect(() => {
+    bridgeRecordRoomRef.current = roomId;
+    return () => {
+      bridgeRecordRoomRef.current = null;
+      const scheduled = bridgeRecordRetryRef.current;
+      if (scheduled?.timer) clearTimeout(scheduled.timer);
+      bridgeRecordRetryRef.current = null;
+    };
+  }, [roomId]);
   /** Published by <BridgeMeetWindowPublisher>, which is inside <LiveKitRoom> and can reach the Room. */
   const meetWindowControlRef = useRef<MeetWindowControl | null>(null);
   const startRecordingRef = useRef(setRecordingMutation.mutateAsync);
@@ -3115,7 +3145,7 @@ export function PersistentMeetingSession({
   });
 
   useEffect(() => {
-    const decision = bridgeAutoRecordingDecision({
+    const decisionInput: BridgeAutoRecordingInput = {
       roomId,
       isBridgeRoom,
       inboundOpen: bridgeInboundOpen,
@@ -3124,11 +3154,24 @@ export function PersistentMeetingSession({
       recording: isRecording,
       starting: bridgeRecordingStarting,
       handledToken: bridgeRecordHandledRef.current,
-    });
+    };
+    // WT-916: a waiting retry is dropped the moment it may no longer fire (recording on, answer
+    // changed or opted out, capture closed, control lost). For good: reopening does not revive it.
+    const scheduled = bridgeRecordRetryRef.current;
+    if (scheduled && !shouldKeepBridgeRecordingRetry(decisionInput, scheduled.retry)) {
+      if (scheduled.timer) clearTimeout(scheduled.timer);
+      bridgeRecordRetryRef.current = null;
+    }
+    // Only the retry still scheduled, and only once its timer has fired, opens the handled gate.
+    const live = bridgeRecordRetryRef.current;
+    const retryDue = live && live.timer === null && live.retry === bridgeRecordRetryDue ? live.retry : null;
+    const decision = bridgeAutoRecordingDecision({ ...decisionInput, retryDue });
     if (decision.type !== "start") return;
-    // Before anything asynchronous, so no later render can decide "start" for the same answer.
-    bridgeRecordHandledRef.current = { roomId, token: decision.token };
+    // Before anything asynchronous, so no later render can decide "start" for the same attempt.
+    bridgeRecordHandledRef.current = { roomId, token: decision.token, attempts: decision.attempt };
+    bridgeRecordRetryRef.current = null;
     setBridgeRecordingStarting(true);
+    const { token, attempt } = decision;
 
     void (async () => {
       try {
@@ -3144,13 +3187,37 @@ export function PersistentMeetingSession({
         // 3. The same endpoint the native button calls.
         const state = await startRecordingRef.current("start");
         setIsRecording(state.recording);
+        setBridgeRecordFailure(null);
         // Not silent, even for the person whose checkbox caused it: this window is hidden behind
         // Meet, and the desktop shell surfaces its toasts.
         if (state.recording) toast.info("This meeting is now being recorded.");
       } catch (error) {
-        // The server's reason first (quota, a 403), as handleToggleRecording does. Once: the
-        // token is handled, so this is one toast and not a retry loop.
-        toast.error(getErrorMessage(error, "Could not start recording."));
+        if (bridgeRecordRoomRef.current !== roomId) return;
+        const plan = bridgeRecordingFailurePlan(
+          { status: getErrorStatus(error), code: apiErrorCode(error) },
+          attempt,
+        );
+        if (plan.type === "retry") {
+          // "Not now" (WT-916): quiet, and on a timer. The effect re-decides when it fires.
+          const retry: BridgeRecordingRetry = { roomId, token, attempt: plan.attempt };
+          const next: { retry: BridgeRecordingRetry; timer: ReturnType<typeof setTimeout> | null } = {
+            retry,
+            timer: null,
+          };
+          next.timer = setTimeout(() => {
+            if (bridgeRecordRetryRef.current !== next) return;
+            next.timer = null;
+            setBridgeRecordRetryDue(retry);
+          }, plan.delayMs);
+          bridgeRecordRetryRef.current = next;
+          console.warn(`[bridge] Recording did not start (attempt ${attempt}); retrying in ${plan.delayMs} ms.`);
+          return;
+        }
+        // Refused, or still failing after the retries: told once, here and in the popup. The
+        // server's reason first (quota, a 403), as handleToggleRecording does.
+        const reason = getErrorMessage(error, "Could not start recording.");
+        toast.error(reason);
+        setBridgeRecordFailure({ roomId, token, reason });
       } finally {
         setBridgeRecordingStarting(false);
       }
@@ -3163,7 +3230,36 @@ export function PersistentMeetingSession({
     bridgeRecordChoice,
     isRecording,
     bridgeRecordingStarting,
+    bridgeRecordRetryDue,
   ]);
+
+  // WT-916: the give-up, shown in the popup only while it is still the truth and still actionable:
+  // the same answer, nothing recording, capture open, this user in control.
+  const bridgeRecordFailed =
+    bridgeRecordFailure &&
+    bridgeRecordFailure.roomId === roomId &&
+    bridgeRecordChoice?.roomId === roomId &&
+    bridgeRecordChoice.record &&
+    bridgeRecordChoice.token === bridgeRecordFailure.token &&
+    !isRecording &&
+    bridgeInboundOpen &&
+    bridgeCanControl
+      ? { reason: bridgeRecordFailure.reason }
+      : null;
+  /** "Try again" from the popup, already checked by the relay. A fresh chain for the same answer. */
+  const handleBridgeRecordRetry = () => {
+    const failure = bridgeRecordFailure;
+    const handled = bridgeRecordHandledRef.current;
+    if (!bridgeRecordFailed || !failure || !handled) return;
+    if (handled.roomId !== roomId || handled.token !== failure.token) return;
+    const previous = bridgeRecordRetryRef.current;
+    if (previous?.timer) clearTimeout(previous.timer);
+    const retry: BridgeRecordingRetry = { roomId, token: failure.token, attempt: 1 };
+    bridgeRecordHandledRef.current = { ...handled, attempts: 0 };
+    bridgeRecordRetryRef.current = { retry, timer: null };
+    setBridgeRecordFailure(null);
+    setBridgeRecordRetryDue(retry);
+  };
 
   // The Meet window stays on the wire only while there is a recording to put it in and the call is
   // still being captured. Stopping the recording by hand, Stop listening with no cable, an idle
@@ -3183,6 +3279,8 @@ export function PersistentMeetingSession({
     enabled: isBridgeRoom,
     recording: isRecording,
     canStop: bridgeCanControl,
+    failed: bridgeRecordFailed,
+    onRetry: handleBridgeRecordRetry,
     onStop: () => {
       setRecordingMutation.mutate("stop", {
         onSuccess: (state) => {
