@@ -124,5 +124,45 @@
     "originalTitle": "View original unfiltered transcript. Only changes your view.",
     "showCleanTitle": "Return to clean transcript. Only changes your view.",
     "selfRepair": "The speaker corrected themselves. As said: \"{rawText}\""
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "Unanswered",
+        "meaning": "A question that was asked and not answered"
+      },
+      "term": {
+        "label": "Term",
+        "meaning": "A term used in this meeting without being defined"
+      },
+      "action": {
+        "label": "Action",
+        "meaning": "A commitment with no owner or no deadline"
+      },
+      "correction": {
+        "label": "Check",
+        "meaning": "This contradicts something said earlier"
+      },
+      "fact": {
+        "label": "Reference",
+        "meaning": "From a document attached to this meeting"
+      },
+      "other": {
+        "label": "Suggestion",
+        "meaning": "Noticed automatically from what was said"
+      }
+    },
+    "actions": {
+      "askWarpBot": "Ask WarpBot",
+      "researchTerm": "Research this term",
+      "findTermInDocuments": "Find it in our documents",
+      "askQuestion": "Ask WarpBot this",
+      "findWhoKnows": "Find who would know",
+      "checkInDocuments": "Check this in the documents",
+      "checkWhichIsRight": "Check which is right",
+      "draftTask": "Draft this task"
+    },
+    "disclaimer": "Generated automatically — check before relying on it.",
+    "dismissAria": "Dismiss suggestion"
   }
 }

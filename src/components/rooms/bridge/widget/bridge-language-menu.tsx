@@ -19,7 +19,9 @@
  *   answers (use-bridge-widget-state.ts), so "no main window" is the rare case, not the normal one.
  *
  * THE HIERARCHY: see lib/meeting/bridge-language-options.ts. Members pick within the room's
- * languages; "Another language" (the workspace's) is offered only to the host or the capturer.
+ * languages; "Another language" (the workspace's) is offered only to the host or the capturer —
+ * and only once the workspace policy has actually loaded. Until then (loading, no room code yet,
+ * or the read failed) a short hint stands where it would be, never the full hard-coded list.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -29,7 +31,12 @@ import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { LanguageColumn } from "@/components/rooms/live/language-column";
 import { useJoinLanguagePolicy } from "@/hooks/use-translationRooms";
 import { normalizeLanguageCode } from "@/lib/language/languages";
-import { bridgeLanguageOptions, type BridgeLanguageOptions } from "@/lib/meeting/bridge-language-options";
+import {
+  bridgeLanguageOptions,
+  bridgeLanguagePolicyStatus,
+  type BridgeLanguageOptions,
+  type BridgeLanguagePolicyStatus,
+} from "@/lib/meeting/bridge-language-options";
 import {
   bridgeWidgetReaderLanguage,
   bridgeWidgetShownLanguage,
@@ -50,6 +57,30 @@ export type BridgeLanguagePick = {
   pick: (language: string) => boolean;
 };
 
+/**
+ * The workspace's language policy for THIS room, and whether it has actually been read (WT-910).
+ *
+ * The public per-room read, which is persistent-meeting-session's primary source too (it is about
+ * the room's workspace rather than whichever one is selected). Its list alone cannot be trusted to
+ * mean anything: null/empty is "unrestricted", and so was "not answered yet" — the query is off
+ * until the room (and its code) is known, it takes a moment, and it can fail. `policyStatus` keeps
+ * those apart so that only a loaded policy unlocks languages beyond the room's own; see
+ * lib/meeting/bridge-language-options.ts. Shared with the dock's far-side pill, so both pickers
+ * hold back the same way.
+ */
+export function useBridgeLanguagePolicy(): {
+  allowedTargetLanguages: string[] | null | undefined;
+  policyStatus: BridgeLanguagePolicyStatus;
+} {
+  const { room } = useBridgeWidget();
+  const { data, isPlaceholderData, isError } = useJoinLanguagePolicy(room?.translationRoomCode ?? "");
+  const policyStatus = bridgeLanguagePolicyStatus({ hasData: data !== undefined, isPlaceholderData, isError });
+  return {
+    allowedTargetLanguages: policyStatus === "known" ? data?.allowedTargetLanguages : undefined,
+    policyStatus,
+  };
+}
+
 export function useBridgeLanguagePick(): BridgeLanguagePick {
   const { room, relay, readerLanguage, setReaderLanguage, canControl } = useBridgeWidget();
   const { view, pickLanguage } = relay;
@@ -65,11 +96,7 @@ export function useBridgeLanguagePick(): BridgeLanguagePick {
     }
   }, [relayedReaderLanguage, readerLanguage, setReaderLanguage]);
 
-  // The workspace's language policy for THIS room — the public per-room read, which is
-  // persistent-meeting-session's primary source too (it is about the room's workspace rather than
-  // whichever one is selected).
-  const { data: languagePolicy } = useJoinLanguagePolicy(room?.translationRoomCode ?? "");
-  const allowedTargetLanguages = languagePolicy?.allowedTargetLanguages;
+  const { allowedTargetLanguages, policyStatus } = useBridgeLanguagePolicy();
 
   const options = useMemo(
     () =>
@@ -78,9 +105,10 @@ export function useBridgeLanguagePick(): BridgeLanguagePick {
         targetLanguages: room?.targetLanguages,
         current: shownLanguage,
         allowedTargetLanguages,
+        policyStatus,
         canAddLanguages: canControl,
       }),
-    [room?.sourceLanguage, room?.targetLanguages, shownLanguage, allowedTargetLanguages, canControl],
+    [room?.sourceLanguage, room?.targetLanguages, shownLanguage, allowedTargetLanguages, policyStatus, canControl],
   );
 
   function pick(language: string): boolean {
@@ -106,6 +134,7 @@ export function BridgeLanguageMenu({
   onPick: (language: string) => void;
 }) {
   const t = useTranslations("meetingControlBar");
+  const tPolicy = useTranslations("rooms.bridgeWidget.languagePolicy");
   const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   // Somebody already on an off-room language must see the section that holds their selection.
   const onAnOffMenuLanguage =
@@ -144,6 +173,21 @@ export function BridgeLanguageMenu({
               <span>{t("languagePicker.otherLanguages.disclosure")}</span>
             </button>
           )}
+        </>
+      ) : options.otherLanguagesWithheld ? (
+        // Where "Another language" would be, for the host/capturer, while the workspace policy is
+        // not known: one compact line instead of the full hard-coded list (WT-910).
+        <>
+          <div className="my-1 h-[1px] bg-border" />
+          <p
+            role={options.otherLanguagesWithheld === "error" ? "alert" : "status"}
+            data-slot="bridge-language-policy-hint"
+            className="px-2.5 py-1.5 text-[11px] leading-snug text-ink-muted"
+          >
+            {options.otherLanguagesWithheld === "error"
+              ? tPolicy("error")
+              : tPolicy("loading")}
+          </p>
         </>
       ) : null}
     </>

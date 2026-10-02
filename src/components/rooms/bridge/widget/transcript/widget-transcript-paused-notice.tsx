@@ -13,11 +13,25 @@
  * matters more than anywhere, because it floats over a Google Meet call where people are visibly
  * still being translated — a notice that let someone believe otherwise would have them restart a
  * translation that never stopped.
+ *
+ * WT-910: but only while it is TRUE. The sentence used to be unconditional, so a room whose
+ * translation had been stopped (header: "Translation stopped") and whose transcript was then paused
+ * said, two lines lower, that translation, dubbing and subtitles were still running. The notice now
+ * takes whether translation is running and says the second sentence only when it is; with
+ * translation stopped it says that instead, so the header and the notice cannot disagree. Unknown
+ * (`null`) says neither — a guess either way is the same contradiction waiting to happen.
  */
 
 import { PauseCircle } from "@phosphor-icons/react/dist/ssr";
 
-export function WidgetTranscriptPausedNotice({ since }: { since: string | null }) {
+export function WidgetTranscriptPausedNotice({
+  since,
+  translationRunning,
+}: {
+  since: string | null;
+  /** Whether a translation session is running; null while that is not known yet. */
+  translationRunning: boolean | null;
+}) {
   // Null when the pause is known without a start time — the broadcast carries none, and the
   // window list may not have caught up yet. The notice then says it is paused without a clock
   // rather than inventing one.
@@ -34,8 +48,12 @@ export function WidgetTranscriptPausedNotice({ since }: { since: string | null }
       <div>
         <span className="font-medium">Transcript paused{startedAt ? ` at ${startedAt}` : ""}</span>
         <p className="mt-0.5 text-ink-muted">
-          Nothing said from now on is written down. Live translation, dubbing and subtitles are
-          still running.
+          Nothing said from now on is written down.
+          {translationRunning === true
+            ? " Live translation, dubbing and subtitles are still running."
+            : translationRunning === false
+              ? " Translation is stopped; resuming the transcript does not start it."
+              : null}
         </p>
       </div>
     </div>

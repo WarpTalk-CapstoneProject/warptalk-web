@@ -54,3 +54,37 @@ export function resolveEgressDisplayName(
 ): string {
   return name?.trim() || identity?.trim() || "Participant";
 }
+
+/**
+ * WT-910 — the Google Meet window, in a bridge room's recording.
+ *
+ * A bridged call happens in Google Meet, so the picture worth recording is Meet's own window: the
+ * desktop app captures it and the host's WarpTalk client publishes it under this track name
+ * (persistent-meeting-session's BridgeMeetWindowPublisher). WarpTalk's own participants have no
+ * cameras on in a bridge room — the popup has none — so a grid of them is a grid of initials.
+ *
+ * By NAME and not by source: it is published as a screen share, and an ordinary screen share in a
+ * native meeting must keep recording the way it does today.
+ */
+export const MEET_WINDOW_TRACK_NAME = "meet-window";
+
+export function isMeetWindowTrack(trackName: string | null | undefined): boolean {
+  return trackName === MEET_WINDOW_TRACK_NAME;
+}
+
+/**
+ * How the recording frame is laid out.
+ *
+ * `meet-window` when a Meet window video is subscribed: it fills the frame and nobody is drawn as
+ * a tile, while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise —
+ * every native meeting, and a bridge recording whose window could not be captured (audio-only).
+ */
+export type EgressLayout = "grid" | "meet-window";
+
+export function resolveEgressLayout(
+  tiles: ReadonlyArray<{ kind: string; meetWindow?: boolean }>,
+): EgressLayout {
+  return tiles.some((tile) => tile.kind === "video" && tile.meetWindow === true)
+    ? "meet-window"
+    : "grid";
+}
