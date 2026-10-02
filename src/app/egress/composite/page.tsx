@@ -68,14 +68,19 @@ import EgressHelper from "@livekit/egress-sdk";
 import {
   isMeetWindowTrack,
   isRecordableParticipant,
+  MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
+  meetWindowShowsPicture,
   resolveEgressDisplayName,
   resolveEgressLayout,
+  shouldResubscribeMeetWindow,
 } from "@/lib/meeting/egress-participants";
 import { getInitials } from "@/lib/meeting/participant-identity";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Tile {
   identity: string;
+  /** The subscription this tile draws; tiles are removed by it, not by whether they are mounted. */
+  track: RemoteTrack;
   element: HTMLMediaElement;
   kind: Track.Kind;
   /** WT-910: the Google Meet window of a bridge room, published under MEET_WINDOW_TRACK_NAME. */
@@ -125,6 +130,9 @@ export default function EgressCompositePage() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [overlays, setOverlays] = useState<Record<string, ParticipantOverlay>>({});
   const [error, setError] = useState<string | null>(null);
+  /** Meet-window elements that have decoded a frame. See meetWindowShowsPicture. */
+  const [framedElements, setFramedElements] = useState<ReadonlySet<HTMLMediaElement>>(new Set());
+  const [meetWindowMuted, setMeetWindowMuted] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -147,6 +155,55 @@ export default function EgressCompositePage() {
       });
     }
 
+    /** Publications whose subscription was already renewed once for a missing picture. */
+    const resubscribed = new Set<string>();
+
+    /**
+     * WT-910 follow-up: when the Meet window's first frame arrives, and what to do if it never does.
+     *
+     * Logged to the console on purpose: it is the only output of this page that reaches the egress
+     * logs, and "subscribed but never decoded a frame" was invisible until a recording came out
+     * black from start to end.
+     */
+    function watchMeetWindow(
+      element: HTMLVideoElement,
+      track: RemoteTrack,
+      publication: RemoteTrackPublication,
+    ) {
+      const subscribedAtMs = Date.now();
+      let firstFrameSeen = false;
+      const onFirstFrame = () => {
+        if (firstFrameSeen) return;
+        firstFrameSeen = true;
+        console.log(
+          `MEET_WINDOW_FIRST_FRAME after ${Date.now() - subscribedAtMs}ms ${element.videoWidth}x${element.videoHeight}`,
+        );
+        setFramedElements((current) => new Set(current).add(element));
+      };
+      element.requestVideoFrameCallback?.(() => onFirstFrame());
+      element.addEventListener("loadeddata", onFirstFrame, { once: true });
+      if (element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) onFirstFrame();
+
+      window.setTimeout(() => {
+        // Gone already: unsubscribed, or replaced by a newer subscription of the same window.
+        if (firstFrameSeen || publication.track !== track) return;
+        const retry = shouldResubscribeMeetWindow({
+          firstFrameSeen,
+          subscribedAtMs,
+          nowMs: Date.now(),
+          alreadyRetried: resubscribed.has(publication.trackSid),
+        });
+        console.warn(
+          `MEET_WINDOW_NO_FRAME after ${Date.now() - subscribedAtMs}ms muted=${publication.isMuted} retry=${retry}`,
+        );
+        if (!retry) return;
+        // A fresh subscription is a fresh downtrack, and with it a fresh keyframe request.
+        resubscribed.add(publication.trackSid);
+        publication.setSubscribed(false);
+        window.setTimeout(() => publication.setSubscribed(true), 500);
+      }, MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS);
+    }
+
     function attach(
       track: RemoteTrack,
       publication: RemoteTrackPublication,
@@ -166,20 +223,27 @@ export default function EgressCompositePage() {
         // A face is cropped to fill its tile; a window is not. Cropping the Meet window would cut
         // off whoever sits at the edge of its grid, so it is letterboxed instead.
         element.style.objectFit = meetWindow ? "contain" : "cover";
+        if (meetWindow) {
+          setMeetWindowMuted(publication.isMuted);
+          watchMeetWindow(element, track, publication);
+        }
       }
       setTiles((current) => [
         ...current,
-        { identity: participant.identity, element, kind: track.kind, meetWindow },
+        { identity: participant.identity, track, element, kind: track.kind, meetWindow },
       ]);
       refreshOverlay(participant);
     }
 
     function detach(track: RemoteTrack) {
       track.detach().forEach((element) => element.remove());
-      setTiles((current) => current.filter((tile) => tile.element.isConnected));
+      // By the track, not by `isConnected`: a subscribed tile the current layout does not mount (a
+      // camera under the Meet window) is still subscribed and must survive somebody else leaving.
+      setTiles((current) => current.filter((tile) => tile.track !== track));
     }
 
-    function handleMuteChange(_publication: TrackPublication, participant: Participant) {
+    function handleMuteChange(publication: TrackPublication, participant: Participant) {
+      if (isMeetWindowTrack(publication.trackName)) setMeetWindowMuted(publication.isMuted);
       refreshOverlay(participant as RemoteParticipant);
     }
 
@@ -263,6 +327,10 @@ export default function EgressCompositePage() {
       : undefined;
 
   if (meetWindowTile && !error) {
+    const showsPicture = meetWindowShowsPicture({
+      firstFrameSeen: framedElements.has(meetWindowTile.element),
+      muted: meetWindowMuted,
+    });
     return (
       <main
         ref={containerRef}
@@ -275,7 +343,10 @@ export default function EgressCompositePage() {
           overflow: "hidden",
         }}
       >
+        {/* Mounted while the slate covers it: a <video> outside the document decodes nothing, and
+            the first frame is exactly what the slate is waiting for. */}
         <MediaHolder tile={meetWindowTile} style={{ width: "100%", height: "100%" }} />
+        {showsPicture ? null : <MeetWindowSlate />}
         {/* Everyone's audio, mounted exactly as the grid mounts it: headless Chrome only records
             what is in the DOM, and the layout must never decide who is heard. */}
         {tiles
@@ -332,6 +403,35 @@ export default function EgressCompositePage() {
         );
       })}
     </main>
+  );
+}
+
+/**
+ * What the recording shows while the Meet window has no picture: the grid's light ground and one
+ * line, never a black rectangle. Static on purpose - this page is recorded, and anything that
+ * moves here would move for the length of the meeting.
+ */
+function MeetWindowSlate() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+        background: STAGE_BG,
+        color: INK_MUTED,
+        fontFamily: FONT,
+      }}
+    >
+      <p style={{ margin: 0, fontSize: "22px", fontWeight: 600, color: INK }}>Google Meet</p>
+      <p style={{ margin: 0, fontSize: "15px" }}>
+        Waiting for the meeting window. Audio is being recorded.
+      </p>
+    </div>
   );
 }
 
