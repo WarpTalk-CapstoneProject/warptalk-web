@@ -350,6 +350,9 @@
       "documentDetail": "ドキュメント",
       "documents": "ドキュメント",
       "history": "履歴",
+      "insights": "インサイト",
+      "insightsUsage": "インサイト · 使用量",
+      "insightsTools": "インサイト · ツール",
       "fallback": "ページ"
     }
   },

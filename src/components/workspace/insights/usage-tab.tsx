@@ -26,11 +26,14 @@ import { ArrowClockwise, CalendarBlank } from "@phosphor-icons/react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { UsageOverview } from "@/app/(app)/[workspaceSlug]/settings/billing/components/usage-overview";
 import type { InsightsTabProps } from "@/components/workspace/insights/insights-types";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceUsageOverview } from "@/hooks/use-workspace-usage-overview";
+import { WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
+import { usageAssistantSnapshot } from "@/lib/workspace/insights/usage-assistant-snapshot";
 
 /** The admin Insights card: a hairline box on the panel, one step up the surface ladder. */
 const CARD = "min-w-0 overflow-hidden rounded-xl border border-hairline bg-surface-1";
@@ -39,6 +42,28 @@ export function UsageTab({ workspaceId, workspaceSlug }: InsightsTabProps) {
   const t = useTranslations("workspaceInsightsUsage");
   const tUsage = useTranslations("settingsBillingUsage");
   const usage = useWorkspaceUsageOverview(workspaceId);
+
+  // WarpBot answers this tab's starters from the figures on it (usage-assistant-snapshot.ts), the
+  // whole-workspace view the tab opens with. Nothing is registered until the cycle and its ledger
+  // have both been read, so a figure still loading is never told to WarpBot as 0.
+  const assistantSnapshot = useMemo(
+    () =>
+      usage.canView && usage.status === "ready" && usage.balance && usage.ledger && usage.ledgerComplete !== undefined
+        ? usageAssistantSnapshot({
+            balance: usage.balance,
+            ledger: usage.ledger,
+            ledgerComplete: usage.ledgerComplete,
+            serviceUsage: usage.serviceUsage,
+            members: usage.members,
+            rooms: usage.rooms,
+            nowMs: usage.now,
+          })
+        : null,
+    [usage.canView, usage.status, usage.balance, usage.ledger, usage.ledgerComplete, usage.serviceUsage, usage.members, usage.rooms, usage.now],
+  );
+  useRegisterAssistantContext(
+    assistantSnapshot ? { pageType: WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot } : null,
+  );
 
   if (usage.roleLoaded && !usage.canView) {
     return <StateCard>{tUsage("accessDenied")}</StateCard>;

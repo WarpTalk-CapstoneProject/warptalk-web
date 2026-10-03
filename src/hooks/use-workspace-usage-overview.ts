@@ -72,6 +72,8 @@ export interface WorkspaceUsageOverview {
   /** The props `UsageOverview` takes, minus `workspaceSlug`. */
   balance: CreditBalanceDto | undefined;
   ledger: CreditTransactionDto[] | undefined;
+  /** False when paging stopped before the server's own total, so the ledger is a floor. Undefined until read. */
+  ledgerComplete: boolean | undefined;
   serviceUsage: readonly BreakdownRowLike[] | undefined;
   members: readonly UsageMemberLike[];
   rooms: readonly MeetingWindowLike[];
@@ -182,6 +184,9 @@ export function useWorkspaceUsageOverview(workspaceId: string): WorkspaceUsageOv
     roleLoaded,
     balance,
     ledger: ledgerQuery.data?.items,
+    ledgerComplete: ledgerQuery.data
+      ? ledgerQuery.data.items.length >= (ledgerQuery.data.totalCount ?? ledgerQuery.data.items.length)
+      : undefined,
     serviceUsage,
     members: members?.items ?? NO_MEMBERS,
     rooms: rooms ?? NO_ROOMS,

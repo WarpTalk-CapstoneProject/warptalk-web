@@ -23,17 +23,20 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 
-import type { InsightsTab, InsightsTabProps } from "@/components/workspace/insights/insights-types";
+import type { InsightsSourceState, InsightsTab, InsightsTabProps } from "@/components/workspace/insights/insights-types";
 import { UpdatedPulse } from "@/components/workspace/insights/insights-primitives";
 import { buildOverviewModel, overviewCsvFigures } from "@/components/workspace/insights/overview-model";
 import { OverviewTab } from "@/components/workspace/insights/overview-tab";
 import { PeriodBar, type PeriodChoice } from "@/components/workspace/insights/period-bar";
 import { ToolsTab } from "@/components/workspace/insights/tools-tab";
 import { UsageTab } from "@/components/workspace/insights/usage-tab";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useInsightsUpdatedAt, useWorkspaceInsightsOverview } from "@/hooks/use-workspace-insights";
 import { useWorkspaceToolInsights } from "@/hooks/use-workspace-tool-insights";
 import type { ResolvedInsightsPeriod } from "@/lib/admin/insights-period";
+import { WORKSPACE_INSIGHTS_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
 import { downloadBlob } from "@/lib/ui/download-blob";
+import { insightsAssistantSnapshot } from "@/lib/workspace/insights/assistant-snapshot";
 import { overviewCsv } from "@/lib/workspace/insights/overview-metrics";
 
 export const INSIGHTS_TABS: readonly InsightsTab[] = ["overview", "usage", "tools"];
@@ -77,6 +80,42 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   // The Tools tab reads the same period through the same hook, so the two share one cached answer.
   const { insights: toolInsights } = useWorkspaceToolInsights({ workspaceId, period, enabled: tab === "overview" });
   const model = useMemo(() => buildOverviewModel(sources, toolInsights, period), [sources, toolInsights, period]);
+
+  // WarpBot's starters on this page are answered from these figures, not from a tool (see
+  // assistant-snapshot.ts). Overview only: the Usage and Tools tabs register their own, from the sources they read.
+  const assistantSnapshot = useMemo(() => {
+    if (tab !== "overview") return null;
+    // A re-read behind data on screen (`refreshing`) still holds the PREVIOUS period's figures;
+    // sending them under the new period's dates would be a wrong answer, so they wait for the read.
+    const ready = <T,>(state: InsightsSourceState<T>) => (state.status === "ready" && !state.refreshing ? state.data : null);
+    const settled = <T,>(state: InsightsSourceState<T>) => (state.status === "ready" ? state.data : undefined);
+    const tools = ready(model.tools);
+    const labels = new Map<string, string>();
+    for (const plugin of ready(sources.workspacePlugins)?.inWorkspace ?? []) labels.set(plugin.key, plugin.label);
+    for (const plugin of ready(sources.catalog) ?? []) labels.set(plugin.key, plugin.label);
+    return insightsAssistantSnapshot({
+      current: { from: period.from, to: period.to },
+      previous: { from: period.previousFrom, to: period.previousTo },
+      credits: ready(model.credits),
+      meetings: ready(model.meetings),
+      hours: ready(model.hours),
+      toolCalls: ready(model.toolCalls),
+      toolSuccessRate: ready(model.toolSuccessRate),
+      tools: tools && {
+        error: tools.totals.error,
+        blocked: tools.totals.blocked,
+        needsSetupPlugins: tools.needsSetupPlugins.map((key) => labels.get(key) ?? key),
+      },
+      activeMembers: ready(model.activeMembers),
+      balance: settled(sources.balance),
+      subscription: settled(sources.subscription),
+      pendingRequests: ready(sources.workspacePlugins)?.pendingRequests.filter((request) => request.status === "pending").length,
+      nowMs,
+    });
+  }, [tab, model, sources, period, nowMs]);
+  useRegisterAssistantContext(
+    assistantSnapshot ? { pageType: WORKSPACE_INSIGHTS_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot } : null,
+  );
 
   const tabProps: InsightsTabProps = { workspaceId, workspaceSlug, period, timeZone, updatedAt };
 

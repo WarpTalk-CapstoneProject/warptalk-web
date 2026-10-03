@@ -350,6 +350,9 @@
       "documentDetail": "Tài liệu",
       "documents": "Tài liệu",
       "history": "Lịch sử",
+      "insights": "Thông tin chi tiết",
+      "insightsUsage": "Thông tin chi tiết · Sử dụng",
+      "insightsTools": "Thông tin chi tiết · Công cụ",
       "fallback": "Trang"
     }
   },

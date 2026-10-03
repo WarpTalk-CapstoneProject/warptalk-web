@@ -18,6 +18,9 @@
  *   4. The platform routes are their own, not the workspace routes with an empty workspace id.
  *   5. Answer chips know the "admin" kind the platform worker cites with, or every platform
  *      citation would render as an unlinked "Knowledge base" chip.
+ *   6. The workspace Owner/Admin starters (Insights Overview / Usage / Tools, Billing, Plugins):
+ *      each page registers its page context, the scope module maps that context to starters, and
+ *      the widget names it in the pill.
  */
 
 import { readFileSync } from "node:fs";
@@ -57,8 +60,12 @@ expect(/useIsSystemAdmin\(\)/.test(widget) && /usePathname\(\)/.test(widget),
   `${WIDGET}: the mode needs both the route and the platform role.`);
 expect(/\{PLATFORM_SCOPE_LABEL\}/.test(widget),
   `${WIDGET}: platform mode must render the "Platform" chip (PLATFORM_SCOPE_LABEL).`);
-expect(/PLATFORM_SUGGESTED_PROMPTS\.map\(/.test(widget),
-  `${WIDGET}: platform mode must offer PLATFORM_SUGGESTED_PROMPTS.`);
+// The widget asks the scope module which starters to show (it also owns the workspace Insights
+// ones), so the platform three are pinned where that choice is made.
+expect(/suggestedPromptsFor\(\{/.test(widget) && /suggestedPrompts\.map\(/.test(widget),
+  `${WIDGET}: the starters must come from suggestedPromptsFor.`);
+expect(/input\.scope === "platform"\) return PLATFORM_SUGGESTED_PROMPTS/.test(scope),
+  `${SCOPE}: platform mode must offer PLATFORM_SUGGESTED_PROMPTS.`);
 expect(/isSystemAdmin\s*&&\s*isAdminPortalPath\(/.test(scope),
   `${SCOPE}: platform mode must require BOTH the system-admin role and an /admin path.`);
 for (const prompt of [
@@ -102,6 +109,29 @@ expect(/"admin",\s*\];/.test(sources) || /KNOWN_KINDS[\s\S]*"admin"/.test(source
 expect(/if \(source\.kind === "admin"\) \{\s*return isAdminPath\(source\.ref\) \? source\.ref : null;/.test(sources),
   `${SOURCES}: an admin chip may link only to a validated /admin path.`);
 expect(/admin:\s*ShieldCheck/.test(chip), `${CHIP}: the admin kind needs its icon.`);
+
+// 6. The workspace Owner/Admin starters: one page context per surface, answered from the figures
+// the page sends, never a tool. A starter whose page no longer registers its context would be
+// offered by nothing, and a page that registers a context with no starters would be a pill that
+// leads nowhere, so each surface is pinned page to scope to widget.
+const SURFACES = [
+  { file: "src/components/workspace/insights/insights-dashboard.tsx", type: "WORKSPACE_INSIGHTS_PAGE_TYPE", snapshot: "insightsAssistantSnapshot", label: "pageContextLabels.insights" },
+  { file: "src/components/workspace/insights/usage-tab.tsx", type: "WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE", snapshot: "usageAssistantSnapshot", label: "pageContextLabels.insightsUsage" },
+  { file: "src/components/workspace/insights/tools-tab.tsx", type: "WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE", snapshot: "toolsAssistantSnapshot", label: "pageContextLabels.insightsTools" },
+];
+for (const surface of SURFACES) {
+  const page = code(read(surface.file));
+  expect(new RegExp(`useRegisterAssistantContext\\(`).test(page) && page.includes(`pageType: ${surface.type}`) && page.includes(`${surface.snapshot}(`),
+    `${surface.file}: must register ${surface.type} with the snapshot from ${surface.snapshot}.`);
+  expect(new RegExp(`\\[${surface.type}\\]:`).test(scope),
+    `${SCOPE}: ${surface.type} needs its starters in WORKSPACE_STARTERS_BY_PAGE_TYPE.`);
+  expect(widget.includes(`t("${surface.label}")`),
+    `${WIDGET}: ${surface.type} needs its context pill label (${surface.label}).`);
+}
+expect(/suggestedPromptsFor\(\{/.test(widget) && /suggestedPrompts\.length > 0 && messages\.length === 0/.test(widget),
+  `${WIDGET}: starters must show only in an empty conversation, from suggestedPromptsFor.`);
+expect(!/pageType:\s*"workspace_/.test(widget),
+  `${WIDGET}: the widget must not hard-code a workspace page type; the pages register theirs.`);
 
 if (failures.length) {
   console.error("Platform WarpBot contract FAILED:");

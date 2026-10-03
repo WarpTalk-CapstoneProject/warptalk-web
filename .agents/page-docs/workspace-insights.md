@@ -19,6 +19,68 @@ Settings → Plugin activity is the per-call record again: the telemetry dashboa
 it (`workspace-telemetry-dashboard.tsx`) was built from placeholder figures and was removed. Its
 counts and charts are answered here, on the Tools tab.
 
+## WarpBot answers from the page (2026-10-03)
+
+**What changed.** An Owner/Admin who opens WarpBot with an empty conversation on Insights sees three
+starters for the tab on screen, the workspace twins of the platform ones on `/admin`. Each tab sends
+the figures it is showing to WarpBot as its page context:
+
+| Tab | pageType | Starters |
+| --- | --- | --- |
+| Overview | `workspace_insights` | Credits used this period vs last / Will our credits last this cycle? / Any tools failing or needing setup? |
+| Usage | `workspace_insights_usage` | Which AI service costs us the most this cycle? / Is our spending concentrated in a few members? / At this pace, when do our credits run out? |
+| Tools | `workspace_insights_tools` | Which tools fail the most? / How many tool calls vs the previous period? / Which plugin tools are blocked or need setup? |
+
+Scope is this page only (owner's call, 2026-10-03): Billing, Invoices, Plugins, Plugin activity and
+the other Settings tabs register nothing and offer no starters.
+
+**Why no tool.** The platform starters are answered by read-only admin tools. The workspace WarpBot
+has no tool that reads a workspace's credits, plan or tool-call counts, and the owner's call was to
+keep this simple: each tab has already read its figures with the owner's own token, so it hands
+them to WarpBot as its ambient page context and the worker prints them as
+"Visible snapshot: key=value, …". Nothing changed in the backend or the AI worker.
+
+**How it works.**
+
+- One pure builder per tab turns what the tab holds into flat `key=value` text, all under
+  `lib/workspace/insights/`: Overview `assistant-snapshot.ts`, Usage `usage-assistant-snapshot.ts`
+  (built from the helpers the tab draws with), Tools `tools-assistant-snapshot.ts`. Shared text
+  rules (no comma, dates, the cycle projection sentence) are in `snapshot-text.ts`.
+- Each tab registers its snapshot with `useRegisterAssistantContext` under its pageType: Overview in
+  `insights-dashboard.tsx`, Usage in `usage-tab.tsx`, Tools in `tools-tab.tsx`. The context
+  unregisters when the tab unmounts, so switching tab swaps the starters.
+- `global-chatbot.tsx` asks `suggestedPromptsFor` (`lib/assistant/assistant-scope.ts`) which starters
+  to show: the platform three in platform scope, the tab's three while its pageType is the effective
+  page context, none otherwise. The composer shows the usual context pill, labelled by
+  `common.assistant.pageContextLabels.*` (`insights`, `insightsUsage`, `insightsTools`).
+- The Usage hook now also reports `ledgerComplete` (false when paging stopped at its cap), which the
+  Usage snapshot prints as "at least N".
+
+**Rules every snapshot keeps.** A source that is loading, failed or was not read has no key (never a
+0, "off" or "none"); a re-read still showing the previous period's figures (`refreshing`) sends
+nothing for them; a capped read is "at least N"; no value holds a comma (the worker joins pairs with
+", "), and user-typed labels go through `plain`; no snapshot uses the keys the context pill reads
+(`title`, `name`, `query`, `status`). Nobody is named: Usage sends how many members spent credits
+and the top spender's share, never who.
+
+**Known limitations.**
+
+- WarpBot knows only what the tab shows right now. Overview and Tools follow the period on screen; a
+  question about another month, a per-member name or one meeting's cost is not in the snapshot.
+  Usage is the whole workspace for the billing cycle: the tab's own member filter is not sent.
+- Switching the context pill off removes the starters with it.
+- The snapshot is what the browser sent. It is the owner's own figures shown back to the owner, so
+  it is not a permission boundary and must not be read as one by anything server-side. A member
+  never reaches this page's data, and the tabs register nothing for a member.
+
+**Testing checklist.** Owner/admin, WarpBot open with no messages, on each tab: three starters for
+that tab and a context pill named for it; click one and the answer quotes the tab's numbers.
+Overview/Tools: change the period and the next answer follows it. Switch Overview → Usage → Tools:
+the starters change with the tab. Any other page (Billing and Plugins included): no starters.
+Platform admin on `/admin`: the platform three, unchanged. Tests: `npm run test:workspace-insights`
+(the three snapshot builders) and `npm run test:platform-warpbot` (`assistant-scope.test.ts` plus
+the wiring contract, which pins tab -> scope -> widget label for every surface).
+
 ## The stand-alone Usage page is retired (2026-10-03)
 
 **What changed.** `/{slug}/settings/billing/usage` was deleted on the owner's call: Insights → Usage

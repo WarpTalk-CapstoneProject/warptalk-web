@@ -350,6 +350,9 @@
       "documentDetail": "Document",
       "documents": "Documents",
       "history": "History",
+      "insights": "Insights",
+      "insightsUsage": "Insights · Usage",
+      "insightsTools": "Insights · Tools",
       "fallback": "Page"
     }
   },

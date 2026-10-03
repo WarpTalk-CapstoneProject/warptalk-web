@@ -6,6 +6,13 @@ import {
   isAdminPortalPath,
   PLATFORM_SCOPE_LABEL,
   PLATFORM_SUGGESTED_PROMPTS,
+  suggestedPromptsFor,
+  WORKSPACE_INSIGHTS_PAGE_TYPE,
+  WORKSPACE_INSIGHTS_SUGGESTED_PROMPTS,
+  WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE,
+  WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE,
+  WORKSPACE_TOOLS_SUGGESTED_PROMPTS,
+  WORKSPACE_USAGE_SUGGESTED_PROMPTS,
 } from "../assistant-scope.ts";
 import { composerReadiness } from "../composer-readiness.ts";
 import { answerSourceHref, isAdminPath, parseAnswerSources } from "../answer-sources.ts";
@@ -39,6 +46,52 @@ describe("platform-scope WarpBot — which widget opens where", () => {
         "Workspaces running low on credits",
         "Any failing pipeline stages today?",
       ],
+    );
+  });
+});
+
+describe("workspace Owner/Admin starters — one set per page context", () => {
+  test("every surface has its own three, and none is another surface's", () => {
+    const surfaces = [
+      [WORKSPACE_INSIGHTS_PAGE_TYPE, WORKSPACE_INSIGHTS_SUGGESTED_PROMPTS],
+      [WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE, WORKSPACE_USAGE_SUGGESTED_PROMPTS],
+      [WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE, WORKSPACE_TOOLS_SUGGESTED_PROMPTS],
+    ] as const;
+    const seen = new Set<string>();
+    for (const [pageType, prompts] of surfaces) {
+      assert.equal(prompts.length, 3, pageType);
+      assert.deepEqual([...suggestedPromptsFor({ scope: "workspace", pageType })], [...prompts], pageType);
+      for (const prompt of prompts) {
+        assert.equal(seen.has(prompt), false, `duplicate starter: ${prompt}`);
+        seen.add(prompt);
+      }
+    }
+  });
+
+  test("a page type that only looks like one of them offers nothing", () => {
+    for (const pageType of ["workspace_insights_extra", "workspace_billing", "constructor", "toString", "__proto__", "WORKSPACE_INSIGHTS"]) {
+      assert.deepEqual([...suggestedPromptsFor({ scope: "workspace", pageType })], [], pageType);
+    }
+  });
+});
+
+describe("workspace Insights starters — the owner's twins of the platform ones", () => {
+  test("they are offered only while the Insights snapshot is the page context", () => {
+    assert.deepEqual(
+      [...suggestedPromptsFor({ scope: "workspace", pageType: WORKSPACE_INSIGHTS_PAGE_TYPE })],
+      ["Credits used this period vs last", "Will our credits last this cycle?", "Any tools failing or needing setup?"],
+    );
+    assert.equal(WORKSPACE_INSIGHTS_SUGGESTED_PROMPTS.length, 3);
+    // Any other page, no page, or the context switched off: nothing would answer them.
+    for (const pageType of ["documents", "room_detail", null, undefined]) {
+      assert.deepEqual([...suggestedPromptsFor({ scope: "workspace", pageType })], [], String(pageType));
+    }
+  });
+
+  test("platform scope keeps its own three whatever page context is lying around", () => {
+    assert.deepEqual(
+      [...suggestedPromptsFor({ scope: "platform", pageType: WORKSPACE_INSIGHTS_PAGE_TYPE })],
+      [...PLATFORM_SUGGESTED_PROMPTS],
     );
   });
 });
