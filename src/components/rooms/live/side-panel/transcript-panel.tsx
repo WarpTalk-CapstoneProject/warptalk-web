@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import { useRef, useEffect, useMemo, useState } from "react";
 import { ClosedCaptioning, PauseCircle } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
-import { useTranslations } from "next-intl";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   confidencePercent,
