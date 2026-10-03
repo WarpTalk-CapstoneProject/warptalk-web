@@ -415,6 +415,9 @@ function JoinMeetingContent() {
             // WT-631. The level meter above was reading from this device; without it the meeting
             // captured from the OS default input instead, which can be a loopback cable.
             selectedMicrophoneId,
+            // The speaker the preview was playing through; without it the meeting played through the
+            // default output whatever was picked here (3 Oct 2026).
+            selectedSpeakerId,
           },
           navigate: (path) => router.push(path),
           closePreview: () => undefined,

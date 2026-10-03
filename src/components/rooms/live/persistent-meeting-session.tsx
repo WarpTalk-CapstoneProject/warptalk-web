@@ -245,7 +245,8 @@ import {
 } from "@/hooks/use-track-processors";
 import {
   JOIN_PREVIEW_KEY,
-  microphoneRoomOptions,
+  availableDeviceIds,
+  meetingDeviceRoomOptions,
   readMeetingJoinState,
   readMeetingMediaPreferences,
 } from "@/lib/meeting/meeting-join-state";
@@ -857,16 +858,17 @@ export function PersistentMeetingSession({
 
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
-  // WT-631. The input device to capture from, carried from the pre-join picker ("" = the
-  // browser's default, which is what every meeting used before). Read ONCE, with the other
-  // preferences, and deliberately never set again: it seeds the LiveKit Room's construction
-  // options, and <LiveKitRoom> builds a brand-new Room whenever those options change — a
-  // mid-meeting switch written back here would tear the call down. LiveKit carries a
-  // mid-meeting switch itself (switchActiveDevice rewrites the room's own capture default),
-  // and media-device-menu.tsx records it for the next page load.
-  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState("");
+  // The devices to use, carried from the pre-join pickers ("" = the browser's default) and checked
+  // against the devices that exist right now — see meetingDeviceRoomOptions. Read ONCE and
+  // deliberately never set again: it seeds the LiveKit Room's construction options, and
+  // <LiveKitRoom> builds a brand-new Room whenever those options change — a mid-meeting switch
+  // written back here would tear the call down. LiveKit carries a mid-meeting switch itself, and
+  // media-device-menu.tsx records it for the next page load.
+  const [deviceRoomOptions, setDeviceRoomOptions] =
+    useState<ReturnType<typeof meetingDeviceRoomOptions>>(undefined);
 
   useEffect(() => {
+    let cancelled = false;
     const preferences = readMeetingMediaPreferences(
       window.sessionStorage,
       roomId,
@@ -877,15 +879,39 @@ export function PersistentMeetingSession({
     setMicrophoneEnabled(preferences.microphoneEnabled);
     setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
     setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
-    setSelectedMicrophoneId(preferences.selectedMicrophoneId);
-    setMediaPreferencesHydrated(true);
+
+    const choice = {
+      microphoneId: preferences.selectedMicrophoneId,
+      speakerId: preferences.selectedSpeakerId,
+    };
+    if (!choice.microphoneId && !choice.speakerId) {
+      setMediaPreferencesHydrated(true);
+      return;
+    }
+    // The device list before the Room is built, so a device unplugged since the pick is left out
+    // instead of pinned. Connecting waits on this (mediaPreferencesHydrated); a browser that
+    // cannot enumerate joins on the defaults, as every meeting did before.
+    (navigator.mediaDevices?.enumerateDevices?.() ?? Promise.resolve([] as MediaDeviceInfo[]))
+      .then((devices) => {
+        if (cancelled) return;
+        setDeviceRoomOptions(meetingDeviceRoomOptions(choice, availableDeviceIds(devices)));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setMediaPreferencesHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [roomId]);
-  // Memoised on the id alone. <LiveKitRoom> keys its Room on JSON.stringify(options), so equal
+  // Memoised on its content. <LiveKitRoom> keys its Room on JSON.stringify(options), so equal
   // content is already stable, but a fresh object every render is one refactor away from not
   // being.
+  const deviceRoomOptionsKey = JSON.stringify(deviceRoomOptions ?? null);
   const liveKitRoomOptions = useMemo(
-    () => microphoneRoomOptions(selectedMicrophoneId),
-    [selectedMicrophoneId],
+    () => deviceRoomOptions,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deviceRoomOptionsKey],
   );
 
   // Same shape as the media preferences above, and for the same reason: sessionStorage is an
@@ -4812,7 +4838,7 @@ export function PersistentMeetingSession({
         // on a demo laptop with VB-Cable installed that is often the loopback, which carries
         // every other browser tab — instead of the microphone the participant picked (and
         // watched a level meter confirm) on the pre-join screen. On the Room, not on `audio`
-        // below: see microphoneRoomOptions for why the prop alone misses muted joiners.
+        // below: see meetingDeviceRoomOptions for why the prop alone misses muted joiners.
         options={liveKitRoomOptions}
         video={cameraEnabled}
         audio={
