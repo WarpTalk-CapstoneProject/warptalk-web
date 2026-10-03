@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RemoteTrackPublication, Track } from "livekit-client";
-import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
+import { RemoteTrackPublication, RoomEvent, Track } from "livekit-client";
+import { AudioTrack, isTrackReference, useRemoteParticipants, useTracks } from "@livekit/components-react";
 
 import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
 import { bridgeOutboundLeg, type BridgeOutboundLeg } from "@/lib/meeting/bridge-mic-device";
@@ -10,6 +10,8 @@ import {
   dubbedHistoryScope,
   EMPTY_DUBBED_HISTORY,
   mergeDubbedHistory,
+  DUB_VOICE_ATTRIBUTE,
+  ORIGINAL_UNDER_DUB_VOLUME,
   outboundDubHistoryScope,
   routeRoomAudio,
 } from "@/lib/meeting/room-audio-routing";
@@ -143,6 +145,28 @@ export function FilteredRoomAudio({
   // subscription logic runs, so nothing below ever has to special-case "is this me".
   const trackRefs = tracks.filter(isTrackReference).filter((trackRef) => !trackRef.publication.isLocal);
 
+  // Whose voice each interpreter bot speaks in (tts_worker VOICE_KIND_ATTRIBUTE). Subscribed to
+  // attribute changes on purpose: a speaker's bot starts on a stock voice and switches to their
+  // clone mid-meeting, and useTracks alone would not re-render for that.
+  const remoteParticipants = useRemoteParticipants({
+    updateOnlyOn: [
+      RoomEvent.ParticipantAttributesChanged,
+      RoomEvent.ParticipantConnected,
+      RoomEvent.ParticipantDisconnected,
+    ],
+  });
+  const dubVoiceKindByIdentity: Record<string, string> = {};
+  for (const participant of remoteParticipants) {
+    const kind = participant.attributes?.[DUB_VOICE_ATTRIBUTE];
+    if (kind && participant.identity.startsWith(AI_INTERPRETER_PREFIX)) {
+      dubVoiceKindByIdentity[participant.identity] = kind;
+    }
+  }
+  const dubVoiceKindFingerprint = Object.entries(dubVoiceKindByIdentity)
+    .map(([identity, kind]) => `${identity}=${kind}`)
+    .sort()
+    .join(",");
+
   // The whole rule lives in lib/meeting/room-audio-routing.ts, where it can be tested. It is a
   // WHOLE-ROOM decision — a speaker's default dub is declined only if a track in this listener's
   // voice exists for that same speaker, and a raw mic is dropped only once its dub exists — so it
@@ -182,6 +206,7 @@ export function FilteredRoomAudio({
     bridgeOutboundReady: bridgeActive,
     bridgeStandInIdentity,
     previouslyDubbedSpeakerIds: dubbedHistory.scope === historyScope ? dubbedHistory.ids : undefined,
+    dubVoiceKindByIdentity,
     previouslyDubbedOutbound: Boolean(
       localUserId && outboundScope && outboundHistory.scope === outboundScope && outboundHistory.ids.has(localUserId),
     ),
@@ -217,7 +242,7 @@ export function FilteredRoomAudio({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, localUserId, bridgeActive, bridgeStandInIdentity, trackIdentityFingerprint, dubbedHistoryFingerprint]);
+  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, localUserId, bridgeActive, bridgeStandInIdentity, trackIdentityFingerprint, dubbedHistoryFingerprint, dubVoiceKindFingerprint]);
 
   const wantedTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
 
@@ -280,8 +305,14 @@ export function FilteredRoomAudio({
           onError={onBridgeOutboundError}
         />
       )}
+      {/* A speaker dubbed in their own voice is still heard as themselves, underneath and
+          quieter, so the two voices do not fight; everyone else plays at full volume. */}
       {audibleTracks.map((trackRef) => (
-        <AudioTrack key={`${trackRef.participant.identity}-${trackRef.source}`} trackRef={trackRef} />
+        <AudioTrack
+          key={`${trackRef.participant.identity}-${trackRef.source}`}
+          trackRef={trackRef}
+          volume={routing.duckedSpeakerIds.has(trackRef.participant.identity) ? ORIGINAL_UNDER_DUB_VOLUME : 1}
+        />
       ))}
     </>
   );

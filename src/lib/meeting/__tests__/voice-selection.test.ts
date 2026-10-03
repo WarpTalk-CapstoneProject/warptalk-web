@@ -46,7 +46,7 @@ test("consent to clone, with no voice picked, is the clone", () => {
   const selection = describeVoiceSelection({ voiceCloneEnabled: true, voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "cloned");
-  assert.equal(selection.label, "My voice");
+  assert.equal(selection.label, "Live cloning");
 });
 
 test("a picked voice is named, not just confirmed", () => {
@@ -80,11 +80,21 @@ test("a dub voice the catalog no longer offers says so", () => {
   assert.match(selection.detail, /not offered for this language/);
 });
 
-test("the default admits it is a stand-in", () => {
+test("with no voice of your own, others hear your original voice", () => {
   const selection = describeVoiceSelection({ voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "automatic");
-  assert.match(selection.detail, /assigned rather than matched/);
+  assert.equal(selection.label, "Off");
+  assert.match(selection.detail, /original voice/);
+});
+
+test("a carried-over clone is named without its locale tag", () => {
+  const selection = describeVoiceSelection({
+    dubVoice: "own-2",
+    ownVoiceProfiles: [{ name: "My voice (vi-VN)", voiceId: "own-2" }],
+  });
+
+  assert.equal(selection.label, "My voice");
 });
 
 test("with no audience the choice is marked inert, not off", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpinnerGap, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
@@ -14,6 +14,8 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { useVoiceCatalogs } from "@/hooks/use-voice-profiles";
+import { voiceLibraryLanguages } from "@/lib/voice/library-languages";
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
 import { VoicePanel } from "@/components/rooms/live/voice-panel";
@@ -227,9 +229,9 @@ export function MeetingControlBar({
    */
   dubVoice?: string | null;
   /** This participant's own uploaded voice profiles that have a usable provider voice behind them. */
-  ownVoiceProfiles?: { id: string; name: string; voiceId: string }[];
+  ownVoiceProfiles?: { id: string; name: string; voiceId: string; language?: string | null }[];
   /** Pass null to go back to cloning live from the meeting. Omit to hide the "Your voice" section. */
-  onChangeDubVoice?: (voiceId: string | null) => void;
+  onChangeDubVoice?: (voiceId: string | null, language?: string | null) => void;
   /**
    * WT-B — whether THIS ROOM streams audio to STT while a speaker is still talking ("flash
    * mode"), rather than waiting for the pause that ends their turn.
@@ -388,14 +390,33 @@ export function MeetingControlBar({
   });
 
   // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
+  // A library pick can come from any language's catalogue now (the panel filters by language),
+  // so the row looks its name up in those too. Fetched only while such a pick is unexplained by
+  // the profiles and the listen-language catalogue, which share the cache with the panel.
+  const dubVoiceUnnamed = Boolean(
+    dubVoice
+      && !ownVoiceProfiles?.some((profile) => profile.voiceId === dubVoice)
+      && !voiceCatalog?.some((voice) => voice.id === dubVoice),
+  );
+  const libraryCodes = useMemo(
+    () => voiceLibraryLanguages(allowedTargetLanguages).map((language) => language.code),
+    [allowedTargetLanguages],
+  );
+  const libraryCatalogs = useVoiceCatalogs(libraryCodes, dubVoiceUnnamed);
+  const namedCatalog = useMemo(
+    () => [...(voiceCatalog ?? []), ...Object.values(libraryCatalogs.byLanguage).flat()],
+    [voiceCatalog, libraryCatalogs.byLanguage],
+  );
   const voiceSelection = describeVoiceSelection({
-    voiceEnabled,
+    // The listener's switch is gone from meeting rooms (the speaker decides what is heard), so a
+    // stale "off" left in this browser must not turn the row into "Transcript only".
+    voiceEnabled: undefined,
     voiceCloneEnabled,
     // The DUB voice, not voicePreference. This row answers "how do I sound", and voicePreference
     // answers the opposite question — which is why it used to claim listeners heard a speaker in
     // a voice that speaker had only ever chosen for their own listening.
     dubVoice,
-    voiceCatalog,
+    voiceCatalog: namedCatalog,
     ownVoiceProfiles,
     hasAudience: voiceCloneHasAudience,
   });
@@ -863,9 +884,9 @@ export function MeetingControlBar({
                 <>
                   <SettingsPanelHeader title={t("settingsMenu.voice.submenuHeader")} onBack={() => setSettingsSection("root")} />
                   {/* The panel itself is shared with the bridge popup — see voice-panel.tsx and
-                      lib/meeting/voice-panel.ts. Room speed stays here: it is the bar's section, not a
-                      voice, and it rides in the panel's footer slot so it keeps its place above the
-                      capture status. */}
+                      lib/meeting/voice-panel.ts. Flash mode stays here: it is the bar's switch, not a
+                      voice, and it rides in the panel's footer slot, which the panel draws at the top
+                      with the clone status — the controls people open this panel to change. */}
                   <VoicePanel
                     mode="meeting"
                     voiceEnabled={voiceEnabled}
@@ -879,24 +900,19 @@ export function MeetingControlBar({
                     dubVoice={dubVoice}
                     ownVoiceProfiles={ownVoiceProfiles}
                     onChangeDubVoice={onChangeDubVoice}
+                    speakLanguage={speakLanguage}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     cloneCapture={cloneCapture}
                     cloneLevels={cloneLevels}
                     onDone={closeSettingsMenu}
                     footer={
                       <>
-                        {/* FLASH MODE — a room setting, kept visually apart from everything above it.
-                            The list above is two questions about VOICE ("how do I sound", "what do I
-                            hear"). This is a third question about SPEED, and it is the only control in
-                            this panel that changes things for other people. Merging it into the list
-                            would repeat the exact mistake this panel was rebuilt to fix, so it gets a
-                            rule, a heading of its own, and a sentence saying who it affects. */}
-                        <div className="my-1 h-[1px] bg-surface-3" />
-                        <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                          {t("roomSpeed.heading")}
-                        </p>
+                        {/* FLASH MODE — a room setting, kept apart from the voice lists below it by a
+                            rule. It is a question about SPEED, and the only control in this panel that
+                            changes things for other people, so its sentence says who it affects. */}
                         <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
                           <span className="min-w-0 text-left">
-                            <span className="block text-[13px] text-ink">{t("roomSpeed.flashMode.label")}</span>
+                            <span className="block text-[13px] font-medium text-ink">{t("roomSpeed.flashMode.label")}</span>
                             <span className="block text-[11px] leading-snug text-ink-subtle">
                               {onChangeFlashMode
                                 ? t("roomSpeed.flashMode.editable")

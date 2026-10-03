@@ -61,3 +61,24 @@ export function isLibraryVoicePointer(profile: VoiceProfileDto): boolean {
 export function ownVoiceProfiles(profiles: VoiceProfileDto[]): VoiceProfileDto[] {
   return profiles.filter((profile) => !isLibraryVoicePointer(profile));
 }
+
+/**
+ * The saved voices a meeting's Voice panel offers under "Your voice": the person's own, with a
+ * provider voice behind them (an upload has none until it is cloned), each with its language.
+ *
+ * Library picks are left out. They are pointer rows with no name, and the meeting used to list
+ * every one of them as "My voice" — which is how the panel showed several identical "My voice"
+ * rows and never the names people gave their voices.
+ */
+export function meetingVoiceProfiles(
+  profiles: VoiceProfileDto[] | null | undefined,
+): { id: string; name: string; voiceId: string; language: string | null }[] {
+  return ownVoiceProfiles(profiles ?? [])
+    .filter((profile) => profile.providerVoiceId && profile.isActive)
+    .map((profile) => ({
+      id: profile.id,
+      name: profile.displayName?.trim() || "My voice",
+      voiceId: profile.providerVoiceId!,
+      language: profile.language,
+    }));
+}

@@ -78,6 +78,11 @@ export type VoicePanelPlan = {
   dividerAfterSwitch: boolean;
   /** Whether the closing sentence may report transcript-only — only where the switch is on screen. */
   summaryReadsVoiceEnabled: boolean;
+  /**
+   * The first "Your voice" row — choosing no voice of your own. In a bridge room that means a
+   * stand-in voice; in a meeting room it means the room hears you as you actually sound.
+   */
+  automaticOption: { label: string; detail: string };
 };
 
 export function planVoicePanel({
@@ -107,36 +112,34 @@ export function planVoicePanel({
         : null,
       dividerAfterSwitch: false,
       summaryReadsVoiceEnabled: false,
+      automaticOption: {
+        label: "Automatic",
+        // Not "stand-in": in a bridge room that word is the far side's seat (see the test).
+        detail: "An assigned voice, not matched to you",
+      },
     };
   }
 
-  // Meeting: the control bar as it has always been. Undefined counts as on, which is what the
-  // bar's `voiceEnabled !== false` tests have always meant.
-  const hearing = voiceEnabled !== false;
+  // Meeting: the speaker decides how they are heard, and nothing the listener sets overrides it.
+  //
+  // Reported: Kỳ turned voice clone on and Tuấn heard the clone only after turning on his OWN
+  // switch. That switch was this panel's "Voice" (hear translated voice), and "Your voice" sat
+  // behind it — so the one person whose setting should not have mattered had to change it, and
+  // could not even reach their own clone choice until they did. The room now plays a speaker's
+  // dub only when it is in the speaker's own voice (room-audio-routing), whatever the listener
+  // has set, so the switch and the stand-in list no longer change anything and are not offered.
+  // `voiceEnabled` is still accepted so the bridge mode and older callers keep their shape.
+  void voiceEnabled;
+  void canToggleVoice;
   return {
-    voiceSwitch: canToggleVoice
-      ? {
-          label: "Voice",
-          detail: hearing
-            ? "On — translations are spoken to you."
-            : "Off — you read translations instead of hearing them.",
-          ariaLabel: "Hear translated voice",
-        }
-      : null,
-    yourVoice: hearing && hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
-    listenVoice: hearing
-      ? {
-          heading: hasYourVoiceControls
-            ? {
-                title: "Stand-in voice",
-                note: "Only applies to people who have not chosen a voice of their own.",
-              }
-            : null,
-          automaticDetail: "Assigned, not matched to your voice",
-          pickWithdrawsConsent: true,
-        }
-      : null,
-    dividerAfterSwitch: hearing,
-    summaryReadsVoiceEnabled: true,
+    voiceSwitch: null,
+    yourVoice: hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
+    listenVoice: null,
+    dividerAfterSwitch: false,
+    summaryReadsVoiceEnabled: false,
+    automaticOption: {
+      label: "Off",
+      detail: "Others hear your original voice",
+    },
   };
 }

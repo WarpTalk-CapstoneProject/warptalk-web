@@ -37,7 +37,7 @@ export type BridgeWidgetRelayClient = {
   /** "" for the automatic voice. */
   setVoicePreference: (voiceId: string) => void;
   /** null to be cloned live. */
-  setDubVoice: (voiceId: string | null) => void;
+  setDubVoice: (voiceId: string | null, language?: string | null) => void;
   setVoiceCloneConsent: (enabled: boolean) => void;
   /** 0..1. */
   setMeetingAudioLevel: (level: number) => void;
@@ -168,8 +168,8 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     [sendWhenConnected],
   );
   const setDubVoice = useCallback(
-    (voiceId: string | null) => {
-      sendWhenConnected({ type: "set-dub-voice", voiceId });
+    (voiceId: string | null, language?: string | null) => {
+      sendWhenConnected(language ? { type: "set-dub-voice", voiceId, language } : { type: "set-dub-voice", voiceId });
     },
     [sendWhenConnected],
   );

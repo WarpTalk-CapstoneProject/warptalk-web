@@ -25,6 +25,7 @@ import { useTranslations } from "next-intl";
 import { VoicePanel } from "@/components/rooms/live/voice-panel";
 import { Button } from "@/components/ui/button";
 import { useGrantVoiceConsent, useVoiceConsent, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { meetingVoiceProfiles } from "@/lib/voice/profile-status";
 import { clampMeetingAudioLevel } from "@/lib/audio/bridge-far-side-monitor";
 import {
   OWN_VOICE_PICK_TIMEOUT_MS,
@@ -63,20 +64,9 @@ export function VoicePanelSlot() {
   }, [hub, connectionState, listenLanguage, voice]);
   const voiceCatalog = catalog?.language === listenLanguage ? catalog.items : [];
 
-  // persistent-meeting-session's rule: only profiles with a provider voice behind them, because an
-  // uploaded recording has none until it has been cloned.
+  // persistent-meeting-session's rule — see meetingVoiceProfiles.
   const { data: savedVoiceProfiles } = useVoiceProfiles();
-  const ownVoiceProfiles = useMemo(
-    () =>
-      (savedVoiceProfiles ?? [])
-        .filter((profile) => profile.providerVoiceId && profile.isActive)
-        .map((profile) => ({
-          id: profile.id,
-          name: profile.displayName || "My voice",
-          voiceId: profile.providerVoiceId!,
-        })),
-    [savedVoiceProfiles],
-  );
+  const ownVoiceProfiles = useMemo(() => meetingVoiceProfiles(savedVoiceProfiles), [savedVoiceProfiles]);
 
   // "My voice" is two gates, and this window only ever sent the second: the room switch is refused
   // (403) without the account-level consent, and the refusal was a toast in the main window. So
@@ -105,9 +95,9 @@ export function VoicePanelSlot() {
   const heldDubClearRef = useRef(false);
   const cardClearsDubRef = useRef(false);
 
-  function handleChangeDubVoice(voiceId: string | null) {
+  function handleChangeDubVoice(voiceId: string | null, language?: string | null) {
     if (voiceId !== null) {
-      relay.setDubVoice(voiceId);
+      relay.setDubVoice(voiceId, language);
       return;
     }
     heldDubClearRef.current = true;
@@ -229,6 +219,7 @@ export function VoicePanelSlot() {
         dubVoice={voice.dubVoice}
         ownVoiceProfiles={ownVoiceProfiles}
         onChangeDubVoice={handleChangeDubVoice}
+        speakLanguage={snapshot.speakLanguage}
         cloneCapture={voice.cloneCapture}
         footer={
           snapshot.voiceEnabled ? (
