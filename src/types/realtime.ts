@@ -30,6 +30,18 @@ export interface ParticipantInfoDto {
   isUsingVoiceClone?: boolean;
 }
 
+/**
+ * TranscriptInterimReceived: the words of a turn still being spoken. A preview — the speaker's
+ * TranscriptSegmentReceived line replaces it. See lib/transcript/live-text.ts.
+ */
+export interface TranscriptInterimDto {
+  speakerId: string;
+  speakerName: string;
+  itemId: string;
+  text: string;
+  language: string;
+}
+
 export interface TranscriptSegmentDto {
   segmentId: string;
   speakerId: string;

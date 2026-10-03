@@ -4,6 +4,13 @@ import { create } from "zustand";
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
 import {
+  clearLiveLine,
+  expireLiveLine,
+  upsertLiveLine,
+  type LiveLine,
+  type LiveLines,
+} from "../lib/transcript/live-text.ts";
+import {
   applyLateFarSpeakerName,
   holdLateFarSpeakerName,
   lateFarSpeakerNameFor,
@@ -59,6 +66,12 @@ interface TranslationRoomStoreState {
   transcriptPaused: boolean;
   /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
   withheldWhilePaused: number;
+  /**
+   * Live text, one line per speaker: the words of a turn still being spoken. Cleared by that
+   * speaker's final line. Captions always show it; the transcript panel shows it only while the
+   * transcript is running. See lib/transcript/live-text.ts.
+   */
+  liveLines: LiveLines;
   /**
    * Late far-speaker names that arrived before their line (the gateway's two consumer loops are not
    * ordered), applied when the line lands. Bounded in age and count — see holdLateFarSpeakerName.
@@ -191,6 +204,8 @@ interface TranslationRoomStoreState {
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
+  upsertLiveLine: (line: Omit<LiveLine, "receivedAt">, now: number) => void;
+  expireLiveLine: (speakerId: string, receivedAt: number) => void;
   /** TranscriptSegmentSpeakerNamed — see applyLateFarSpeakerName for the whole rule. */
   nameTranscriptSegmentSpeaker: (late: FarSpeakerLateName) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
@@ -286,6 +301,7 @@ const initialState = {
   transcriptSegments: [],
   transcriptPaused: false,
   withheldWhilePaused: 0,
+  liveLines: {} as LiveLines,
   heldLateSpeakerNames: [] as readonly HeldLateName[],
   cleanSentences: [] as TranscriptCleanSentenceEventDto[],
   suggestions: {},
@@ -364,6 +380,8 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       const segment = heldName ? { ...incoming, speakerName: heldName } : incoming;
       const held = taken.held === s.heldLateSpeakerNames ? {} : { heldLateSpeakerNames: taken.held };
       const captionSegments = mergeTranscriptSegment(s.captionSegments, segment);
+      // The speaker's final line replaces their live text, in both lanes.
+      const liveLines = clearLiveLine(s.liveLines, segment.speakerId);
       // A revision of a line the transcript already holds keeps updating it, paused or not: the
       // line was said while recording, and only its wording is changing.
       const alreadyRecorded = s.transcriptSegments.some((existing) => existing.segmentId === segment.segmentId);
@@ -372,14 +390,28 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         return {
           ...held,
           captionSegments,
+          liveLines,
           withheldWhilePaused: s.withheldWhilePaused + (alreadyCaptioned ? 0 : 1),
         };
       }
       return {
         ...held,
         captionSegments,
+        liveLines,
         transcriptSegments: mergeTranscriptSegment(s.transcriptSegments, segment),
       };
+    }),
+
+  upsertLiveLine: (line, now) =>
+    set((s) => {
+      const liveLines = upsertLiveLine(s.liveLines, line, now);
+      return liveLines === s.liveLines ? {} : { liveLines };
+    }),
+
+  expireLiveLine: (speakerId, receivedAt) =>
+    set((s) => {
+      const liveLines = expireLiveLine(s.liveLines, speakerId, receivedAt);
+      return liveLines === s.liveLines ? {} : { liveLines };
     }),
 
   // The late far-speaker name renames a line in BOTH lanes, paused or not: it adds nothing to
