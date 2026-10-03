@@ -5,6 +5,7 @@ import { ParticipantEvent, RoomEvent, Track, type RemoteParticipant } from "live
 import { useMaybeRoomContext } from "@livekit/components-react";
 
 import { BargeInDetector, combineRms, rms } from "@/lib/meeting/barge-in";
+import { MicGate } from "@/lib/meeting/mic-gate";
 
 /**
  * Stops the microphone carrying the room's own translation back into the room.
@@ -41,6 +42,35 @@ import { BargeInDetector, combineRms, rms } from "@/lib/meeting/barge-in";
  *   Disabling the underlying track sends silence and touches nothing else: the publication
  *   stays, the SFU keeps routing, the ingress worker's VAD sees silence and never opens a chunk,
  *   and no UI anywhere changes. It is the smallest thing that removes the audio.
+ *
+ * WHICH TRACK, AND WHO GIVES IT BACK
+ *   `LocalTrack.mediaStreamTrack` is the track that leaves the machine: the noise filter's OUTPUT
+ *   while a filter is attached (livekit-client 2.x: `processor?.processedTrack ??
+ *   _mediaStreamTrack`), the raw capture otherwise. LiveKit's own mute and unmute only ever flip
+ *   `enabled` on the RAW capture. So with the filter on — the default — the flag this gate holds
+ *   down is one that nothing else in the page will ever lift.
+ *
+ *   That produced a microphone that stayed silent until the page was reloaded. As first written,
+ *   the gate remembered only THAT it was holding the microphone, and on release re-enabled
+ *   whatever track it found at that moment — unless the user was muted, in which case it did
+ *   nothing, "because their mute outranks ours". A listener who muted while a dub was playing and
+ *   was still muted when the gate period ended therefore kept a disabled filter output with no
+ *   one left to enable it; their unmute brought back the raw track only. The mic button showed
+ *   on, the published track carried silence, the ingress VAD never opened a chunk — no
+ *   transcript, no translation, no dub, for the rest of the meeting. Reloading built new tracks.
+ *   The same loss was reachable without touching mute: the filter attaching mid-dub left the RAW
+ *   track disabled behind the new output, and release only enabled the output.
+ *
+ *   The gate now keeps the track OBJECTS it disabled (lib/meeting/mic-gate.ts) and gives back
+ *   exactly those — when the gate opens, and at once when the microphone moves to a different
+ *   object underneath it (filter attached or removed, device switched, track restarted). It
+ *   never enables a track it did not itself disable, so a mute it found in place stays in place.
+ *
+ *   Releasing under the user's mute is safe, and it is the point: re-enabling the filter's output
+ *   cannot be heard, because the mute holds its INPUT (the raw track) down. The one track that
+ *   must not be re-enabled under a mute is the raw capture itself — gated when no filter is
+ *   attached — since that flag now IS the user's mute. It is left alone and dropped from the
+ *   books; LiveKit's unmute sets it back. Nothing here ever calls LiveKit's mute or unmute.
  *
  * THE TRADE-OFF, AND WHY IT IS NO LONGER ALL-OR-NOTHING
  *   As first written this was strict half duplex: while a dub sounded, this microphone was not
@@ -107,7 +137,11 @@ export function HalfDuplexMic({
     dubIdentitiesRef.current = dubIdentities;
   }, [dubIdentities]);
 
-  /** True only while WE are holding the microphone down, so a user's own mute is never touched. */
+  /**
+   * True while the gate is meant to be shut. WHICH tracks it has actually disabled — and so which
+   * it must give back — is the MicGate's business, not this flag's: a user's own mute is never
+   * touched because a track found already disabled is never recorded there.
+   */
   const gatedRef = useRef(false);
   /**
    * A gate period: a dub is sounding to this listener, or its hangover has not run out. Distinct
@@ -134,28 +168,40 @@ export function HalfDuplexMic({
     // is on the components-react hook's view of a participant, not on LocalParticipant itself.
     // With Krisp attached, livekit-client's `mediaStreamTrack` getter returns the processor's
     // output, which is the published audio — so this is always the track that leaves the machine.
-    const micTrack = () =>
-      room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ??
-      null;
+    const localMic = () => room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    const micTrack = () => localMic()?.mediaStreamTrack ?? null;
+
+    // The tracks this gate has disabled. It gives back exactly those objects, whatever the user's
+    // mute state — with one exception, expressed by the predicate: while the user is muted, a
+    // held track that is NOT the live processor's output is left as it is. That is the raw
+    // capture (gated when no filter is attached), whose `enabled` flag is now the user's mute —
+    // re-enabling it would publish somebody who believes they are muted, the one failure here
+    // worse than the bug being fixed — or a track already replaced and stopped. LiveKit's unmute
+    // re-enables the raw capture itself, so leaving it cannot strand it. The processor's output
+    // is always given back: nothing else ever would, and under a mute its input is silent.
+    const gate = new MicGate<MediaStreamTrack>(
+      (track) =>
+        !room.localParticipant.isMicrophoneEnabled &&
+        track !== localMic()?.getProcessor()?.processedTrack,
+    );
 
     const openMic = () => {
       gatedRef.current = false;
-      // Only if the user has not muted themselves in the meantime. Their mute outranks ours, and
-      // re-enabling the track under it would publish audio from somebody who believes they are
-      // muted — the one failure here that is worse than the bug being fixed.
-      if (!room.localParticipant.isMicrophoneEnabled) return;
-      const track = micTrack();
-      if (track) track.enabled = true;
+      gate.release();
     };
 
     /** Shut inside a gate period unless the listener has barged in; open otherwise. */
     const apply = () => {
       if (periodRef.current && !detector.open) {
         gatedRef.current = true;
-        // Re-asserted on every call, not only on the transition: the Krisp processor attaching
-        // mid-dub swaps the published track for a new, enabled one.
+        // Re-asserted on every call, not only on the transition. The track carrying the
+        // microphone changes underneath a gate period — the Krisp processor attaching or
+        // detaching, a device switch, a restart — and a user unmuting inside one re-enables the
+        // raw capture. `claim` gives back whatever was held on a previous object and says whether
+        // the current one is live and therefore ours to silence; a track it finds already
+        // disabled by somebody else is not recorded, and so is never re-enabled from here.
         const track = micTrack();
-        if (track && track.enabled) track.enabled = false;
+        if (gate.claim(track) && track) track.enabled = false;
         return;
       }
       if (gatedRef.current) openMic();
@@ -251,11 +297,13 @@ export function HalfDuplexMic({
       if (!periodRef.current) return;
       // Their own mute: nothing is being sent either way, and nothing here may decide otherwise.
       if (!room.localParticipant.isMicrophoneEnabled) return;
+      // From here on every path ends in apply(), measured or not: this tick is also what puts the
+      // gate back on a track that changed, or that the user's unmute re-enabled, mid-period.
       const context = getContext();
-      if (!context) return;
+      if (!context) return apply();
       syncMicProbe(context);
       syncDubProbes(context);
-      if (!micProbe) return;
+      if (!micProbe) return apply();
       detector.step({
         at: performance.now(),
         micRms: levelOf(micProbe.analyser),
@@ -354,20 +402,22 @@ export function HalfDuplexMic({
       // Never leave the microphone held down by a component that has gone away — that would be a
       // silent mic with nothing left running to release it.
       if (gatedRef.current) openMic();
+      // And unconditionally: the tracks held are the only record of what was disabled, and this
+      // gate is about to be unreachable. Whatever the flag above says, nothing stays held.
+      gate.release();
     };
   }, [room, enabled]);
 
   // Translation stopping (or the last dub leaving) must release the microphone too: with no
   // interpreter left to report isSpeaking, no event will ever arrive to do it.
+  //
+  // Ending the period is the whole of it. The tracks the gate disabled are known only to the
+  // effect above, which gives them back in endPeriod and again in its cleanup — `enabled` going
+  // false or the room changing runs that cleanup before this. Looking the microphone up afresh
+  // here and enabling it, as this once did, is how a track the gate never disabled gets enabled.
   useEffect(() => {
     if (enabled && dubIdentities.length > 0) return;
     endPeriodRef.current?.();
-    if (!gatedRef.current || !room) return;
-    gatedRef.current = false;
-    if (!room.localParticipant.isMicrophoneEnabled) return;
-    const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track
-      ?.mediaStreamTrack;
-    if (track) track.enabled = true;
   }, [enabled, dubIdentities.length, room]);
 
   return null;
