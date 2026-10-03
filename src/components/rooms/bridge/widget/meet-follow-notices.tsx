@@ -15,10 +15,13 @@
  *      Meet was left, and the ending is the main window's native one (the popup only answers).
  *      After "Keep open", one quiet line says the room is open and WarpTalk is not listening,
  *      because it is not: this desktop stopped hearing Meet when the user left the call.
- *   2. A fallback chip, where Meet's mute button cannot be read (an older desktop, macOS, a button
- *      the sensor never saw): the WarpTalk mic would otherwise stay off for the whole meeting with
- *      no way to turn it on. One line, one press, validated by the main window. It stays while the
- *      mic is on by hand, so it can be turned off again. While the mic follows Meet: nothing.
+ *   2. The WarpTalk mic, always, while the user is in the call. It used to appear only where Meet's
+ *      mute button cannot be read (an older desktop, macOS, a button the sensor never saw); while
+ *      the mic followed Meet the popup said nothing — and on 2026-10-03 the desktop misread Meet's
+ *      button as muted, the mic went off, and WarpTalk heard nothing of the host with nothing on
+ *      screen. Now one line says on or off (off in the warning colour) and who decides it, and one
+ *      press turns it the other way: applied directly where Meet cannot be read, an override while
+ *      following Meet, held until Meet's button next changes (lib/meeting/bridge-meet-follow).
  *
  * Both come from the main window's snapshot and draw nothing without one. Above the tabs and the
  * language step alike, in one strip each, so the dock row is left alone.
@@ -42,7 +45,7 @@ export function MeetFollowNotices() {
   return (
     <>
       <MeetLeftPrompt />
-      <MicFallbackChip />
+      <WarpTalkMicStrip />
     </>
   );
 }
@@ -105,22 +108,27 @@ function MeetLeftPrompt() {
   );
 }
 
-function MicFallbackChip() {
+function WarpTalkMicStrip() {
   const t = useTranslations("rooms.bridgeWidget.micChip");
   const { relay } = useBridgeWidget();
   const chip = bridgeWidgetMicChip(relay.view);
   if (!chip) return null;
 
   const Icon = chip.enabled ? Microphone : MicrophoneSlash;
+  const who = chip.control === "meet" ? (chip.override ? t("overridden") : t("followsMeet")) : null;
   return (
     <div
       data-bridge-mic-chip={chip.enabled ? "on" : "off"}
+      data-bridge-mic-control={chip.control}
       role="status"
-      title={t("hint")}
+      title={chip.control === "meet" ? t("meetHint") : t("hint")}
       className={`${STRIP} flex items-center gap-1.5 ${chip.enabled ? "bg-surface-2" : "bg-status-waiting/15"}`}
     >
       <Icon size={14} weight="fill" className="shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate font-semibold">{chip.enabled ? t("on") : t("off")}</span>
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-semibold">{chip.enabled ? t("on") : t("off")}</span>
+        {who ? <span className="text-ink-muted"> · {who}</span> : null}
+      </span>
       <Button
         size="sm"
         variant={chip.enabled ? "outline" : "default"}

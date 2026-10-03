@@ -24,7 +24,9 @@ const checks = [
   // a stale active workspace can never hand it another workspace's summary.
   [
     "a room's record requests that room's workspace",
-    roomDetailPage.includes("useEndedRoomRecord(validWorkspaceId ?? null, roomId)"),
+    // B4 added a third argument (the room's own status/end time, for the finalizing poll); the
+    // workspace argument this contract is about is unchanged.
+    /useEndedRoomRecord\(validWorkspaceId \?\? null, roomId[,)]/.test(roomDetailPage),
   ],
   [
     "the per-room record shares the workspace-isolated cache key",

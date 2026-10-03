@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PaperPlaneTilt } from "@phosphor-icons/react/dist/ssr";
@@ -49,6 +50,7 @@ export function InviteToMeetingDialog({
   joinLink: string;
   onCopyLink: () => void;
 }) {
+  const t = useTranslations("meetingLive");
   const [raw, setRaw] = useState("");
   const invite = useInviteToRoom(roomId);
   // Only while the dialog is open — this is a 3-second-poll panel and the list is not needed
@@ -77,7 +79,7 @@ export function InviteToMeetingDialog({
       setRaw("");
       onOpenChange(false);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not send the invitations."));
+      toast.error(getErrorMessage(error, t("inviteDialog.sendFailed")));
     }
   }
 
@@ -91,9 +93,9 @@ export function InviteToMeetingDialog({
     >
       <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[460px]">
         <DialogHeader>
-          <DialogTitle>Invite to this meeting</DialogTitle>
+          <DialogTitle>{t("inviteDialog.title")}</DialogTitle>
           <DialogDescription className="text-ink-subtle pt-2">
-            They get an email and an in-app notification with a link straight into this room.
+            {t("inviteDialog.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -103,7 +105,7 @@ export function InviteToMeetingDialog({
             onChange={(event) => setRaw(event.target.value)}
             rows={3}
             autoFocus
-            placeholder="name@company.com, another@company.com"
+            placeholder={t("inviteDialog.placeholder")}
             className="w-full resize-none rounded-md border border-border bg-surface-2 px-3 py-2 text-[13px] text-ink placeholder:text-ink-subtle focus:border-primary focus:outline-none"
           />
 
@@ -132,7 +134,7 @@ export function InviteToMeetingDialog({
             className="self-start text-[12px] font-medium text-primary hover:text-primary-hover"
             title={joinLink}
           >
-            Or copy the join link
+            {t("inviteDialog.copyLink")}
           </button>
         </div>
 
@@ -150,9 +152,9 @@ export function InviteToMeetingDialog({
           >
             <PaperPlaneTilt className="mr-1.5 h-3.5 w-3.5" />
             {invite.isPending
-              ? "Sending…"
+              ? t("inviteDialog.sending")
               : sendable.length > 1
-                ? `Invite ${sendable.length}`
+                ? t("inviteDialog.inviteCount", { count: sendable.length })
                 : "Invite"}
           </Button>
         </DialogFooter>

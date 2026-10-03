@@ -115,6 +115,11 @@ export interface BridgeModeAvailability {
  *   real       only physical microphones
  *   ambiguous  the cable AND another endpoint
  *   unknown    nothing recording (Meet muted, not capturing), or the probe failed
+ *
+ * `speaker` is the same question for the browser's OUTPUT (desktop 2026-10-03; optional, absent on
+ * older builds and when the probe failed): "cable" means the browser plays into "CABLE Input
+ * (VB-Audio Virtual Cable)", so the far side loops back into Meet's own microphone and the user
+ * hears nothing of the call. Nothing may require it.
  */
 export interface MeetMicState {
   state: "cable" | "real" | "unknown" | "ambiguous";
@@ -122,6 +127,8 @@ export interface MeetMicState {
   endpoint?: string;
   endpoints?: string[];
   reason?: "no-active-session" | "other-virtual-device" | "probe-failed" | "unsupported-platform";
+  speaker?: "cable" | "real" | "unknown";
+  speakerEndpoints?: string[];
   at: number;
 }
 

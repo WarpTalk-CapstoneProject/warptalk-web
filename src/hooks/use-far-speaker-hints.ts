@@ -70,6 +70,15 @@ export function useFarSpeakerHints({
         }
         return connection.invoke(REPORT_FAR_SPEAKER_HINTS, roomId, hints, clientNowMs);
       },
+      // Bug B3: a warning reaches the desktop's main.log, so a refused or failing hop is visible.
+      // The first failure of a run, then every tenth, so a long outage does not flood it.
+      onSendError: (error, failures) => {
+        if (failures !== 1 && failures % 10 !== 0) return;
+        console.warn("[bridge] Meet speaker names not delivered to the hub:", {
+          failures,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      },
     });
 
     const watch = new MeetCaptionsOffWatch({ onChange: setMeetCaptionsOff });

@@ -1,0 +1,60 @@
+{
+  "exitControl": {
+    "leaveAria": "Leave meeting",
+    "leaveMenu": "Leave Meeting",
+    "endForAllMenu": "End Meeting for All",
+    "leaveDialogTitle": "Leave Meeting",
+    "leaveDialogDescription": "Are you sure you want to leave the meeting?",
+    "leaveDialogHostNote": "You are the active host. The meeting will continue without an active host unless you end it for everyone.",
+    "endDialogTitle": "End Meeting for All",
+    "endDialogDescription": "This will end the meeting for everyone, kick all participants out, and finalize the artifacts and billing. This action cannot be undone.",
+    "cancel": "Cancel",
+    "leaveRoom": "Leave Room",
+    "endForEveryone": "End for Everyone",
+    "failedToEnd": "Failed to end meeting",
+    "notRecording": "Not being recorded",
+    "notRecordingTitle": "Subtitles and translation work normally. Nothing from this meeting is saved, so there will be no transcript, summary or minutes afterwards.",
+    "ending": "Ending…"
+  },
+  "inviteDialog": {
+    "title": "Invite to this meeting",
+    "description": "They get an email and an in-app notification with a link straight into this room.",
+    "placeholder": "name@company.com, another@company.com",
+    "copyLink": "Or copy the join link",
+    "cancel": "Cancel",
+    "invite": "Invite",
+    "inviteCount": "Invite {count}",
+    "sending": "Sending…",
+    "sendFailed": "Could not send the invitations."
+  },
+  "transcriptPause": {
+    "title": "Pause the transcript?",
+    "description": "Nothing said from now on is written to the transcript or stored — translation, dubbing and voice clone keep running.",
+    "cancel": "Cancel",
+    "confirm": "Pause transcript"
+  },
+  "sidePanel": {
+    "transcript": "Transcript",
+    "chat": "Chat",
+    "people": "People",
+    "transcriptPaused": "Transcript paused",
+    "pauseTranscript": "Pause transcript",
+    "resumeTranscript": "Resume transcript",
+    "transcriptRequestInProgress": "Transcript request in progress"
+  },
+  "transcriptPanel": {
+    "empty": "Start WarpTalk to see live translation here."
+  },
+  "controlBar": {
+    "voiceOffHint": "Off — you read translations instead of hearing them.",
+    "voiceOnHint": "You hear translations in your language.",
+    "roomSpeedFast": "Fast room",
+    "roomSpeedFastHint": "Translate while people are still speaking. Faster, but still experimental.",
+    "micNoiseOff": "Off",
+    "micNoiseOffHint": "No extra filtering. Best for a headset already close to your mouth.",
+    "micNoiseClose": "Close mic",
+    "micNoiseCloseHint": "A headset, or a phone held to your face.",
+    "micNoiseRoom": "Room mic",
+    "micNoiseRoomHint": "A laptop or a mic across the desk. Use this if your transcript gets worse when you sit back."
+  }
+}

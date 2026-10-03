@@ -21,7 +21,8 @@ import {
   hasRememberedAccessToken,
 } from "@/lib/auth/landing-redirect";
 import type { PlanDto } from "@/types/billing";
-import { formatMoney } from "@/lib/format/currency";
+import { formatPlanPrice, priceWithVat } from "@/lib/billing/plan-display";
+import { usePlanTax } from "@/hooks/use-plan-tax";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
@@ -923,6 +924,7 @@ function PricingSection() {
   const user = useAuthStore((state) => state.user);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
 
+  const { vatPercent } = usePlanTax();
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["landing-plans"],
     queryFn: () => billingService.getPlans(),
@@ -980,13 +982,16 @@ function PricingSection() {
           plans
             .filter((plan: PlanDto) => plan.isActive !== false)
             .sort((a: PlanDto, b: PlanDto) => a.sortOrder - b.sortOrder)
-            .map((plan: PlanDto) => {
+            .map((plan: PlanDto, index: number, ladder: PlanDto[]) => {
               const featureList = buildFeatureList(plan, pricingT);
 
               return (
                 <article
+                  // The last plan in the ladder is the highlighted one, as on PlanGrid. This read
+                  // `sortOrder > 1`, which stopped meaning anything once drag-and-drop on Admin →
+                  // Plans started numbering plans 10, 20, 30 (3 Oct 2026): every card turned "pro".
                   className={
-                    plan.sortOrder > 1 ? "c3-card c3-card-pro" : "c3-card"
+                    index === ladder.length - 1 && ladder.length > 1 ? "c3-card c3-card-pro" : "c3-card"
                   }
                   key={plan.id}
                 >
@@ -994,8 +999,16 @@ function PricingSection() {
                   <h3 className="c3-tier-large">
                     {plan.price === 0
                       ? t("pricing.free")
-                      : `${formatMoney(plan.price, plan.currency)}${t("pricing.perMonth")}`}
+                      : `${formatPlanPrice(plan.price, plan.currency)}${t("pricing.perMonth")}`}
                   </h3>
+                  {plan.price > 0 && vatPercent !== null && vatPercent > 0 ? (
+                    <p className="c3-desc">
+                      {t("pricing.plusVat", {
+                        percent: vatPercent,
+                        total: formatPlanPrice(priceWithVat(plan.price, vatPercent, plan.currency), plan.currency),
+                      })}
+                    </p>
+                  ) : null}
                   <p className="c3-desc">{describePlan(plan, pricingT)}</p>
                   <ul className="c3-list">
                     {featureList.map((feature: string) => (

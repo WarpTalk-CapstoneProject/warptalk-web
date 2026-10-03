@@ -39,11 +39,13 @@
  * after the last plan, ruled like a plan). Without them this renders exactly as before.
  */
 
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { CaretRight, Check } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 
-import { formatAmount, formatMoney } from "@/lib/format/currency";
+import { formatAmount } from "@/lib/format/currency";
+import { formatPlanPrice, priceWithVat } from "@/lib/billing/plan-display";
+import { usePlanTax } from "@/hooks/use-plan-tax";
 import {
   YEARLY_PRICE_MULTIPLIER,
   checkoutTotal,
@@ -70,7 +72,15 @@ function capabilitiesOf(plan: PlanDto, t: BillingT): string[] {
 }
 
 /** Per-cycle price rendered the way a price is read: amount large, unit small. */
-function PriceLine({ plan, interval }: { plan: PlanDto; interval: BillingInterval }) {
+function PriceLine({
+  plan,
+  interval,
+  vatPercent,
+}: {
+  plan: PlanDto;
+  interval: BillingInterval;
+  vatPercent: number | null;
+}) {
   const t = useTranslations("settingsBilling");
   const cycle = (plan.billingCycle ?? "").toLowerCase();
   const pricedYearly = cycle === "yearly" || cycle === "year" || cycle === "annual";
@@ -84,14 +94,24 @@ function PriceLine({ plan, interval }: { plan: PlanDto; interval: BillingInterva
     <div>
       <p className="flex flex-wrap items-baseline gap-1">
         <span className="text-[22px] font-semibold leading-none tabular-nums text-ink">
-          {formatMoney(price, plan.currency)}
+          {formatPlanPrice(price, plan.currency)}
         </span>
         {price > 0 ? <span className="text-[12px] text-ink-muted">{unit}</span> : null}
       </p>
+      {/* Prices are stored without VAT and checkout adds it (3 Oct 2026), so the card says so,
+          with the amount the buyer will actually see on Stripe. */}
+      {price > 0 && vatPercent !== null && vatPercent > 0 ? (
+        <p className="mt-1 text-[11px] tabular-nums text-ink-muted">
+          {t("planGrid.plusVat", {
+            percent: vatPercent,
+            total: formatPlanPrice(priceWithVat(price, vatPercent, plan.currency), plan.currency),
+          })}
+        </p>
+      ) : null}
       {showsYearlyTotal ? (
         <p className="mt-1 text-[11px] tabular-nums text-ink-muted">
           {t("planGrid.billedYearly", {
-            total: formatMoney(checkoutTotal(plan, "yearly"), plan.currency),
+            total: formatPlanPrice(checkoutTotal(plan, "yearly"), plan.currency),
           })}
         </p>
       ) : null}
@@ -116,6 +136,7 @@ export function PlanGrid({
   onIntervalChange,
   renderPlanAction,
   trailingCell,
+  columnProps,
 }: {
   /** Active plans, cheapest first. Sorting is the caller's job — it owns `sortOrder`. */
   plans: PlanDto[];
@@ -129,8 +150,11 @@ export function PlanGrid({
   renderPlanAction?: (plan: PlanDto) => ReactNode;
   /** Admin preview only: one more cell after the last plan, laid out and ruled like a plan. */
   trailingCell?: ReactNode;
+  /** Admin preview only: extra props on each plan's column (drag-and-drop ordering). */
+  columnProps?: (plan: PlanDto) => HTMLAttributes<HTMLDivElement> & { className?: string };
 }) {
   const t = useTranslations("settingsBilling");
+  const { vatPercent } = usePlanTax();
   const yearlySavingPercent = Math.round((1 - YEARLY_PRICE_MULTIPLIER) * 100);
   const currentIndex = plans.findIndex((plan) => plan.id === currentPlanId);
 
@@ -211,15 +235,18 @@ export function PlanGrid({
             (capability) => !previous || !capabilitiesOf(previous, t).includes(capability),
           );
 
+          const extra = columnProps?.(plan);
           return (
             <div
               key={plan.id}
+              {...extra}
               className={cn(
                 "flex min-w-0 flex-col gap-3 border-hairline px-4 py-[18px] sm:px-6",
                 "motion-safe:transition-colors motion-safe:duration-[180ms]",
                 isCurrent ? "bg-primary/[0.09]" : "hover:bg-primary/[0.06]",
                 // Rules between columns, never around them: the page grid is the one object.
                 ruleFor(index),
+                extra?.className,
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -231,7 +258,7 @@ export function PlanGrid({
                 {renderPlanAction ? <div className="ml-auto flex items-center gap-1.5">{renderPlanAction(plan)}</div> : null}
               </div>
 
-              <PriceLine plan={plan} interval={interval} />
+              <PriceLine plan={plan} interval={interval} vatPercent={vatPercent} />
 
               {isCurrent ? (
                 <BillingButton tone="quiet">{t("planGrid.currentPlan")}</BillingButton>

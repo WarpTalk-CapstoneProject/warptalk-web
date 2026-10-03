@@ -28,6 +28,16 @@
  *   bridge has no pre-join screen to write one, and without it a reload of this window fails
  *   closed to a muted microphone.
  *
+ *   THE POPUP CAN OVERRIDE IT (field evidence 2026-10-03: the desktop read Meet's button as muted
+ *   while it showed unmuted, and the mic went off with nothing on screen). `setManualMic` while
+ *   following Meet is an override in the reducer, held until Meet's button next changes; where
+ *   Meet cannot be read it applies directly, as the chip always did. Every applied value is logged
+ *   to main.log (`console.warn("[bridge] ...")`, the level the desktop copies) with its reason.
+ *
+ *   `micIntentRef` is the last value applied: what the mic is MEANT to be, which the session's
+ *   self-heal (lib/meeting/mic-self-heal) enforces after a reconnect. Not `microphoneEnabled`, which
+ *   mirrors what LiveKit has and so says "off" exactly when a lost publication needs healing.
+ *
  *   IF IT DOES NOT TAKE: Meet says unmuted, the mic was asked for, and a few seconds later it is
  *   still off (the device is busy, permission was refused). Saying nothing is the original bug in
  *   a new place, so the control is then reported as "manual" and the popup's chip appears.
@@ -44,7 +54,9 @@ import { watchMeetCall, type MeetCallState } from "@/lib/desktop/bridge";
 import {
   INITIAL_MEET_FOLLOW,
   meetFollowLeftCall,
+  describeMeetFollowMicReason,
   meetFollowMicControl,
+  meetFollowMicOverridden,
   meetFollowMicTarget,
   reduceMeetFollow,
   trustedMeetPhase,
@@ -76,11 +88,18 @@ export type BridgeMeetFollow = {
    * never told. The recording's picture follows it (lib/meeting/bridge-recording).
    */
   call: MeetCallState | null;
-  /** Who decides the WarpTalk mic; "manual" is when the popup offers its chip. */
+  /** Who decides the WarpTalk mic; "manual" is when the popup's press applies directly. */
   micControl: MeetMicControl;
+  /** The mic is on the popup's override of Meet's reading (until Meet's button next changes). */
+  micOverridden: boolean;
+  /** The last value applied to the mic (null before the first): what it is meant to be. */
+  micIntentRef: RefObject<boolean | null>;
   /** The user left the call and has not come back: this desktop stops listening to Meet. */
   leftCall: boolean;
-  /** The popup's chip. The relay host has already checked the control is "manual". */
+  /**
+   * The popup's mic button (and the host's ForceMuted). The relay host has already checked the
+   * control is "manual" or "meet". An override while following Meet; applied directly otherwise.
+   */
   setManualMic: (enabled: boolean) => void;
   /** "Keep open". */
   keepOpen: () => void;
@@ -141,8 +160,11 @@ export function useBridgeMeetFollow({
     setMicrophoneIntentRef.current = setMicrophoneIntent;
   });
 
+  const micIntentRef = useRef<boolean | null>(null);
   const applyMicrophone = useCallback(
-    (on: boolean) => {
+    (on: boolean, reason: string) => {
+      micIntentRef.current = on;
+      console.warn(`[bridge] WarpTalk mic → ${on ? "on" : "off"}: ${reason}`);
       try {
         rememberBridgeMicrophone(window.sessionStorage, roomId, on);
       } catch {
@@ -156,12 +178,44 @@ export function useBridgeMeetFollow({
   );
 
   const micTarget = enabled ? meetFollowMicTarget(state) : null;
+  const micReason = describeMeetFollowMicReason(state);
+  const micReasonRef = useRef(micReason);
+  useEffect(() => {
+    micReasonRef.current = micReason;
+  });
+  const lastAppliedRef = useRef<{ on: boolean; connected: boolean } | null>(null);
   useEffect(() => {
     if (micTarget === null) return;
-    applyMicrophone(micTarget);
+    const last = lastAppliedRef.current;
+    const reapply = last !== null && last.on === micTarget && liveKitConnected && !last.connected;
+    lastAppliedRef.current = { on: micTarget, connected: liveKitConnected };
+    applyMicrophone(
+      micTarget,
+      reapply ? `re-applied after LiveKit connected (${micReasonRef.current})` : micReasonRef.current,
+    );
     // `liveKitConnected` on purpose: a (re)connect re-applies what Meet last said, so a reconnect
     // can never come back with a microphone Meet has muted.
   }, [micTarget, liveKitConnected, applyMicrophone]);
+
+  // The popup's press. While following Meet it is an override (the reducer holds it until Meet's
+  // button changes, and the effect above applies it); a press for what is already the target —
+  // the "it did not take" chip asking again — and every press where Meet cannot be read apply
+  // directly, as the chip always did.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+  const setManualMic = useCallback(
+    (on: boolean) => {
+      const current = stateRef.current;
+      if (meetFollowMicControl(current) === "meet" && meetFollowMicTarget(current) !== on) {
+        dispatch({ roomId, event: { type: "mic-override", enabled: on } });
+        return;
+      }
+      applyMicrophone(on, "set by hand in the popup");
+    },
+    [roomId, applyMicrophone],
+  );
 
   // Asked for, connected, and still off after a while: it did not take. Set and cleared from a
   // timer both, so the chip neither flickers on every unmute nor outlives the fault.
@@ -202,6 +256,7 @@ export function useBridgeMeetFollow({
   const derivedControl = meetFollowMicControl(state);
   const micControl: MeetMicControl =
     derivedControl === "meet" && micNotTaken && micWanted ? "manual" : derivedControl;
+  const micOverridden = enabled && micControl === "meet" && meetFollowMicOverridden(state);
   const leftCall = enabled && meetFollowLeftCall(state);
 
   return useMemo(
@@ -210,11 +265,13 @@ export function useBridgeMeetFollow({
       callPhase,
       call,
       micControl,
+      micOverridden,
+      micIntentRef,
       leftCall,
-      setManualMic: applyMicrophone,
+      setManualMic,
       keepOpen,
       resolveLeave,
     }),
-    [state, callPhase, call, micControl, leftCall, applyMicrophone, keepOpen, resolveLeave],
+    [state, callPhase, call, micControl, micOverridden, leftCall, setManualMic, keepOpen, resolveLeave],
   );
 }

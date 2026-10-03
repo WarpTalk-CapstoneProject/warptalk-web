@@ -75,18 +75,65 @@ export function isMeetWindowTrack(trackName: string | null | undefined): boolean
 /**
  * How the recording frame is laid out.
  *
- * `meet-window` when a Meet window video is subscribed: it fills the frame and nobody is drawn as
- * a tile, while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise —
- * every native meeting, and a bridge recording whose window could not be captured (audio-only).
+ * `meet-window` when a Meet window video is subscribed, OR whenever the room is a bridge room
+ * (`bridge`, see isBridgeRecording): the Meet stage fills the frame and nobody is drawn as a tile,
+ * while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise — every
+ * native meeting.
+ *
+ * WHY `bridge` AND NOT ONLY THE TRACK (production recording, 03 Oct)
+ *   The layout used to follow the subscription alone. The Meet window's track went away 34 s into a
+ *   bridge recording (B18 takes it down whenever Meet does not read as "in the call, on its tab")
+ *   and the template fell straight back to the grid: two "Camera is off" tiles — "External Meeting"
+ *   and the host — for the next 2.5 minutes, and the same grid for the first 3.4 s, before the
+ *   subscription landed. A bridge recording is a recording of the Google Meet call; the native grid
+ *   is never a picture of it. So a bridge room keeps the Meet stage for the whole file, and the
+ *   stage holds the last frame (or the slate) while the window is away — see meetWindowStage.
  */
 export type EgressLayout = "grid" | "meet-window";
 
 export function resolveEgressLayout(
   tiles: ReadonlyArray<{ kind: string; meetWindow?: boolean }>,
+  options: { bridge?: boolean } = {},
 ): EgressLayout {
+  if (options.bridge === true) return "meet-window";
   return tiles.some((tile) => tile.kind === "video" && tile.meetWindow === true)
     ? "meet-window"
     : "grid";
+}
+
+/**
+ * The bridge stand-in's LiveKit identity: the "External Meeting" seat the far side of the Meet call
+ * is published under. The backend's WarpTalk.Shared.ExternalBridgeConstants.ParticipantUserId, and
+ * the web's BRIDGE_STAND_IN_USER_ID (bridge-far-side-language.ts; the test pins the two equal).
+ * Copied rather than imported so this public, session-less page pulls in no language modules.
+ */
+export const BRIDGE_STAND_IN_IDENTITY = "00000000-0000-0000-0000-00000000b21d";
+
+/**
+ * Whether this recording is of a Google Meet bridge room. Latched by the caller: once true it stays
+ * true for the rest of the file (the stand-in leaving at the end of the call, or the window being
+ * taken down, does not turn a Meet recording into a grid of initials).
+ *
+ * Either of two signals, both readable off the LiveKit room by this session-less page:
+ *   - the bridge stand-in is in the room. It is connected for as long as the call is captured, and
+ *     a bridge recording only ever starts once it is (bridge-recording.ts, `inboundOpen`) — so it is
+ *     already there when the recorder connects, which is what keeps the first seconds off the grid;
+ *   - a `meet-window` track was published, which only a bridge room's publisher ever does;
+ *   - a `meet-audio` track was published (the call's sound, see MEET_AUDIO_TRACK_NAME), likewise.
+ *
+ * The ONE notion of "bridge" in this template: the layout (resolveEgressLayout) and the audio
+ * (resolveEgressAudioContext / shouldRecordAudio) both read it, through the same latch.
+ */
+export function isBridgeRecording(input: {
+  participantIdentities: Iterable<string>;
+  meetWindowPublished: boolean;
+  meetAudioPublished?: boolean;
+}): boolean {
+  if (input.meetWindowPublished || input.meetAudioPublished === true) return true;
+  for (const identity of input.participantIdentities) {
+    if (identity === BRIDGE_STAND_IN_IDENTITY) return true;
+  }
+  return false;
 }
 
 /**
@@ -117,4 +164,276 @@ export function shouldResubscribeMeetWindow(input: {
 }): boolean {
   if (input.firstFrameSeen || input.alreadyRetried) return false;
   return input.nowMs - input.subscribedAtMs >= MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS;
+}
+
+/**
+ * What the bridge recording's stage shows right now.
+ *
+ *   live   the Meet window track, once it has decoded a frame and while it is not muted;
+ *   held   otherwise, the last Meet frame the recorder kept (see pickHeldMeetFrame);
+ *   slate  otherwise: nothing of Meet has been seen yet (the first seconds), or nothing safe to hold.
+ *
+ * Never the grid: see resolveEgressLayout.
+ */
+export type MeetWindowStage = "live" | "held" | "slate";
+
+export function meetWindowStage(input: {
+  hasTrack: boolean;
+  firstFrameSeen: boolean;
+  muted: boolean;
+  hasHeldFrame: boolean;
+}): MeetWindowStage {
+  if (input.hasTrack && meetWindowShowsPicture(input)) return "live";
+  return input.hasHeldFrame ? "held" : "slate";
+}
+
+/** How often the template copies the live Meet window aside, to have something to hold. */
+export const MEET_WINDOW_SNAPSHOT_INTERVAL_MS = 1_000;
+
+/** How many snapshots are kept: enough to reach back past MEET_WINDOW_HOLD_LOOKBACK_MS. */
+export const MEET_WINDOW_SNAPSHOT_RING = 8;
+
+/**
+ * How far before the picture went away a held frame must have been taken.
+ *
+ * B18 takes the window down when Meet leaves its tab, but not instantly: a window capture shows the
+ * new tab at once, while the desktop reads the tab about once a second and believes "Meet is gone"
+ * only after two reads 1.5 s apart (meet-call-state.ts), then IPC, unpublish and unsubscribe. So
+ * the last ~3 s of a window that went away may be another tab, or the PiP window — exactly what
+ * B18 promises is never recorded. Holding the very last frame would freeze that tab on screen for
+ * as long as Meet is away. The frame held is one taken at least this long before the loss.
+ */
+export const MEET_WINDOW_HOLD_LOOKBACK_MS = 4_000;
+
+/**
+ * Which kept snapshot to hold when the live picture goes away at `lostAtMs`, and which to keep.
+ *
+ * Snapshots from the lookback window are suspect and are dropped for good (`keep` leaves them out),
+ * so a later loss can never hold one either. Returns the newest snapshot that is old enough, or
+ * null — the slate — when there is none (the picture was live for less than the lookback).
+ */
+export function pickHeldMeetFrame<T extends { atMs: number }>(
+  snapshots: ReadonlyArray<T>,
+  lostAtMs: number,
+  lookbackMs: number = MEET_WINDOW_HOLD_LOOKBACK_MS,
+): { held: T | null; keep: T[] } {
+  const keep = snapshots.filter((snapshot) => snapshot.atMs <= lostAtMs - lookbackMs);
+  let held: T | null = null;
+  for (const snapshot of keep) {
+    if (!held || snapshot.atMs > held.atMs) held = snapshot;
+  }
+  return { held, keep };
+}
+
+// ── Bridge recording AUDIO ───────────────────────────────────────────────────
+
+/**
+ * The Google Meet call's own sound, in a bridge room's recording.
+ *
+ * THE BUG THIS EXISTS FOR
+ *   A bridge recording (production, 2026-10-03, 222 s) was digital silence from 1.1 s to the end
+ *   while the user talked in Meet the whole time. The template mixed what WarpTalk publishes, and
+ *   in a bridge room none of that is the call:
+ *     - the user's voice was only their WarpTalk microphone, which is an STT tap and not what Meet
+ *       hears. In a bridge it starts OFF (no join record: media preferences fail closed), is
+ *       switched by the Meet mute sensor, mute-on-entry and force-mute, and is silenced by the
+ *       half-duplex gate while a dub plays. In that file it was muted for nearly the whole call
+ *       while Meet's own button was on.
+ *     - the far side was only the stand-in's capture, which is fine, but it is the other half.
+ *
+ * THE TRACK
+ *   The capturer's WarpTalk client publishes `meet-audio` while a bridge recording runs
+ *   (components/rooms/live/bridge-meet-audio-publisher): the inbound leg's capture of Meet's
+ *   playback (the far side: process loopback or the cable, whichever the bridge is already using)
+ *   mixed with the user's microphone, which follows Meet's mute button rather than WarpTalk's.
+ *   Published as SCREEN-SHARE AUDIO on purpose: livekit_ingress_worker reads only microphone and
+ *   unknown sources (WT-631 `_carries_speech`) and the live clients play only microphones
+ *   (FilteredRoomAudio), so the recording is the only thing that hears it.
+ *
+ *   When it is there, it replaces every other HUMAN audio track in the mix: the stand-in and the
+ *   members are already inside it (they reach the capturer's Meet), so mixing them as well would
+ *   play the call twice.
+ */
+export const MEET_AUDIO_TRACK_NAME = "meet-audio";
+
+export function isMeetAudioTrack(trackName: string | null | undefined): boolean {
+  return trackName === MEET_AUDIO_TRACK_NAME;
+}
+
+/**
+ * A dub that belongs in a BRIDGE recording: an interpreter's shared default track.
+ *
+ * Product decision (2026-10-03): a bridge recording carries the call AND WarpTalk's translation of
+ * it. One default track exists per (speaker, target language); a `-voice-{id8}-` track is the same
+ * sentence again in a voice one listener picked, so it would only double the dub.
+ */
+export function isRecordedBridgeDub(identity: string | null | undefined): boolean {
+  if (!identity || !identity.startsWith("ai-interpreter-")) return false;
+  return !identity.slice("ai-interpreter-".length).includes("-voice-");
+}
+
+/**
+ * The participant attribute the `meet-audio` publisher sets to say whether its own microphone is in
+ * the mix: "1" when the microphone copy is open, "0" when it could not be opened (getUserMedia
+ * refused, no device, a device that keeps dying). The far side is in `meet-audio` either way.
+ * Absent means "1": the publisher sets it before the track is published.
+ */
+export const MEET_AUDIO_MIC_ATTRIBUTE = "warptalk.meet-audio.mic";
+
+/** Whether this participant's `meet-audio` lacks their own voice, from their attributes. */
+export function meetAudioLacksMicrophone(attributes: Readonly<Record<string, string>> | undefined): boolean {
+  return attributes?.[MEET_AUDIO_MIC_ATTRIBUTE] === "0";
+}
+
+/** One remote participant as the audio policy sees it. */
+export interface EgressAudioParticipant {
+  identity: string;
+  /** Names of every track the participant has PUBLISHED (subscribed or not). */
+  trackNames: readonly (string | null | undefined)[];
+  /** LiveKit participant attributes (MEET_AUDIO_MIC_ATTRIBUTE). */
+  attributes?: Readonly<Record<string, string>>;
+  /** A published, UNMUTED microphone-source track (their WarpTalk mic actually carrying sound). */
+  microphoneLive?: boolean;
+}
+
+export interface EgressAudioContext {
+  /** A bridge recording: isBridgeRecording now, or `latched` from earlier in the file. */
+  bridge: boolean;
+  /** A person publishes `meet-audio`: the call's own mix replaces every other human's audio. */
+  meetAudio: boolean;
+  /**
+   * Who publishes `meet-audio` WITHOUT their own microphone in it. Their WarpTalk microphone is
+   * then kept in the mix (theirs only; the stand-in and members are inside `meet-audio`).
+   */
+  meetAudioWithoutMic: readonly string[];
+  /**
+   * Of those, whether every one has their WarpTalk microphone live (published and unmuted). In a
+   * bridge it is usually held off (it starts off, follows the Meet sensor, mute-on-entry), so the
+   * fallback is often silent, and the slate must say the local voice is missing then.
+   */
+  meetAudioFallbackMicLive: boolean;
+}
+
+/**
+ * The room as both halves of the template need it. `bridge` is isBridgeRecording over the room
+ * (counting `meet-audio`), OR'd with the caller's latch, so the layout and the audio can never
+ * disagree about whether this is a bridge recording. Only people's tracks count: a bot naming a
+ * track `meet-window` or `meet-audio` proves nothing.
+ */
+export function resolveEgressAudioContext(
+  participants: ReadonlyArray<EgressAudioParticipant>,
+  options: { latched?: boolean } = {},
+): EgressAudioContext {
+  const people = participants.filter((participant) => isRecordableParticipant(participant.identity));
+  const published = (match: (name: string | null | undefined) => boolean) =>
+    people.some((participant) => participant.trackNames.some(match));
+  const meetAudioPublishers = people.filter((participant) => participant.trackNames.some(isMeetAudioTrack));
+  const meetAudio = meetAudioPublishers.length > 0;
+  const meetAudioWithoutMic = meetAudioPublishers
+    .filter((participant) => meetAudioLacksMicrophone(participant.attributes));
+  const meetAudioFallbackMicLive =
+    meetAudioWithoutMic.length > 0 && meetAudioWithoutMic.every((participant) => participant.microphoneLive === true);
+  const bridge =
+    options.latched === true ||
+    isBridgeRecording({
+      participantIdentities: people.map((participant) => participant.identity),
+      meetWindowPublished: published(isMeetWindowTrack),
+      meetAudioPublished: meetAudio,
+    });
+  return {
+    bridge,
+    meetAudio,
+    meetAudioWithoutMic: meetAudioWithoutMic.map((participant) => participant.identity),
+    meetAudioFallbackMicLive,
+  };
+}
+
+/**
+ * Whether the recorder subscribes to one AUDIO publication.
+ *
+ *   AIBot_ (STT ingest)            never: it publishes nothing that belongs in a file.
+ *   ai-interpreter- (dubs)         only in a bridge room, and only the default track per speaker
+ *                                  and language. A native meeting keeps recording no dubs (the
+ *                                  original reason for this template).
+ *   a person's `meet-audio`        always.
+ *   any other human audio          unless the room has `meet-audio`, which already contains it —
+ *                                  except the `meet-audio` publisher's own MICROPHONE when their
+ *                                  `meet-audio` says it has no microphone in it (their voice would
+ *                                  otherwise be missing from the file).
+ *
+ * LIMITATION OF THAT FALLBACK: the WarpTalk microphone is not gated by MEET's mute button the way
+ * the meet-audio copy is. It is whatever WarpTalk publishes: off unless the Meet sensor turned it
+ * on, mute-on-entry and force-mute apply, and the half-duplex gate silences it while a dub plays.
+ * The template does not try to re-gate it (it cannot see Meet); the slate says whether it is live.
+ */
+export function shouldRecordAudio(
+  publication: { identity: string; trackName: string | null | undefined; source?: string },
+  context: EgressAudioContext,
+): boolean {
+  const { identity, trackName, source } = publication;
+  if (!identity || identity.startsWith("AIBot_")) return false;
+  if (identity.startsWith("ai-interpreter-")) return context.bridge && isRecordedBridgeDub(identity);
+  if (!isRecordableParticipant(identity)) return false;
+  if (isMeetAudioTrack(trackName)) return true;
+  if (!context.meetAudio) return true;
+  return source === "microphone" && context.meetAudioWithoutMic.includes(identity);
+}
+
+/**
+ * The slate's second line, which used to claim "Audio is being recorded." whatever was mixed — in
+ * the silent production file it said so over 222 s of nothing. It now says what is actually
+ * subscribed. It cannot hear the signal, so it names the source and nothing more.
+ */
+export function meetWindowSlateAudioLine(input: {
+  meetAudio: boolean;
+  otherAudio: boolean;
+  /** `meet-audio` carries the far side only; the local voice can only be their WarpTalk microphone. */
+  meetAudioWithoutMic?: boolean;
+  /**
+   * That WarpTalk microphone is published and unmuted right now. Unmuted is not the same as open:
+   * the half-duplex gate silences it while a dub plays without muting it, so the line says "when it
+   * is open" rather than claiming the voice outright.
+   */
+  fallbackMicLive?: boolean;
+}): string {
+  if (input.meetAudio && input.meetAudioWithoutMic) {
+    return input.fallbackMicLive
+      ? "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone when it is open."
+      : "The Google Meet call audio is being recorded, but the local speaker's voice is missing (their microphone is off in WarpTalk).";
+  }
+  if (input.meetAudio) return "The Google Meet call audio is being recorded.";
+  if (input.otherAudio) return "Only audio published in WarpTalk is being recorded, not the Meet call itself.";
+  return "No audio is reaching the recording yet.";
+}
+
+/**
+ * The decoded-frame set without the elements of a track that went away. The set used to only
+ * grow: every re-published Meet window left its dead <video> in it for the rest of the recording.
+ * Returns the same set when nothing was in it, so a state update can bail out.
+ */
+export function pruneFramedElements<T>(framed: ReadonlySet<T>, gone: Iterable<T>): ReadonlySet<T> {
+  let next: Set<T> | null = null;
+  for (const element of gone) {
+    if (!framed.has(element)) continue;
+    next ??= new Set(framed);
+    next.delete(element);
+  }
+  return next ?? framed;
+}
+
+/** The widest a held-frame snapshot is kept: one per second for the whole meeting, so kept small. */
+export const MEET_WINDOW_SNAPSHOT_MAX_WIDTH = 640;
+
+/**
+ * A snapshot's canvas size: the window's aspect ratio, at most MEET_WINDOW_SNAPSHOT_MAX_WIDTH wide
+ * (never upscaled). Shown letterboxed and scaled up only while the window is away, where a softer
+ * still is fine; the copy and the memory are about a quarter of a 1280-wide frame.
+ */
+export function meetWindowSnapshotSize(
+  videoWidth: number,
+  videoHeight: number,
+  maxWidth: number = MEET_WINDOW_SNAPSHOT_MAX_WIDTH,
+): { width: number; height: number } {
+  if (videoWidth <= maxWidth) return { width: videoWidth, height: videoHeight };
+  return { width: maxWidth, height: Math.max(1, Math.round((videoHeight * maxWidth) / videoWidth)) };
 }

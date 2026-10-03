@@ -65,6 +65,14 @@
     "percentAriaLabel": "{percent}% thời gian nói",
     "footnote": "Được đo từ bản chép, nên đây là thời gian nói thực tế chứ không phải thời gian có mặt trong cuộc họp."
   },
+  "templates": {
+    "general": { "label": "Cuộc họp chung", "description": "Tổng quan, quyết định, việc cần làm và những gì còn bỏ ngỏ." },
+    "traceable": { "label": "Tóm tắt truy vết", "description": "Mỗi câu đều kèm thời điểm nó xuất phát." },
+    "standup": { "label": "Họp standup", "description": "Tiến độ, kế hoạch và vướng mắc của từng người." },
+    "interview": { "label": "Phỏng vấn ứng viên", "description": "Tiểu sử, câu trả lời, điểm mạnh, lo ngại và bước tiếp theo." },
+    "demo": { "label": "Demo sản phẩm", "description": "Đã trình bày gì, phản ứng ra sao, ý kiến trái chiều và việc tiếp theo." },
+    "technical": { "label": "Thảo luận kỹ thuật", "description": "Vấn đề, các phương án đã cân nhắc, đã chọn gì và vì sao." }
+  },
   "absence": {
     "generating": "Trợ lý AI của WarpTalk đang phân tích bản chép. Việc này thường mất chưa đến một phút.",
     "failed": "Việc tạo tóm tắt cho cuộc họp này chưa hoàn tất. Bản chép vẫn khả dụng.",

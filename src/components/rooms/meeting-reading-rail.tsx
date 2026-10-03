@@ -1057,8 +1057,12 @@ function RailSummary({
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {SUMMARY_TEMPLATES.map((template) => (
-                <option key={template.key} value={template.key} title={template.description}>
-                  {template.label}
+                <option
+                  key={template.key}
+                  value={template.key}
+                  title={t(`templates.${template.key}.description` as never) as string || template.description}
+                >
+                  {(t(`templates.${template.key}.label` as never) as string) || template.label}
                 </option>
               ))}
             </select>

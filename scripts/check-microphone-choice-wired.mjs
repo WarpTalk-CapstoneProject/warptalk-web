@@ -13,17 +13,25 @@
  *   The pieces were all present and unconnected, which is the shape the unit test in
  *   meeting-join-state.test.ts cannot see. So the wiring is checked here.
  *
+ * 3 OCT 2026: THE DEVICE IS PINNED, AND THE SPEAKER COUNTS TOO
+ *   Reported as "I pick another mic or speaker and it falls back to the default". WT-631 passed
+ *   the microphone as `ideal`, a preference the browser may overrule — and did, silently, while
+ *   the pre-join preview captured with `exact`. The speaker picker never reached the meeting at
+ *   all. Both are pinned now, and only while the device still exists (see
+ *   meetingDeviceRoomOptions), which keeps WT-631's protection against an unplugged headset.
+ *
  * THE RULES
- *   1. Both pre-join screens put selectedMicrophoneId into the join record.
- *   2. The session reads it back and hands it to <LiveKitRoom options> through
- *      microphoneRoomOptions — the Room's capture default, which also covers a participant who
- *      joins muted and turns the microphone on later (the `audio` prop is read only on connect).
+ *   1. Both pre-join screens put selectedMicrophoneId AND selectedSpeakerId into the join record.
+ *   2. The session builds <LiveKitRoom options> with meetingDeviceRoomOptions from the browser's
+ *      current device list (availableDeviceIds) — the Room's capture default, which also covers a
+ *      participant who joins muted and turns the microphone on later, and its audio output.
  *   3. The `audio` prop does NOT name a device. Passed there, it would override the Room's
  *      capture default on every reconnect and undo a switch made mid-meeting.
- *   4. The session sets the id only while hydrating. <LiveKitRoom> builds a new Room whenever its
- *      options change, so writing a mid-meeting switch back into this state would drop the call.
- *   5. The meeting bar's picker switches a microphone as a preference (exact: false) and records
- *      the pick, so a reload keeps it and an unplugged device falls back instead of throwing.
+ *   4. The session sets the options only while hydrating. <LiveKitRoom> builds a new Room whenever
+ *      its options change, so writing a mid-meeting switch back into this state would drop the call.
+ *   5. The meeting bar's picker switches with { exact: true } — never `exact: false` — records
+ *      the pick for a microphone and for a speaker, so a reload keeps it, and says so when the
+ *      switch fails instead of leaving the participant on another device.
  */
 
 import { readFileSync } from "node:fs";
@@ -62,17 +70,25 @@ for (const file of [JOIN_PAGE, SETUP_MODAL]) {
         `from the OS default input instead of the microphone the participant just tested.`,
     );
   }
+  if (!/\bselectedSpeakerId\b/.test(deviceState[1])) {
+    failures.push(
+      `${file}: the join record does not carry selectedSpeakerId, so the meeting plays through ` +
+        `the default output whatever speaker was picked.`,
+    );
+  }
 }
 
 // ---- Rules 2–4: the session --------------------------------------------------------------------
 const session = stripComments(read(SESSION));
 
-if (!/setSelectedMicrophoneId\(\s*preferences\.selectedMicrophoneId\s*\)/.test(session)) {
-  failures.push(`${SESSION}: expected the hydrated preferences to set selectedMicrophoneId.`);
+if (!/meetingDeviceRoomOptions\(\s*choice\s*,\s*availableDeviceIds\(/.test(session)) {
+  failures.push(
+    `${SESSION}: expected the room options to be built with meetingDeviceRoomOptions over the ` +
+      `browser's current device list (availableDeviceIds), so a device is pinned only while it exists.`,
+  );
 }
-
-if (!/microphoneRoomOptions\(\s*selectedMicrophoneId\s*\)/.test(session)) {
-  failures.push(`${SESSION}: expected the room options to be built with microphoneRoomOptions.`);
+if (!/preferences\.selectedSpeakerId/.test(session)) {
+  failures.push(`${SESSION}: the hydrated preferences' selectedSpeakerId is never read.`);
 }
 
 const liveKitRoom = session.match(/<LiveKitRoom\b([\s\S]*?)\n\s*>/);
@@ -82,7 +98,7 @@ if (!liveKitRoom) {
   if (!/\boptions=\{liveKitRoomOptions\}/.test(liveKitRoom[1])) {
     failures.push(
       `${SESSION}: <LiveKitRoom> is not given options={liveKitRoomOptions}, so the chosen ` +
-        `microphone never reaches LiveKit.`,
+        `devices never reach LiveKit.`,
     );
   }
   const audioProp = liveKitRoom[1].match(/\baudio=\{([\s\S]*?)\n\s{8}\}/);
@@ -94,10 +110,10 @@ if (!liveKitRoom) {
   }
 }
 
-const setterCalls = session.match(/\bsetSelectedMicrophoneId\(/g) ?? [];
+const setterCalls = session.match(/\bsetDeviceRoomOptions\(/g) ?? [];
 if (setterCalls.length !== 1) {
   failures.push(
-    `${SESSION}: setSelectedMicrophoneId is called ${setterCalls.length} times; expected once, ` +
+    `${SESSION}: setDeviceRoomOptions is called ${setterCalls.length} times; expected once, ` +
       `while hydrating. It seeds the Room's construction options, and a change there rebuilds the ` +
       `Room — a mid-meeting switch written back here would drop the call.`,
   );
@@ -106,17 +122,26 @@ if (setterCalls.length !== 1) {
 // ---- Rule 5: the meeting bar ---------------------------------------------------------------------
 const menu = stripComments(read(DEVICE_MENU));
 
-if (!/kind === "audioinput" \? \{ exact: false \}/.test(menu)) {
+if (/exact:\s*false/.test(menu) || !/setActiveMediaDevice\(\s*device\.deviceId\s*,\s*\{\s*exact:\s*true\s*\}\s*\)/.test(menu)) {
   failures.push(
-    `${DEVICE_MENU}: a microphone must be switched with { exact: false }. LiveKit keeps the ` +
-      `constraint as the room's capture default, and an exact id outlives an unplugged device.`,
+    `${DEVICE_MENU}: a device must be switched with { exact: true }. A preference lets the ` +
+      `browser hand back the default device instead, silently.`,
   );
 }
 
-if (!/rememberSelectedMicrophone\(/.test(menu)) {
+for (const recorder of ["rememberSelectedMicrophone", "rememberSelectedSpeaker"]) {
+  if (!new RegExp(`\\b${recorder}\\(`).test(menu)) {
+    failures.push(
+      `${DEVICE_MENU}: ${recorder} is not called, so a reload puts the participant back on the ` +
+        `device they just left.`,
+    );
+  }
+}
+
+if (!/toast\.error\(/.test(menu)) {
   failures.push(
-    `${DEVICE_MENU}: a microphone picked in the meeting is not recorded, so a reload puts the ` +
-      `participant back on the device they just left.`,
+    `${DEVICE_MENU}: a failed switch is not reported. The previous device stays active and the ` +
+      `participant has no way to know their pick did not take.`,
   );
 }
 

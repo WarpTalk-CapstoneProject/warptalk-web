@@ -21,17 +21,44 @@
     "createAccount": "アカウントを作成"
   },
   "featureSteps": {
-    "signalDrift": { "kicker": "シグナルの軌跡", "title": "すべての声が痕跡を残す。" },
-    "languageCrossing": { "kicker": "言語を越えて", "title": "意味は国境を越えて伝わる。" },
-    "thePause": { "kicker": "その瞬間", "title": "信号が形を変える間も、会話は止まらない。" },
-    "memoryBloom": { "kicker": "記憶の芽生え", "title": "この部屋はすべてを覚えている。" }
+    "signalDrift": {
+      "kicker": "シグナルの軌跡",
+      "title": "すべての声が痕跡を残す。"
+    },
+    "languageCrossing": {
+      "kicker": "言語を越えて",
+      "title": "意味は国境を越えて伝わる。"
+    },
+    "thePause": {
+      "kicker": "その瞬間",
+      "title": "信号が形を変える間も、会話は止まらない。"
+    },
+    "memoryBloom": {
+      "kicker": "記憶の芽生え",
+      "title": "この部屋はすべてを覚えている。"
+    }
   },
   "signals": {
-    "capture": { "meta": "収録 / 音声認識 / オーディオ", "label": "収録" },
-    "understand": { "meta": "理解 / コンテキスト / 記憶", "label": "理解" },
-    "translate": { "meta": "翻訳 / AI / 言語", "label": "翻訳" },
-    "speak": { "meta": "発話 / 音声合成 / ボイス", "label": "発話" },
-    "remember": { "meta": "記憶 / 文字起こし / アシスタント", "label": "記憶" }
+    "capture": {
+      "meta": "収録 / 音声認識 / オーディオ",
+      "label": "収録"
+    },
+    "understand": {
+      "meta": "理解 / コンテキスト / 記憶",
+      "label": "理解"
+    },
+    "translate": {
+      "meta": "翻訳 / AI / 言語",
+      "label": "翻訳"
+    },
+    "speak": {
+      "meta": "発話 / 音声合成 / ボイス",
+      "label": "発話"
+    },
+    "remember": {
+      "meta": "記憶 / 文字起こし / アシスタント",
+      "label": "記憶"
+    }
   },
   "voiceHeading": "声は、そのまま人らしく戻ってくる。",
   "understandHeading": "会話がその場で理解されるとき。",
@@ -51,7 +78,8 @@
     "featureCredits": "サイクルごとに{count}クレジット",
     "featureParticipants": "1ミーティングあたり最大{count}人まで参加可能",
     "featureLanguages": "最大{count}言語まで同時利用可能",
-    "featureDefaultSupport": "標準メールサポート"
+    "featureDefaultSupport": "標準メールサポート",
+    "plusVat": "+ {percent}% VAT · お支払い時 {total}"
   },
   "footer": {
     "stayInTouch": "つながりましょう!",

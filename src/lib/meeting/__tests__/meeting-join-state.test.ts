@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  availableDeviceIds,
   completeMeetingJoin,
-  microphoneRoomOptions,
+  meetingDeviceRoomOptions,
   readMeetingJoinState,
   readMeetingMediaPreferences,
   rememberBridgeMicrophone,
   rememberSelectedMicrophone,
+  rememberSelectedSpeaker,
 } from "../meeting-join-state.ts";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "../track-effects-preferences.ts";
 
@@ -50,6 +52,7 @@ test("keeps camera off for the room selected in preview", () => {
     // WT-631. "" is no preference: the browser's default input, which is what every meeting
     // captured from before the pre-join choice was carried through.
     selectedMicrophoneId: "",
+    selectedSpeakerId: "",
   });
 });
 
@@ -166,14 +169,71 @@ test("the device is read even where permissions fail closed, and still publishes
   assert.equal(preferences.cameraEnabled, false);
 });
 
-test("the room prefers the chosen microphone rather than demanding it", () => {
-  // `ideal`, never `exact`: an id saved from a headset that has since been unplugged must fall back
-  // to the default input, not throw OverconstrainedError and join with no microphone at all.
-  assert.deepEqual(microphoneRoomOptions("headset-abc"), {
-    audioCaptureDefaults: { deviceId: { ideal: "headset-abc" } },
+const PRESENT = availableDeviceIds([
+  { kind: "audioinput", deviceId: "default" },
+  { kind: "audioinput", deviceId: "headset-abc" },
+  { kind: "audiooutput", deviceId: "default" },
+  { kind: "audiooutput", deviceId: "headphones-xyz" },
+  { kind: "videoinput", deviceId: "cam-1" },
+]);
+
+test("a chosen microphone that is present is pinned, not merely preferred", () => {
+  // 3 Oct 2026: `ideal` let the browser hand back the default input while the preview had
+  // captured from the chosen one with `exact` — the "falls back to the default device" report.
+  assert.deepEqual(
+    meetingDeviceRoomOptions({ microphoneId: "headset-abc", speakerId: "" }, PRESENT),
+    { audioCaptureDefaults: { deviceId: { exact: "headset-abc" } } },
+  );
+});
+
+test("a chosen device that has been unplugged is left out, so the default is used", () => {
+  // WT-631's case: an exact id for a device that is gone would throw OverconstrainedError and
+  // join with no microphone. Checking the device list first keeps that safety without `ideal`.
+  assert.equal(
+    meetingDeviceRoomOptions({ microphoneId: "gone-headset", speakerId: "gone-speaker" }, PRESENT),
+    undefined,
+  );
+});
+
+test("the chosen speaker becomes the room's audio output", () => {
+  assert.deepEqual(
+    meetingDeviceRoomOptions({ microphoneId: "headset-abc", speakerId: "headphones-xyz" }, PRESENT),
+    {
+      audioCaptureDefaults: { deviceId: { exact: "headset-abc" } },
+      audioOutput: { deviceId: "headphones-xyz" },
+    },
+  );
+  assert.deepEqual(
+    meetingDeviceRoomOptions({ microphoneId: "", speakerId: "headphones-xyz" }, PRESENT),
+    { audioOutput: { deviceId: "headphones-xyz" } },
+  );
+});
+
+test("no choice builds the room exactly as before", () => {
+  assert.equal(meetingDeviceRoomOptions({ microphoneId: "", speakerId: "" }, PRESENT), undefined);
+});
+
+test("a device of the wrong kind does not count as present", () => {
+  // An output id must not satisfy a microphone pick, or the room would be pinned to nothing.
+  assert.equal(
+    meetingDeviceRoomOptions({ microphoneId: "headphones-xyz", speakerId: "" }, PRESENT),
+    undefined,
+  );
+});
+
+test("a speaker picked in the meeting survives a reload, beside the microphone", () => {
+  const storage = storageWith({
+    "warptalk.devices.preview": JSON.stringify({
+      roomId: "room-1",
+      selectedMicrophoneId: "headset-abc",
+    }),
   });
-  // No preference builds the room exactly as before this existed.
-  assert.equal(microphoneRoomOptions(""), undefined);
+  rememberSelectedSpeaker(storage, "room-1", "headphones-xyz");
+
+  const preferences = readMeetingMediaPreferences(storage, "room-1");
+  assert.equal(preferences.selectedSpeakerId, "headphones-xyz");
+  assert.equal(preferences.selectedMicrophoneId, "headset-abc");
+  assert.equal(readMeetingMediaPreferences(storage, "room-2").selectedSpeakerId, "");
 });
 
 test("an opt-out at the current version is honoured; an older one is not a choice", () => {

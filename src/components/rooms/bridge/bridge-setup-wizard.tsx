@@ -602,8 +602,8 @@ export function BridgeSetupWizard({
           </li>
         </ul>
         <p className="mb-3 text-xs text-ink-subtle">
-          Keep your own microphone and headphones selected here in WarpTalk. Meet talks to the
-          virtual devices; you talk to your real ones.
+          Pick your own microphone for WarpTalk in the WarpTalk popup over Meet: ⚙ → Microphone.
+          Meet talks to the virtual devices; you talk to your real ones.
         </p>
         <label className="flex items-start gap-2 text-sm">
           <input
