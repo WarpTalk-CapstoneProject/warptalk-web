@@ -70,10 +70,13 @@ expect(
 );
 expect(
   publisher,
-  /meetWindowRecoveryDelayMs\(failures\)/,
+  /useSupervisedPublish\(\{\s*enabled: meetWindowSupervised,\s*kick: meetWindowRepublish,/,
   PUBLISHER,
-  "a dropped Meet window must be retried with meetWindowRecoveryDelayMs back-off",
+  "the supervisor (with its back-off) must be the single re-publisher of the Meet window; B18's return to the tab only kicks it",
 );
+if (/void meetWindowControlRef\.current\?\.publishMeetWindow\(roomId\)\.then/.test(publisher)) {
+  failures.push(`${PUBLISHER}: a second re-publish effect races the supervisor on publishMeetWindow`);
+}
 
 expect(
   template,

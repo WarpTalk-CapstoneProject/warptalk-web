@@ -389,6 +389,33 @@ export function meetWindowRecoveryDelayMs(consecutiveFailures: number): number {
 }
 
 /**
+ * What a publisher answers while a publish of the same track is already in flight. Both bridge
+ * publishers share the in-flight attempt instead (single flight), so this is a guard: a supervisor
+ * that ever sees it waits for that attempt rather than counting a failure and backing off.
+ */
+export const BRIDGE_PUBLISH_IN_FLIGHT = "a publish of this track is already in flight";
+
+export type SupervisedPublishOutcome = "up" | "pending" | "failed";
+
+/** How one supervised publish attempt counts: "published" is up, an in-flight one is not a failure. */
+export function classifySupervisedPublish(result: string): SupervisedPublishOutcome {
+  if (result === "published") return "up";
+  if (result === BRIDGE_PUBLISH_IN_FLIGHT) return "pending";
+  return "failed";
+}
+
+/**
+ * When a supervisor checks again: the steady interval while the track is up (or an attempt is still
+ * in flight), the recovery back-off after `consecutiveFailures` failures. Shared by the Meet window
+ * and the Meet audio (`meet-audio`) supervisors.
+ */
+export function nextSupervisedPublishDelayMs(consecutiveFailures: number): number {
+  return consecutiveFailures === 0
+    ? MEET_WINDOW_SUPERVISE_INTERVAL_MS
+    : meetWindowRecoveryDelayMs(consecutiveFailures);
+}
+
+/**
  * Whether the start chain may open the Meet window as the recording's first picture. Off the tab it
  * starts audio-only, and the picture follows when Meet is back (shouldRepublishMeetWindow).
  */

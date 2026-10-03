@@ -53,9 +53,9 @@ expect(
 );
 expect(
   session,
-  /publishMeetAudio\(\)[\s\S]{0,400}startRecordingRef\.current\("start"\)/,
+  /Promise\.allSettled\(\[[\s\S]{0,400}publishMeetWindow\(roomId\)[\s\S]{0,200}publishMeetAudio\(\)[\s\S]{0,1200}startRecordingRef\.current\("start"\)/,
   SESSION,
-  "the start chain must publish meet-audio before asking the server to record",
+  "the start chain must open the Meet window and publish meet-audio together (allSettled) before asking the server to record",
 );
 expect(
   publisher,

@@ -8,14 +8,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  BRIDGE_PUBLISH_IN_FLIGHT,
   MEET_TAB_RETURN_HOLD_MS,
   MEET_WINDOW_RECOVERY_DELAYS_MS,
   MEET_WINDOW_SUPERVISE_INTERVAL_MS,
+  classifySupervisedPublish,
   describeMeetWindowCaptureFailure,
   mayCaptureMeetWindowAtStart,
   meetWindowOnTab,
   meetWindowRecoveryDelayMs,
   meetWindowTabReading,
+  nextSupervisedPublishDelayMs,
   shouldPublishMeetWindow,
   shouldRepublishMeetWindow,
   shouldSuperviseMeetWindow,
@@ -156,4 +159,19 @@ test("supervise: a dropped window is retried with a bounded back-off", () => {
   // Never longer than 15 s without a picture once the desktop can give one again.
   assert.ok(Math.max(...MEET_WINDOW_RECOVERY_DELAYS_MS) <= 15_000);
   assert.ok(MEET_WINDOW_SUPERVISE_INTERVAL_MS <= 5_000);
+});
+
+test("supervise: an attempt already in flight is pending, never a failure that backs off", () => {
+  assert.equal(classifySupervisedPublish("published"), "up");
+  assert.equal(classifySupervisedPublish(BRIDGE_PUBLISH_IN_FLIGHT), "pending");
+  assert.equal(classifySupervisedPublish("the meeting is not connected"), "failed");
+  assert.equal(classifySupervisedPublish("no-publisher"), "failed");
+});
+
+test("supervise: the steady interval while up, the shared back-off after failures (window and audio)", () => {
+  assert.equal(nextSupervisedPublishDelayMs(0), MEET_WINDOW_SUPERVISE_INTERVAL_MS);
+  assert.deepEqual(
+    [1, 2, 3, 4, 9].map(nextSupervisedPublishDelayMs),
+    [2_000, 4_000, 8_000, 15_000, 15_000],
+  );
 });
