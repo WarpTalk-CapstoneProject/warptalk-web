@@ -210,15 +210,49 @@ test("WT-306: a restored id pointing at an ended room retires the session", () =
 });
 
 test("a restored id the API cannot resolve at all also retires the session", () => {
-  assert.equal(
-    isRestoredMeetingStale({
-      compact: true,
-      roomLoadFailed: true,
-      hasRoom: false,
-      canConnectRoom: false,
-    }),
-    true,
-  );
+  for (const status of [404, 410, 403]) {
+    assert.equal(
+      isRestoredMeetingStale({
+        compact: true,
+        roomLoadFailed: true,
+        roomLoadErrorStatus: status,
+        hasRoom: false,
+        canConnectRoom: false,
+      }),
+      true,
+      `HTTP ${status} is the server answering about this room`,
+    );
+  }
+});
+
+test("prod 2026-10-03: a backend hang does not tear down a live bridge session", () => {
+  // The room query timed out (no response) about 41 s into a live external-bridge call, and the
+  // session - popup, idle reaper, Meet-left countdown - was retired with the room never ended.
+  // Absence is not evidence: a timeout, a 5xx or a dropped connection says nothing about the room.
+  for (const status of [undefined, 500, 502, 503, 504, 408, 429]) {
+    assert.equal(
+      isRestoredMeetingStale({
+        compact: true,
+        roomLoadFailed: true,
+        roomLoadErrorStatus: status,
+        hasRoom: true,
+        canConnectRoom: true,
+      }),
+      false,
+      `a lookup failing with ${status ?? "no response"} must hold the session`,
+    );
+    // Not even when nothing has loaded yet: the query's own retry gets another go.
+    assert.equal(
+      isRestoredMeetingStale({
+        compact: true,
+        roomLoadFailed: true,
+        roomLoadErrorStatus: status,
+        hasRoom: false,
+        canConnectRoom: false,
+      }),
+      false,
+    );
+  }
 });
 
 test("a room still loading is not yet stale — nothing is closed on a pending query", () => {

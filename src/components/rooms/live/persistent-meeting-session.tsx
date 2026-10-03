@@ -2087,10 +2087,14 @@ export function PersistentMeetingSession({
 
   // WT-306: `activeRoomId` now survives a reload, so it can name a room that has since ended,
   // been cancelled, or that this account can no longer read. A restored id must not mount a
-  // mini window onto a dead room — retire the session instead.
+  // mini window onto a dead room — retire the session instead. Only when the SERVER says so: a
+  // timeout here used to retire a live bridge session mid-call (prod, 2026-10-03), the same
+  // "absence is not evidence" mistake canConnectMeeting above was fixed for.
   const meetingRoomIsGone = isRestoredMeetingStale({
     compact,
     roomLoadFailed: roomQuery.isError,
+    roomLoadErrorStatus: (roomQuery.error as { response?: { status?: number } } | null)?.response
+      ?.status,
     hasRoom: Boolean(roomQuery.data),
     canConnectRoom: canConnectMeeting,
   });
@@ -5085,7 +5089,13 @@ export function PersistentMeetingSession({
     return <WaitingRoomView onRetry={retryMeetingConnection} />;
   }
 
-  if (roomQuery.isError || !room) {
+  // `!room`, not `roomQuery.isError || !room`. React Query keeps the last good room through a failed
+  // REFETCH, and the old test swapped a running meeting for this panel on any one of them - which
+  // unmounts LiveKit, the bridge popup's relay and the leave countdown exactly as the stale-session
+  // retire above used to (prod, 2026-10-03: a backend hang). A room that is really gone is retired
+  // by meetingRoomIsGone / canConnectMeeting on the server's answer; a lookup that never produced a
+  // room still lands here.
+  if (!room) {
     return (
       <StatePanel
         icon={<WarningCircle className="h-8 w-8" />}
