@@ -638,6 +638,18 @@ assert.match(
   "The room page's Start/Join must hand an External Meeting to the desktop popup (WT-868).",
 );
 
+// Reported 4 Oct 2026: on a meeting record, the Conversation and Timeline layouts made the page
+// scroll on into blank space for the full length of the transcript. Their rows carry sr-only
+// citation anchors, which are absolutely positioned; with the transcript's scroll frame not
+// positioned, they were laid out against the wrapper outside it and escaped its overflow clip.
+// The frame must be the containing block of what scrolls inside it.
+const transcriptPanel = stripComments(read("src/components/rooms/meeting-transcript-panel.tsx"));
+assert.match(
+  transcriptPanel,
+  /ref=\{scrollerRef\}[\s\S]{0,400}"relative [^"]*overflow-y-auto/,
+  "The transcript's scroll frame must be `relative`, or absolutely positioned rows escape its clip and stretch the page.",
+);
+
 console.log(
-  "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330, no External Meeting in create): PASS",
+  "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330, no External Meeting in create, transcript frame contains its rows): PASS",
 );
