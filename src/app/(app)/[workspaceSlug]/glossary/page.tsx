@@ -30,7 +30,7 @@
  *   is the disambiguation the global list cannot do.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,6 +51,7 @@ import {
   WorkspacePage,
   WorkspacePrimaryButton,
   WorkspaceToolbar,
+  WorkspaceToolbarDivider,
 } from "@/components/workspace/page-chrome";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Badge } from "@/components/ui/badge";
@@ -216,28 +217,6 @@ export default function WorkspaceGlossaryPage() {
     },
   });
 
-  const terms = useMemo(() => {
-    const all = termsQuery.data ?? [];
-    const needle = search.trim().toLowerCase();
-    return all.filter((term) => {
-      if (selectedDomain !== "all" && normalizeDomain(term.domain) !== selectedDomain) {
-        return false;
-      }
-      if (!needle) return true;
-      return [term.sourceTerm, term.targetTerm, term.domain, term.definition, term.context]
-        .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(needle));
-    });
-  }, [termsQuery.data, search, selectedDomain]);
-
-  const customDomainGroups = useMemo(() => {
-    return groupTermsByDomain(terms);
-  }, [terms]);
-
-  const crossDomainMap = useMemo(() => {
-    return findCrossDomainTerms(termsQuery.data ?? [], (t) => t.sourceTerm);
-  }, [termsQuery.data]);
-
   const availableCustomDomains = useMemo(() => {
     const set = new Set<string>();
     for (const term of termsQuery.data ?? []) {
@@ -248,6 +227,34 @@ export default function WorkspaceGlossaryPage() {
       if (b === "General") return -1;
       return a.localeCompare(b, "vi");
     });
+  }, [termsQuery.data]);
+
+  // The domain filter belongs to the glossary it was picked in. Derived rather than reset on
+  // every switch: a domain the open glossary does not have (another glossary's "Food", or one whose
+  // last term was just removed) reads as "all" instead of filtering the page down to nothing while
+  // the pill row — which only shows when there are 2+ domains — offers no way back.
+  const activeDomain = availableCustomDomains.includes(selectedDomain) ? selectedDomain : "all";
+
+  const terms = useMemo(() => {
+    const all = termsQuery.data ?? [];
+    const needle = search.trim().toLowerCase();
+    return all.filter((term) => {
+      if (activeDomain !== "all" && normalizeDomain(term.domain) !== activeDomain) {
+        return false;
+      }
+      if (!needle) return true;
+      return [term.sourceTerm, term.targetTerm, term.domain, term.definition, term.context]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(needle));
+    });
+  }, [termsQuery.data, search, activeDomain]);
+
+  const customDomainGroups = useMemo(() => {
+    return groupTermsByDomain(terms);
+  }, [terms]);
+
+  const crossDomainMap = useMemo(() => {
+    return findCrossDomainTerms(termsQuery.data ?? [], (t) => t.sourceTerm);
   }, [termsQuery.data]);
 
   // WT-875 — the languages a NEW glossary may be created in are the workspace's allowed target
@@ -455,62 +462,87 @@ export default function WorkspaceGlossaryPage() {
       <WorkspaceToolbar
         filters={
           activeTab === "custom" && glossaries.length > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            // One row, two filters in order: WHICH PAIR (the select), then WHICH GLOSSARY (the
+            // chips). It used to wrap, so a second pair's label and chips dropped under the select
+            // and read as a stray line. The toolbar's filter slot scrolls sideways; nothing wraps.
+            <div className="flex items-center gap-2">
               {/* PO 2026-10-02: filter by language pair, one unit, with counts. */}
               {pairView.options.length > 1 ? (
-                <Select value={pairView.filter} onValueChange={(value) => value && setPairFilter(value)}>
-                  <SelectTrigger className="h-7 w-auto min-w-[150px] text-[12px]" aria-label={t("pairs.filterLabel")}>
-                    {/* WT-937: the key ("en>vi") is not a label; render what the menu item says. */}
-                    <SelectValue>
-                      {(value) => {
-                        const option = pairView.options.find((candidate) => candidate.key === value);
-                        return option
-                          ? t("pairs.option", {
-                              source: getLanguageName(option.source),
-                              target: getLanguageName(option.target),
-                              count: option.count,
-                            })
-                          : t("pairs.all", { count: glossaries.length });
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_PAIRS}>{t("pairs.all", { count: glossaries.length })}</SelectItem>
-                    {pairView.options.map((option) => (
-                      <SelectItem key={option.key} value={option.key}>
-                        {t("pairs.option", {
-                          source: getLanguageName(option.source),
-                          target: getLanguageName(option.target),
-                          count: option.count,
-                        })}
+                <>
+                  <Select value={pairView.filter} onValueChange={(value) => value && setPairFilter(value)}>
+                    {/* size="sm": the trigger's own `data-[size=default]:h-9` outranks a bare `h-7`. */}
+                    <SelectTrigger
+                      size="sm"
+                      className="shrink-0 py-0 text-[12px]"
+                      aria-label={t("pairs.filterLabel")}
+                    >
+                      {/* WT-937: the key ("en>vi") is not a label; render what the menu item says. */}
+                      <SelectValue>
+                        {(value) => {
+                          const option = pairView.options.find((candidate) => candidate.key === value);
+                          return option
+                            ? t("pairs.option", {
+                                source: getLanguageName(option.source),
+                                target: getLanguageName(option.target),
+                                count: option.count,
+                              })
+                            : t("pairs.all", { count: glossaries.length });
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    {/* Below the trigger and as wide as its longest pair, not the trigger's width. */}
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="w-auto min-w-(--anchor-width)"
+                    >
+                      <SelectItem value={ALL_PAIRS} className="text-[12px]">
+                        {t("pairs.all", { count: glossaries.length })}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {pairView.options.map((option) => (
+                        <SelectItem key={option.key} value={option.key} className="text-[12px]">
+                          {t("pairs.option", {
+                            source: getLanguageName(option.source),
+                            target: getLanguageName(option.target),
+                            count: option.count,
+                          })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <WorkspaceToolbarDivider />
+                </>
               ) : null}
-              {pairView.groups.map((group) => (
-                <div key={group.key} className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-ink-subtle">
-                    {getLanguageName(group.source)} → {getLanguageName(group.target)}
-                  </span>
-                  {group.glossaries.map((glossary) => {
-                    const active = selected?.id === glossary.id;
-                    return (
-                      <button
-                        key={glossary.id}
-                        type="button"
-                        onClick={() => setSelectedId(glossary.id)}
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] transition-colors ${
-                          active
-                            ? "border-border bg-surface-2 font-medium text-ink"
-                            : "border-transparent text-ink-muted hover:bg-surface-2"
-                        }`}
-                      >
-                        {glossary.name}
-                      </button>
-                    );
-                  })}
-                </div>
+              {pairView.groups.map((group, index) => (
+                <Fragment key={group.key}>
+                  {index > 0 ? <WorkspaceToolbarDivider /> : null}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {/* Filtered to one pair, the select already names it. */}
+                    {pairView.filter === ALL_PAIRS ? (
+                      <span className="mr-0.5 whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-ink-subtle">
+                        {getLanguageName(group.source)} → {getLanguageName(group.target)}
+                      </span>
+                    ) : null}
+                    {group.glossaries.map((glossary) => {
+                      const active = selected?.id === glossary.id;
+                      return (
+                        <button
+                          key={glossary.id}
+                          type="button"
+                          onClick={() => setSelectedId(glossary.id)}
+                          aria-pressed={active}
+                          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] transition-colors ${
+                            active
+                              ? "border-border bg-surface-2 font-medium text-ink"
+                              : "border-transparent text-ink-muted hover:bg-surface-2"
+                          }`}
+                        >
+                          {glossary.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Fragment>
               ))}
             </div>
           ) : null
@@ -610,6 +642,8 @@ export default function WorkspaceGlossaryPage() {
               glossary={selected}
               termCount={termsQuery.data?.length ?? selected.termCount}
               canManage={canManage}
+              languages={languageOptions}
+              languagesReady={languagePolicyReady}
               onChanged={(pair) => {
                 // WT-937: stay on the glossary that was just relabelled. With the filter left on
                 // the old pair it was filtered out and a different glossary opened in its place.
@@ -701,7 +735,7 @@ export default function WorkspaceGlossaryPage() {
                     type="button"
                     onClick={() => setSelectedDomain("all")}
                     className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                      selectedDomain === "all"
+                      activeDomain === "all"
                         ? "border-border bg-surface-3 font-semibold text-ink"
                         : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
                     }`}
@@ -715,7 +749,7 @@ export default function WorkspaceGlossaryPage() {
                     const domainCount = (termsQuery.data ?? []).filter(
                       (t) => normalizeDomain(t.domain) === domain,
                     ).length;
-                    const active = selectedDomain === domain;
+                    const active = activeDomain === domain;
                     return (
                       <button
                         key={domain}
@@ -736,7 +770,7 @@ export default function WorkspaceGlossaryPage() {
               )}
 
               {/* Grouping Toggle (Domain vs A-Z) */}
-              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <div className="flex items-center gap-1.5 self-end sm:ml-auto sm:self-auto">
                 <span className="text-[11px] text-ink-subtle">{t("grouping.label")}:</span>
                 <div className="inline-flex rounded-[6px] border border-hairline bg-surface-2 p-0.5">
                   <button

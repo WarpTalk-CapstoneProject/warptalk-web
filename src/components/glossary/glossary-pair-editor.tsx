@@ -5,8 +5,10 @@
  *
  * Somebody who imported a dictionary as English → English and meant English → Vietnamese used to
  * have to create a new glossary and import again. Now the pair is two selects beside the
- * glossary's name, offered from the languages the platform admin has published (the same list the
- * Import template tab uses). The terms are NOT re-translated or changed; when the glossary
+ * glossary's name, offered from the languages the WORKSPACE allows (Settings → language policy,
+ * the same list the New glossary dialog uses — see `pairEditorLanguageOptions`). They used to be
+ * every language the platform admin had published, which let a workspace relabel a glossary into a
+ * pair it may not create. The terms are NOT re-translated or changed; when the glossary
  * already has terms the change waits for a one-line confirmation in the page saying so (no
  * window.confirm). Afterwards the chip moves to its new pair group, and the Import dialog's quick
  * download and the Import template tab follow the new pair (both read the glossary's pair).
@@ -32,9 +34,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePublishedTemplateLanguages } from "@/hooks/use-glossary-import-template";
 import { useUpdateGlossaryLanguages } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/api/errors";
+import { pairEditorLanguageOptions, type PairLanguageOption } from "@/lib/glossary/glossary-pairs";
 import { baseLanguage } from "@/lib/glossary/import-template";
 import { getLanguageName } from "@/lib/language/languages";
 import type { GlossaryDto } from "@/types/workspace";
@@ -46,16 +48,21 @@ export function GlossaryPairEditor({
   glossary,
   termCount,
   canManage,
+  languages,
+  languagesReady,
   onChanged,
 }: {
   workspaceId: string;
   glossary: GlossaryDto;
   termCount: number;
   canManage: boolean;
+  /** The languages the workspace's policy allows. */
+  languages: readonly PairLanguageOption[];
+  /** False until the policy has settled; the selects wait rather than offer a forbidden language. */
+  languagesReady: boolean;
   onChanged?: (pair: Pair) => void;
 }) {
   const t = useTranslations("glossary.pairEditor");
-  const { languages, isLoading } = usePublishedTemplateLanguages();
   const update = useUpdateGlossaryLanguages(workspaceId);
   const [pending, setPending] = useState<Pair | null>(null);
   const [editing, setEditing] = useState(false);
@@ -67,11 +74,11 @@ export function GlossaryPairEditor({
   const nameOf = (code: string) =>
     languages.find((language) => language.code === code)?.name ?? getLanguageName(code);
 
-  // A pair the admin has since unpublished is still shown as the current value.
-  const options = [...languages];
-  for (const code of [current.sourceLanguage, current.targetLanguage]) {
-    if (code && !options.some((language) => language.code === code)) options.push({ code, name: nameOf(code) });
-  }
+  const options = pairEditorLanguageOptions(
+    languages,
+    [current.sourceLanguage, current.targetLanguage],
+    nameOf,
+  );
 
   const apply = async (pair: Pair) => {
     try {
@@ -122,13 +129,14 @@ export function GlossaryPairEditor({
   }
 
   const select = (value: string, label: string, onPick: (code: string) => void) => (
-    <Select value={value} onValueChange={(code) => code && onPick(code)} disabled={isLoading || update.isPending}>
-      <SelectTrigger className="h-7 w-36 text-[12px]" aria-label={label}>
+    <Select value={value} onValueChange={(code) => code && onPick(code)} disabled={!languagesReady || update.isPending}>
+      {/* size="sm": the trigger's own `data-[size=default]:h-9` outranks a bare `h-7`. */}
+      <SelectTrigger size="sm" className="w-36 py-0 text-[12px]" aria-label={label}>
         <SelectValue>{(code) => (code ? nameOf(String(code)) : "")}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((language) => (
-          <SelectItem key={language.code} value={language.code}>
+          <SelectItem key={language.code} value={language.code} className="text-[12px]">
             {language.name}
           </SelectItem>
         ))}
