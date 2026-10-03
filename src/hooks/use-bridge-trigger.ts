@@ -19,6 +19,7 @@ import {
   nextBridgeTrigger,
   nextBridgeWindow,
   selectTriggerMeeting,
+  sightingLatchRoomId,
   type BridgeTriggerSnapshot,
   type BridgeTriggerState,
   type BridgeWindowLedger,
@@ -126,14 +127,60 @@ export function useBridgeTrigger({
     return () => window.clearTimeout(timer);
   }, [meetWindowLostAtMs]);
 
-  const meeting = selectTriggerMeeting(meetings, nowMs, translatingRoomId);
+  /**
+   * The sighting narrows the schedule, and the latch breaks ties (see `selectTriggerMeeting`).
+   *
+   * Both used to be left out, and the clock alone picked: a bridge room whose session was torn
+   * down without ending it stayed "the meeting" for its whole one-hour tail, so the next Meet call
+   * the user opened could never become an offer and was never claimed (prod, 2026-10-03).
+   * `seenRoomId` as the preference is what keeps a picture-in-picture or hidden-tab sighting - no
+   * code to compare - on the call the user was last seen in, rather than on whichever room starts
+   * nearest.
+   */
+  const meeting = selectTriggerMeeting(
+    meetings,
+    nowMs,
+    translatingRoomId,
+    presence?.meetCode,
+    seenRoomId,
+  );
   const meetingRoomId = meeting?.roomId ?? null;
 
-  // Read by the sensor callback, which fires long after the render that set it up.
-  const meetingRoomIdRef = useRef<string | null>(null);
+  // Read by the sensor callback, which fires long after the render that set it up. It needs the
+  // INPUTS of the selection, not its last answer: that answer was computed with the previous
+  // sighting's code, which is exactly how a stale room got latched.
+  const meetingsRef = useRef(meetings);
+  const translatingRoomIdRef = useRef(translatingRoomId);
+  const seenRoomIdRef = useRef(seenRoomId);
   useEffect(() => {
-    meetingRoomIdRef.current = meetingRoomId;
-  }, [meetingRoomId]);
+    meetingsRef.current = meetings;
+    translatingRoomIdRef.current = translatingRoomId;
+    seenRoomIdRef.current = seenRoomId;
+  }, [meetings, translatingRoomId, seenRoomId]);
+
+  /**
+   * The room list catching up with a sighting that is still on screen.
+   *
+   * Presence events arrive only when the sighting CHANGES. In the offer flow the sighting comes
+   * first and the claimed room arrives in the list a moment later, with the Meet window unchanged,
+   * so the callback below never runs for it and the latch would keep pointing at whatever room it
+   * held before - the old room, which a later hidden-tab sighting (no code) would then prefer and
+   * re-open. Same rule as the callback, run when its inputs move instead of when the sensor speaks.
+   */
+  const visibleLatch =
+    presence?.meetWindowVisible
+      ? sightingLatchRoomId({
+          meetings,
+          nowMs,
+          translatingRoomId,
+          observedMeetCode: presence.meetCode,
+          preferredRoomId: seenRoomId,
+        })
+      : null;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a latch fed by the room list, not by an event
+    if (visibleLatch && visibleLatch !== seenRoomIdRef.current) setSeenRoomId(visibleLatch);
+  }, [visibleLatch]);
 
   /**
    * The sensor arms for the whole session. Nothing gates it.
@@ -184,14 +231,24 @@ export function useBridgeTrigger({
    * WHY THE DEPENDENCY ARRAY IS EMPTY
    *   The subscription belongs to the mount, not to the schedule. `meetings` must not appear here:
    *   a query that refetches hands back a new array with the same content, and re-arming on its
-   *   identity would tear down and restart the helper process on every poll. `meetingRoomIdRef` is
-   *   how the callback reads the current meeting without the effect having to depend on it.
+   *   identity would tear down and restart the helper process on every poll. The refs above are how
+   *   the callback reads the current schedule without the effect having to depend on it.
    */
   useEffect(() => {
     const stop = watchMeetPresence((next) => {
       setPresence(next);
-      if (next.meetWindowVisible && meetingRoomIdRef.current) {
-        setSeenRoomId(meetingRoomIdRef.current);
+      // Latch only a sighting that belongs to a room, judged with THIS sighting's code. Any visible
+      // window used to latch the last render's selection, which had been made with the previous
+      // call's code - so opening a new Meet tab latched the old room to `ready`.
+      if (next.meetWindowVisible) {
+        const latch = sightingLatchRoomId({
+          meetings: meetingsRef.current,
+          nowMs: Date.now(),
+          translatingRoomId: translatingRoomIdRef.current,
+          observedMeetCode: next.meetCode,
+          preferredRoomId: seenRoomIdRef.current,
+        });
+        if (latch) setSeenRoomId(latch);
       }
       // Only a sighting that ENDED starts the grace. A first report of "nothing there" is not a
       // loss of anything, and must not be able to raise an offer on its own.
