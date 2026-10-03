@@ -3724,6 +3724,14 @@ export function PersistentMeetingSession({
     },
     [isBridgeRoom],
   );
+  // The other direction, to main.log for the same reason: whether the Meet side's dub is being
+  // played to this person, and why not when it is not ("they hear my dub, I hear none of theirs").
+  const handleBridgeInboundDubChange = useCallback(
+    (line: string) => {
+      if (isBridgeRoom) console.warn(line);
+    },
+    [isBridgeRoom],
+  );
 
   const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
@@ -5340,6 +5348,7 @@ export function PersistentMeetingSession({
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
           onBridgeOutboundLegChange={handleBridgeOutboundLegChange}
+          onBridgeInboundDubChange={handleBridgeInboundDubChange}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}

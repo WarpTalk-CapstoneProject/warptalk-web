@@ -5,7 +5,12 @@ import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
 import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
-import { bridgeOutboundLeg, type BridgeOutboundLeg } from "@/lib/meeting/bridge-mic-device";
+import {
+  bridgeOutboundLeg,
+  describeInboundDubChange,
+  isDubOfSpeaker,
+  type BridgeOutboundLeg,
+} from "@/lib/meeting/bridge-mic-device";
 import {
   dubbedHistoryScope,
   EMPTY_DUBBED_HISTORY,
@@ -88,6 +93,7 @@ export function FilteredRoomAudio({
   bridgeStandInIdentity,
   onBridgeOutboundError,
   onBridgeOutboundLegChange,
+  onBridgeInboundDubChange,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -128,6 +134,12 @@ export function FilteredRoomAudio({
    * `outboundIdentity` is the dub's bot when the leg is "dub".
    */
   onBridgeOutboundLegChange?: (leg: BridgeOutboundLeg, outboundIdentity: string | null) => void;
+  /**
+   * The other direction, on every change: the main.log line saying whether the Meet side's dub is
+   * being played to this listener, and why not when it is not (lib/meeting/bridge-mic-device).
+   * Only reported once the stand-in is known, so never in a native meeting.
+   */
+  onBridgeInboundDubChange?: (line: string) => void;
 }) {
   const bridgeActive = Boolean(bridgeOutboundDeviceId);
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
@@ -255,6 +267,33 @@ export function FilteredRoomAudio({
   const localDubIdentities = audibleTracks
     .filter((trackRef) => trackRef.participant.identity.startsWith(AI_INTERPRETER_PREFIX))
     .map((trackRef) => trackRef.participant.identity);
+
+  // Bridge rooms: what this listener hears of the Meet side, for main.log — the twin of the
+  // outbound leg above. Every dub of the stand-in in the room is named, in any language, with
+  // whether the routing keeps it and whether its media is arriving; the line is what is compared,
+  // so it is reported when any of that changes and not on every render.
+  const inboundDubLine = bridgeStandInIdentity
+    ? describeInboundDubChange({
+        translationActive,
+        voiceEnabled,
+        listenLanguage: targetLanguageNormalized,
+        farSideLanguage: speakerLanguageByUserId[bridgeStandInIdentity],
+        tracks: trackRefs
+          .filter((trackRef) => isDubOfSpeaker(trackRef.participant.identity, bridgeStandInIdentity))
+          .map((trackRef) => ({
+            identity: trackRef.participant.identity,
+            wanted: isWanted(trackRef.participant.identity),
+            subscribed: Boolean(trackRef.publication.isSubscribed),
+          })),
+      })
+    : null;
+  const onInboundDubChangeRef = useRef(onBridgeInboundDubChange);
+  useEffect(() => {
+    onInboundDubChangeRef.current = onBridgeInboundDubChange;
+  });
+  useEffect(() => {
+    if (inboundDubLine) onInboundDubChangeRef.current?.(inboundDubLine);
+  }, [inboundDubLine]);
 
   return (
     <>

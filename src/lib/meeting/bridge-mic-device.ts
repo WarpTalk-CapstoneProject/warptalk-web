@@ -22,10 +22,19 @@
  *   (main.log) and the popup can say when Meet has been hearing the untranslated voice for long
  *   enough that it is not just the first sentence waiting for its dub.
  *
+ * WHAT THIS PERSON HEARS OF MEET (`BridgeInboundDub`)
+ *   The other direction, named for main.log for the same reason: "they hear my dub, I hear none of
+ *   theirs" (production, 2026-10-03) could not be answered from a log that only ever named the
+ *   outbound leg. It says whether the Meet side's dub is being played to this person, and when it
+ *   is not, which of the four reasons it is — with the facts behind the answer on the same line
+ *   (the switch, the session, the listen language, and every dub of the Meet side in the room), so
+ *   one line tells "the pipeline produced none" from "it produced one and it was not played".
+ *
  * Relative imports with the extension: the unit tests run under the plain node test runner.
  */
 
 import type { BridgeAudioMode } from "./bridge-audio-mode.ts";
+import { AI_INTERPRETER_PREFIX } from "./interpreter-track.ts";
 
 /**
  * Every virtual endpoint a bridge machine is known to carry: VB-CABLE and Hi-Fi Cable (and the
@@ -137,4 +146,95 @@ export function describeOutboundLegChange(leg: BridgeOutboundLeg, outboundIdenti
     case "none":
       return "[bridge] Meet now hears nothing from WarpTalk";
   }
+}
+
+// ── what this person hears of Meet ──────────────────────────────────────────
+
+/**
+ *   dub              the Meet side's translated voice is being played to this person
+ *   no-dub           it should be — voice on, translation running, another language — and no such
+ *                    dub is on the wire: nothing has been said yet, the bot is between sentences,
+ *                    or the pipeline is not producing it
+ *   text             "You hear" is on Text: dubs are not played to this person
+ *   not-translating  no translation session is running
+ *   same-language    the Meet side speaks the language this person listens in: nothing to dub
+ */
+export type BridgeInboundDub = "dub" | "no-dub" | "text" | "not-translating" | "same-language";
+
+/** One dub of the Meet side that is in the room, in whichever language and voice it was rendered. */
+export type BridgeInboundDubTrack = {
+  identity: string;
+  /** This listener's routing keeps it (room-audio-routing). */
+  wanted: boolean;
+  /** Its media is arriving: a wanted publication with no track yet plays nothing. */
+  subscribed: boolean;
+};
+
+export type BridgeInboundDubReport = {
+  translationActive: boolean;
+  /** This person's "You hear" switch: Voice (true) or Text (false). */
+  voiceEnabled: boolean;
+  listenLanguage: string;
+  /** The stand-in's speak language, or null while it is not known. */
+  farSideLanguage: string | null | undefined;
+  /** Every dub of the stand-in in the room — see isDubOfSpeaker. */
+  tracks: readonly BridgeInboundDubTrack[];
+};
+
+/**
+ * Whether `identity` is an interpreter bot dubbing `speakerId`, in ANY language or voice
+ * (`ai-interpreter-{lang}-{speakerId}`, `ai-interpreter-{lang}-voice-{id8}-{speakerId}`). Any
+ * language on purpose: a dub of the Meet side in a language this person does not listen in is
+ * exactly what "none is on the wire" would otherwise hide.
+ */
+export function isDubOfSpeaker(identity: string, speakerId: string): boolean {
+  return identity.startsWith(AI_INTERPRETER_PREFIX) && identity.endsWith(`-${speakerId}`);
+}
+
+/** The Meet side's dub this person is actually being played, or null. */
+function playingInboundDub(report: BridgeInboundDubReport): string | null {
+  return report.tracks.find((track) => track.wanted && track.subscribed)?.identity ?? null;
+}
+
+export function bridgeInboundDub(report: BridgeInboundDubReport): BridgeInboundDub {
+  if (!report.translationActive) return "not-translating";
+  if (!report.voiceEnabled) return "text";
+  if (playingInboundDub(report)) return "dub";
+  if (report.farSideLanguage && report.farSideLanguage === report.listenLanguage) return "same-language";
+  return "no-dub";
+}
+
+/**
+ * The main.log line for what this person hears of the Meet side. The same report gives the same
+ * line, so the caller logs when the line changes and not on every render.
+ */
+export function describeInboundDubChange(report: BridgeInboundDubReport): string {
+  const language = report.listenLanguage;
+  const headline = (() => {
+    switch (bridgeInboundDub(report)) {
+      case "dub":
+        return `You now hear the Meet side's translated voice (${playingInboundDub(report)})`;
+      case "no-dub":
+        return `You hear no translated voice of the Meet side: none is on the wire in "${language}"`;
+      case "text":
+        return 'You hear no translated voice of the Meet side: "You hear" is on Text';
+      case "not-translating":
+        return "You hear no translated voice of the Meet side: translation is not running";
+      case "same-language":
+        return `You hear no translated voice of the Meet side: it speaks the language you listen in ("${language}")`;
+    }
+  })();
+  const tracks = report.tracks.length
+    ? report.tracks
+        .map((track) => {
+          if (!track.wanted) return `${track.identity} not wanted`;
+          return `${track.identity} wanted, ${track.subscribed ? "subscribed" : "not subscribed"}`;
+        })
+        .join("; ")
+    : "none";
+  return (
+    `[bridge] ${headline} ` +
+    `[voice ${report.voiceEnabled ? "on" : "off"}, translation ${report.translationActive ? "running" : "not running"}, ` +
+    `listening in "${language}"; Meet-side dubs in the room: ${tracks}]`
+  );
 }
