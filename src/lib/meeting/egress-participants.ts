@@ -389,12 +389,16 @@ export function meetWindowSlateAudioLine(input: {
   otherAudio: boolean;
   /** `meet-audio` carries the far side only; the local voice can only be their WarpTalk microphone. */
   meetAudioWithoutMic?: boolean;
-  /** That WarpTalk microphone is published and unmuted right now. */
+  /**
+   * That WarpTalk microphone is published and unmuted right now. Unmuted is not the same as open:
+   * the half-duplex gate silences it while a dub plays without muting it, so the line says "when it
+   * is open" rather than claiming the voice outright.
+   */
   fallbackMicLive?: boolean;
 }): string {
   if (input.meetAudio && input.meetAudioWithoutMic) {
     return input.fallbackMicLive
-      ? "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone."
+      ? "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone when it is open."
       : "The Google Meet call audio is being recorded, but the local speaker's voice is missing (their microphone is off in WarpTalk).";
   }
   if (input.meetAudio) return "The Google Meet call audio is being recorded.";

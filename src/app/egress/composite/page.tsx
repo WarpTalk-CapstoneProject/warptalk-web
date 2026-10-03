@@ -225,15 +225,16 @@ export default function EgressCompositePage() {
      * because one publication (`meet-audio`, the stand-in) changes the answer for the others.
      */
     function noteBridge() {
-      const participants = Array.from(room.remoteParticipants.values());
+      const participants = Array.from(room.remoteParticipants.values()).map((participant) => ({
+        participant,
+        publications: Array.from(participant.trackPublications.values()),
+      }));
       const context = resolveEgressAudioContext(
-        participants.map((participant) => ({
+        participants.map(({ participant, publications }) => ({
           identity: participant.identity,
-          trackNames: Array.from(participant.trackPublications.values()).map((pub) => pub.trackName),
+          trackNames: publications.map((pub) => pub.trackName),
           attributes: participant.attributes,
-          microphoneLive: Array.from(participant.trackPublications.values()).some(
-            (pub) => pub.source === Track.Source.Microphone && !pub.isMuted,
-          ),
+          microphoneLive: publications.some((pub) => pub.source === Track.Source.Microphone && !pub.isMuted),
         })),
         { latched: bridgeLatched },
       );
@@ -246,8 +247,8 @@ export default function EgressCompositePage() {
         // The egress logs see this page's console and nothing else.
         console.log(`RECORDING_AUDIO_SOURCES ${sources}`);
       }
-      participants.forEach((participant) => {
-        participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
+      participants.forEach(({ participant, publications }) => {
+        publications.forEach((publication: RemoteTrackPublication) => {
           if (publication.kind !== Track.Kind.Audio) return;
           const wanted = shouldRecordAudio(
             { identity: participant.identity, trackName: publication.trackName, source: publication.source },

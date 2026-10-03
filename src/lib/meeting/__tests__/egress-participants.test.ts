@@ -356,7 +356,7 @@ test("meet-audio with its microphone (\"1\" or no attribute yet) replaces the Wa
 test("the slate says the local voice is the WarpTalk microphone only while that mic is live", () => {
   assert.match(
     meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true, meetAudioWithoutMic: true, fallbackMicLive: true }),
-    /comes from their WarpTalk microphone/,
+    /comes from their WarpTalk microphone when it is open/,
   );
   // Muted or absent (the usual bridge state): the voice is missing, and the slate says so.
   assert.match(

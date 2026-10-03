@@ -126,7 +126,7 @@ expect(
 );
 expect(
   template,
-  /resolveEgressAudioContext\([\s\S]{0,800}\{ latched: bridgeLatched \}/,
+  /resolveEgressAudioContext\(\s*participants\.map\(\(\{ participant, publications \}\) => \(\{\s*identity: participant\.identity,\s*trackNames: publications\.map\(\(pub\) => pub\.trackName\),\s*attributes: participant\.attributes,\s*microphoneLive: [^\n]+\n\s*\}\)\),\s*\{ latched: bridgeLatched \},\s*\);/,
   TEMPLATE,
   "the bridge room must be recognised with isBridgeRecording (via resolveEgressAudioContext: stand-in present, or a meet-window/meet-audio track), through the one latch",
 );
