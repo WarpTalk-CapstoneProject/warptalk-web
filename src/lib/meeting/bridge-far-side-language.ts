@@ -134,3 +134,24 @@ export function farSideLanguageProblem({
     ? "single-language-workspace"
     : "same-language";
 }
+
+/**
+ * WT-909 wave 2: the OTHER languages the room says are spoken on the Meet side — its declared
+ * languages minus the host's and minus the far side's own (the one dubbed into Meet). In a bridge
+ * room everybody besides the host IS the far side, so a declared language that is neither of the
+ * two belongs to somebody in Meet. Two or more Meet-side languages in all, and the backend runs the
+ * far side's speech unpinned (TranslationRoomService.FarSideSpeaksSeveralLanguages).
+ */
+export function farSideAlsoSpoken(input: {
+  hostLanguage: string | null | undefined;
+  farSideLanguage: string | null | undefined;
+  sourceLanguage?: string | null;
+  targetLanguages?: readonly (string | null | undefined)[] | null;
+}): string[] {
+  const exclude = new Set(
+    normalizedList([input.hostLanguage, input.farSideLanguage, input.sourceLanguage]),
+  );
+  return normalizedList(input.targetLanguages ?? []).filter(
+    (language) => language !== "auto" && !exclude.has(language),
+  );
+}

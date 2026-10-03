@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   BRIDGE_STAND_IN_USER_ID,
   defaultFarSideLanguage,
+  farSideAlsoSpoken,
   farSideLanguageProblem,
   planBridgeRoomLanguages,
 } from "../bridge-far-side-language.ts";
@@ -86,4 +87,17 @@ test("problem: the workspace allows only the one language both sides are on", ()
     farSideLanguageProblem({ hostLanguage: "vi", farSideLanguage: "vi", allowedLanguages: ["VI"] }),
     "single-language-workspace",
   );
+});
+
+test("also spoken (WT-909 wave 2): the meeting's languages besides the host's and the dubbed one", () => {
+  // The demo: host on English, Vietnamese dubbed into Meet, and a Japanese speaker there too.
+  assert.deepEqual(
+    farSideAlsoSpoken({ hostLanguage: "en", farSideLanguage: "vi", sourceLanguage: "en-US", targetLanguages: ["vi", "en", "ja-JP"] }),
+    ["ja"],
+  );
+  assert.deepEqual(
+    farSideAlsoSpoken({ hostLanguage: "en", farSideLanguage: "vi", sourceLanguage: "en", targetLanguages: ["vi", "en"] }),
+    [],
+  );
+  assert.deepEqual(farSideAlsoSpoken({ hostLanguage: "en", farSideLanguage: null, targetLanguages: null }), []);
 });
