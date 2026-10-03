@@ -194,8 +194,8 @@ export function VoicePanel({
                 said "Automatic". Every state the summary can name now has a row that reads as it. */}
             {onChangeDubVoice ? (
               <VoiceOption
-                label="Automatic"
-                detail="A stand-in voice, assigned rather than matched to you"
+                label={plan.automaticOption.label}
+                detail={plan.automaticOption.detail}
                 value=""
                 active={!dubVoice && !voiceCloneEnabled}
                 onSelect={() => {
