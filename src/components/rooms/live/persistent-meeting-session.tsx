@@ -2970,8 +2970,18 @@ export function PersistentMeetingSession({
     const previous = voiceCloneEnabled;
     setVoiceCloneEnabled(enabled); // optimistic
     setVoiceCloneConsent.mutate(enabled, {
-      onError: () => {
+      // Both outcomes go to main.log in a bridge room: "I picked My voice and was never dubbed in
+      // it" was unanswerable afterwards, and the toast below is in a window nobody is looking at.
+      onSuccess: () => {
+        if (isBridgeRoom) console.warn(`[bridge] own-voice clone for this room turned ${enabled ? "on" : "off"}`);
+      },
+      onError: (error) => {
         setVoiceCloneEnabled(previous);
+        if (isBridgeRoom) {
+          console.warn(
+            `[bridge] own-voice clone could not be turned ${enabled ? "on" : "off"}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
         toast.error("Could not update voice clone consent.");
       },
     });
