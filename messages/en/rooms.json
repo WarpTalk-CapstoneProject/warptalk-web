@@ -387,6 +387,21 @@
       "turnOn": "Turn on",
       "turnOff": "Turn off",
       "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand."
+    },
+    "voiceCloneMode": {
+      "label": "Voice clone mode",
+      "description": "Speak a Meet participant's translation in a copy of their own voice, once you have recorded that they agreed.",
+      "noticeLabel": "Notice for Meet's chat",
+      "notice": "WarpTalk is translating this call. With your OK, it will speak the translation of what you say in a copy of your own voice, for this meeting only. Tell me if you would rather not.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy the notice. Select the text and copy it by hand.",
+      "peopleLabel": "People in the Meet call",
+      "empty": "Names appear here once people speak with Meet captions (CC) on.",
+      "hint": "Tick only the people who said yes. Unticking a name removes that person's voice copy. Turning this mode off does not untick anyone.",
+      "statusFailed": "Could not check who is already ticked.",
+      "retry": "Try again",
+      "saveFailed": "Could not save this choice."
     }
   }
 }
