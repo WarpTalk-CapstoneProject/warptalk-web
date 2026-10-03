@@ -8,11 +8,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  BRIDGE_PUBLISH_IN_FLIGHT,
   MEET_TAB_RETURN_HOLD_MS,
   MEET_WINDOW_RECOVERY_DELAYS_MS,
   MEET_WINDOW_SUPERVISE_INTERVAL_MS,
-  classifySupervisedPublish,
+  supervisedPublishSucceeded,
   describeMeetWindowCaptureFailure,
   mayCaptureMeetWindowAtStart,
   meetWindowOnTab,
@@ -161,11 +160,10 @@ test("supervise: a dropped window is retried with a bounded back-off", () => {
   assert.ok(MEET_WINDOW_SUPERVISE_INTERVAL_MS <= 5_000);
 });
 
-test("supervise: an attempt already in flight is pending, never a failure that backs off", () => {
-  assert.equal(classifySupervisedPublish("published"), "up");
-  assert.equal(classifySupervisedPublish(BRIDGE_PUBLISH_IN_FLIGHT), "pending");
-  assert.equal(classifySupervisedPublish("the meeting is not connected"), "failed");
-  assert.equal(classifySupervisedPublish("no-publisher"), "failed");
+test("supervise: only \"published\" counts as up", () => {
+  assert.equal(supervisedPublishSucceeded("published"), true);
+  assert.equal(supervisedPublishSucceeded("the meeting is not connected"), false);
+  assert.equal(supervisedPublishSucceeded("no-publisher"), false);
 });
 
 test("supervise: the steady interval while up, the shared back-off after failures (window and audio)", () => {
