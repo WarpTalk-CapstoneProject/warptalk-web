@@ -75,18 +75,60 @@ export function isMeetWindowTrack(trackName: string | null | undefined): boolean
 /**
  * How the recording frame is laid out.
  *
- * `meet-window` when a Meet window video is subscribed: it fills the frame and nobody is drawn as
- * a tile, while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise —
- * every native meeting, and a bridge recording whose window could not be captured (audio-only).
+ * `meet-window` when a Meet window video is subscribed, OR whenever the room is a bridge room
+ * (`bridge`, see isBridgeRecording): the Meet stage fills the frame and nobody is drawn as a tile,
+ * while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise — every
+ * native meeting.
+ *
+ * WHY `bridge` AND NOT ONLY THE TRACK (production recording, 03 Oct)
+ *   The layout used to follow the subscription alone. The Meet window's track went away 34 s into a
+ *   bridge recording (B18 takes it down whenever Meet does not read as "in the call, on its tab")
+ *   and the template fell straight back to the grid: two "Camera is off" tiles — "External Meeting"
+ *   and the host — for the next 2.5 minutes, and the same grid for the first 3.4 s, before the
+ *   subscription landed. A bridge recording is a recording of the Google Meet call; the native grid
+ *   is never a picture of it. So a bridge room keeps the Meet stage for the whole file, and the
+ *   stage holds the last frame (or the slate) while the window is away — see meetWindowStage.
  */
 export type EgressLayout = "grid" | "meet-window";
 
 export function resolveEgressLayout(
   tiles: ReadonlyArray<{ kind: string; meetWindow?: boolean }>,
+  options: { bridge?: boolean } = {},
 ): EgressLayout {
+  if (options.bridge === true) return "meet-window";
   return tiles.some((tile) => tile.kind === "video" && tile.meetWindow === true)
     ? "meet-window"
     : "grid";
+}
+
+/**
+ * The bridge stand-in's LiveKit identity: the "External Meeting" seat the far side of the Meet call
+ * is published under. The backend's WarpTalk.Shared.ExternalBridgeConstants.ParticipantUserId, and
+ * the web's BRIDGE_STAND_IN_USER_ID (bridge-far-side-language.ts; the test pins the two equal).
+ * Copied rather than imported so this public, session-less page pulls in no language modules.
+ */
+export const BRIDGE_STAND_IN_IDENTITY = "00000000-0000-0000-0000-00000000b21d";
+
+/**
+ * Whether this recording is of a Google Meet bridge room. Latched by the caller: once true it stays
+ * true for the rest of the file (the stand-in leaving at the end of the call, or the window being
+ * taken down, does not turn a Meet recording into a grid of initials).
+ *
+ * Either of two signals, both readable off the LiveKit room by this session-less page:
+ *   - the bridge stand-in is in the room. It is connected for as long as the call is captured, and
+ *     a bridge recording only ever starts once it is (bridge-recording.ts, `inboundOpen`) — so it is
+ *     already there when the recorder connects, which is what keeps the first seconds off the grid;
+ *   - a `meet-window` track was published, which only a bridge room's publisher ever does.
+ */
+export function isBridgeRecording(input: {
+  participantIdentities: Iterable<string>;
+  meetWindowPublished: boolean;
+}): boolean {
+  if (input.meetWindowPublished) return true;
+  for (const identity of input.participantIdentities) {
+    if (identity === BRIDGE_STAND_IN_IDENTITY) return true;
+  }
+  return false;
 }
 
 /**
@@ -117,4 +159,63 @@ export function shouldResubscribeMeetWindow(input: {
 }): boolean {
   if (input.firstFrameSeen || input.alreadyRetried) return false;
   return input.nowMs - input.subscribedAtMs >= MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS;
+}
+
+/**
+ * What the bridge recording's stage shows right now.
+ *
+ *   live   the Meet window track, once it has decoded a frame and while it is not muted;
+ *   held   otherwise, the last Meet frame the recorder kept (see pickHeldMeetFrame);
+ *   slate  otherwise: nothing of Meet has been seen yet (the first seconds), or nothing safe to hold.
+ *
+ * Never the grid: see resolveEgressLayout.
+ */
+export type MeetWindowStage = "live" | "held" | "slate";
+
+export function meetWindowStage(input: {
+  hasTrack: boolean;
+  firstFrameSeen: boolean;
+  muted: boolean;
+  hasHeldFrame: boolean;
+}): MeetWindowStage {
+  if (input.hasTrack && meetWindowShowsPicture(input)) return "live";
+  return input.hasHeldFrame ? "held" : "slate";
+}
+
+/** How often the template copies the live Meet window aside, to have something to hold. */
+export const MEET_WINDOW_SNAPSHOT_INTERVAL_MS = 1_000;
+
+/** How many snapshots are kept: enough to reach back past MEET_WINDOW_HOLD_LOOKBACK_MS. */
+export const MEET_WINDOW_SNAPSHOT_RING = 8;
+
+/**
+ * How far before the picture went away a held frame must have been taken.
+ *
+ * B18 takes the window down when Meet leaves its tab, but not instantly: a window capture shows the
+ * new tab at once, while the desktop reads the tab about once a second and believes "Meet is gone"
+ * only after two reads 1.5 s apart (meet-call-state.ts), then IPC, unpublish and unsubscribe. So
+ * the last ~3 s of a window that went away may be another tab, or the PiP window — exactly what
+ * B18 promises is never recorded. Holding the very last frame would freeze that tab on screen for
+ * as long as Meet is away. The frame held is one taken at least this long before the loss.
+ */
+export const MEET_WINDOW_HOLD_LOOKBACK_MS = 4_000;
+
+/**
+ * Which kept snapshot to hold when the live picture goes away at `lostAtMs`, and which to keep.
+ *
+ * Snapshots from the lookback window are suspect and are dropped for good (`keep` leaves them out),
+ * so a later loss can never hold one either. Returns the newest snapshot that is old enough, or
+ * null — the slate — when there is none (the picture was live for less than the lookback).
+ */
+export function pickHeldMeetFrame<T extends { atMs: number }>(
+  snapshots: ReadonlyArray<T>,
+  lostAtMs: number,
+  lookbackMs: number = MEET_WINDOW_HOLD_LOOKBACK_MS,
+): { held: T | null; keep: T[] } {
+  const keep = snapshots.filter((snapshot) => snapshot.atMs <= lostAtMs - lookbackMs);
+  let held: T | null = null;
+  for (const snapshot of keep) {
+    if (!held || snapshot.atMs > held.atMs) held = snapshot;
+  }
+  return { held, keep };
 }

@@ -60,6 +60,21 @@ expect(
   "the capture's end must be heard on the SOURCE track; the wrapper never fires `ended`",
 );
 
+// Production bridge recording, 03 Oct: the window was taken down at 0:34 and never came back.
+// Re-publishing must not hang on the one "Meet is back on its tab" transition.
+expect(
+  publisher,
+  /const meetWindowSupervised = shouldSuperviseMeetWindow\(\{/,
+  PUBLISHER,
+  "the session must keep the Meet window up while the recording wants it (shouldSuperviseMeetWindow)",
+);
+expect(
+  publisher,
+  /meetWindowRecoveryDelayMs\(failures\)/,
+  PUBLISHER,
+  "a dropped Meet window must be retried with meetWindowRecoveryDelayMs back-off",
+);
+
 expect(
   template,
   /requestVideoFrameCallback/,
@@ -68,7 +83,7 @@ expect(
 );
 expect(
   template,
-  /showsPicture \? null : <MeetWindowSlate \/>/,
+  /\{stage === "slate" \? <MeetWindowSlate \/> : null\}/,
   TEMPLATE,
   "the template must show the slate, not a black stage, until the Meet window has a picture",
 );
@@ -89,6 +104,46 @@ expect(
   /filter\(\(tile\) => tile\.track !== track\)/,
   TEMPLATE,
   "tiles must be dropped by track on unsubscribe, not by whether they are mounted",
+);
+
+// Production bridge recording, 03 Oct: the first 3.4 s and 0:34-3:14 were the native grid
+// ("External Meeting" + the host, "Camera is off"), because the layout followed the window track
+// alone and the track went away. A bridge room must keep the Meet stage for the whole file.
+expect(
+  template,
+  /resolveEgressLayout\(tiles, \{ bridge \}\) === "meet-window"/,
+  TEMPLATE,
+  "the layout must take the latched bridge flag, so a bridge room never falls back to the grid",
+);
+expect(
+  template,
+  /noteBridge\(\);[\s\S]*EgressHelper\.startRecording\(\)/,
+  TEMPLATE,
+  "the bridge room must be recognised before startRecording, so the first frame is not the grid",
+);
+expect(
+  template,
+  /isBridgeRecording\(\{/,
+  TEMPLATE,
+  "the bridge room must be recognised with isBridgeRecording (stand-in present, or a meet-window track)",
+);
+expect(
+  template,
+  /pickHeldMeetFrame\(snapshotsRef\.current, lostAtMs\)/,
+  TEMPLATE,
+  "a lost Meet window must hold a frame from before the B18 lookback, never the very last one",
+);
+expect(
+  template,
+  /stage === "held" && heldFrame \? <HeldMeetFrame frame=\{heldFrame\} \/> : null/,
+  TEMPLATE,
+  "while the Meet window is away the stage must hold the kept Meet frame",
+);
+expect(
+  template,
+  /MEET_WINDOW_LOST/,
+  TEMPLATE,
+  "the loss of the Meet window must be logged to the console (the egress logs)",
 );
 
 if (failures.length > 0) {

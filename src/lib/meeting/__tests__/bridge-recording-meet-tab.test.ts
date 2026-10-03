@@ -9,12 +9,16 @@ import { test } from "node:test";
 
 import {
   MEET_TAB_RETURN_HOLD_MS,
+  MEET_WINDOW_RECOVERY_DELAYS_MS,
+  MEET_WINDOW_SUPERVISE_INTERVAL_MS,
   describeMeetWindowCaptureFailure,
   mayCaptureMeetWindowAtStart,
   meetWindowOnTab,
+  meetWindowRecoveryDelayMs,
   meetWindowTabReading,
   shouldPublishMeetWindow,
   shouldRepublishMeetWindow,
+  shouldSuperviseMeetWindow,
 } from "../bridge-recording.ts";
 
 const call = (phase: "lobby" | "in-call" | "left" | "unknown", via: "tab" | "pip" | null, meetCode: string | null = "abc-defg-hij") => ({
@@ -23,12 +27,14 @@ const call = (phase: "lobby" | "in-call" | "left" | "unknown", via: "tab" | "pip
   meetCode,
 });
 
-test("reading: only in-call on the tab is on-tab", () => {
+test("reading: only in-call (or unreadable) on the tab is on-tab", () => {
   const read = (c: ReturnType<typeof call> | null) =>
     meetWindowTabReading({ sensorAvailable: true, call: c, roomMeetCode: "abc-defg-hij" });
   assert.equal(read(call("in-call", "tab")), "on-tab");
   assert.equal(read(call("in-call", "pip")), "off-tab");
+  // A tab switch (no Meet surface at all) or a failed probe: off.
   assert.equal(read(call("unknown", null)), "off-tab");
+  assert.equal(read(call("unknown", "pip")), "off-tab");
   assert.equal(read(call("lobby", "tab")), "off-tab");
   assert.equal(read(call("left", "tab")), "off-tab");
   // No reading yet from a desktop that has the sensor: fail closed.
@@ -107,4 +113,47 @@ test("start: audio-only when off the tab, the window otherwise (or with no senso
 
 test("the desktop's meet-not-on-tab refusal reads as a log line", () => {
   assert.match(describeMeetWindowCaptureFailure({ ok: false, reason: "meet-not-on-tab" }), /not on its tab/);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Production bridge recording, 03 Oct: the window went down at 0:34 with Meet plainly on its tab,
+// and never came back for 2.5 minutes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("reading: Meet on its tab with buttons the desktop could not read stays on-tab", () => {
+  // classifyMeetSurface's empty-tree / listing-truncated / controls-unrecognised: the active tab IS
+  // meet.google.com/<this code>, so the window shows Meet. Taking the picture down for it is the bug.
+  const read = (c: ReturnType<typeof call>) =>
+    meetWindowTabReading({ sensorAvailable: true, call: c, roomMeetCode: "abc-defg-hij" });
+  assert.equal(read(call("unknown", "tab")), "on-tab");
+  // ...but only for this room's call.
+  assert.equal(read(call("unknown", "tab", "zzz-zzzz-zzz")), "off-tab");
+  // A flap in-call -> unknown (on the tab) -> in-call never takes the picture down.
+  for (const c of [call("in-call", "tab"), call("unknown", "tab"), call("in-call", "tab")]) {
+    assert.equal(shouldPublishMeetWindow({ ...base, meetOnTab: meetWindowOnTab(read(c), true) }), true);
+  }
+});
+
+test("supervise: whenever a running recording wants the picture, with or without the tab sensor", () => {
+  assert.equal(shouldSuperviseMeetWindow({ ...base, meetOnTab: true }), true);
+  // An older desktop (no sensor) used to never re-publish after a drop.
+  assert.equal(shouldSuperviseMeetWindow({ ...base, meetOnTab: null }), true);
+  // B18 still wins: off the tab nothing is brought back.
+  assert.equal(shouldSuperviseMeetWindow({ ...base, meetOnTab: false }), false);
+  // The start chain publishes the first picture itself; nothing is kept up without a recording.
+  assert.equal(shouldSuperviseMeetWindow({ ...base, starting: true, meetOnTab: true }), false);
+  assert.equal(shouldSuperviseMeetWindow({ ...base, recording: false, meetOnTab: true }), false);
+  assert.equal(shouldSuperviseMeetWindow({ ...base, inboundOpen: false, meetOnTab: true }), false);
+  assert.equal(shouldSuperviseMeetWindow({ ...base, isBridgeRoom: false, meetOnTab: true }), false);
+});
+
+test("supervise: a dropped window is retried with a bounded back-off", () => {
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 50].map(meetWindowRecoveryDelayMs),
+    [2_000, 4_000, 8_000, 15_000, 15_000, 15_000],
+  );
+  assert.equal(meetWindowRecoveryDelayMs(0), MEET_WINDOW_RECOVERY_DELAYS_MS[0]);
+  // Never longer than 15 s without a picture once the desktop can give one again.
+  assert.ok(Math.max(...MEET_WINDOW_RECOVERY_DELAYS_MS) <= 15_000);
+  assert.ok(MEET_WINDOW_SUPERVISE_INTERVAL_MS <= 5_000);
 });

@@ -214,13 +214,16 @@ import {
   bridgeRecordingFailurePlan,
   describeMeetWindowCaptureFailure,
   MEET_TAB_RETURN_HOLD_MS,
+  MEET_WINDOW_SUPERVISE_INTERVAL_MS,
   mayCaptureMeetWindowAtStart,
   meetWindowOnTab,
+  meetWindowRecoveryDelayMs,
   meetWindowTabReading,
   nextBridgeRecordChoice,
   shouldKeepBridgeRecordingRetry,
   shouldPublishMeetWindow,
   shouldRepublishMeetWindow,
+  shouldSuperviseMeetWindow,
   type BridgeAutoRecordingInput,
   type BridgeRecordChoice,
   type BridgeRecordingRetry,
@@ -3448,6 +3451,48 @@ export function PersistentMeetingSession({
       if (video !== "published") console.warn(`[bridge] Meet window not published again: ${video}.`);
     });
   }, [meetWindowRepublish, roomId]);
+  // The Meet window stays up for as long as the recording wants it, whatever took it down: the
+  // capture ending, a dropped connection, a re-arm the desktop refused once, an older desktop with
+  // no tab sensor. The republish above only answers Meet coming back to its tab, and a recording
+  // lost its picture for 2.5 minutes by every other road (shouldSuperviseMeetWindow).
+  const meetWindowSupervised = shouldSuperviseMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
+  useEffect(() => {
+    if (!meetWindowSupervised) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+    let lastFailure: string | null = null;
+    const check = async () => {
+      const control = meetWindowControlRef.current;
+      const video = control ? await control.publishMeetWindow(roomId) : "no-publisher";
+      if (cancelled) return;
+      if (video === "published") {
+        if (failures > 0) console.info(`[bridge] Meet window is back on the recording after ${failures} failed attempt(s).`);
+        failures = 0;
+        lastFailure = null;
+      } else {
+        failures += 1;
+        // Once per reason, not once per attempt: this can repeat for the length of a meeting.
+        if (video !== lastFailure) console.warn(`[bridge] Meet window still off the recording: ${video}.`);
+        lastFailure = video;
+      }
+      timer = setTimeout(
+        () => void check(),
+        failures === 0 ? MEET_WINDOW_SUPERVISE_INTERVAL_MS : meetWindowRecoveryDelayMs(failures),
+      );
+    };
+    timer = setTimeout(() => void check(), MEET_WINDOW_SUPERVISE_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [meetWindowSupervised, roomId]);
 
   // The popup's REC chip, and its Stop. Every bridge participant's main window publishes the state
   // (a member is being recorded too and has to see it); only host and capturer are offered Stop,

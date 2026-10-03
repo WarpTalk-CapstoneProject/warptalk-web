@@ -281,8 +281,20 @@ export const MEET_TAB_RETURN_HOLD_MS = 1_000;
  *
  *   "on-tab"   the desktop says the user is in the call (`in-call`) on the Meet tab (`via: "tab"`),
  *              and the reading is about this room's call (the codes match when both are known).
- *   "off-tab"  anything else from a desktop that has the sensor: `pip`, `lobby`, `left`, `unknown`,
- *              a reading about another call, or no reading yet. Fails closed.
+ *              Also `unknown` ON the Meet tab (`via: "tab"`): see below.
+ *   "off-tab"  anything else from a desktop that has the sensor: `pip`, `lobby`, `left`, `unknown`
+ *              with no surface (`via: null` — a tab switch, a failed probe), a reading about another
+ *              call, or no reading yet. Fails closed.
+ *
+ * WHY `unknown` ON THE TAB COUNTS (production recording, 03 Oct)
+ *   The desktop answers `unknown` with `via: "tab"` when it DID find the active tab at
+ *   meet.google.com/<code> but could not read its buttons: an accessibility tree caught empty or
+ *   mid-update, a listing that hit its cap with the people panel open, a Meet build that renamed
+ *   its classes (meet-call-state.ts classifyMeetSurface: empty-tree, listing-truncated,
+ *   controls-unrecognised). The window then shows Meet — exactly what B18 allows on the recording —
+ *   and taking the picture down for it cut a bridge recording over to the native grid at 0:34 while
+ *   Meet was plainly on screen. A tab switch without PiP reads as `unknown` with NO surface
+ *   (`no-meet-surface`, `via: null`), so it is still off-tab.
  *   null       the desktop has no call-state sensor (built before WT-911): no B18, the rule is as
  *              it was. A documented gap.
  */
@@ -299,7 +311,8 @@ export function meetWindowTabReading(input: {
   if (!input.sensorAvailable) return null;
   const call = input.call;
   if (!call || !trustsMeetReading(call.meetCode, input.roomMeetCode)) return "off-tab";
-  return call.phase === "in-call" && call.via === "tab" ? "on-tab" : "off-tab";
+  if (call.via !== "tab") return "off-tab";
+  return call.phase === "in-call" || call.phase === "unknown" ? "on-tab" : "off-tab";
 }
 
 /**
@@ -332,6 +345,47 @@ export function shouldRepublishMeetWindow(input: {
     !input.starting &&
     shouldPublishMeetWindow(input)
   );
+}
+
+/**
+ * Whether the Meet window should be kept on the wire by the recovery loop (the session's Meet
+ * window supervisor): a recording is running, nothing is starting it, and the picture is wanted.
+ *
+ * WHY A LOOP (production recording, 03 Oct)
+ *   The window was taken down 34 s into a bridge recording and never came back for the remaining
+ *   2.5 minutes. Re-publishing was tied to ONE transition — Meet settling back on its tab
+ *   (shouldRepublishMeetWindow) — so a drop by any other road stayed dropped: the capture ending
+ *   (`ended` on the source), the LiveKit room disconnecting, the publisher remounting, a re-arm
+ *   the desktop refused once (`meet-window-not-found` while the HWND was being re-read,
+ *   `consent-required` while the loopback leg was re-keyed), or an older desktop without the
+ *   call-state sensor (`meetOnTab === null`), which never re-published at all. While this is true
+ *   the session keeps asking the publisher, which answers "published" at once when the track is up.
+ *
+ * Off the tab (`meetOnTab === false`) it is false: B18 still takes the picture down there.
+ */
+export function shouldSuperviseMeetWindow(input: {
+  isBridgeRoom: boolean;
+  inboundOpen: boolean;
+  recording: boolean;
+  starting: boolean;
+  meetOnTab: boolean | null;
+}): boolean {
+  return input.recording && !input.starting && shouldPublishMeetWindow(input);
+}
+
+/** How often a supervised Meet window that is up is checked again. Free: no IPC, no capture. */
+export const MEET_WINDOW_SUPERVISE_INTERVAL_MS = 3_000;
+
+/**
+ * Back-off between attempts to bring a dropped Meet window back. Each attempt arms the desktop
+ * (a window enumeration) and opens a capture, so it is spaced out, but never further than 15 s: a
+ * recording without its picture is the failure this exists for.
+ */
+export const MEET_WINDOW_RECOVERY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000] as const;
+
+export function meetWindowRecoveryDelayMs(consecutiveFailures: number): number {
+  const index = Math.min(Math.max(consecutiveFailures, 1), MEET_WINDOW_RECOVERY_DELAYS_MS.length) - 1;
+  return MEET_WINDOW_RECOVERY_DELAYS_MS[index];
 }
 
 /**
