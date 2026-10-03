@@ -59,6 +59,15 @@
  *   whole file: the Meet stage stays, showing the live window, else the last Meet frame kept from
  *   before the loss (pickHeldMeetFrame — never one from the seconds in which the window may already
  *   have shown another tab), else the slate.
+ *
+ * BRIDGE AUDIO: THE CALL ITSELF, AND ITS DUBS
+ *   A bridge recording was silent from 1.1 s to the end while the user talked in Meet: the mix was
+ *   WarpTalk's own STT tracks, and the user's WarpTalk mic was muted while Meet's was on. The
+ *   capturer now publishes the call's sound as `meet-audio`; when a person publishes it, it replaces
+ *   every other human audio track (they are already inside it). And a bridge recording carries the
+ *   translation too (product decision 2026-10-03): each speaker's DEFAULT dub per language is
+ *   mixed in at its published level, never as a tile. A native meeting still records no dubs. The
+ *   rules are egress-participants.ts `shouldRecordAudio`; this page only applies them.
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -75,9 +84,13 @@ import {
 import EgressHelper from "@livekit/egress-sdk";
 
 import {
-  isBridgeRecording,
+  isMeetAudioTrack,
   isMeetWindowTrack,
   isRecordableParticipant,
+  isRecordedBridgeDub,
+  meetWindowSlateAudioLine,
+  resolveEgressAudioContext,
+  shouldRecordAudio,
   MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
   MEET_WINDOW_SNAPSHOT_INTERVAL_MS,
   MEET_WINDOW_SNAPSHOT_RING,
@@ -98,6 +111,8 @@ interface Tile {
   kind: Track.Kind;
   /** WT-910: the Google Meet window of a bridge room, published under MEET_WINDOW_TRACK_NAME. */
   meetWindow: boolean;
+  /** A bridge room's `meet-audio`: the Google Meet call's own sound (MEET_AUDIO_TRACK_NAME). */
+  meetAudio?: boolean;
 }
 
 /** What overlays a video tile — everything here comes straight off the LiveKit `Room`. */
@@ -152,6 +167,11 @@ export default function EgressCompositePage() {
   const [heldFrame, setHeldFrame] = useState<HTMLCanvasElement | null>(null);
   /** Copies of the live Meet window, taken every MEET_WINDOW_SNAPSHOT_INTERVAL_MS. */
   const snapshotsRef = useRef<Array<{ canvas: HTMLCanvasElement; atMs: number }>>([]);
+  /**
+   * Audio that is mixed but never drawn: a bridge room's `meet-audio` and its dubs. Mounted hidden
+   * in both layouts; a dub is not a person and gets no tile.
+   */
+  const [callAudio, setCallAudio] = useState<Tile[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -177,22 +197,55 @@ export default function EgressCompositePage() {
     /** Publications whose subscription was already renewed once for a missing picture. */
     const resubscribed = new Set<string>();
 
-    /** Latches `bridge` from what the room shows right now. See isBridgeRecording. */
+    /**
+     * The one bridge latch, shared by the layout (`bridge` state -> resolveEgressLayout) and the
+     * audio (shouldRecordAudio). Once true it stays true for the file. See isBridgeRecording.
+     */
+    let bridgeLatched = false;
+    function latchBridge() {
+      if (bridgeLatched) return;
+      bridgeLatched = true;
+      setBridge(true);
+    }
+
+    /** What this page last asked for, per audio publication; isSubscribed lags the request. */
+    const audioRequested = new Map<string, boolean>();
+    let audioSources = "";
+
+    /**
+     * Reads the room once and applies it: latches `bridge` (stand-in present, or a `meet-window` /
+     * `meet-audio` track published: resolveEgressAudioContext -> isBridgeRecording), then applies
+     * shouldRecordAudio to every audio publication. Re-run on every change to who publishes what,
+     * because one publication (`meet-audio`, the stand-in) changes the answer for the others.
+     */
     function noteBridge() {
-      let meetWindowPublished = false;
-      room.remoteParticipants.forEach((participant) => {
-        participant.trackPublications.forEach((publication) => {
-          if (isMeetWindowTrack(publication.trackName)) meetWindowPublished = true;
+      const participants = Array.from(room.remoteParticipants.values());
+      const context = resolveEgressAudioContext(
+        participants.map((participant) => ({
+          identity: participant.identity,
+          trackNames: Array.from(participant.trackPublications.values()).map((pub) => pub.trackName),
+        })),
+        { latched: bridgeLatched },
+      );
+      if (context.bridge) latchBridge();
+      const sources = `bridge=${context.bridge} meetAudio=${context.meetAudio}`;
+      if (sources !== audioSources) {
+        audioSources = sources;
+        // The egress logs see this page's console and nothing else.
+        console.log(`RECORDING_AUDIO_SOURCES ${sources}`);
+      }
+      participants.forEach((participant) => {
+        participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
+          if (publication.kind !== Track.Kind.Audio) return;
+          const wanted = shouldRecordAudio(
+            { identity: participant.identity, trackName: publication.trackName },
+            context,
+          );
+          if (audioRequested.get(publication.trackSid) === wanted) return;
+          audioRequested.set(publication.trackSid, wanted);
+          publication.setSubscribed(wanted);
         });
       });
-      if (
-        isBridgeRecording({
-          participantIdentities: room.remoteParticipants.keys(),
-          meetWindowPublished,
-        })
-      ) {
-        setBridge(true);
-      }
     }
 
     /**
@@ -246,6 +299,27 @@ export default function EgressCompositePage() {
       publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) {
+      // Bridge audio that is mixed but never drawn. Only subscribed when shouldRecordAudio said so
+      // (noteBridge), so this only decides where it is mounted.
+      if (
+        track.kind === Track.Kind.Audio &&
+        (isMeetAudioTrack(publication.trackName) || isRecordedBridgeDub(participant.identity))
+      ) {
+        const element = track.attach();
+        console.log(`RECORDING_AUDIO_ATTACHED ${participant.identity} ${publication.trackName || "-"}`);
+        setCallAudio((current) => [
+          ...current,
+          {
+            identity: participant.identity,
+            track,
+            element,
+            kind: track.kind,
+            meetWindow: false,
+            meetAudio: isMeetAudioTrack(publication.trackName),
+          },
+        ]);
+        return;
+      }
       // The filter, and the only line that matters. A bot's track is never subscribed, so its
       // audio never reaches the encoder.
       if (!isRecordableParticipant(participant.identity)) return;
@@ -261,7 +335,7 @@ export default function EgressCompositePage() {
         // off whoever sits at the edge of its grid, so it is letterboxed instead.
         element.style.objectFit = meetWindow ? "contain" : "cover";
         if (meetWindow) {
-          setBridge(true);
+          latchBridge();
           setMeetWindowMuted(publication.isMuted);
           watchMeetWindow(element, track, publication);
         }
@@ -278,6 +352,7 @@ export default function EgressCompositePage() {
       // By the track, not by `isConnected`: a subscribed tile the current layout does not mount (a
       // camera under the Meet window) is still subscribed and must survive somebody else leaving.
       setTiles((current) => current.filter((tile) => tile.track !== track));
+      setCallAudio((current) => current.filter((tile) => tile.track !== track));
     }
 
     function handleMuteChange(publication: TrackPublication, participant: Participant) {
@@ -320,7 +395,7 @@ export default function EgressCompositePage() {
           refreshOverlay(participant);
         });
         // Before startRecording: the stand-in is already here in a bridge room, so the file's first
-        // frame is the Meet slate rather than the grid.
+        // frame is the Meet slate rather than the grid, and the first second is already mixed right.
         noteBridge();
         room.on(RoomEvent.ParticipantConnected, (participant) => {
           subscribeIfHuman(participant);
@@ -332,6 +407,9 @@ export default function EgressCompositePage() {
           refreshOverlay(participant);
           noteBridge();
         });
+        // `meet-audio` going away hands the mix back to everyone's own tracks.
+        room.on(RoomEvent.TrackUnpublished, () => noteBridge());
+        room.on(RoomEvent.ParticipantDisconnected, () => noteBridge());
 
         EgressHelper.startRecording();
       } catch (cause) {
@@ -345,6 +423,8 @@ export default function EgressCompositePage() {
     function subscribeIfHuman(participant: RemoteParticipant) {
       if (!isRecordableParticipant(participant.identity)) return;
       participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
+        // Audio is noteBridge's call: whose audio is mixed depends on the whole room.
+        if (publication.kind === Track.Kind.Audio) return;
         publication.setSubscribed(true);
       });
     }
@@ -376,6 +456,12 @@ export default function EgressCompositePage() {
   });
   const live = stage === "live";
   const liveElement = live && meetWindowTile ? meetWindowTile.element : null;
+
+  const slateAudioLine = meetWindowSlateAudioLine({
+    meetAudio: callAudio.some((tile) => tile.meetAudio === true),
+    otherAudio:
+      callAudio.length > 0 || tiles.some((tile) => tile.kind === Track.Kind.Audio),
+  });
 
   // Keep copies of the live window, so there is a Meet frame to hold when it goes away.
   useEffect(() => {
@@ -447,12 +533,11 @@ export default function EgressCompositePage() {
         {meetWindowTile ? (
           <MediaHolder tile={meetWindowTile} style={{ width: "100%", height: "100%" }} />
         ) : null}
-        {stage === "held" && heldFrame ? <HeldMeetFrame frame={heldFrame} /> : null}
-        {stage === "slate" ? <MeetWindowSlate /> : null}
+        {stage === "held" && heldFrame ? <HeldMeetFrame frame={heldFrame} audioLine={slateAudioLine} /> : null}
+        {stage === "slate" ? <MeetWindowSlate audioLine={slateAudioLine} /> : null}
         {/* Everyone's audio, mounted exactly as the grid mounts it: headless Chrome only records
             what is in the DOM, and the layout must never decide who is heard. */}
-        {tiles
-          .filter((tile) => tile.kind === Track.Kind.Audio)
+        {[...tiles.filter((tile) => tile.kind === Track.Kind.Audio), ...callAudio]
           .map((tile, index) => (
             <MediaHolder
               key={`${tile.identity}-audio-${index}`}
@@ -483,6 +568,15 @@ export default function EgressCompositePage() {
       {error ? (
         <p style={{ color: "#fff", fontFamily: "sans-serif", padding: "2rem" }}>{error}</p>
       ) : null}
+      {/* Bridge audio without a tile (meet-audio, dubs): mounted, because headless Chrome only
+          records what is in the DOM; out of flow, so it takes no grid cell. */}
+      {callAudio.map((tile, index) => (
+        <MediaHolder
+          key={`${tile.identity}-call-audio-${index}`}
+          tile={tile}
+          style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+        />
+      ))}
       {participantIdentities.map((identity) => {
         const overlay = overlays[identity] || {
           name: resolveEgressDisplayName(undefined, identity),
@@ -513,7 +607,7 @@ export default function EgressCompositePage() {
  * line, never a black rectangle. Static on purpose - this page is recorded, and anything that
  * moves here would move for the length of the meeting.
  */
-function MeetWindowSlate() {
+function MeetWindowSlate({ audioLine }: { audioLine: string }) {
   return (
     <div
       style={{
@@ -530,9 +624,7 @@ function MeetWindowSlate() {
       }}
     >
       <p style={{ margin: 0, fontSize: "22px", fontWeight: 600, color: INK }}>Google Meet</p>
-      <p style={{ margin: 0, fontSize: "15px" }}>
-        Waiting for the meeting window. Audio is being recorded.
-      </p>
+      <p style={{ margin: 0, fontSize: "15px" }}>Waiting for the meeting window. {audioLine}</p>
     </div>
   );
 }
@@ -542,7 +634,7 @@ function MeetWindowSlate() {
  * carries on underneath; the one static line says so, so a still picture over moving speech is not
  * mistaken for a frozen file.
  */
-function HeldMeetFrame({ frame }: { frame: HTMLCanvasElement }) {
+function HeldMeetFrame({ frame, audioLine }: { frame: HTMLCanvasElement; audioLine: string }) {
   const holderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -572,7 +664,7 @@ function HeldMeetFrame({ frame }: { frame: HTMLCanvasElement }) {
           fontWeight: 500,
         }}
       >
-        Meeting window paused. Audio is being recorded.
+        Meeting window paused. {audioLine}
       </p>
     </div>
   );

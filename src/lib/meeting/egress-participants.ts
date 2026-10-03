@@ -118,13 +118,18 @@ export const BRIDGE_STAND_IN_IDENTITY = "00000000-0000-0000-0000-00000000b21d";
  *   - the bridge stand-in is in the room. It is connected for as long as the call is captured, and
  *     a bridge recording only ever starts once it is (bridge-recording.ts, `inboundOpen`) — so it is
  *     already there when the recorder connects, which is what keeps the first seconds off the grid;
- *   - a `meet-window` track was published, which only a bridge room's publisher ever does.
+ *   - a `meet-window` track was published, which only a bridge room's publisher ever does;
+ *   - a `meet-audio` track was published (the call's sound, see MEET_AUDIO_TRACK_NAME), likewise.
+ *
+ * The ONE notion of "bridge" in this template: the layout (resolveEgressLayout) and the audio
+ * (resolveEgressAudioContext / shouldRecordAudio) both read it, through the same latch.
  */
 export function isBridgeRecording(input: {
   participantIdentities: Iterable<string>;
   meetWindowPublished: boolean;
+  meetAudioPublished?: boolean;
 }): boolean {
-  if (input.meetWindowPublished) return true;
+  if (input.meetWindowPublished || input.meetAudioPublished === true) return true;
   for (const identity of input.participantIdentities) {
     if (identity === BRIDGE_STAND_IN_IDENTITY) return true;
   }
@@ -218,4 +223,122 @@ export function pickHeldMeetFrame<T extends { atMs: number }>(
     if (!held || snapshot.atMs > held.atMs) held = snapshot;
   }
   return { held, keep };
+}
+
+// ── Bridge recording AUDIO ───────────────────────────────────────────────────
+
+/**
+ * The Google Meet call's own sound, in a bridge room's recording.
+ *
+ * THE BUG THIS EXISTS FOR
+ *   A bridge recording (production, 2026-10-03, 222 s) was digital silence from 1.1 s to the end
+ *   while the user talked in Meet the whole time. The template mixed what WarpTalk publishes, and
+ *   in a bridge room none of that is the call:
+ *     - the user's voice was only their WarpTalk microphone, which is an STT tap and not what Meet
+ *       hears. In a bridge it starts OFF (no join record: media preferences fail closed), is
+ *       switched by the Meet mute sensor, mute-on-entry and force-mute, and is silenced by the
+ *       half-duplex gate while a dub plays. In that file it was muted for nearly the whole call
+ *       while Meet's own button was on.
+ *     - the far side was only the stand-in's capture, which is fine, but it is the other half.
+ *
+ * THE TRACK
+ *   The capturer's WarpTalk client publishes `meet-audio` while a bridge recording runs
+ *   (components/rooms/live/bridge-meet-audio-publisher): the inbound leg's capture of Meet's
+ *   playback (the far side: process loopback or the cable, whichever the bridge is already using)
+ *   mixed with the user's microphone, which follows Meet's mute button rather than WarpTalk's.
+ *   Published as SCREEN-SHARE AUDIO on purpose: livekit_ingress_worker reads only microphone and
+ *   unknown sources (WT-631 `_carries_speech`) and the live clients play only microphones
+ *   (FilteredRoomAudio), so the recording is the only thing that hears it.
+ *
+ *   When it is there, it replaces every other HUMAN audio track in the mix: the stand-in and the
+ *   members are already inside it (they reach the capturer's Meet), so mixing them as well would
+ *   play the call twice.
+ */
+export const MEET_AUDIO_TRACK_NAME = "meet-audio";
+
+export function isMeetAudioTrack(trackName: string | null | undefined): boolean {
+  return trackName === MEET_AUDIO_TRACK_NAME;
+}
+
+/**
+ * A dub that belongs in a BRIDGE recording: an interpreter's shared default track.
+ *
+ * Product decision (2026-10-03): a bridge recording carries the call AND WarpTalk's translation of
+ * it. One default track exists per (speaker, target language); a `-voice-{id8}-` track is the same
+ * sentence again in a voice one listener picked, so it would only double the dub.
+ */
+export function isRecordedBridgeDub(identity: string | null | undefined): boolean {
+  if (!identity || !identity.startsWith("ai-interpreter-")) return false;
+  return !identity.slice("ai-interpreter-".length).includes("-voice-");
+}
+
+/** One remote participant as the audio policy sees it. */
+export interface EgressAudioParticipant {
+  identity: string;
+  /** Names of every track the participant has PUBLISHED (subscribed or not). */
+  trackNames: readonly (string | null | undefined)[];
+}
+
+export interface EgressAudioContext {
+  /** A bridge recording: isBridgeRecording now, or `latched` from earlier in the file. */
+  bridge: boolean;
+  /** A person publishes `meet-audio`: the call's own mix replaces every other human's audio. */
+  meetAudio: boolean;
+}
+
+/**
+ * The room as both halves of the template need it. `bridge` is isBridgeRecording over the room
+ * (counting `meet-audio`), OR'd with the caller's latch, so the layout and the audio can never
+ * disagree about whether this is a bridge recording. Only people's tracks count: a bot naming a
+ * track `meet-window` or `meet-audio` proves nothing.
+ */
+export function resolveEgressAudioContext(
+  participants: ReadonlyArray<EgressAudioParticipant>,
+  options: { latched?: boolean } = {},
+): EgressAudioContext {
+  const people = participants.filter((participant) => isRecordableParticipant(participant.identity));
+  const published = (match: (name: string | null | undefined) => boolean) =>
+    people.some((participant) => participant.trackNames.some(match));
+  const meetAudio = published(isMeetAudioTrack);
+  const bridge =
+    options.latched === true ||
+    isBridgeRecording({
+      participantIdentities: people.map((participant) => participant.identity),
+      meetWindowPublished: published(isMeetWindowTrack),
+      meetAudioPublished: meetAudio,
+    });
+  return { bridge, meetAudio };
+}
+
+/**
+ * Whether the recorder subscribes to one AUDIO publication.
+ *
+ *   AIBot_ (STT ingest)            never: it publishes nothing that belongs in a file.
+ *   ai-interpreter- (dubs)         only in a bridge room, and only the default track per speaker
+ *                                  and language. A native meeting keeps recording no dubs (the
+ *                                  original reason for this template).
+ *   a person's `meet-audio`        always.
+ *   any other human audio          unless the room has `meet-audio`, which already contains it.
+ */
+export function shouldRecordAudio(
+  publication: { identity: string; trackName: string | null | undefined },
+  context: EgressAudioContext,
+): boolean {
+  const { identity, trackName } = publication;
+  if (!identity || identity.startsWith("AIBot_")) return false;
+  if (identity.startsWith("ai-interpreter-")) return context.bridge && isRecordedBridgeDub(identity);
+  if (!isRecordableParticipant(identity)) return false;
+  if (isMeetAudioTrack(trackName)) return true;
+  return !context.meetAudio;
+}
+
+/**
+ * The slate's second line, which used to claim "Audio is being recorded." whatever was mixed — in
+ * the silent production file it said so over 222 s of nothing. It now says what is actually
+ * subscribed. It cannot hear the signal, so it names the source and nothing more.
+ */
+export function meetWindowSlateAudioLine(input: { meetAudio: boolean; otherAudio: boolean }): string {
+  if (input.meetAudio) return "The Google Meet call audio is being recorded.";
+  if (input.otherAudio) return "Only audio published in WarpTalk is being recorded, not the Meet call itself.";
+  return "No audio is reaching the recording yet.";
 }

@@ -12,19 +12,25 @@ import { test } from "node:test";
 
 import {
   BRIDGE_STAND_IN_IDENTITY,
+  MEET_AUDIO_TRACK_NAME,
   MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
   MEET_WINDOW_HOLD_LOOKBACK_MS,
   MEET_WINDOW_SNAPSHOT_INTERVAL_MS,
   MEET_WINDOW_SNAPSHOT_RING,
   MEET_WINDOW_TRACK_NAME,
   isBridgeRecording,
+  isMeetAudioTrack,
   isMeetWindowTrack,
   isRecordableParticipant,
+  isRecordedBridgeDub,
   meetWindowShowsPicture,
   meetWindowStage,
   pickHeldMeetFrame,
+  meetWindowSlateAudioLine,
+  resolveEgressAudioContext,
   resolveEgressDisplayName,
   resolveEgressLayout,
+  shouldRecordAudio,
   shouldResubscribeMeetWindow,
 } from "../egress-participants.ts";
 import { BRIDGE_STAND_IN_USER_ID } from "../bridge-far-side-language.ts";
@@ -201,4 +207,115 @@ test("a picture that was live for less than the lookback holds nothing (the slat
 
 test("the snapshot ring reaches back past the lookback", () => {
   assert.ok(MEET_WINDOW_SNAPSHOT_RING * MEET_WINDOW_SNAPSHOT_INTERVAL_MS > MEET_WINDOW_HOLD_LOOKBACK_MS + MEET_WINDOW_SNAPSHOT_INTERVAL_MS);
+});
+
+// Bridge recording AUDIO: the call itself (meet-audio) and its dubs.
+
+const STAND_IN = BRIDGE_STAND_IN_IDENTITY;
+const MEMBER = "019ff9e1-e3e2-7024-99b7-000000000002";
+const DUB_FOR_FAR_SIDE = `ai-interpreter-vi-${STAND_IN}`;
+const DUB_FOR_HOST = `ai-interpreter-en-${HOST}`;
+const DUB_VOICE_VARIANT = `ai-interpreter-vi-voice-1a2b3c4d-${STAND_IN}`;
+
+test("only the track published under the agreed name is the Meet call audio", () => {
+  assert.equal(MEET_AUDIO_TRACK_NAME, "meet-audio");
+  assert.equal(isMeetAudioTrack("meet-audio"), true);
+  assert.equal(isMeetAudioTrack("meet-window"), false);
+  assert.equal(isMeetAudioTrack(""), false);
+  assert.equal(isMeetAudioTrack(undefined), false);
+});
+
+test("a room is a bridge when the stand-in, the Meet window or the Meet audio is in it", () => {
+  assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: [""] }]), {
+    bridge: false,
+    meetAudio: false,
+  });
+  assert.equal(resolveEgressAudioContext([{ identity: STAND_IN, trackNames: [""] }]).bridge, true);
+  assert.equal(
+    resolveEgressAudioContext([{ identity: HOST, trackNames: ["", "meet-window"] }]).bridge,
+    true,
+  );
+  assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: ["", "meet-audio"] }]), {
+    bridge: true,
+    meetAudio: true,
+  });
+});
+
+test("a published meet-audio marks a bridge recording, through the same isBridgeRecording", () => {
+  assert.equal(
+    isBridgeRecording({ participantIdentities: [HOST], meetWindowPublished: false, meetAudioPublished: true }),
+    true,
+  );
+});
+
+test("the layout's latch carries into the audio: a bridge stays a bridge after the stand-in leaves", () => {
+  // End of the call: the stand-in is gone and nothing names the Meet, but the file is still a
+  // bridge recording, so its dubs are still mixed.
+  assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: [""] }], { latched: true }), {
+    bridge: true,
+    meetAudio: false,
+  });
+});
+
+test("a bot naming a track meet-audio does not take over the mix", () => {
+  assert.deepEqual(
+    resolveEgressAudioContext([{ identity: DUB_FOR_HOST, trackNames: ["meet-audio"] }]),
+    { bridge: false, meetAudio: false },
+  );
+});
+
+test("a native meeting records every person's audio and no dub, exactly as before", () => {
+  const native = { bridge: false, meetAudio: false };
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, native), true);
+  assert.equal(shouldRecordAudio({ identity: MEMBER, trackName: "" }, native), true);
+  assert.equal(shouldRecordAudio({ identity: DUB_FOR_HOST, trackName: "" }, native), false);
+  assert.equal(shouldRecordAudio({ identity: "AIBot_room", trackName: "" }, native), false);
+});
+
+test("a bridge recording with meet-audio mixes the call once, plus each default dub", () => {
+  const bridge = { bridge: true, meetAudio: true };
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "meet-audio" }, bridge), true);
+  // Already inside meet-audio: the host's WarpTalk mic, the stand-in's capture, a member's mic.
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), false);
+  assert.equal(shouldRecordAudio({ identity: STAND_IN, trackName: "" }, bridge), false);
+  assert.equal(shouldRecordAudio({ identity: MEMBER, trackName: "" }, bridge), false);
+  // The translation is part of a bridge recording (product decision 2026-10-03).
+  assert.equal(shouldRecordAudio({ identity: DUB_FOR_FAR_SIDE, trackName: "" }, bridge), true);
+  assert.equal(shouldRecordAudio({ identity: DUB_FOR_HOST, trackName: "" }, bridge), true);
+  // The same sentence again in a listener-picked voice would double the dub.
+  assert.equal(shouldRecordAudio({ identity: DUB_VOICE_VARIANT, trackName: "" }, bridge), false);
+  assert.equal(shouldRecordAudio({ identity: "AIBot_room", trackName: "" }, bridge), false);
+});
+
+test("a bridge recording without meet-audio (older client) keeps WarpTalk's tracks, and the dubs", () => {
+  const bridge = { bridge: true, meetAudio: false };
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), true);
+  assert.equal(shouldRecordAudio({ identity: STAND_IN, trackName: "" }, bridge), true);
+  assert.equal(shouldRecordAudio({ identity: DUB_FOR_FAR_SIDE, trackName: "" }, bridge), true);
+});
+
+test("only an interpreter's default track is a recorded bridge dub", () => {
+  assert.equal(isRecordedBridgeDub(DUB_FOR_FAR_SIDE), true);
+  assert.equal(isRecordedBridgeDub(DUB_VOICE_VARIANT), false);
+  assert.equal(isRecordedBridgeDub(HOST), false);
+  assert.equal(isRecordedBridgeDub("AIBot_room"), false);
+  assert.equal(isRecordedBridgeDub(null), false);
+});
+
+test("the slate says which audio is being recorded, never more than that", () => {
+  assert.equal(
+    meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true }),
+    "The Google Meet call audio is being recorded.",
+  );
+  assert.match(meetWindowSlateAudioLine({ meetAudio: false, otherAudio: true }), /not the Meet call/);
+  assert.equal(
+    meetWindowSlateAudioLine({ meetAudio: false, otherAudio: false }),
+    "No audio is reaching the recording yet.",
+  );
+  for (const line of [
+    meetWindowSlateAudioLine({ meetAudio: false, otherAudio: true }),
+    meetWindowSlateAudioLine({ meetAudio: false, otherAudio: false }),
+  ]) {
+    assert.doesNotMatch(line, /^Audio is being recorded/);
+  }
 });

@@ -83,7 +83,7 @@ expect(
 );
 expect(
   template,
-  /\{stage === "slate" \? <MeetWindowSlate \/> : null\}/,
+  /\{stage === "slate" \? <MeetWindowSlate audioLine=\{slateAudioLine\} \/> : null\}/,
   TEMPLATE,
   "the template must show the slate, not a black stage, until the Meet window has a picture",
 );
@@ -123,9 +123,9 @@ expect(
 );
 expect(
   template,
-  /isBridgeRecording\(\{/,
+  /resolveEgressAudioContext\([\s\S]{0,300}\{ latched: bridgeLatched \}/,
   TEMPLATE,
-  "the bridge room must be recognised with isBridgeRecording (stand-in present, or a meet-window track)",
+  "the bridge room must be recognised with isBridgeRecording (via resolveEgressAudioContext: stand-in present, or a meet-window/meet-audio track), through the one latch",
 );
 expect(
   template,
@@ -135,7 +135,7 @@ expect(
 );
 expect(
   template,
-  /stage === "held" && heldFrame \? <HeldMeetFrame frame=\{heldFrame\} \/> : null/,
+  /stage === "held" && heldFrame \? <HeldMeetFrame frame=\{heldFrame\} audioLine=\{slateAudioLine\} \/> : null/,
   TEMPLATE,
   "while the Meet window is away the stage must hold the kept Meet frame",
 );
