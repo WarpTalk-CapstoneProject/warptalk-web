@@ -133,6 +133,7 @@ import {
 } from "@/lib/assistant/mention-trigger";
 import { matchesSearchText } from "@/lib/ui/search-text";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import { mentionBlurb } from "@/lib/assistant/mention-blurb";
 import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
   pluginWritesAlwaysAllowed,
@@ -1044,7 +1045,9 @@ export function GlobalChatbot() {
       // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
       // handling, and the avatar contract forbids bypassing the primitives with a bare <img>.
       icon: <PluginGlyph plugin={plugin} size="xs" />,
-      description: plugin.description,
+      // The first clause only: the full catalog text is written for the Plugins page. See
+      // mentionBlurb.
+      description: mentionBlurb(plugin.description),
       entityType: "plugin",
       entityId: plugin.key,
     }));
@@ -2418,17 +2421,21 @@ export function GlobalChatbot() {
                                           {opt.icon}
                                         </span>
                                       )}
-                                      <div className="flex items-center gap-1.5 truncate">
+                                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
                                         {/* A summary row shows the meeting's name: its group
                                             heading already says "Summaries". A hint shows what it
-                                            will write, "@document:". */}
-                                        <span className="font-medium truncate">
+                                            will write, "@document:".
+                                            The name is what the user picks by, so it does not
+                                            shrink until it takes 70% of the row; the description
+                                            gives way first. Both shrinking equally cut "Linear"
+                                            to "Li…" beside its own description (3 Oct 2026). */}
+                                        <span className="max-w-[70%] shrink-0 truncate font-medium">
                                           {isNamespaceHint(opt)
                                             ? `@${opt.title}`
                                             : (opt.label ?? opt.title)}
                                         </span>
                                         {opt.description && (
-                                          <span className="text-[12px] text-ink-subtle truncate">
+                                          <span className="min-w-0 truncate text-[12px] text-ink-subtle">
                                             {opt.description}
                                           </span>
                                         )}
