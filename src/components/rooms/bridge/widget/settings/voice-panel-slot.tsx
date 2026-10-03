@@ -19,7 +19,7 @@
  *     in two places is two places to disagree.
  */
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { VoicePanel } from "@/components/rooms/live/voice-panel";
@@ -98,8 +98,30 @@ export function VoicePanelSlot() {
     relay.setVoiceCloneConsent(enabled);
   }
 
+  // VoicePanel's "My voice" row clears the saved dub voice and THEN asks for the clone, in one
+  // click. Sent straight through, "Not now" on the card below would still have dropped the voice
+  // the person was dubbed in. So a clear is held for the rest of the click: the consent card takes
+  // it over when it opens, and anything else (the Automatic row) lets it go out.
+  const heldDubClearRef = useRef(false);
+  const cardClearsDubRef = useRef(false);
+
+  function handleChangeDubVoice(voiceId: string | null) {
+    if (voiceId !== null) {
+      relay.setDubVoice(voiceId);
+      return;
+    }
+    heldDubClearRef.current = true;
+    queueMicrotask(() => {
+      if (!heldDubClearRef.current) return;
+      heldDubClearRef.current = false;
+      relay.setDubVoice(null);
+    });
+  }
+
   function handleChangeOwnVoice(enabled: boolean) {
     if (planOwnVoicePick({ enabling: enabled, accountConsent: voiceConsent?.isGranted }) === "ask") {
+      cardClearsDubRef.current = heldDubClearRef.current;
+      heldDubClearRef.current = false;
       setOwnVoiceFailed(false);
       setAskingConsent(true);
       return;
@@ -116,6 +138,8 @@ export function VoicePanelSlot() {
       return;
     }
     setAskingConsent(false);
+    if (cardClearsDubRef.current) relay.setDubVoice(null);
+    cardClearsDubRef.current = false;
     sendOwnVoice(true);
   }
 
@@ -184,7 +208,8 @@ export function VoicePanelSlot() {
           </div>
         </div>
       ) : null}
-      {ownVoiceFailed ? (
+      {/* Not while the switch reads on: an answer that came after the wait is still an answer. */}
+      {ownVoiceFailed && !cloneEnabledNow ? (
         <p
           role="alert"
           className="mx-2.5 mb-2 rounded-md bg-destructive/10 px-2.5 py-2 text-[11px] leading-snug text-destructive"
@@ -203,7 +228,7 @@ export function VoicePanelSlot() {
         onChangeVoiceCloneConsent={handleChangeOwnVoice}
         dubVoice={voice.dubVoice}
         ownVoiceProfiles={ownVoiceProfiles}
-        onChangeDubVoice={relay.setDubVoice}
+        onChangeDubVoice={handleChangeDubVoice}
         cloneCapture={voice.cloneCapture}
         footer={
           snapshot.voiceEnabled ? (
