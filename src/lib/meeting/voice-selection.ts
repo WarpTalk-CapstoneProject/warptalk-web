@@ -21,6 +21,8 @@
 
 import type { VoiceOptionDto } from "@/types/realtime";
 
+import { profileDisplay } from "./voice-panel-library.ts";
+
 export type VoiceSelectionInput = {
   /** false = this listener wants transcript only and no audio is synthesized at all. */
   voiceEnabled?: boolean;
@@ -97,7 +99,8 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
   if (dubVoice) {
     const mine = ownVoiceProfiles?.find((profile) => profile.voiceId === dubVoice);
     const fromCatalog = voiceCatalog?.find((voice) => voice.id === dubVoice);
-    const named = mine?.name ?? fromCatalog?.name;
+    // "My voice (vi-VN)" reads as "My voice": the locale tag is for machines.
+    const named = (mine ? profileDisplay(mine.name).name : undefined) ?? fromCatalog?.name;
     return {
       kind: "picked",
       // A voice no longer offered for this language is not a bug worth hiding — the language
@@ -114,7 +117,8 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
   if (voiceCloneEnabled) {
     return {
       kind: "cloned",
-      label: "My voice",
+      // "Live cloning", the panel's own word for it: a saved profile is often called My voice.
+      label: "Live cloning",
       detail: `Listeners hear your translated speech in your own voice.${audienceNote}`,
       inert,
     };
@@ -122,11 +126,11 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
 
   return {
     kind: "automatic",
-    label: "Automatic",
-    // "Assigned, not matched" is the honest description: the worker picks deterministically from
-    // the catalog by hashing the speaker id, so everyone keeps a stable voice and no two people
-    // sound alike — but nothing compares it to how the speaker actually sounds.
-    detail: `A stand-in voice, assigned rather than matched to how you sound.${audienceNote}`,
+    // "Off", not "Automatic": in a meeting room a speaker with no voice of their own is heard as
+    // they actually sound, and nobody plays a stand-in voice for them any more (see
+    // room-audio-routing — the speaker decides).
+    label: "Off",
+    detail: `Others hear your original voice.${audienceNote}`,
     inert,
   };
 }

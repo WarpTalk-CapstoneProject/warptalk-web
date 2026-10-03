@@ -35,7 +35,9 @@
  *                    set-language             { language }            one pick = speak + listen
  *                    set-voice-enabled        { enabled }             the dock's Text | Voice
  *                    set-voice-preference     { voiceId }             "" = the automatic voice
- *                    set-dub-voice            { voiceId | null }      null = clone me live
+ *                    set-dub-voice            { voiceId | null,       null = clone me live;
+ *                                               language? }             language = the catalogue
+ *                                                                       a library voice came from
  *                    set-voice-clone-consent  { enabled }
  *                    set-meeting-audio-level  { level }               0..1, the original under a dub
  *                    answer-browser-capture   { granted, sourceId? }  the consent modal, answered here
@@ -348,7 +350,7 @@ export type BridgeWidgetIntent =
   | { type: "set-language"; language: string }
   | { type: "set-voice-enabled"; enabled: boolean }
   | { type: "set-voice-preference"; voiceId: string }
-  | { type: "set-dub-voice"; voiceId: string | null }
+  | { type: "set-dub-voice"; voiceId: string | null; language?: string | null }
   | { type: "set-voice-clone-consent"; enabled: boolean }
   | { type: "set-meeting-audio-level"; level: number }
   | { type: "answer-browser-capture"; granted: boolean; sourceId?: string }
@@ -611,7 +613,14 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
     }
     case "set-dub-voice": {
       const voiceId = nullableId(raw.voiceId);
-      return voiceId.ok ? { type: "set-dub-voice", voiceId: voiceId.value } : null;
+      if (!voiceId.ok) return null;
+      // Optional, and dropped rather than refused when malformed: without it the main window
+      // validates against the speak language, which is what it always did.
+      const language =
+        typeof raw.language === "string" && /^[a-z]{2,3}$/i.test(raw.language) ? raw.language.toLowerCase() : null;
+      return language
+        ? { type: "set-dub-voice", voiceId: voiceId.value, language }
+        : { type: "set-dub-voice", voiceId: voiceId.value };
     }
     case "set-voice-clone-consent":
       return typeof raw.enabled === "boolean"

@@ -122,6 +122,7 @@ import {
   voiceClonePromptDismissKey,
 } from "@/lib/meeting/voice-clone-prompt";
 import { VoiceCloneConsentPrompt } from "@/components/rooms/live/voice-clone-consent-prompt";
+import { meetingVoiceProfiles } from "@/lib/voice/profile-status";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
@@ -2879,17 +2880,7 @@ export function PersistentMeetingSession({
   // Only profiles with a provider voice behind them. An uploaded recording has none until it has
   // been cloned, and offering it would let somebody pick a voice that cannot be used — the same
   // silent nothing WT-396 exists to remove.
-  const ownVoiceProfiles = useMemo(
-    () =>
-      (savedVoiceProfiles ?? [])
-        .filter((profile) => profile.providerVoiceId && profile.isActive)
-        .map((profile) => ({
-          id: profile.id,
-          name: profile.displayName || "My voice",
-          voiceId: profile.providerVoiceId!,
-        })),
-    [savedVoiceProfiles],
-  );
+  const ownVoiceProfiles = useMemo(() => meetingVoiceProfiles(savedVoiceProfiles), [savedVoiceProfiles]);
 
   /**
    * Pick the voice this participant is dubbed in, or null to be cloned live in the meeting.
@@ -2900,15 +2891,16 @@ export function PersistentMeetingSession({
    * everywhere except the meeting the person is standing in, until somebody joins or translation
    * is restarted and a publish happens for some unrelated reason.
    */
-  function handleChangeDubVoice(voiceId: string | null) {
+  function handleChangeDubVoice(voiceId: string | null, pickedLanguage?: string | null) {
     setDubVoice.mutate(
       // A voice of your own is accepted without a language; a catalogue pick is validated
       // against one — see VoiceProfileService.IsVoiceChoosableByAsync.
       {
         voiceId,
+        // The panel's library spans languages, so a pick names the catalogue it came from.
         language: ownVoiceProfiles.some((profile) => profile.voiceId === voiceId)
           ? null
-          : sourceLanguage,
+          : pickedLanguage || sourceLanguage,
       },
       {
         onSuccess: async () => {

@@ -96,7 +96,7 @@ export type BridgeWidgetRelayHostOptions = {
   /** "" means the automatic voice, as `onChangeVoicePreference` takes it. */
   onSetVoicePreference?: (voiceId: string) => void;
   /** null means "clone me live", as `onChangeDubVoice` takes it. */
-  onSetDubVoice?: (voiceId: string | null) => void;
+  onSetDubVoice?: (voiceId: string | null, language?: string | null) => void;
   onSetVoiceCloneConsent?: (enabled: boolean) => void;
   /** 0..1, already range-checked by the relay. */
   onSetMeetingAudioLevel?: (level: number) => void;
@@ -423,7 +423,7 @@ export function useBridgeWidgetRelayHost({
           handlers.onSetVoicePreference?.(message.voiceId);
           break;
         case "set-dub-voice":
-          handlers.onSetDubVoice?.(message.voiceId);
+          handlers.onSetDubVoice?.(message.voiceId, message.language);
           break;
         case "set-voice-clone-consent":
           handlers.onSetVoiceCloneConsent?.(message.enabled);

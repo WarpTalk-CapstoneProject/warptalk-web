@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { hasCloningVoiceProfile } from "@/lib/voice/profile-status";
 import { VoiceConsentService, VoiceProfileService } from "@/services/voice-profile.service";
 import type {
   CreateVoiceProfileRequest,
   SetDubVoiceRequest,
   SetPreferredVoiceRequest,
+  VoiceCatalogItemDto,
 } from "@/types/voice-profile";
 
 export const VOICE_PROFILE_KEYS = {
@@ -91,6 +92,28 @@ export function useVoiceCatalog(language: string, enabled = true) {
     enabled: enabled && Boolean(language),
     staleTime: 60_000,
   });
+}
+
+/**
+ * The catalogues of several languages at once, keyed by language — for the meeting Voice panel's
+ * language filter, whose "All languages" lists every one. Each language is its own query under the
+ * same key useVoiceCatalog uses, so the Voice Profiles page and the panel share one cache.
+ */
+export function useVoiceCatalogs(languages: readonly string[], enabled = true) {
+  const results = useQueries({
+    queries: languages.map((language) => ({
+      queryKey: VOICE_PROFILE_KEYS.catalog(language),
+      queryFn: () => VoiceProfileService.catalog(language),
+      enabled: enabled && Boolean(language),
+      staleTime: 60_000,
+    })),
+  });
+  const byLanguage: Record<string, VoiceCatalogItemDto[]> = {};
+  languages.forEach((language, index) => {
+    const data = results[index]?.data;
+    if (data) byLanguage[language] = data;
+  });
+  return { byLanguage, loading: results.some((result) => result.isLoading) };
 }
 
 export function useDubVoice() {
