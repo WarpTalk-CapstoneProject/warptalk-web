@@ -352,6 +352,9 @@ export function isRecordFinalizing(
   if (!Number.isFinite(endedMs)) return false;
   // A client clock behind the server's reads a fresh end as being in the future; that is fresh.
   if (nowMs - endedMs > RECORD_FINALIZING_WINDOW_MS) return false;
+  // ...but only by up to one window. A clock hours behind would otherwise hold the wait screen
+  // (and its 4 s history polling) for hours when the transcript never comes; show the record.
+  if (endedMs - nowMs > RECORD_FINALIZING_WINDOW_MS) return false;
 
   return !(input.record?.artifacts ?? []).some((artifact) => artifact.type === "transcript_export");
 }

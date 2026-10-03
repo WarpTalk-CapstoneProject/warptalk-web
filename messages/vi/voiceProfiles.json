@@ -22,6 +22,14 @@
       "withdrawFailed": "Không thể thu hồi quyền. Vui lòng thử lại.",
       "granted": "Cuộc họp giờ có thể nhân bản giọng bạn.",
       "grantFailed": "Không thể ghi nhận quyền. Vui lòng thử lại."
+    },
+    "prompt": {
+      "title": "Lồng tiếng bằng chính giọng của bạn?",
+      "body": "Người nghe đang nghe bản dịch lời bạn bằng giọng thư viện.",
+      "allow": "Dùng giọng của tôi",
+      "later": "Để sau",
+      "enabled": "Giọng của bạn sẽ được dùng từ những câu tiếp theo.",
+      "failed": "Không bật được giọng của bạn. Bạn vẫn có thể bật trong phần Giọng nói."
     }
   },
   "dubPicker": {

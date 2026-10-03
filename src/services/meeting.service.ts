@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { BridgeTokenDto, JoinMeetingResponseDto, RecordingStateDto, TriggerAiRequest } from "@/types/meeting";
+import type { MeetingClientEvent } from "@/lib/meeting/livekit-connect-watchdog";
 
 export const meetingService = {
   join(translationRoomId: string, displayName?: string) {
@@ -17,6 +18,18 @@ export const meetingService = {
    */
   bridgeToken(translationRoomId: string) {
     return apiClient.post<BridgeTokenDto>(API.meetings.bridgeToken(translationRoomId));
+  },
+
+  /**
+   * Tell the server what this browser's LiveKit connection did. Fire-and-forget: a report that
+   * fails is not something a person in a meeting can act on, so it never surfaces and never
+   * retries — see lib/meeting/livekit-connect-watchdog.ts for why it exists.
+   */
+  reportClientEvent(translationRoomId: string, event: MeetingClientEvent) {
+    return apiClient
+      .post(API.meetings.clientEvents(translationRoomId), event)
+      .then(() => undefined)
+      .catch(() => undefined);
   },
 
   triggerAi(translationRoomId: string, data: TriggerAiRequest) {

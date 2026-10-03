@@ -110,7 +110,18 @@ import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
-import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import {
+  useDubVoice,
+  useGrantVoiceConsent,
+  useSetDubVoice,
+  useVoiceConsent,
+  useVoiceProfiles,
+} from "@/hooks/use-voice-profiles";
+import {
+  shouldPromptVoiceClone,
+  voiceClonePromptDismissKey,
+} from "@/lib/meeting/voice-clone-prompt";
+import { VoiceCloneConsentPrompt } from "@/components/rooms/live/voice-clone-consent-prompt";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
@@ -312,6 +323,15 @@ import {
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
+import {
+  boundedText,
+  canAutoRetryConnect,
+  CONNECT_RETRY_AFTER_ERROR_MS,
+  CONNECT_SLOW_MS,
+  connectFailureCode,
+  type MeetingClientEvent,
+  shouldReportDisconnect,
+} from "@/lib/meeting/livekit-connect-watchdog";
 import { translationRoomService } from "@/services/translation-room.service";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
@@ -2890,6 +2910,54 @@ export function PersistentMeetingSession({
     );
   }
 
+  // Asked in the meeting, at the moment it matters: the pipeline has just said this speaker is
+  // being dubbed in a library voice (`not_opted_in`). See lib/meeting/voice-clone-prompt.ts.
+  const voiceConsentT = useTranslations("voiceProfiles.consent");
+  const { data: voiceConsent } = useVoiceConsent();
+  const grantVoiceConsent = useGrantVoiceConsent();
+  const [voiceClonePromptDismissed, setVoiceClonePromptDismissed] = useState<boolean>(() => {
+    try {
+      return window.sessionStorage.getItem(voiceClonePromptDismissKey(roomId)) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [voiceClonePromptPending, setVoiceClonePromptPending] = useState(false);
+  const showVoiceClonePrompt = shouldPromptVoiceClone({
+    cloneReason: cloneCaptureState?.reason,
+    dubVoiceId: dubVoice,
+    dismissed: voiceClonePromptDismissed,
+  });
+
+  function dismissVoiceClonePrompt() {
+    setVoiceClonePromptDismissed(true);
+    try {
+      window.sessionStorage.setItem(voiceClonePromptDismissKey(roomId), "1");
+    } catch {
+      // Non-critical: the worst case is being asked once more after a reload.
+    }
+  }
+
+  async function handleAllowVoiceCloneFromPrompt() {
+    setVoiceClonePromptPending(true);
+    try {
+      // Both gates, in order. The room switch is refused (403) without the account consent, and
+      // the account consent alone does not reach routes this meeting already built.
+      if (!voiceConsent?.isGranted) {
+        await grantVoiceConsent.mutateAsync();
+      }
+      await setVoiceCloneConsent.mutateAsync(true);
+      setVoiceCloneEnabled(true);
+      // Hidden for the rest of the meeting even before the pipeline's next state arrives.
+      setVoiceClonePromptDismissed(true);
+      toast.success(voiceConsentT("prompt.enabled"));
+    } catch {
+      toast.error(voiceConsentT("prompt.failed"));
+    } finally {
+      setVoiceClonePromptPending(false);
+    }
+  }
+
   function handleChangeVoiceCloneConsent(enabled: boolean) {
     const previous = voiceCloneEnabled;
     setVoiceCloneEnabled(enabled); // optimistic
@@ -4913,6 +4981,62 @@ export function PersistentMeetingSession({
     });
   }
 
+  // LiveKit connect watchdog + report. See lib/meeting/livekit-connect-watchdog.ts.
+  const connectStartedAtRef = useRef<number | null>(null);
+  const autoConnectRetriesRef = useRef(0);
+  const reportConnectEvent = useCallback(
+    (event: Omit<MeetingClientEvent, "userAgent" | "attempt">) => {
+      if (!roomId) return;
+      void meetingService.reportClientEvent(roomId, {
+        ...event,
+        attempt: autoConnectRetriesRef.current,
+        userAgent: typeof navigator !== "undefined" ? boundedText(navigator.userAgent) : null,
+      });
+    },
+    [roomId],
+  );
+  const autoRetryConnect = useCallback(
+    (reason: string) => {
+      if (
+        !canAutoRetryConnect({
+          autoRetries: autoConnectRetriesRef.current,
+          displaced: sessionDisplacedRef.current,
+        })
+      ) {
+        return;
+      }
+      autoConnectRetriesRef.current += 1;
+      reportConnectEvent({ kind: "connect_retry", code: reason });
+      // The same thing a reload did for Tuấn: drop the session, take a fresh token, connect.
+      retryMeetingConnectionRef.current();
+    },
+    [reportConnectEvent],
+  );
+  // Declared above the early returns below (hooks), so the connect gate is asked here too —
+  // the same pure function, the same inputs as `shouldConnectLiveKit` further down.
+  const awaitingLiveKit =
+    shouldConnectMeeting({
+      hasToken: Boolean(meetingSession?.token),
+      canConnectRoom: canConnectMeeting,
+      idleReaped: meetingIsIdleReaped,
+      displaced: sessionDisplaced,
+    }) && !liveKitConnected;
+  useEffect(() => {
+    if (!awaitingLiveKit) {
+      connectStartedAtRef.current = null;
+      return;
+    }
+    connectStartedAtRef.current = Date.now();
+    const timer = window.setTimeout(() => {
+      reportConnectEvent({ kind: "connect_slow", elapsedMs: CONNECT_SLOW_MS });
+      autoRetryConnect("connect_slow");
+    }, CONNECT_SLOW_MS);
+    return () => window.clearTimeout(timer);
+    // Re-armed for each token: a retry hands out a new one and the clock starts again.
+  }, [awaitingLiveKit, meetingSession?.token, reportConnectEvent, autoRetryConnect]);
+  const connectElapsedMs = () =>
+    connectStartedAtRef.current == null ? null : Date.now() - connectStartedAtRef.current;
+
   if (roomQuery.isLoading) {
     return (
       <StatePanel
@@ -4960,6 +5084,7 @@ export function PersistentMeetingSession({
     displaced: sessionDisplaced,
   });
 
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
       {/* Wrapped here rather than around <main>, so the minimised dock resolves faces from the
@@ -5004,15 +5129,28 @@ export function PersistentMeetingSession({
             return;
           }
           setMeetingError(describeLiveKitError(error));
+          reportConnectEvent({
+            kind: "connect_error",
+            code: connectFailureCode(error),
+            message: boundedText(error),
+            elapsedMs: connectElapsedMs(),
+          });
+          // Failed outright rather than hanging: no reason to wait out the slow-connect timer.
+          window.setTimeout(() => autoRetryConnect("connect_error"), CONNECT_RETRY_AFTER_ERROR_MS);
         }}
         onConnected={() => {
           setMeetingError(null);
           setLiveKitConnected(true);
+          reportConnectEvent({ kind: "connected", elapsedMs: connectElapsedMs() });
+          autoConnectRetriesRef.current = 0;
         }}
         // The other device joined with this identity and LiveKit evicted this connection. Without
         // this, the next render re-ran room.connect() and evicted the other device back.
         onDisconnected={(reason) => {
           if (isDuplicateIdentityDisconnect(reason)) markSessionDisplaced();
+          if (shouldReportDisconnect(reason)) {
+            reportConnectEvent({ kind: "disconnected", code: reason == null ? null : String(reason) });
+          }
           setLiveKitConnected(false);
         }}
         data-lk-theme="default"
@@ -5398,6 +5536,14 @@ export function PersistentMeetingSession({
                   }}
                 />
               </div>
+            ) : null}
+
+            {showVoiceClonePrompt ? (
+              <VoiceCloneConsentPrompt
+                pending={voiceClonePromptPending}
+                onAllow={() => void handleAllowVoiceCloneFromPrompt()}
+                onDismiss={dismissVoiceClonePrompt}
+              />
             ) : null}
 
             <div
