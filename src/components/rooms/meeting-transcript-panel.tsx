@@ -1717,7 +1717,13 @@ export function MeetingTranscriptArtifact({
             // The print rules are the reward the spec promised for laying this out as a document:
             // a page of paper has no viewport to bound and no scrollbar to scroll, so the frame
             // that makes this readable on screen is exactly what has to go on paper.
-            "max-h-[min(60vh,560px)] overflow-y-auto rounded-xl border border-border bg-surface-1 p-4 print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-transparent print:p-0",
+            //
+            // `relative` makes this frame the containing block of everything absolutely positioned
+            // inside it. Without it the sr-only citation anchors (TranscriptRowAnchors) and the
+            // timeline rails were positioned against the wrapper OUTSIDE the scroller, so the
+            // overflow clip did not apply to them: in the Conversation and Timeline layouts the
+            // page grew by the full height of the transcript and scrolled on into blank space.
+            "relative max-h-[min(60vh,560px)] overflow-y-auto rounded-xl border border-border bg-surface-1 p-4 print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-transparent print:p-0",
             // Taller in reading mode: the rail beside it is scrolling independently, so a short
             // column would leave the reader scrubbing a letterbox next to a half-empty rail.
             isReading ? "max-h-[min(72vh,720px)]" : "",
