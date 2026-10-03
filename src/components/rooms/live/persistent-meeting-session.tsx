@@ -1,7 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   LiveKitRoom,
@@ -218,6 +225,7 @@ import {
   type BridgeRecordChoice,
   type BridgeRecordingRetry,
 } from "@/lib/meeting/bridge-recording";
+import { hydrateFromJoin, readJoinHostState } from "@/lib/meeting/join-host-state";
 import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
 import {
   MEET_WINDOW_CAPTURE_CONSTRAINTS,
@@ -1673,8 +1681,57 @@ export function PersistentMeetingSession({
 
   // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
   // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
-  const [isRoomLocked, setIsRoomLocked] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  //
+  // WT-935 — AND READ ON JOIN. A broadcast announces a transition and is not replayed, so on its
+  // own it left both at `false` after every reload or late join: the Record button drew idle in a
+  // meeting that was being recorded (and the host's next press sent `start` for a recording
+  // already running), and a locked room opened as "unlocked". The join response has carried both
+  // all along (`locked` WT-282, `recording` WT-283); hydrateHostStateFromJoin below reads them at
+  // both places a session is received. Rules and reasons: lib/meeting/join-host-state.
+  //
+  // `setIsRoomLocked` / `setIsRecording` are what the SERVER SAID LIVE — a broadcast, or the answer
+  // to this client's own request. Each call is counted, so a join response that was in flight
+  // while one landed can tell it is the older fact and stand down. Hydration itself goes through
+  // the raw setters and is not counted: it is a snapshot, not a statement about a change.
+  //
+  // LiveKit's `room.isRecording` was considered as the source and deliberately not used: it would
+  // be a third voice whose lag behind the egress request cannot be bounded from here, and the join
+  // response is the meeting service's own row — the same fact the Record endpoint acts on.
+  const [isRoomLocked, setRoomLockedState] = useState(false);
+  const [isRecording, setRecordingState] = useState(false);
+  const hostStateToldRef = useRef({ locked: 0, recording: 0 });
+  const setIsRoomLocked = useCallback((next: SetStateAction<boolean>) => {
+    hostStateToldRef.current.locked += 1;
+    setRoomLockedState(next);
+  }, []);
+  const setIsRecording = useCallback((next: SetStateAction<boolean>) => {
+    hostStateToldRef.current.recording += 1;
+    setRecordingState(next);
+  }, []);
+  /**
+   * Applies a join response's `locked` / `recording`. `asked` is hostStateToldRef as it stood when
+   * the join request was sent. Silent on purpose — no toast for a state that was already true when
+   * this client arrived; the standing REC chip is what tells a joiner the meeting is recorded.
+   */
+  const hydrateHostStateFromJoin = useCallback(
+    (session: JoinMeetingResponseDto, asked: { locked: number; recording: number }) => {
+      const joined = readJoinHostState(session);
+      const told = hostStateToldRef.current;
+      const lockToldWhileJoining = told.locked !== asked.locked;
+      const recordingToldWhileJoining = told.recording !== asked.recording;
+      setRoomLockedState((current) =>
+        hydrateFromJoin({ current, joined: joined.locked, toldWhileJoining: lockToldWhileJoining }),
+      );
+      setRecordingState((current) =>
+        hydrateFromJoin({
+          current,
+          joined: joined.recording,
+          toldWhileJoining: recordingToldWhileJoining,
+        }),
+      );
+    },
+    [],
+  );
   /**
    * WT-605 — the last TranscriptPaused/TranscriptResumed broadcast, or null.
    *
@@ -1703,9 +1760,9 @@ export function PersistentMeetingSession({
   // had and visibly did nothing. Derived rather than synced in an effect so there is no
   // cascading render.
   //
-  // There is no equivalent field for the lock — see the PR's BACKEND note: JoinMeetingResponse
-  // does not report it, so `isRoomLocked` can still only be learned from a RoomLockChanged
-  // broadcast that fires after somebody toggles it.
+  // WT-935: the lock is read from the join response too now (`locked`, WT-282) — see
+  // hydrateHostStateFromJoin above. It is state rather than derived like this one because the
+  // RoomLockChanged broadcast keeps moving it afterwards.
   const [muteOnEntryOverride, setMuteOnEntryOverride] = useState<boolean | null>(
     null,
   );
@@ -1714,9 +1771,8 @@ export function PersistentMeetingSession({
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
-  // Unlike the room lock a few lines up — whose own comment records that it "can only be learned
-  // from a RoomLockChanged broadcast that fires after somebody toggles it" — the transcript pause
-  // HAS a read, so somebody who joins mid-pause is not left believing it is running.
+  // The transcript pause has its own read, so somebody who joins mid-pause is not left believing it
+  // is running. (The lock and the recording are read from the join response instead — WT-935.)
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
   const setTranscriptPausedMutation = useSetTranscriptPaused(roomId);
   const transcriptPause: TranscriptPauseState = resolveTranscriptPause({
@@ -2852,10 +2908,15 @@ export function PersistentMeetingSession({
     meetingJoinedRef.current = true;
     setMeetingSession(null);
 
+    const hostStateAsked = { ...hostStateToldRef.current };
     void joinMeetingAsync({ translationRoomId: room.id, displayName })
       .then((session) => {
         setMeetingError(null);
         setMeetingSession(session);
+        // WT-935: the lock and the recording as they are now. In the same batch as the session, so
+        // nothing that waits for the join (the bridge's automatic recording start) ever sees a
+        // joined room that is "not recording" while it is.
+        hydrateHostStateFromJoin(session, hostStateAsked);
         // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
         if (session.muteOnEntry) setMicrophoneEnabled(false);
       })
@@ -2870,6 +2931,7 @@ export function PersistentMeetingSession({
   }, [
     canConnectMeeting,
     displayName,
+    hydrateHostStateFromJoin,
     joinMeetingAsync,
     room,
     setMicrophoneEnabled,
@@ -2886,10 +2948,13 @@ export function PersistentMeetingSession({
 
     const translationRoomId = room.id;
     queueMicrotask(() => {
+      const hostStateAsked = { ...hostStateToldRef.current };
       void joinMeetingAsync({ translationRoomId, displayName })
         .then((session) => {
           setMeetingError(null);
           setMeetingSession(session);
+          // WT-935: see retryMeetingConnection above — the same read, for the first join.
+          hydrateHostStateFromJoin(session, hostStateAsked);
           // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
           if (session.muteOnEntry) setMicrophoneEnabled(false);
         })
@@ -2902,7 +2967,7 @@ export function PersistentMeetingSession({
           );
         });
     });
-  }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
+  }, [canConnectMeeting, displayName, hydrateHostStateFromJoin, joinMeetingAsync, room?.id]);
 
   /**
    * Make sure this person exists as a PARTICIPANT of the translation room, not only as a
@@ -3328,6 +3393,7 @@ export function PersistentMeetingSession({
     isRecording,
     bridgeRecordingStarting,
     bridgeRecordRetryDue,
+    setIsRecording,
   ]);
 
   // WT-916: the give-up, shown in the popup only while it is still the truth and still actionable:
