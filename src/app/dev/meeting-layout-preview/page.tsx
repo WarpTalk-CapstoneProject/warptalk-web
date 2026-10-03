@@ -127,7 +127,7 @@ export default function MeetingLayoutPreview() {
 
           <div
             data-collapsed={captionLaneCollapsed ? "" : undefined}
-            className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center data-[collapsed]:h-10"
+            className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center data-[collapsed]:h-8"
           >
             {/* Read as Sarah (listens in English): a vi/ja line whose translation has not arrived is
                 shown as spoken and muted. Kenji's live words (ja) are NOT shown to her — live text

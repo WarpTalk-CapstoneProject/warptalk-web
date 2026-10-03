@@ -41,8 +41,9 @@ import { ParticipantAvatar } from "./participant-avatar";
  *   that grew upward OVER the camera view. That left nobody a way to glance back at a sentence
  *   they missed. The history is back, but it scrolls INSIDE the lane's own fixed box (a visible
  *   scrollbar, sticking to the newest line until the reader scrolls up, with a "Latest" chip to
- *   come back) — it still never grows over the video. The corner caret collapses the lane to
- *   the one line being spoken, giving the height back to the camera view, or opens it again.
+ *   come back) — it still never grows over the video. The corner caret (down) hides the lane
+ *   completely, giving its height back to the camera view; hidden, only a small up caret is
+ *   left to bring it back. Owner, 4 Oct: "ẩn thì ẩn luôn" — a one-line remnant was not hidden.
  *
  *   It does not auto-hide, which is what the original single box did wrong: whoever looked away
  *   for a moment still has the previous line on screen, and the space under the video does not
@@ -96,7 +97,7 @@ export function LiveSubtitleOverlay({
    * translation that is not coming — see captionTextForReader.
    */
   translationActive?: boolean;
-  /** Collapsed: the line being spoken only, no history. The session owns the state. */
+  /** Hidden: no captions at all, only the caret that brings them back. The session owns it. */
   collapsed?: boolean;
   /**
    * Collapses or opens the lane. Omitted where the lane cannot change height (the minimised
@@ -212,6 +213,23 @@ export function LiveSubtitleOverlay({
 
   if (!enabled) return null;
 
+  if (variant === "lane" && collapsed && onToggleCollapsed) {
+    return (
+      <div data-caption-lane data-collapsed="" className="flex h-full w-full items-center justify-end">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={false}
+          aria-label={t("expand")}
+          title={t("expand")}
+          className="mr-1.5 grid size-7 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <CaretUp className="size-4" weight="bold" />
+        </button>
+      </div>
+    );
+  }
+
   if (variant === "compact") {
     return (
       <div className="pointer-events-none flex h-full w-full items-end justify-center">
@@ -235,26 +253,21 @@ export function LiveSubtitleOverlay({
 
   return (
     // A fixed box that clips: nothing in the lane grows over the camera view. The history
-    // scrolls inside it; collapsed, it holds the one line being spoken.
+    // scrolls inside it.
     <div
       data-caption-lane
-      data-collapsed={collapsed ? "" : undefined}
       className="relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-2/60"
     >
       {onToggleCollapsed ? (
         <button
           type="button"
           onClick={onToggleCollapsed}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? t("expand") : t("collapse")}
-          title={collapsed ? t("expand") : t("collapse")}
+          aria-expanded
+          aria-label={t("collapse")}
+          title={t("collapse")}
           className="absolute right-1.5 top-1.5 z-20 grid size-7 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          {collapsed ? (
-            <CaretUp className="size-4" weight="bold" />
-          ) : (
-            <CaretDown className="size-4" weight="bold" />
-          )}
+          <CaretDown className="size-4" weight="bold" />
         </button>
       ) : null}
 
