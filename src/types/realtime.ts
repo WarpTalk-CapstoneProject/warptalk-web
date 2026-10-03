@@ -114,6 +114,18 @@ export interface TranscriptCleanSentenceEventDto {
   revision: number;
 }
 
+/**
+ * `TranscriptSegmentSpeakerNamed`, broadcast to translationRoom:{roomId}: the Meet person on a
+ * bridge line that went out as "Google Meet participants", found about a second later from the
+ * captions that followed it. `segmentId` is the original TranscriptSegmentReceived's segmentId.
+ * Sent at most once per segment, only above the gateway's display confidence; older backends never
+ * send it. Applied by `applyLateFarSpeakerName` (speaker-identity.ts).
+ */
+export interface TranscriptSegmentSpeakerNamedDto {
+  segmentId: string;
+  speakerName: string;
+}
+
 export interface TranslationTextDto {
   segmentId: string;
   speakerId: string;

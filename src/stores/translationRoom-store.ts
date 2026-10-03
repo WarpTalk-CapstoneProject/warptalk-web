@@ -3,6 +3,11 @@ import { create } from "zustand";
 // node test runner, which does not resolve the "@/" alias for a real (non-type) import.
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
+import {
+  applyLateFarSpeakerName,
+  revisedFarSideSpeakerName,
+  type FarSpeakerLateName,
+} from "../lib/transcript/speaker-identity.ts";
 import type {
   AiSuggestionDto,
   ChatMentionDto,
@@ -177,6 +182,8 @@ interface TranslationRoomStoreState {
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
+  /** TranscriptSegmentSpeakerNamed — see applyLateFarSpeakerName for the whole rule. */
+  nameTranscriptSegmentSpeaker: (late: FarSpeakerLateName) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   upsertCleanSentence: (sentence: TranscriptCleanSentenceEventDto) => void;
   setTranscriptPaused: (paused: boolean) => void;
@@ -355,6 +362,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         captionSegments,
         transcriptSegments: mergeTranscriptSegment(s.transcriptSegments, segment),
       };
+    }),
+
+  // The late far-speaker name renames a line in BOTH lanes, paused or not: it adds nothing to
+  // either, it only says who spoke a line the lane already holds — the caption runs group by the
+  // same speaker key the panel does. `{}` when neither lane holds a line to name, which is also
+  // every repeat of the event, so a redelivery re-renders nothing.
+  nameTranscriptSegmentSpeaker: (late) =>
+    set((s) => {
+      const captionSegments = applyLateFarSpeakerName(s.captionSegments, late);
+      const transcriptSegments = applyLateFarSpeakerName(s.transcriptSegments, late);
+      if (captionSegments === s.captionSegments && transcriptSegments === s.transcriptSegments) {
+        return {};
+      }
+      return { captionSegments, transcriptSegments };
     }),
 
   /**
@@ -748,6 +769,10 @@ function mergeTranscriptSegment(
         existing.segmentId === segment.segmentId
           ? {
               ...segment,
+              // A revision may not take a named Meet person back to "Google Meet participants" —
+              // a copy of the original broadcast would otherwise undo a late name. See
+              // revisedFarSideSpeakerName.
+              speakerName: revisedFarSideSpeakerName(existing, segment),
               // Translations already filed against this bubble survive a later STT revision
               // of the same segment. TranscriptSegmentReceived always carries them as null
               // (AiResultConsumerService builds it that way), so spreading `segment` over an

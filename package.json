@@ -223,7 +223,7 @@
     "test:usage-overview": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/usage-overview.test.ts",
     "test:page-ground": "node scripts/check-page-ground.mjs",
     "test:page-placeholders": "node scripts/check-page-placeholders-contract.mjs",
-    "test:transcript-speaker": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/speaker-color.test.ts src/lib/transcript/__tests__/speaker-identity.test.ts && node scripts/check-transcript-speaker-contract.mjs",
+    "test:transcript-speaker": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/speaker-color.test.ts src/lib/transcript/__tests__/speaker-identity.test.ts src/lib/transcript/__tests__/far-speaker-late-name.test.ts && node scripts/check-transcript-speaker-contract.mjs",
     "test:avatar-everywhere": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/auth/__tests__/avatar-url.test.ts && node scripts/check-avatar-everywhere-contract.mjs",
     "test:mic-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/mic-check.test.ts",
     "test:assistant-step-detail": "node scripts/check-assistant-step-detail-contract.mjs",

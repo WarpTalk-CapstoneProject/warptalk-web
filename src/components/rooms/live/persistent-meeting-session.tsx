@@ -129,6 +129,7 @@ import type {
   ParticipantInfoDto,
   TranscriptCleanSentenceEventDto,
   TranscriptSegmentDto,
+  TranscriptSegmentSpeakerNamedDto,
   TranslationRoomStateDto,
   TranslationTextDto,
   VoiceOptionDto,
@@ -3957,6 +3958,18 @@ export function PersistentMeetingSession({
             participantsRef.current,
           ),
         });
+      },
+    );
+    // The late far-speaker name: a Meet-side line that went out as "Google Meet participants"
+    // because Meet's captions named the speaker a second after their words, named in place once
+    // the ai worker has seen them. Not behind the transcript gate: it adds nothing, it only names
+    // a line one of the lanes already holds, and an id neither holds is ignored (the store's rule,
+    // applyLateFarSpeakerName). An older backend never sends it; the line then keeps the fallback,
+    // as it always did.
+    connection.on(
+      "TranscriptSegmentSpeakerNamed",
+      (late: TranscriptSegmentSpeakerNamedDto) => {
+        useTranslationRoomStore.getState().nameTranscriptSegmentSpeaker(late);
       },
     );
     // WT-716 tier 2. `cleanText`/`cleanFlags` on TranscriptSegmentReceived above need no handling

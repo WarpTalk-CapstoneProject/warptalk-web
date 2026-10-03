@@ -134,3 +134,93 @@ export function localizeFarSideSpeakerName(
   if (!isBridgeStandInSpeaker(speakerId)) return speakerName;
   return bridgeFarSideSpeakerName(speakerName) ?? farSideFallback;
 }
+
+/**
+ * The late far-speaker name: `TranscriptSegmentSpeakerNamed { segmentId, speakerName }`.
+ *
+ * WHY A LINE IS NAMED AFTER IT IS SHOWN
+ *   Meet's captions name a new speaker about a second AFTER their first words. So the first line
+ *   after a speaker change is finalized with nobody to put on it and goes out as "Google Meet
+ *   participants" — and that line is exactly the one a reader needs named, because it is where the
+ *   conversation changed hands. The PO's call: show the line at once, unchanged, and rename it in
+ *   place when the ai worker has seen the hints that came after it. The backend sends the answer as
+ *   its own hub event (and updates the saved row the same way), so nothing is held back waiting.
+ *
+ * THE RULE, ALL OF IT HERE SO EVERY HOLDER OF LIVE LINES APPLIES THE SAME ONE
+ *   - Only the line with that segment id. Unknown id → the SAME array back, so a store or a
+ *     setState given it re-renders nothing (the event can outrun the line, or name a line from
+ *     before this client connected — there is nothing to create, and creating would put a sentence
+ *     in the panel that never arrived).
+ *   - Only a stand-in line, and only while it names nobody (`bridgeFarSideSpeakerName` is null:
+ *     the wire fallback, the seat's name, a GUID, empty). A real name is never overwritten — the
+ *     one the gateway put there on arrival was read with the hints in hand and is the better
+ *     answer; the late one is a second look at a line that had none.
+ *   - A late name that is itself "nobody" is not a name, and changes nothing.
+ *   - Idempotent: once named, the line is no longer "nobody", so a redelivered event is a no-op
+ *     (same reference again).
+ *
+ *   Everything else about the line stays — text, translations, clock. Grouping needs nothing of
+ *   its own: `transcriptSpeakerKey` reads the name, so the next render puts the renamed line in
+ *   its person's run (joining the turn it now belongs to, leaving the unnamed one), and keys stay
+ *   the segment ids they were, so nothing is drawn twice.
+ */
+export type FarSpeakerLateName = {
+  segmentId: string;
+  speakerName: string | null | undefined;
+};
+
+export function applyLateFarSpeakerName<
+  T extends { segmentId: string; speakerId?: string | null; speakerName?: string | null },
+>(lines: T[], late: FarSpeakerLateName | null | undefined): T[] {
+  const segmentId = (late?.segmentId ?? "").trim().toLowerCase();
+  if (!segmentId || !bridgeFarSideSpeakerName(late?.speakerName)) return lines;
+
+  // Lower-cased on both sides: a GUID from .NET and the same GUID from Python are one id, and the
+  // case one of them happens to print in is not a reason to miss the line.
+  const index = lines.findIndex((line) => line.segmentId.trim().toLowerCase() === segmentId);
+  if (index === -1) return lines;
+
+  const name = lateFarSpeakerNameFor(lines[index], late?.speakerName);
+  if (!name) return lines;
+
+  const next = [...lines];
+  next[index] = { ...lines[index], speakerName: name };
+  return next;
+}
+
+/**
+ * The per-line half of `applyLateFarSpeakerName`, for a caller that already found the line by id
+ * (the catch-up merge walks every live line once against a map, rather than searching the list
+ * once per saved row). The name to put on `line`, or null when the rule says leave it alone.
+ */
+export function lateFarSpeakerNameFor(
+  line: { speakerId?: string | null; speakerName?: string | null },
+  lateName: string | null | undefined,
+): string | null {
+  const name = bridgeFarSideSpeakerName(lateName);
+  if (!name) return null;
+  if (!isBridgeStandInSpeaker(line.speakerId)) return null;
+  if (bridgeFarSideSpeakerName(line.speakerName) !== null) return null;
+  return name;
+}
+
+/**
+ * The name a REVISION of a live line should carry: the incoming one, unless that would take a Meet
+ * person back to "nobody".
+ *
+ * A segment can arrive again (a corrected transcription, a redelivery after a reconnect), and the
+ * live merge spreads the new copy over the old. Once a line has been named — by the gateway or by
+ * the late name above — a copy of the original broadcast still says "Google Meet participants",
+ * and spreading it would quietly undo the rename. A revision that carries a real name of its own
+ * still wins: that is the newer answer.
+ */
+export function revisedFarSideSpeakerName(
+  existing: { speakerId?: string | null; speakerName?: string | null },
+  incoming: { speakerId?: string | null; speakerName: string },
+): string {
+  if (!isBridgeStandInSpeaker(incoming.speakerId) || !isBridgeStandInSpeaker(existing.speakerId)) {
+    return incoming.speakerName;
+  }
+  if (bridgeFarSideSpeakerName(incoming.speakerName) !== null) return incoming.speakerName;
+  return bridgeFarSideSpeakerName(existing.speakerName) ?? incoming.speakerName;
+}
