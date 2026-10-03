@@ -22,6 +22,14 @@
       "withdrawFailed": "Could not withdraw your consent. Try again.",
       "granted": "Meetings may now clone your voice.",
       "grantFailed": "Could not record your consent. Try again."
+    },
+    "prompt": {
+      "title": "Dub you in your own voice?",
+      "body": "Listeners are hearing your translated speech in a library voice right now.",
+      "allow": "Use my voice",
+      "later": "Not now",
+      "enabled": "Your voice will be used from your next sentences.",
+      "failed": "Could not turn on your voice. You can still do it in Voice settings."
     }
   },
   "dubPicker": {

@@ -110,7 +110,18 @@ import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
-import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import {
+  useDubVoice,
+  useGrantVoiceConsent,
+  useSetDubVoice,
+  useVoiceConsent,
+  useVoiceProfiles,
+} from "@/hooks/use-voice-profiles";
+import {
+  shouldPromptVoiceClone,
+  voiceClonePromptDismissKey,
+} from "@/lib/meeting/voice-clone-prompt";
+import { VoiceCloneConsentPrompt } from "@/components/rooms/live/voice-clone-consent-prompt";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
@@ -2873,6 +2884,54 @@ export function PersistentMeetingSession({
     );
   }
 
+  // Asked in the meeting, at the moment it matters: the pipeline has just said this speaker is
+  // being dubbed in a library voice (`not_opted_in`). See lib/meeting/voice-clone-prompt.ts.
+  const voiceConsentT = useTranslations("voiceProfiles.consent");
+  const { data: voiceConsent } = useVoiceConsent();
+  const grantVoiceConsent = useGrantVoiceConsent();
+  const [voiceClonePromptDismissed, setVoiceClonePromptDismissed] = useState<boolean>(() => {
+    try {
+      return window.sessionStorage.getItem(voiceClonePromptDismissKey(roomId)) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [voiceClonePromptPending, setVoiceClonePromptPending] = useState(false);
+  const showVoiceClonePrompt = shouldPromptVoiceClone({
+    cloneReason: cloneCaptureState?.reason,
+    dubVoiceId: dubVoice,
+    dismissed: voiceClonePromptDismissed,
+  });
+
+  function dismissVoiceClonePrompt() {
+    setVoiceClonePromptDismissed(true);
+    try {
+      window.sessionStorage.setItem(voiceClonePromptDismissKey(roomId), "1");
+    } catch {
+      // Non-critical: the worst case is being asked once more after a reload.
+    }
+  }
+
+  async function handleAllowVoiceCloneFromPrompt() {
+    setVoiceClonePromptPending(true);
+    try {
+      // Both gates, in order. The room switch is refused (403) without the account consent, and
+      // the account consent alone does not reach routes this meeting already built.
+      if (!voiceConsent?.isGranted) {
+        await grantVoiceConsent.mutateAsync();
+      }
+      await setVoiceCloneConsent.mutateAsync(true);
+      setVoiceCloneEnabled(true);
+      // Hidden for the rest of the meeting even before the pipeline's next state arrives.
+      setVoiceClonePromptDismissed(true);
+      toast.success(voiceConsentT("prompt.enabled"));
+    } catch {
+      toast.error(voiceConsentT("prompt.failed"));
+    } finally {
+      setVoiceClonePromptPending(false);
+    }
+  }
+
   function handleChangeVoiceCloneConsent(enabled: boolean) {
     const previous = voiceCloneEnabled;
     setVoiceCloneEnabled(enabled); // optimistic
@@ -5308,6 +5367,14 @@ export function PersistentMeetingSession({
                   }}
                 />
               </div>
+            ) : null}
+
+            {showVoiceClonePrompt ? (
+              <VoiceCloneConsentPrompt
+                pending={voiceClonePromptPending}
+                onAllow={() => void handleAllowVoiceCloneFromPrompt()}
+                onDismiss={dismissVoiceClonePrompt}
+              />
             ) : null}
 
             <div
