@@ -6,8 +6,8 @@
     "addOthers": "Add others"
   },
   "captions": {
-    "collapse": "Collapse captions",
-    "expand": "Expand captions",
+    "collapse": "Hide captions",
+    "expand": "Show captions",
     "latest": "Latest",
     "liveRegionAria": "Live captions",
     "emptyState": "Captions will appear here as people speak."

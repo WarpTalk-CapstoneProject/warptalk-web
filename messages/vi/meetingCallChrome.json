@@ -6,8 +6,8 @@
     "addOthers": "Mời thêm người"
   },
   "captions": {
-    "collapse": "Thu gọn phụ đề",
-    "expand": "Mở rộng phụ đề",
+    "collapse": "Ẩn phụ đề",
+    "expand": "Hiện phụ đề",
     "latest": "Mới nhất",
     "liveRegionAria": "Phụ đề trực tiếp",
     "emptyState": "Phụ đề sẽ hiện ở đây khi có người nói."

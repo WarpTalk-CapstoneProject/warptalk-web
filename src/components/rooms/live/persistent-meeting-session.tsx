@@ -870,8 +870,8 @@ export function PersistentMeetingSession({
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
-  // The caption lane's caret: collapsed holds the one line being spoken and gives the rest of the
-  // lane's height back to the camera view; open, the lane scrolls back through earlier captions.
+  // The caption lane's caret: hidden gives the lane's whole height back to the camera view and
+  // leaves only an up caret; open, the lane scrolls back through earlier captions.
   const [captionLaneCollapsed, setCaptionLaneCollapsed] = useState(false);
   // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
@@ -5632,9 +5632,9 @@ export function PersistentMeetingSession({
               <div
                 data-meeting-subtitle-lane
                 // A fixed box that clips its own content: the history scrolls INSIDE it and never
-                // grows over the camera view (WT-873). Collapsed, it shrinks to one line.
+                // grows over the camera view (WT-873). Hidden, only the up caret's row is left.
                 data-collapsed={captionLaneCollapsed ? "" : undefined}
-                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden transition-[height] duration-200 data-[collapsed]:h-10"
+                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden transition-[height] duration-200 data-[collapsed]:h-8"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
