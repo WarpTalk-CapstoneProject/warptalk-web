@@ -121,19 +121,18 @@ export function planVoicePanel({
   }
 
   // Meeting. Two questions, both answered here: how YOU sound (Your voice, always shown) and
-  // whether YOU hear other people's cloned voices (the switch). Owner, 4 Oct 2026: a clone must
-  // only reach a listener who switched it on — see room-audio-routing. The switch sits at the top
-  // with the other switches, and no longer hides Your voice when it is off. There is still no
-  // stand-in list: a speaker with no voice of their own is heard as they sound.
+  // whether YOU hear people translated (the switch) — in their clone where they chose one, in a
+  // stand-in voice otherwise. See room-audio-routing. The switch sits at the top with the other
+  // switches, and no longer hides Your voice when it is off. There is no stand-in picker.
   const hearing = voiceEnabled !== false;
   return {
     voiceSwitch: canToggleVoice
       ? {
-          label: "Hear cloned voices",
+          label: "Hear translated voice",
           detail: hearing
-            ? "On — people who cloned their voice are heard in it."
+            ? "On — in their cloned voice where they turned it on."
             : "Off — you hear everyone's original voice.",
-          ariaLabel: "Hear cloned voices",
+          ariaLabel: "Hear translated voice",
         }
       : null,
     yourVoice: hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
@@ -142,7 +141,7 @@ export function planVoicePanel({
     summaryReadsVoiceEnabled: false,
     automaticOption: {
       label: "Off",
-      detail: "Others hear your original voice",
+      detail: "Listeners hear a stand-in voice",
     },
   };
 }

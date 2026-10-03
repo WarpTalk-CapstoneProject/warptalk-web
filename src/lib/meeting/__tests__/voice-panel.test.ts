@@ -23,7 +23,7 @@ function plan(overrides: Partial<VoicePanelInput>) {
 test("meeting, voice on: the listener switch, then Your voice, and no stand-in list", () => {
   const result = plan({ voiceEnabled: true });
 
-  assert.equal(result.voiceSwitch?.label, "Hear cloned voices");
+  assert.equal(result.voiceSwitch?.label, "Hear translated voice");
   assert.match(result.voiceSwitch?.detail ?? "", /^On/);
   assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
   assert.equal(result.listenVoice, null);
@@ -37,8 +37,8 @@ test("meeting, voice off: Your voice is still offered, and the switch says what 
   assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
 });
 
-test("meeting: choosing no voice of your own means you are heard as you sound", () => {
-  assert.deepEqual(plan({}).automaticOption, { label: "Off", detail: "Others hear your original voice" });
+test("meeting: choosing no voice of your own means listeners get a stand-in voice", () => {
+  assert.deepEqual(plan({}).automaticOption, { label: "Off", detail: "Listeners hear a stand-in voice" });
 });
 
 test("meeting: no handler, no control", () => {

@@ -126,11 +126,10 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
 
   return {
     kind: "automatic",
-    // "Off", not "Automatic": in a meeting room a speaker with no voice of their own is heard as
-    // they actually sound, and nobody plays a stand-in voice for them any more (see
-    // room-audio-routing — the speaker decides).
+    // "Off": you are not cloned. Listeners who hear translated voice get you in a stand-in voice,
+    // assigned rather than matched to how you sound — see room-audio-routing.
     label: "Off",
-    detail: `Others hear your original voice.${audienceNote}`,
+    detail: `Listeners hear a stand-in voice, assigned rather than matched to how you sound.${audienceNote}`,
     inert,
   };
 }

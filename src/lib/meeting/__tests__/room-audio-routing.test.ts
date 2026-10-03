@@ -452,7 +452,7 @@ describe("WT-874: a speaker already dubbed stays dubbed across an idle bot", () 
 // Reported: Kỳ and Tuấn in one meeting. Kỳ turned voice clone on, and Tuấn heard Kỳ's clone only
 // once Tuấn turned HIS switch on too. Every one of Kỳ's dubs was synthesised as "cloned" — the
 // listener's switch decided playback. The speaker decides now.
-describe("the speaker decides whether they are heard in their own voice", () => {
+describe("the listener decides whether they hear translated voice; the speaker decides whose voice", () => {
   const KY = ALICE; // speaks English, voice clone on
   const TUAN = BOB; // speaks Japanese, voice clone off
   const JA = "ja";
@@ -476,23 +476,24 @@ describe("the speaker decides whether they are heard in their own voice", () => 
     const routing = routeRoomAudio(room());
     assert.ok(routing.wanted.has(dub(VI, KY)));
     assert.ok(routing.wanted.has(KY));
-    assert.deepEqual([...routing.duckedSpeakerIds], [KY]);
+    assert.ok(routing.duckedSpeakerIds.has(KY));
     assert.ok(ORIGINAL_UNDER_DUB_VOLUME > 0 && ORIGINAL_UNDER_DUB_VOLUME < 1);
   });
 
-  it("plays a speaker without a voice of their own as they sound, at full volume", () => {
+  // Owner, 4 Oct 2026: a speaker who did not consent is never cloned, but a listener who wants
+  // translated voice still gets them — in a stand-in voice.
+  it("dubs a speaker without a voice of their own in a stand-in voice, original ducked", () => {
     const routing = routeRoomAudio(room());
-    assert.ok(!routing.wanted.has(dub(VI, TUAN)));
+    assert.ok(routing.wanted.has(dub(VI, TUAN)));
     assert.ok(routing.wanted.has(TUAN));
-    assert.ok(!routing.duckedSpeakerIds.has(TUAN));
+    assert.ok(routing.duckedSpeakerIds.has(TUAN));
   });
 
-  // Owner, 4 Oct 2026: a clone reaching a listener who never asked for it was a hole. The
-  // listener's own switch has to be on.
-  it("plays a cloned voice only to a listener who switched it on", () => {
+  // The listener decides: on hears everyone translated, off hears everyone as they sound.
+  it("plays dubs only to a listener who switched translated voice on", () => {
     const on = routeRoomAudio(room({ voiceEnabled: true }));
-    assert.deepEqual([...on.wanted].sort(), [KY, TUAN, dub(VI, KY)].sort());
-    assert.deepEqual([...on.duckedSpeakerIds], [KY]);
+    assert.deepEqual([...on.wanted].sort(), [KY, TUAN, dub(VI, KY), dub(VI, TUAN)].sort());
+    assert.deepEqual([...on.duckedSpeakerIds].sort(), [KY, TUAN].sort());
 
     const off = routeRoomAudio(room({ voiceEnabled: false }));
     assert.deepEqual([...off.wanted].sort(), [KY, TUAN].sort());
@@ -507,11 +508,11 @@ describe("the speaker decides whether they are heard in their own voice", () => 
     assert.ok(routing.duckedSpeakerIds.has(KY));
   });
 
-  it("follows the speaker when their stock voice becomes their clone", () => {
+  it("keeps dubbing a speaker whose stock voice becomes their clone", () => {
     const before = routeRoomAudio(
       room({ dubVoiceKindByIdentity: { [dub(VI, KY)]: "default", [dub(VI, TUAN)]: "default" } }),
     );
-    assert.ok(!before.wanted.has(dub(VI, KY)));
+    assert.ok(before.wanted.has(dub(VI, KY)));
     assert.ok(routeRoomAudio(room()).wanted.has(dub(VI, KY)));
   });
 
