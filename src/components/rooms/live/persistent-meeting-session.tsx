@@ -200,6 +200,8 @@ import {
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
   showDesktopMainWindow,
+  type MeetCallState,
+  type MeetWindowGeometry,
   type VirtualAudioStatus,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
@@ -228,6 +230,7 @@ import {
   MEET_TAB_RETURN_HOLD_MS,
   mayCaptureMeetWindowAtStart,
   meetWindowOnTab,
+  meetWindowNeedsRearm,
   meetWindowTabReading,
   nextBridgeRecordChoice,
   shouldKeepBridgeRecordingRetry,
@@ -247,6 +250,11 @@ import {
   MEET_WINDOW_PUBLISH_OPTIONS,
   steadyFrameTrack,
 } from "@/lib/meeting/meet-window-track";
+import {
+  describeMeetWindowCrop,
+  meetWindowVisibleRect,
+  nextMeetWindowCropGeometry,
+} from "@/lib/meeting/meet-window-crop";
 import {
   canCaptureBrowserLoopback,
   describeLoopbackFailure,
@@ -3588,12 +3596,29 @@ export function PersistentMeetingSession({
     starting: bridgeRecordingStarting,
     meetOnTab,
   });
-  useSupervisedPublish({
+  const kickMeetWindowSupervisor = useSupervisedPublish({
     enabled: meetWindowSupervised,
     kick: meetWindowRepublish,
     publish: () => meetWindowControlRef.current?.publishMeetWindow(roomId) ?? null,
     label: "Meet window",
   });
+  // The Meet tab was dragged into another browser window: the desktop names a new window for the
+  // call. The publisher drops the capture of the old one as soon as it sees that (it would record
+  // whatever tab is left there); this kicks the supervisor - still the only re-publisher - into an
+  // immediate attempt rather than its next check. publishMeetWindow re-arms only when the windows
+  // really differ (meetWindowNeedsRearm); a kick during an attempt in flight runs one more after it.
+  const meetCallWindowHandle = meetFollow.call?.windowHandle ?? null;
+  const lastMeetCallWindowHandleRef = useRef<number | null>(null);
+  useEffect(() => {
+    // Readings without a window (PiP, no surface) neither trigger nor forget: tab -> PiP -> the same
+    // tab is no change, tab -> PiP -> a tab in another window is one.
+    if (meetCallWindowHandle === null) return;
+    const previous = lastMeetCallWindowHandleRef.current;
+    lastMeetCallWindowHandleRef.current = meetCallWindowHandle;
+    // Only a CHANGE of window: the first sighting and the supervisor's own start need nothing here.
+    if (!meetWindowSupervised || previous === null || previous === meetCallWindowHandle) return;
+    kickMeetWindowSupervisor();
+  }, [kickMeetWindowSupervisor, meetCallWindowHandle, meetWindowSupervised]);
 
   // The popup's REC chip, and its Stop. Every bridge participant's main window publishes the state
   // (a member is being recorded too and has to see it); only host and capturer are offered Stop,
@@ -5090,7 +5115,12 @@ export function PersistentMeetingSession({
 
         {/* WT-910: the Google Meet window, published for a bridge recording. Bridge rooms only. */}
         {isBridgeRoom ? (
-          <BridgeMeetWindowPublisher controlRef={meetWindowControlRef} wanted={meetWindowWanted} />
+          <BridgeMeetWindowPublisher
+            controlRef={meetWindowControlRef}
+            wanted={meetWindowWanted}
+            meetCall={meetFollow.call}
+            roomMeetCode={roomMeetCode}
+          />
         ) : null}
         {/* The Google Meet call's sound, published for a bridge recording. Bridge rooms only. */}
         {isBridgeRoom ? (
@@ -5905,6 +5935,14 @@ function LocalMediaController({
  *   `wanted` going false (the recording stopped, the inbound leg closed for good, the meeting
  *   ended), the track ending (the Meet window was closed), the room disconnecting, and unmount. The
  *   recording itself is not touched by any of them: it carries on audio-only.
+ *   Also the Meet tab moving to ANOTHER browser window (the desktop's call state names a window
+ *   other than the one armed): the old capture comes down at once and the session kicks its publish
+ *   supervisor, which re-arms on the new window.
+ *
+ * CROPPED TO THE PAGE
+ *   The frames are cropped to the page's content area — no tab strip, address bar or bookmarks bar —
+ *   from the layout the desktop sends with the call state (lib/meeting/meet-window-crop). No layout,
+ *   or one that does not fit the frames, sends the window whole, as before.
  *
  * Same reason LocalMediaController exists: PersistentMeetingSession RENDERS <LiveKitRoom>, so it
  * cannot call useRoomContext() itself.
@@ -5912,13 +5950,26 @@ function LocalMediaController({
 function BridgeMeetWindowPublisher({
   controlRef,
   wanted,
+  meetCall,
+  roomMeetCode,
 }: {
   controlRef: React.RefObject<MeetWindowControl | null>;
   wanted: boolean;
+  /** The desktop's last call state for this room (window, layout); null without the sensor. */
+  meetCall: MeetCallState | null;
+  roomMeetCode: string | null | undefined;
 }) {
   const room = useRoomContext();
-  const currentRef = useRef<{ track: MediaStreamTrack; drop: () => void } | null>(null);
+  /** `windowHandle`: the HWND the desktop armed this capture on; null from an older desktop. */
+  const currentRef = useRef<{ track: MediaStreamTrack; drop: () => void; windowHandle: number | null } | null>(null);
   const wantedRef = useRef(wanted);
+  const meetCallRef = useRef(meetCall);
+  const roomMeetCodeRef = useRef(roomMeetCode);
+  /**
+   * The layout the open capture is cropped with (meet-window-crop.ts): one holder per capture, so a
+   * new window never starts from the old window's layout, and kept across readings that carry none.
+   */
+  const cropRef = useRef<{ windowHandle: number | null; geometry: MeetWindowGeometry | null } | null>(null);
 
   useEffect(() => {
     wantedRef.current = wanted;
@@ -5926,16 +5977,48 @@ function BridgeMeetWindowPublisher({
   }, [wanted]);
 
   useEffect(() => {
+    meetCallRef.current = meetCall;
+    roomMeetCodeRef.current = roomMeetCode;
+    const crop = cropRef.current;
+    if (crop) crop.geometry = nextMeetWindowCropGeometry(crop.geometry, meetCall, crop.windowHandle);
+    // The Meet tab now lives in another browser window. The capture still shows the old window,
+    // which shows some other tab now: off the recording at once. The session arms the new window.
+    const current = currentRef.current;
+    if (current && meetWindowNeedsRearm({ capturedWindowHandle: current.windowHandle, call: meetCall, roomMeetCode })) {
+      console.info(
+        `[bridge] The Meet tab moved to another window (${current.windowHandle} -> ${meetCall?.windowHandle}); capturing it again.`,
+      );
+      current.drop();
+    }
+  }, [meetCall, roomMeetCode]);
+
+  useEffect(() => {
     const localParticipant = room.localParticipant;
     /** The attempt in flight, shared by every caller (start chain, supervisor): single flight. */
     let publishing: Promise<string> | null = null;
+    const movedFrom = (windowHandle: number | null) =>
+      meetWindowNeedsRearm({
+        capturedWindowHandle: windowHandle,
+        call: meetCallRef.current,
+        roomMeetCode: roomMeetCodeRef.current,
+      });
 
     const publishOnce = async (roomId: string): Promise<string> => {
-      if (currentRef.current) return "published";
+      const existing = currentRef.current;
+      if (existing) {
+        if (!movedFrom(existing.windowHandle)) return "published";
+        // The Meet tab is in another window now: re-arm on it (meetWindowNeedsRearm).
+        existing.drop();
+      }
       if (room.state !== ConnectionState.Connected) return "the meeting is not connected";
       const armed = await armMeetWindowCapture(roomId);
       if (!armed) return describeMeetWindowCaptureFailure("no-desktop-method");
       if (!armed.ok) return describeMeetWindowCaptureFailure(armed);
+      // The HWND the desktop armed; null from an older desktop (no re-arm, no per-window layout).
+      const windowHandle =
+        typeof armed.windowHandle === "number" && Number.isSafeInteger(armed.windowHandle) && armed.windowHandle > 0
+          ? armed.windowHandle
+          : null;
 
       let track: MediaStreamTrack | undefined;
       try {
@@ -5949,11 +6032,37 @@ function BridgeMeetWindowPublisher({
       }
       if (!track) return describeMeetWindowCaptureFailure("capture-failed");
       const source = track;
+      // The arm was spent on a window the Meet tab has already left (it moved while this was being
+      // opened): never published. A kick that came in meanwhile makes the supervisor try again
+      // right after this attempt; otherwise its back-off does.
+      if (movedFrom(windowHandle)) {
+        source.stop();
+        return "the Meet tab moved to another window while it was being captured";
+      }
       // A meeting UI: text and faces, kept sharp rather than smooth.
       source.contentHint = "detail";
+      // Cropped to the page: no tab strip, address bar or bookmarks bar (meet-window-crop.ts). The
+      // layout follows the call state live; until the desktop has sent one (or from an older
+      // desktop, or when the bounds do not fit the frames) the frame goes out whole, as before.
+      const crop = {
+        windowHandle,
+        geometry: nextMeetWindowCropGeometry(null, meetCallRef.current, windowHandle),
+      };
+      cropRef.current = crop;
+      let lastCrop: string | null = null;
+      const visibleRect = (frame: { x: number; y: number; width: number; height: number }) => {
+        const rect = meetWindowVisibleRect(crop.geometry, frame);
+        const described = describeMeetWindowCrop(rect, frame);
+        if (described !== lastCrop) {
+          // Once per change, not per frame: where the egress logs can tell a crop from none.
+          console.info(`[bridge] Meet window crop: ${described}.`);
+          lastCrop = described;
+        }
+        return rect;
+      };
       // Never a quiet track: a static Meet window would otherwise send the recorder nothing to
       // decode, and the whole recording came out black. See meet-window-track.ts.
-      const steady = await steadyFrameTrack(source);
+      const steady = await steadyFrameTrack(source, { visibleRect });
       const captured = steady.track;
 
       try {
@@ -5964,16 +6073,18 @@ function BridgeMeetWindowPublisher({
         });
       } catch {
         steady.stop();
+        if (cropRef.current === crop) cropRef.current = null;
         return describeMeetWindowCaptureFailure("publish-failed");
       }
 
       const drop = () => {
         if (currentRef.current?.track !== captured) return;
         currentRef.current = null;
+        if (cropRef.current === crop) cropRef.current = null;
         source.removeEventListener("ended", drop);
         void localParticipant.unpublishTrack(captured, false).catch(() => {}).finally(() => steady.stop());
       };
-      currentRef.current = { track: captured, drop };
+      currentRef.current = { track: captured, drop, windowHandle };
       // The Meet window was closed, or the desktop ended the capture. Heard on the SOURCE: the
       // wrapper published in its place never fires `ended` on its own.
       source.addEventListener("ended", drop);
@@ -5984,6 +6095,12 @@ function BridgeMeetWindowPublisher({
       if (!wantedRef.current) {
         drop();
         return "the recording no longer needs it";
+      }
+      // The tab moved while the track was being published: the kick for the new window found
+      // this attempt in flight, so the supervisor runs one more check right after it.
+      if (movedFrom(windowHandle)) {
+        drop();
+        return "the Meet tab moved to another window while it was being published";
       }
       return "published";
     };

@@ -373,6 +373,37 @@ export function shouldSuperviseMeetWindow(input: {
   return input.recording && !input.starting && shouldPublishMeetWindow(input);
 }
 
+/**
+ * The Meet tab now lives in ANOTHER browser window than the one being recorded: arm a new capture.
+ *
+ * WHY (production, 03 Oct)
+ *   A Meet tab dragged out into its own Chrome window moves the call to a new HWND. The granted
+ *   capture is of the old window, which keeps recording whatever tab is left in it. The desktop now
+ *   says which window each reading came from (`MeetCallState.windowHandle`) and which window an arm
+ *   handed out (`windowHandle` on the arm result); when they differ the old capture is dropped at
+ *   once and a new one is armed through the usual publish path.
+ *
+ * Only on a reading that places the call on its tab — `in-call`, or `unknown` with `via: "tab"`
+ * (meetWindowTabReading's "on-tab") — about this room's call. Either handle unknown (an older
+ * desktop) is false: the recording behaves exactly as before.
+ */
+export function meetWindowNeedsRearm(input: {
+  /** The HWND the current capture was armed on; null/undefined when unknown or nothing is captured. */
+  capturedWindowHandle: number | null | undefined;
+  call: Pick<MeetCallState, "phase" | "via" | "meetCode" | "windowHandle"> | null | undefined;
+  roomMeetCode: string | null | undefined;
+}): boolean {
+  const captured = input.capturedWindowHandle;
+  if (typeof captured !== "number" || !Number.isSafeInteger(captured) || captured <= 0) return false;
+  const call = input.call;
+  if (!call || call.via !== "tab") return false;
+  if (call.phase !== "in-call" && call.phase !== "unknown") return false;
+  if (!trustsMeetReading(call.meetCode, input.roomMeetCode)) return false;
+  const current = call.windowHandle;
+  if (typeof current !== "number" || !Number.isSafeInteger(current) || current <= 0) return false;
+  return current !== captured;
+}
+
 /** How often a supervised Meet window that is up is checked again. Free: no IPC, no capture. */
 export const MEET_WINDOW_SUPERVISE_INTERVAL_MS = 3_000;
 

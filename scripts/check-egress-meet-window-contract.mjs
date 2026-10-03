@@ -37,9 +37,30 @@ const template = read(TEMPLATE);
 
 expect(
   publisher,
-  /const steady = await steadyFrameTrack\(source\);/,
+  /const steady = await steadyFrameTrack\(source, \{ visibleRect \}\);/,
   PUBLISHER,
-  "the Meet window must be wrapped in steadyFrameTrack before it is published",
+  "the Meet window must be wrapped in steadyFrameTrack, with its crop, before it is published",
+);
+// Production bridge recording, 03 Oct: the whole Chrome window was recorded — other tabs' titles,
+// the address bar, the bookmarks bar. The frames are cropped to the page's content area.
+expect(
+  publisher,
+  /const rect = meetWindowVisibleRect\(crop\.geometry, frame\);/,
+  PUBLISHER,
+  "the Meet window must be cropped to the page (meetWindowVisibleRect) from the desktop's layout",
+);
+expect(
+  publisher,
+  /crop\.geometry = nextMeetWindowCropGeometry\(crop\.geometry, meetCall, crop\.windowHandle\)/,
+  PUBLISHER,
+  "the crop must follow the desktop's layout live (bookmarks bar toggled, window resized)",
+);
+// Production, 03 Oct: a Meet tab dragged into a new Chrome window kept being recorded from the old one.
+expect(
+  publisher,
+  /meetWindowNeedsRearm\(\{ capturedWindowHandle: current\.windowHandle, call: meetCall, roomMeetCode \}\)[\s\S]{0,240}current\.drop\(\);/,
+  PUBLISHER,
+  "a capture of a window the Meet tab has left must come down as soon as the call state says so",
 );
 expect(
   publisher,
@@ -77,6 +98,20 @@ expect(
 if (/void meetWindowControlRef\.current\?\.publishMeetWindow\(roomId\)\.then/.test(publisher)) {
   failures.push(`${PUBLISHER}: a second re-publish effect races the supervisor on publishMeetWindow`);
 }
+// The Meet tab moving to another window re-arms through the same supervisor (a kick), not a
+// parallel publishMeetWindow call of its own.
+expect(
+  publisher,
+  /const kickMeetWindowSupervisor = useSupervisedPublish\(\{\s*enabled: meetWindowSupervised,/,
+  PUBLISHER,
+  "the session must keep the Meet window supervisor's kick for the Meet tab moving to another window",
+);
+expect(
+  publisher,
+  /previous === meetCallWindowHandle\) return;\s*kickMeetWindowSupervisor\(\);/,
+  PUBLISHER,
+  "a Meet tab moved to another window must kick the supervisor (the single re-publisher) into a re-arm",
+);
 
 expect(
   template,

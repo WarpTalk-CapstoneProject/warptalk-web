@@ -14,6 +14,7 @@ import {
   supervisedPublishSucceeded,
   describeMeetWindowCaptureFailure,
   mayCaptureMeetWindowAtStart,
+  meetWindowNeedsRearm,
   meetWindowOnTab,
   meetWindowRecoveryDelayMs,
   meetWindowTabReading,
@@ -172,4 +173,45 @@ test("supervise: the steady interval while up, the shared back-off after failure
     [1, 2, 3, 4, 9].map(nextSupervisedPublishDelayMs),
     [2_000, 4_000, 8_000, 15_000, 15_000],
   );
+});
+
+// ── production, 03 Oct: a Meet tab dragged into a new window kept being recorded from the old one ──
+
+test("re-arm: the Meet tab is on its tab in ANOTHER window than the one captured", () => {
+  const rearm = (capturedWindowHandle: number | null | undefined, c: Record<string, unknown> | null, roomMeetCode = "abc-defg-hij") =>
+    meetWindowNeedsRearm({
+      capturedWindowHandle,
+      call: c as Parameters<typeof meetWindowNeedsRearm>[0]["call"],
+      roomMeetCode,
+    });
+  const moved = { ...call("in-call", "tab"), windowHandle: 5555 };
+  assert.equal(rearm(2222, moved), true);
+  // Unreadable buttons on the tab still name the tab's window (meetWindowTabReading's on-tab).
+  assert.equal(rearm(2222, { ...call("unknown", "tab"), windowHandle: 5555 }), true);
+  // The same window: nothing to do.
+  assert.equal(rearm(5555, moved), false);
+});
+
+test("re-arm: never off the tab, never for another call, never on a guess", () => {
+  const rearm = (capturedWindowHandle: number | null | undefined, c: Record<string, unknown> | null, roomMeetCode = "abc-defg-hij") =>
+    meetWindowNeedsRearm({
+      capturedWindowHandle,
+      call: c as Parameters<typeof meetWindowNeedsRearm>[0]["call"],
+      roomMeetCode,
+    });
+  // The PiP window has its own HWND and is never recorded (B18): no re-arm onto it.
+  assert.equal(rearm(2222, { ...call("in-call", "pip"), windowHandle: 3333 }), false);
+  assert.equal(rearm(2222, { ...call("lobby", "tab"), windowHandle: 5555 }), false);
+  assert.equal(rearm(2222, { ...call("left", "tab"), windowHandle: 5555 }), false);
+  assert.equal(rearm(2222, { ...call("unknown", null), windowHandle: 5555 }), false);
+  // A reading about another meeting's tab.
+  assert.equal(rearm(2222, { ...call("in-call", "tab", "zzz-zzzz-zzz"), windowHandle: 5555 }), false);
+  // An older desktop: no handle on the arm, or none on the call state. Behaves as before.
+  assert.equal(rearm(null, { ...call("in-call", "tab"), windowHandle: 5555 }), false);
+  assert.equal(rearm(undefined, { ...call("in-call", "tab"), windowHandle: 5555 }), false);
+  assert.equal(rearm(2222, call("in-call", "tab")), false);
+  assert.equal(rearm(2222, null), false);
+  for (const windowHandle of [0, -1, 1.5, Number.NaN, "5555"]) {
+    assert.equal(rearm(2222, { ...call("in-call", "tab"), windowHandle }), false, String(windowHandle));
+  }
 });

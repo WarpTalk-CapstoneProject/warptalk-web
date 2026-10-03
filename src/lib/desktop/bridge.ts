@@ -145,6 +145,36 @@ export interface MeetCallState {
   meetCode: string | null;
   reason: string;
   atMs: number;
+  /**
+   * The HWND of the window the reading came from (the browser window hosting the Meet tab, or the
+   * PiP window). A Meet tab dragged into another window changes it, and the recording re-arms its
+   * capture on the new one (lib/meeting/meet-window-crop). Absent from older desktop builds.
+   */
+  windowHandle?: number;
+  /**
+   * Where the page content sits in that window (`via: "tab"` only), for cropping the browser chrome
+   * out of the recording. Absent when unread or implausible, and from older desktop builds.
+   */
+  windowGeometry?: MeetWindowGeometry;
+}
+
+/** Mirrors warptalk-desktop `MeetWindowRect`: physical pixels, relative to the visible frame. */
+export interface MeetWindowRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Mirrors warptalk-desktop `MeetWindowGeometry`. `frame` is the visible window (DWM extended frame
+ * bounds, x = y = 0), `window` is GetWindowRect (includes the invisible resize borders), `content`
+ * is the page's Document element — the web contents below the tab strip, address and bookmarks bars.
+ */
+export interface MeetWindowGeometry {
+  frame: MeetWindowRect;
+  window: MeetWindowRect;
+  content: MeetWindowRect;
 }
 
 /**
@@ -274,7 +304,12 @@ export interface WindowsLoopbackPcmChunk {
  * `ok: false` means no window video; the recording still runs, audio-only.
  */
 export type ArmMeetWindowCaptureResult =
-  | { ok: true; sourceName: string }
+  | {
+      ok: true;
+      sourceName: string;
+      /** The HWND that will be handed out; compared with `MeetCallState.windowHandle`. Newer desktops only. */
+      windowHandle?: number;
+    }
   | {
       ok: false;
       reason:
