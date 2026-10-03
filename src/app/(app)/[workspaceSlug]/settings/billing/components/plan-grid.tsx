@@ -32,8 +32,14 @@
  * MOTION: hover and current-plan tints ease over ~180ms under `motion-safe:` only.
  *
  * No shadows: see billing-primitives.
+ *
+ * ADMIN PREVIEW. Admin → Plans & pricing → Preview renders this same component, so what an admin
+ * looks at is what a buyer gets, not a copy that drifts. It passes two slots the billing page never
+ * does: `renderPlanAction` (a control in each column's title row) and `trailingCell` (one more cell
+ * after the last plan, ruled like a plan). Without them this renders exactly as before.
  */
 
+import type { ReactNode } from "react";
 import { CaretRight, Check } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 
@@ -108,6 +114,8 @@ export function PlanGrid({
   onSelect,
   interval = "monthly",
   onIntervalChange,
+  renderPlanAction,
+  trailingCell,
 }: {
   /** Active plans, cheapest first. Sorting is the caller's job — it owns `sortOrder`. */
   plans: PlanDto[];
@@ -117,6 +125,10 @@ export function PlanGrid({
   interval?: BillingInterval;
   /** When given, the header offers the Monthly / Yearly choice. */
   onIntervalChange?: (interval: BillingInterval) => void;
+  /** Admin preview only: a control at the end of each column's title row. */
+  renderPlanAction?: (plan: PlanDto) => ReactNode;
+  /** Admin preview only: one more cell after the last plan, laid out and ruled like a plan. */
+  trailingCell?: ReactNode;
 }) {
   const t = useTranslations("settingsBilling");
   const yearlySavingPercent = Math.round((1 - YEARLY_PRICE_MULTIPLIER) * 100);
@@ -130,8 +142,19 @@ export function PlanGrid({
   // Columns per breakpoint, never more than there are plans. Each cell rules its own left edge
   // when it is not first in its line, and its top edge when it is not in the first line — so a
   // wrapped ladder stays ruled without doubling any hairline.
-  const smCols = Math.min(plans.length, 2);
-  const wideCols = Math.min(plans.length, 4);
+  //
+  // The trailing cell counts as a column, or it would wrap under the first plan.
+  const cellCount = plans.length + (trailingCell ? 1 : 0);
+  const smCols = Math.min(cellCount, 2);
+  const wideCols = Math.min(cellCount, 4);
+  const ruleFor = (index: number) =>
+    cn(
+      index > 0 && "border-t",
+      index % smCols !== 0 ? "sm:border-l" : "sm:border-l-0",
+      index >= smCols ? "sm:border-t" : "sm:border-t-0",
+      index % wideCols !== 0 ? "2xl:border-l" : "2xl:border-l-0",
+      index >= wideCols ? "2xl:border-t" : "2xl:border-t-0",
+    );
 
   return (
     <div className="min-w-0">
@@ -172,9 +195,9 @@ export function PlanGrid({
       <div
         className={cn(
           "grid min-w-0 grid-cols-1",
-          plans.length >= 2 && "sm:grid-cols-2",
-          plans.length === 3 && "2xl:grid-cols-3",
-          plans.length >= 4 && "2xl:grid-cols-4",
+          cellCount >= 2 && "sm:grid-cols-2",
+          cellCount === 3 && "2xl:grid-cols-3",
+          cellCount >= 4 && "2xl:grid-cols-4",
         )}
       >
         {plans.map((plan, index) => {
@@ -196,11 +219,7 @@ export function PlanGrid({
                 "motion-safe:transition-colors motion-safe:duration-[180ms]",
                 isCurrent ? "bg-primary/[0.09]" : "hover:bg-primary/[0.06]",
                 // Rules between columns, never around them: the page grid is the one object.
-                index > 0 && "border-t",
-                index % smCols !== 0 ? "sm:border-l" : "sm:border-l-0",
-                index >= smCols ? "sm:border-t" : "sm:border-t-0",
-                index % wideCols !== 0 ? "2xl:border-l" : "2xl:border-l-0",
-                index >= wideCols ? "2xl:border-t" : "2xl:border-t-0",
+                ruleFor(index),
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -209,6 +228,7 @@ export function PlanGrid({
                 {plan.id === highlightedId ? (
                   <Pill tone="accent">{t("planGrid.mostPopular")}</Pill>
                 ) : null}
+                {renderPlanAction ? <div className="ml-auto flex items-center gap-1.5">{renderPlanAction(plan)}</div> : null}
               </div>
 
               <PriceLine plan={plan} interval={interval} />
@@ -266,6 +286,9 @@ export function PlanGrid({
             </div>
           );
         })}
+        {trailingCell ? (
+          <div className={cn("flex min-w-0 border-hairline", ruleFor(plans.length))}>{trailingCell}</div>
+        ) : null}
       </div>
     </div>
   );

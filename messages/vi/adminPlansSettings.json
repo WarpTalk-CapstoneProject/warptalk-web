@@ -72,8 +72,18 @@
     "editConfiguration": "Chỉnh sửa cấu hình",
     "refresh": "Làm mới",
     "filterLabel": "Chế độ xem giá",
+    "preview": {
+      "note": "Đúng giao diện người mua thấy ở Cài đặt → Thanh toán, dùng chung component. Bút chì để chỉnh gói, + để thêm gói. Nút Chọn và Nâng cấp ở đây không có tác dụng.",
+      "includeHidden": "Hiện cả gói đang ẩn ({count})",
+      "hidden": "Đang ẩn",
+      "adjust": "Chỉnh {name}",
+      "addPlan": "Thêm gói",
+      "error": "Không tải được danh sách gói.",
+      "retry": "Thử lại"
+    },
     "tabs": {
       "plans": "Gói",
+      "preview": "Xem trước",
       "rateCards": "Bảng giá đơn vị",
       "configuration": "Cấu hình"
     },

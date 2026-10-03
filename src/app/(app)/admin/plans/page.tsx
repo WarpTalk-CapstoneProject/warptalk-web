@@ -45,6 +45,7 @@ import {
   RateCardDeactivateDialog,
   RateCardEditDialog,
 } from "@/components/admin/pricing-editors";
+import { PlanStorefrontPreview } from "@/components/admin/plan-storefront-preview";
 import {
   useAdminPlans,
   useAdminPricingConfig,
@@ -73,7 +74,7 @@ import { cn } from "@/lib/utils";
 import type { UsageRateCardDto } from "@/types/admin-pricing";
 import type { PlanDto } from "@/types/billing";
 
-const TAB_VALUES = ["plans", "rate-cards", "configuration"] as const;
+const TAB_VALUES = ["plans", "preview", "rate-cards", "configuration"] as const;
 
 type Tab = (typeof TAB_VALUES)[number];
 
@@ -735,6 +736,7 @@ function PlansAndPricing() {
   const searchParams = useSearchParams();
   const TAB_LABEL_KEYS: Record<Tab, string> = {
     plans: "tabs.plans",
+    preview: "tabs.preview",
     "rate-cards": "tabs.rateCards",
     configuration: "tabs.configuration",
   };
@@ -781,7 +783,11 @@ function PlansAndPricing() {
   const config = configQuery.data ?? null;
 
   const active =
-    tab === "plans" ? plansQuery : tab === "rate-cards" ? rateCardsQuery : configQuery;
+    tab === "plans" || tab === "preview"
+      ? plansQuery
+      : tab === "rate-cards"
+        ? rateCardsQuery
+        : configQuery;
 
   return (
     <AdminPage>
@@ -792,7 +798,7 @@ function PlansAndPricing() {
         description={t("description")}
         actions={
           <>
-            {tab === "plans" ? (
+            {tab === "plans" || tab === "preview" ? (
               <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
                 <Plus size={14} />
                 {t("newPlan")}
@@ -843,6 +849,16 @@ function PlansAndPricing() {
           isFetching={plansQuery.isFetching}
           onRetry={() => void plansQuery.refetch()}
           onEdit={setEditingPlan}
+        />
+      ) : tab === "preview" ? (
+        // The ladder a buyer sees on Settings → Billing, with the same two dialogs laid over it.
+        <PlanStorefrontPreview
+          plans={plans}
+          isPending={plansQuery.isPending}
+          isError={plansQuery.isError}
+          onRetry={() => void plansQuery.refetch()}
+          onEdit={setEditingPlan}
+          onCreate={() => setIsCreatingPlan(true)}
         />
       ) : tab === "rate-cards" ? (
         <RateCardsList

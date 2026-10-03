@@ -72,8 +72,18 @@
     "editConfiguration": "Edit configuration",
     "refresh": "Refresh",
     "filterLabel": "Pricing view",
+    "preview": {
+      "note": "What a buyer sees on Settings → Billing, built from the same component. Pencil adjusts a plan, + adds one. Choose and Upgrade do nothing here.",
+      "includeHidden": "Include hidden plans ({count})",
+      "hidden": "Hidden",
+      "adjust": "Adjust {name}",
+      "addPlan": "Add plan",
+      "error": "The plans could not be loaded.",
+      "retry": "Try again"
+    },
     "tabs": {
       "plans": "Plans",
+      "preview": "Preview",
       "rateCards": "Rate cards",
       "configuration": "Configuration"
     },
