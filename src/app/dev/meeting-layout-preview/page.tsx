@@ -21,7 +21,7 @@
  *   at `clamp(96px,15vh,148px)` holds three lines; it cannot show that the stage renders.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
@@ -68,6 +68,7 @@ function fixtureSegment(index: number) {
 }
 
 export default function MeetingLayoutPreview() {
+  const [captionLaneCollapsed, setCaptionLaneCollapsed] = useState(false);
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
 
   useEffect(() => {
@@ -124,10 +125,19 @@ export default function MeetingLayoutPreview() {
             </div>
           </section>
 
-          <div className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center">
+          <div
+            data-collapsed={captionLaneCollapsed ? "" : undefined}
+            className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center data-[collapsed]:h-10"
+          >
             {/* Read as Sarah (listens in English): a vi/ja line whose translation has not arrived is
-                shown as spoken and muted, and "live" adds Kenji's words of a turn still being said. */}
-            <LiveSubtitleOverlay enabled readerLanguage="en" onOpenTranscript={() => undefined} />
+                shown as spoken and muted. Kenji's live words (ja) are NOT shown to her — live text
+                appears only in the reader's own language. Scroll up in the lane for history. */}
+            <LiveSubtitleOverlay
+              enabled
+              readerLanguage="en"
+              collapsed={captionLaneCollapsed}
+              onToggleCollapsed={() => setCaptionLaneCollapsed((value) => !value)}
+            />
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-2">

@@ -6,7 +6,9 @@
     "addOthers": "参加者を追加"
   },
   "captions": {
-    "openFullTranscript": "文字起こし全文を開く",
+    "collapse": "字幕を折りたたむ",
+    "expand": "字幕を展開",
+    "latest": "最新",
     "liveRegionAria": "ライブ字幕",
     "emptyState": "誰かが話すと、ここに字幕が表示されます。"
   },

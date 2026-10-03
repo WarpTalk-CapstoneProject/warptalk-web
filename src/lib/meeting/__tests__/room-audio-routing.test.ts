@@ -6,7 +6,6 @@ import {
   EMPTY_DUBBED_HISTORY,
   findOutboundDubIdentity,
   mergeDubbedHistory,
-  ORIGINAL_UNDER_DUB_VOLUME,
   outboundDubHistoryScope,
   routeRoomAudio,
   type RoomAudioRoutingInput,
@@ -449,15 +448,14 @@ describe("WT-874: a speaker already dubbed stays dubbed across an idle bot", () 
   });
 });
 
-// Reported: Kỳ and Tuấn in one meeting. Kỳ turned voice clone on, and Tuấn heard Kỳ's clone only
-// once Tuấn turned HIS switch on too. Every one of Kỳ's dubs was synthesised as "cloned" — the
-// listener's switch decided playback. The speaker decides now.
-describe("the listener decides whether they hear translated voice; the speaker decides whose voice", () => {
-  const KY = ALICE; // speaks English, voice clone on
-  const TUAN = BOB; // speaks Japanese, voice clone off
+// The rule after the owner's live test, 4 Oct 2026: the listener's switch decides; on, everyone is
+// dubbed (their clone, or a stand-in) and the ORIGINAL IS MUTED while the dub plays — played under
+// it, it made the dub feel late and leaked into other people's microphones.
+describe("the listener's switch decides, and the original is muted under a dub", () => {
+  const KY = ALICE; // speaks English
+  const TUAN = BOB; // speaks Japanese
   const JA = "ja";
 
-  /** HOST listens in Vietnamese; both speakers are dubbed into it. */
   function room(overrides: Partial<RoomAudioRoutingInput> = {}): RoomAudioRoutingInput {
     return {
       identities: [KY, TUAN, dub(VI, KY), dub(VI, TUAN)],
@@ -467,81 +465,33 @@ describe("the listener decides whether they hear translated voice; the speaker d
       voiceEnabled: true,
       translationActive: true,
       localUserId: HOST,
-      dubVoiceKindByIdentity: { [dub(VI, KY)]: "cloned", [dub(VI, TUAN)]: "default" },
       ...overrides,
     };
   }
 
-  it("plays the cloned dub and keeps the original audible, ducked beneath it", () => {
-    const routing = routeRoomAudio(room());
-    assert.ok(routing.wanted.has(dub(VI, KY)));
-    assert.ok(routing.wanted.has(KY));
-    assert.ok(routing.duckedSpeakerIds.has(KY));
-    assert.ok(ORIGINAL_UNDER_DUB_VOLUME > 0 && ORIGINAL_UNDER_DUB_VOLUME < 1);
+  it("on: every speaker's dub plays and their original is muted", () => {
+    assert.deepEqual([...routeRoomAudio(room()).wanted].sort(), [dub(VI, KY), dub(VI, TUAN)].sort());
   });
 
-  // Owner, 4 Oct 2026: a speaker who did not consent is never cloned, but a listener who wants
-  // translated voice still gets them — in a stand-in voice.
-  it("dubs a speaker without a voice of their own in a stand-in voice, original ducked", () => {
-    const routing = routeRoomAudio(room());
-    assert.ok(routing.wanted.has(dub(VI, TUAN)));
-    assert.ok(routing.wanted.has(TUAN));
-    assert.ok(routing.duckedSpeakerIds.has(TUAN));
+  it("off: everyone is heard as they sound, no dubs", () => {
+    assert.deepEqual([...routeRoomAudio(room({ voiceEnabled: false })).wanted].sort(), [KY, TUAN].sort());
   });
 
-  // The listener decides: on hears everyone translated, off hears everyone as they sound.
-  it("plays dubs only to a listener who switched translated voice on", () => {
-    const on = routeRoomAudio(room({ voiceEnabled: true }));
-    assert.deepEqual([...on.wanted].sort(), [KY, TUAN, dub(VI, KY), dub(VI, TUAN)].sort());
-    assert.deepEqual([...on.duckedSpeakerIds].sort(), [KY, TUAN].sort());
-
-    const off = routeRoomAudio(room({ voiceEnabled: false }));
-    assert.deepEqual([...off.wanted].sort(), [KY, TUAN].sort());
-    assert.equal(off.duckedSpeakerIds.size, 0, "with nothing dubbed, the original plays at full volume");
-  });
-
-  it("treats a voice the speaker picked for themselves as their own", () => {
-    const routing = routeRoomAudio(
-      room({ dubVoiceKindByIdentity: { [dub(VI, KY)]: "profile", [dub(VI, TUAN)]: "default" } }),
-    );
-    assert.ok(routing.wanted.has(dub(VI, KY)));
-    assert.ok(routing.duckedSpeakerIds.has(KY));
-  });
-
-  it("keeps dubbing a speaker whose stock voice becomes their clone", () => {
-    const before = routeRoomAudio(
-      room({ dubVoiceKindByIdentity: { [dub(VI, KY)]: "default", [dub(VI, TUAN)]: "default" } }),
-    );
-    assert.ok(before.wanted.has(dub(VI, KY)));
-    assert.ok(routeRoomAudio(room()).wanted.has(dub(VI, KY)));
-  });
-
-  it("never mutes the original while a cloned speaker's bot is reconnecting", () => {
+  it("the original stays muted while a dubbed speaker's bot reconnects", () => {
     const routing = routeRoomAudio(
       room({ identities: [KY, TUAN, dub(VI, TUAN)], previouslyDubbedSpeakerIds: new Set([KY]) }),
     );
-    assert.ok(routing.wanted.has(KY));
-    assert.ok(!routing.duckedSpeakerIds.has(KY));
-  });
-
-  it("plays nothing synthetic once translation stops", () => {
-    const routing = routeRoomAudio(room({ translationActive: false }));
-    assert.ok(!routing.wanted.has(dub(VI, KY)));
-    assert.equal(routing.duckedSpeakerIds.size, 0);
-  });
-
-  it("keeps the old rule for a pipeline that does not report voice kinds", () => {
-    const routing = routeRoomAudio(room({ dubVoiceKindByIdentity: {} }));
-    assert.ok(routing.wanted.has(dub(VI, KY)));
     assert.ok(!routing.wanted.has(KY));
-    assert.equal(routing.duckedSpeakerIds.size, 0);
   });
 
-  it("leaves bridge rooms on their own rules", () => {
-    const routing = routeRoomAudio(
-      bridgeRoom({ dubVoiceKindByIdentity: { [dub(VI, STAND_IN)]: "default", [dub(EN, HOST)]: "cloned" } }),
-    );
-    assert.ok(routing.wanted.has(dub(VI, STAND_IN)));
-    assert.equal(routing.duckedSpeakerIds.size, 0);
+  it("before the first dub of a speaker exists, their original is heard rather than silence", () => {
+    const routing = routeRoomAudio(room({ identities: [KY, TUAN, dub(VI, TUAN)] }));
+    assert.ok(routing.wanted.has(KY));
+    assert.ok(!routing.wanted.has(TUAN));
+  });
+
+  it("nothing synthetic plays once translation stops", () => {
+    const routing = routeRoomAudio(room({ translationActive: false }));
+    assert.deepEqual([...routing.wanted].sort(), [KY, TUAN].sort());
   });
 });
