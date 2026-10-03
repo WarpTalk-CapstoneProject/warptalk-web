@@ -99,3 +99,32 @@ export function groupGlossariesByPair<T extends PairedGlossary>(
 export function filterAfterPairChange(currentFilter: string, newKey: string): string {
   return currentFilter === ALL_PAIRS ? ALL_PAIRS : newKey;
 }
+
+export interface PairLanguageOption {
+  code: string;
+  name: string;
+}
+
+/**
+ * What the "Change pair" selects offer: the languages the WORKSPACE allows (Settings → language
+ * policy), the same bound the New glossary dialog has had since WT-875.
+ *
+ * They used to offer every language the platform admin had published, so a workspace limited to
+ * English and Vietnamese could relabel a glossary as Japanese — a pair it cannot create and no
+ * meeting of its own can use. L1 workspace ⊇ L2 meeting ⊇ L3 artifact: changing is bounded by the
+ * current policy, reading is not. So the glossary's CURRENT languages stay listed even when the
+ * policy has since dropped them; otherwise the select would render an empty box for a pair the
+ * glossary still holds.
+ */
+export function pairEditorLanguageOptions(
+  allowed: readonly PairLanguageOption[],
+  current: readonly (string | null | undefined)[],
+  nameOf: (code: string) => string,
+): PairLanguageOption[] {
+  const options = allowed.map(({ code, name }) => ({ code: base(code), name }));
+  for (const value of current) {
+    const code = base(value);
+    if (code && !options.some((option) => option.code === code)) options.push({ code, name: nameOf(code) });
+  }
+  return options;
+}

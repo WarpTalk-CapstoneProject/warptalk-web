@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ALL_PAIRS, filterAfterPairChange, glossaryPairKey, groupGlossariesByPair } from "../glossary-pairs.ts";
+import {
+  ALL_PAIRS,
+  filterAfterPairChange,
+  glossaryPairKey,
+  groupGlossariesByPair,
+  pairEditorLanguageOptions,
+} from "../glossary-pairs.ts";
 
 const names: Record<string, string> = { en: "English", vi: "Vietnamese", ja: "Japanese" };
 const nameOf = (code: string) => names[code] ?? code;
@@ -86,5 +92,24 @@ describe("WT-937 — changing the open glossary's pair keeps it open", () => {
 
   test("All pairs stays All pairs", () => {
     assert.equal(filterAfterPairChange(ALL_PAIRS, "en>vi"), ALL_PAIRS);
+  });
+});
+
+describe("the Change pair selects follow the workspace language policy", () => {
+  const allowed = [{ code: "en", name: "English" }, { code: "vi", name: "Vietnamese" }];
+
+  test("only the languages the workspace allows are offered", () => {
+    assert.deepEqual(
+      pairEditorLanguageOptions(allowed, ["en", "vi"], nameOf).map((option) => option.code),
+      ["en", "vi"],
+    );
+  });
+
+  test("a language the glossary already holds stays listed after the policy dropped it", () => {
+    assert.deepEqual(pairEditorLanguageOptions(allowed, ["en-US", "ja"], nameOf), [
+      { code: "en", name: "English" },
+      { code: "vi", name: "Vietnamese" },
+      { code: "ja", name: "Japanese" },
+    ]);
   });
 });
