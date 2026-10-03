@@ -487,11 +487,16 @@ describe("the speaker decides whether they are heard in their own voice", () => 
     assert.ok(!routing.duckedSpeakerIds.has(TUAN));
   });
 
-  it("is the same whatever the listener's own switch says", () => {
-    for (const voiceEnabled of [true, false]) {
-      const routing = routeRoomAudio(room({ voiceEnabled }));
-      assert.deepEqual([...routing.wanted].sort(), [KY, TUAN, dub(VI, KY)].sort());
-    }
+  // Owner, 4 Oct 2026: a clone reaching a listener who never asked for it was a hole. The
+  // listener's own switch has to be on.
+  it("plays a cloned voice only to a listener who switched it on", () => {
+    const on = routeRoomAudio(room({ voiceEnabled: true }));
+    assert.deepEqual([...on.wanted].sort(), [KY, TUAN, dub(VI, KY)].sort());
+    assert.deepEqual([...on.duckedSpeakerIds], [KY]);
+
+    const off = routeRoomAudio(room({ voiceEnabled: false }));
+    assert.deepEqual([...off.wanted].sort(), [KY, TUAN].sort());
+    assert.equal(off.duckedSpeakerIds.size, 0, "with nothing dubbed, the original plays at full volume");
   });
 
   it("treats a voice the speaker picked for themselves as their own", () => {

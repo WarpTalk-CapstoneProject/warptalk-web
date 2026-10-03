@@ -18,20 +18,24 @@ function plan(overrides: Partial<VoicePanelInput>) {
   return planVoicePanel({ mode: "meeting", ...ALL_HANDLERS, ...overrides });
 }
 
-// Reported: Kỳ turned voice clone on, and Tuấn heard the clone only after turning on HIS "Voice"
-// switch — which also hid "Your voice" while off. The speaker decides now; the listener has nothing
-// to set, so the meeting panel is "Your voice" alone, whatever voiceEnabled says.
-for (const voiceEnabled of [true, false, undefined]) {
-  test(`meeting, voiceEnabled=${voiceEnabled}: Your voice only — no listener switch, no stand-in list`, () => {
-    const result = plan({ voiceEnabled });
+// Owner, 4 Oct 2026: a listener hears cloned voices only with their own switch on. The switch is
+// back, at the top beside Flash mode, and Your voice no longer hides behind it when it is off.
+test("meeting, voice on: the listener switch, then Your voice, and no stand-in list", () => {
+  const result = plan({ voiceEnabled: true });
 
-    assert.equal(result.voiceSwitch, null);
-    assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
-    assert.equal(result.listenVoice, null);
-    assert.equal(result.dividerAfterSwitch, false);
-    assert.equal(result.summaryReadsVoiceEnabled, false);
-  });
-}
+  assert.equal(result.voiceSwitch?.label, "Hear cloned voices");
+  assert.match(result.voiceSwitch?.detail ?? "", /^On/);
+  assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
+  assert.equal(result.listenVoice, null);
+  assert.equal(result.dividerAfterSwitch, true);
+});
+
+test("meeting, voice off: Your voice is still offered, and the switch says what you hear", () => {
+  const result = plan({ voiceEnabled: false });
+
+  assert.equal(result.voiceSwitch?.detail, "Off — you hear everyone's original voice.");
+  assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
+});
 
 test("meeting: choosing no voice of your own means you are heard as you sound", () => {
   assert.deepEqual(plan({}).automaticOption, { label: "Off", detail: "Others hear your original voice" });

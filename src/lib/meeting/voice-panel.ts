@@ -120,22 +120,25 @@ export function planVoicePanel({
     };
   }
 
-  // Meeting: the speaker decides how they are heard, and nothing the listener sets overrides it.
-  //
-  // Reported: Kỳ turned voice clone on and Tuấn heard the clone only after turning on his OWN
-  // switch. That switch was this panel's "Voice" (hear translated voice), and "Your voice" sat
-  // behind it — so the one person whose setting should not have mattered had to change it, and
-  // could not even reach their own clone choice until they did. The room now plays a speaker's
-  // dub only when it is in the speaker's own voice (room-audio-routing), whatever the listener
-  // has set, so the switch and the stand-in list no longer change anything and are not offered.
-  // `voiceEnabled` is still accepted so the bridge mode and older callers keep their shape.
-  void voiceEnabled;
-  void canToggleVoice;
+  // Meeting. Two questions, both answered here: how YOU sound (Your voice, always shown) and
+  // whether YOU hear other people's cloned voices (the switch). Owner, 4 Oct 2026: a clone must
+  // only reach a listener who switched it on — see room-audio-routing. The switch sits at the top
+  // with the other switches, and no longer hides Your voice when it is off. There is still no
+  // stand-in list: a speaker with no voice of their own is heard as they sound.
+  const hearing = voiceEnabled !== false;
   return {
-    voiceSwitch: null,
+    voiceSwitch: canToggleVoice
+      ? {
+          label: "Hear cloned voices",
+          detail: hearing
+            ? "On — people who cloned their voice are heard in it."
+            : "Off — you hear everyone's original voice.",
+          ariaLabel: "Hear cloned voices",
+        }
+      : null,
     yourVoice: hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
     listenVoice: null,
-    dividerAfterSwitch: false,
+    dividerAfterSwitch: Boolean(canToggleVoice),
     summaryReadsVoiceEnabled: false,
     automaticOption: {
       label: "Off",

@@ -219,12 +219,7 @@ export function VoicePanel({
       ) : null}
 
       {/* The switches next, above every list: they are the controls people come here to flip. */}
-      {footer ? (
-        <>
-          {footer}
-          <div className="my-1 h-[1px] bg-surface-3" />
-        </>
-      ) : null}
+      {footer}
 
       {plan.voiceSwitch && onChangeVoiceEnabled ? (
         <div className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2">
@@ -243,7 +238,8 @@ export function VoicePanel({
         </div>
       ) : null}
 
-      {plan.dividerAfterSwitch ? <div className="my-1 h-[1px] bg-surface-3" /> : null}
+      {/* One rule under the switches, whichever of them this surface has. */}
+      {footer || plan.dividerAfterSwitch ? <div className="my-1 h-[1px] bg-surface-3" /> : null}
 
       {/* YOUR VOICE — one direction only. Whose voice a dub is spoken in is the speaker's decision;
           the listener chooses the LANGUAGE, and the same voice is rendered once per language. */}

@@ -241,8 +241,13 @@ export function routeRoomAudio({
   const kindOf = (identity: string): string | undefined => dubVoiceKindByIdentity?.[identity] || undefined;
   const speakerOwnedVoice =
     !isBridgeRoom && identities.some((identity) => identity.startsWith(AI_INTERPRETER_PREFIX) && kindOf(identity));
+  // ...AND THE LISTENER OPTS IN. Owner, 4 Oct 2026, after the release above: a clone reaching
+  // every listener whether or not they asked for it was a hole. The listener's own switch
+  // (`voiceEnabled`) has to be on to hear anyone's cloned voice; off, they hear everyone as they
+  // actually sound. Nothing else about the rule changed: no stand-in dubs, and the original still
+  // plays under a clone at ORIGINAL_UNDER_DUB_VOLUME.
   const ownVoiceDubbed = new Set<string>();
-  if (speakerOwnedVoice && translationActive) {
+  if (speakerOwnedVoice && translationActive && voiceEnabled) {
     for (const identity of identities) {
       const dubbed = dubbedSpeakerId(identity);
       if (dubbed && dubbed !== localUserId && isOwnVoiceKind(kindOf(identity))) ownVoiceDubbed.add(dubbed);
@@ -255,7 +260,13 @@ export function routeRoomAudio({
     if (speakerOwnedVoice) {
       if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
         const dubbed = dubbedSpeakerId(identity);
-        return translationActive && dubbed !== null && dubbed !== localUserId && isOwnVoiceKind(kindOf(identity));
+        return (
+          voiceEnabled
+          && translationActive
+          && dubbed !== null
+          && dubbed !== localUserId
+          && isOwnVoiceKind(kindOf(identity))
+        );
       }
       // Every person stays audible; duckedSpeakerIds says which play quieter under their clone.
       return true;
