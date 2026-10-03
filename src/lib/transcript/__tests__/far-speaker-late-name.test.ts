@@ -14,9 +14,14 @@ import { beforeEach, test } from "node:test";
 import {
   BRIDGE_FAR_SIDE_FALLBACK_NAME,
   BRIDGE_STAND_IN_USER_ID,
+  LATE_NAME_HOLD_MAX,
+  LATE_NAME_HOLD_MS,
   applyLateFarSpeakerName,
+  holdLateFarSpeakerName,
   lateFarSpeakerNameFor,
   revisedFarSideSpeakerName,
+  takeLateFarSpeakerName,
+  type HeldLateName,
 } from "../speaker-identity.ts";
 import { groupTranscriptSegments } from "../transcript-display.ts";
 import { buildCatchUpTranscript } from "../transcript-catch-up.ts";
@@ -242,6 +247,75 @@ test("a line that arrived named keeps its name when a late event names someone e
   store().addTranscriptSegment(line("a", "Lan Nguyen", 1_000));
   store().nameTranscriptSegmentSpeaker({ segmentId: "a", speakerName: "Minh Tran" });
   assert.equal(store().transcriptSegments[0].speakerName, "Lan Nguyen");
+});
+
+// ── a name that outran its line ──────────────────────────────────────────────────────────────────
+
+test("a held name is handed to its line once, by id in any case", () => {
+  const held = holdLateFarSpeakerName([], { segmentId: "ABC", speakerName: " Minh Tran " }, 0);
+  assert.deepEqual(held, [{ segmentId: "abc", speakerName: "Minh Tran", heldAt: 0 }]);
+
+  const taken = takeLateFarSpeakerName(held, "abc", 500);
+  assert.equal(taken.name, "Minh Tran");
+  assert.equal(taken.held.length, 0);
+  assert.equal(takeLateFarSpeakerName(taken.held, "abc", 600).name, null);
+});
+
+test("nothing that is not a name is held, and the first answer for a segment stands", () => {
+  const empty: readonly HeldLateName[] = [];
+  assert.equal(holdLateFarSpeakerName(empty, { segmentId: "a", speakerName: NOBODY }, 0), empty);
+  assert.equal(holdLateFarSpeakerName(empty, { segmentId: "", speakerName: "Minh" }, 0), empty);
+  const once = holdLateFarSpeakerName(empty, { segmentId: "a", speakerName: "Minh" }, 0);
+  assert.equal(holdLateFarSpeakerName(once, { segmentId: "a", speakerName: "Lan" }, 1), once);
+});
+
+test("a held name expires after LATE_NAME_HOLD_MS", () => {
+  const held = holdLateFarSpeakerName([], { segmentId: "a", speakerName: "Minh" }, 1_000);
+  assert.equal(takeLateFarSpeakerName(held, "a", 1_000 + LATE_NAME_HOLD_MS).name, "Minh");
+  const late = takeLateFarSpeakerName(held, "a", 1_000 + LATE_NAME_HOLD_MS + 1);
+  assert.equal(late.name, null);
+  assert.equal(late.held.length, 0, "an expired entry is dropped, not kept");
+  // Expired entries also go when something new is held.
+  const next = holdLateFarSpeakerName(held, { segmentId: "b", speakerName: "Lan" }, 1_000 + LATE_NAME_HOLD_MS + 1);
+  assert.deepEqual(next.map((entry) => entry.segmentId), ["b"]);
+});
+
+test("at most LATE_NAME_HOLD_MAX are held; the oldest go first", () => {
+  let held: readonly HeldLateName[] = [];
+  for (let index = 0; index < LATE_NAME_HOLD_MAX + 5; index += 1) {
+    held = holdLateFarSpeakerName(held, { segmentId: `s${index}`, speakerName: "Minh" }, index);
+  }
+  assert.equal(held.length, LATE_NAME_HOLD_MAX);
+  assert.equal(held[0].segmentId, "s5");
+  assert.equal(takeLateFarSpeakerName(held, "s0", 100).name, null);
+});
+
+test("the store: a name that arrives before its line is applied when the line lands", () => {
+  store().nameTranscriptSegmentSpeaker({ segmentId: "a", speakerName: "Minh Tran" });
+  assert.equal(store().transcriptSegments.length, 0, "a held name creates no line");
+  assert.equal(store().heldLateSpeakerNames.length, 1);
+
+  store().addTranscriptSegment(line("a", NOBODY, 1_000));
+  assert.equal(store().transcriptSegments[0].speakerName, "Minh Tran");
+  assert.equal(store().captionSegments[0].speakerName, "Minh Tran");
+  assert.equal(store().heldLateSpeakerNames.length, 0, "used once, then gone");
+});
+
+test("the store: a held name never renames a line that arrives named, and is not held for a known line", () => {
+  store().nameTranscriptSegmentSpeaker({ segmentId: "a", speakerName: "Minh Tran" });
+  store().addTranscriptSegment(line("a", "Lan Nguyen", 1_000));
+  assert.equal(store().transcriptSegments[0].speakerName, "Lan Nguyen");
+  assert.equal(store().heldLateSpeakerNames.length, 0);
+
+  // The line is here and keeps its name: nothing to hold for later.
+  store().nameTranscriptSegmentSpeaker({ segmentId: "a", speakerName: "Minh Tran" });
+  assert.equal(store().heldLateSpeakerNames.length, 0);
+});
+
+test("the store: reset forgets held names", () => {
+  store().nameTranscriptSegmentSpeaker({ segmentId: "a", speakerName: "Minh Tran" });
+  store().reset();
+  assert.equal(store().heldLateSpeakerNames.length, 0);
 });
 
 // ── the saved-row backstop ───────────────────────────────────────────────────────────────────────

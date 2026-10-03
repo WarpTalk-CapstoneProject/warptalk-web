@@ -224,3 +224,65 @@ export function revisedFarSideSpeakerName(
   if (bridgeFarSideSpeakerName(incoming.speakerName) !== null) return incoming.speakerName;
   return bridgeFarSideSpeakerName(existing.speakerName) ?? incoming.speakerName;
 }
+
+/**
+ * A late name that arrived BEFORE its line.
+ *
+ * The gateway reads the late-name stream and stt:results in two consumer loops that are not
+ * ordered against each other, so in rare cases `TranscriptSegmentSpeakerNamed` reaches this client
+ * a moment before the `TranscriptSegmentReceived` it names. Dropping it would be safe — the saved
+ * row carries the name, and the catch-up merge adopts it on the next refetch — but the reader would
+ * watch "Google Meet participants" for a line the client was already told about. So an unmatched
+ * name is held briefly and applied when the line lands.
+ *
+ * BOUNDED, BECAUSE MOST UNMATCHED NAMES NEVER FIND A LINE
+ *   An id this client has no line for is usually a line it will never have: said before this
+ *   client connected, or kept out of both lanes. Holding those forever is a leak, so an entry lives
+ *   LATE_NAME_HOLD_MS and at most LATE_NAME_HOLD_MAX are kept (the oldest go first). The race this
+ *   covers is milliseconds; ten seconds is generous and still tiny.
+ *
+ * Pure (the caller passes `now`), so each bound is a unit test. Ids are stored lower-cased, as
+ * `applyLateFarSpeakerName` compares them.
+ */
+export const LATE_NAME_HOLD_MS = 10_000;
+export const LATE_NAME_HOLD_MAX = 50;
+
+export type HeldLateName = { segmentId: string; speakerName: string; heldAt: number };
+
+function withoutExpired(held: readonly HeldLateName[], now: number): readonly HeldLateName[] {
+  return held.some((entry) => now - entry.heldAt > LATE_NAME_HOLD_MS)
+    ? held.filter((entry) => now - entry.heldAt <= LATE_NAME_HOLD_MS)
+    : held;
+}
+
+/** Keep `late` for a line that has not arrived. Not a name, or already held → nothing new held. */
+export function holdLateFarSpeakerName(
+  held: readonly HeldLateName[],
+  late: FarSpeakerLateName | null | undefined,
+  now: number,
+): readonly HeldLateName[] {
+  const live = withoutExpired(held, now);
+  const segmentId = (late?.segmentId ?? "").trim().toLowerCase();
+  const speakerName = bridgeFarSideSpeakerName(late?.speakerName);
+  // The first answer for a segment stands, the same as on a line (a named line is never renamed).
+  if (!segmentId || !speakerName || live.some((entry) => entry.segmentId === segmentId)) return live;
+  const next = [...live, { segmentId, speakerName, heldAt: now }];
+  return next.length > LATE_NAME_HOLD_MAX ? next.slice(next.length - LATE_NAME_HOLD_MAX) : next;
+}
+
+/**
+ * The held name for a line that has just arrived, and the hold without it. `name` is null when
+ * nothing (unexpired) is held for that id; `held` is the same array when nothing changed.
+ */
+export function takeLateFarSpeakerName(
+  held: readonly HeldLateName[],
+  segmentId: string,
+  now: number,
+): { name: string | null; held: readonly HeldLateName[] } {
+  if (held.length === 0) return { name: null, held };
+  const live = withoutExpired(held, now);
+  const id = segmentId.trim().toLowerCase();
+  const index = live.findIndex((entry) => entry.segmentId === id);
+  if (index === -1) return { name: null, held: live };
+  return { name: live[index].speakerName, held: live.filter((_, at) => at !== index) };
+}

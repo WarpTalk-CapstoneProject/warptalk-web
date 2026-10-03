@@ -81,6 +81,12 @@ live lines):
   (caption + transcript) and returns `{}` when neither changed. It is not behind the transcript gate,
   because it adds no line. It goes away with the connection (`connection.stop()` in the effect
   cleanup), like every other handler on it.
+- A name that arrives BEFORE its line (the gateway's two consumer loops are not ordered, so this is
+  rare but real) is held in `heldLateSpeakerNames` and applied by `addTranscriptSegment` when the
+  line lands, by the same rule (`lateFarSpeakerNameFor`). It is held only when neither lane has that
+  id at all. The hold is bounded: `LATE_NAME_HOLD_MS` (10 s) and `LATE_NAME_HOLD_MAX` (50, oldest
+  dropped). Each entry is used once and cleared by `reset()`. Pure helpers:
+  `holdLateFarSpeakerName` / `takeLateFarSpeakerName`.
 - A revision of the same segment (`mergeTranscriptSegment`) keeps the name:
   `revisedFarSideSpeakerName` does not let a copy carrying the fallback take a named Meet line back
   to "nobody". A revision with a real name of its own still wins.
@@ -113,8 +119,10 @@ live lines):
 - `messages/{en,vi,ja}/meetingTranscript.json`: `speaker.googleMeetParticipants`
 - `scripts/check-transcript-speaker-contract.mjs`: rule 6
 - Late name: `speaker-identity.ts` (`applyLateFarSpeakerName`, `lateFarSpeakerNameFor`,
-  `revisedFarSideSpeakerName`), `src/types/realtime.ts` (`TranscriptSegmentSpeakerNamedDto`),
-  `src/stores/translationRoom-store.ts` (`nameTranscriptSegmentSpeaker`, `mergeTranscriptSegment`),
+  `revisedFarSideSpeakerName`, `holdLateFarSpeakerName`, `takeLateFarSpeakerName`),
+  `src/types/realtime.ts` (`TranscriptSegmentSpeakerNamedDto`),
+  `src/stores/translationRoom-store.ts` (`nameTranscriptSegmentSpeaker`, `heldLateSpeakerNames`,
+  `addTranscriptSegment`, `mergeTranscriptSegment`),
   `persistent-meeting-session.tsx` (handler), `use-bridge-widget-state.ts` (handler + revision),
   `transcript-catch-up.ts` (saved-row backstop), `__tests__/far-speaker-late-name.test.ts` (in
   `test:transcript-speaker`)

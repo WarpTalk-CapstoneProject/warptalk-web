@@ -5,8 +5,12 @@ import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
 import {
   applyLateFarSpeakerName,
+  holdLateFarSpeakerName,
+  lateFarSpeakerNameFor,
   revisedFarSideSpeakerName,
+  takeLateFarSpeakerName,
   type FarSpeakerLateName,
+  type HeldLateName,
 } from "../lib/transcript/speaker-identity.ts";
 import type {
   AiSuggestionDto,
@@ -55,6 +59,11 @@ interface TranslationRoomStoreState {
   transcriptPaused: boolean;
   /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
   withheldWhilePaused: number;
+  /**
+   * Late far-speaker names that arrived before their line (the gateway's two consumer loops are not
+   * ordered), applied when the line lands. Bounded in age and count — see holdLateFarSpeakerName.
+   */
+  heldLateSpeakerNames: readonly HeldLateName[];
   /**
    * WT-716 tier 2: merged clean sentences received live (TranscriptCleanSentenceReceived), highest
    * revision per id. Kept as sentences, not folded into the segments: a sentence REPLACES the
@@ -277,6 +286,7 @@ const initialState = {
   transcriptSegments: [],
   transcriptPaused: false,
   withheldWhilePaused: 0,
+  heldLateSpeakerNames: [] as readonly HeldLateName[],
   cleanSentences: [] as TranscriptCleanSentenceEventDto[],
   suggestions: {},
   chatMessages: [],
@@ -345,8 +355,14 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       ),
     })),
 
-  addTranscriptSegment: (segment) =>
+  addTranscriptSegment: (incoming) =>
     set((s) => {
+      // A late name that outran this line is applied as the line arrives, by the same rule as an
+      // event that finds it (lateFarSpeakerNameFor): a line that came named keeps its own name.
+      const taken = takeLateFarSpeakerName(s.heldLateSpeakerNames, incoming.segmentId, Date.now());
+      const heldName = taken.name ? lateFarSpeakerNameFor(incoming, taken.name) : null;
+      const segment = heldName ? { ...incoming, speakerName: heldName } : incoming;
+      const held = taken.held === s.heldLateSpeakerNames ? {} : { heldLateSpeakerNames: taken.held };
       const captionSegments = mergeTranscriptSegment(s.captionSegments, segment);
       // A revision of a line the transcript already holds keeps updating it, paused or not: the
       // line was said while recording, and only its wording is changing.
@@ -354,11 +370,13 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       if (s.transcriptPaused && !alreadyRecorded) {
         const alreadyCaptioned = s.captionSegments.some((existing) => existing.segmentId === segment.segmentId);
         return {
+          ...held,
           captionSegments,
           withheldWhilePaused: s.withheldWhilePaused + (alreadyCaptioned ? 0 : 1),
         };
       }
       return {
+        ...held,
         captionSegments,
         transcriptSegments: mergeTranscriptSegment(s.transcriptSegments, segment),
       };
@@ -366,16 +384,25 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
 
   // The late far-speaker name renames a line in BOTH lanes, paused or not: it adds nothing to
   // either, it only says who spoke a line the lane already holds — the caption runs group by the
-  // same speaker key the panel does. `{}` when neither lane holds a line to name, which is also
-  // every repeat of the event, so a redelivery re-renders nothing.
+  // same speaker key the panel does. `{}` when there is nothing to name, which is also every
+  // repeat of the event, so a redelivery re-renders nothing.
+  //
+  // Neither lane holding the id at all is a different case from holding a line it may not rename:
+  // the event may have outrun its line, so the name is held briefly (heldLateSpeakerNames) and
+  // addTranscriptSegment applies it. A line that IS here and keeps its name is simply left alone.
   nameTranscriptSegmentSpeaker: (late) =>
     set((s) => {
       const captionSegments = applyLateFarSpeakerName(s.captionSegments, late);
       const transcriptSegments = applyLateFarSpeakerName(s.transcriptSegments, late);
-      if (captionSegments === s.captionSegments && transcriptSegments === s.transcriptSegments) {
-        return {};
+      if (captionSegments !== s.captionSegments || transcriptSegments !== s.transcriptSegments) {
+        return { captionSegments, transcriptSegments };
       }
-      return { captionSegments, transcriptSegments };
+      const id = (late?.segmentId ?? "").trim().toLowerCase();
+      const holds = (lines: TranscriptSegmentDto[]) =>
+        lines.some((line) => line.segmentId.trim().toLowerCase() === id);
+      if (!id || holds(s.captionSegments) || holds(s.transcriptSegments)) return {};
+      const heldLateSpeakerNames = holdLateFarSpeakerName(s.heldLateSpeakerNames, late, Date.now());
+      return heldLateSpeakerNames === s.heldLateSpeakerNames ? {} : { heldLateSpeakerNames };
     }),
 
   /**
