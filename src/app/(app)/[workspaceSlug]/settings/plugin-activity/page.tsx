@@ -57,10 +57,7 @@ import {
 } from "@/components/ui/select";
 import { useAssistantPlugins, useWorkspacePluginToolAudits } from "@/hooks/use-assistant";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceRole, useWorkspaceRoleLoaded } from "@/hooks/use-workspace-role";
-import { WORKSPACE_PLUGIN_ACTIVITY_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
-import { pluginActivityAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 import {
   hasNextPluginActivityPage,
   toPluginActivityRows,
@@ -173,27 +170,6 @@ export default function WorkspacePluginActivityPage() {
     apply();
     setPage(0);
   };
-
-  // WarpBot answers this page's starters from the calls on screen (settings-assistant-snapshots.ts):
-  // counts, plugins and outcomes, never who made a call. Not registered until the log has been read.
-  const auditsRead = auditsQuery.data !== undefined;
-  const assistantSnapshot = useMemo(
-    () =>
-      canRead && auditsRead
-        ? pluginActivityAssistantSnapshot({
-            rows,
-            hasMore: hasNextPluginActivityPage(rows.length, PAGE_SIZE),
-            page,
-            filtered: pluginKey !== ALL || userId !== ALL,
-          })
-        : null,
-    [canRead, auditsRead, rows, page, pluginKey, userId],
-  );
-  useRegisterAssistantContext(
-    assistantSnapshot && workspaceId
-      ? { pageType: WORKSPACE_PLUGIN_ACTIVITY_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot }
-      : null,
-  );
 
   if (!workspaceId) return null;
 

@@ -1,6 +1,6 @@
 /**
- * The few text rules every WarpBot page snapshot shares (Insights Overview / Usage / Tools,
- * Billing, Plugins).
+ * The few text rules every WarpBot page snapshot shares (Insights Overview / Usage /
+ * Tools).
  *
  * The worker prints a snapshot as "Visible snapshot: key=value, key=value", joining pairs with
  * ", " — so a comma inside a value would read as the start of another pair, and a line break would

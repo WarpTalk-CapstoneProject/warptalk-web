@@ -7,14 +7,10 @@ import {
   PLATFORM_SCOPE_LABEL,
   PLATFORM_SUGGESTED_PROMPTS,
   suggestedPromptsFor,
-  WORKSPACE_BILLING_PAGE_TYPE,
-  WORKSPACE_BILLING_SUGGESTED_PROMPTS,
   WORKSPACE_INSIGHTS_PAGE_TYPE,
   WORKSPACE_INSIGHTS_SUGGESTED_PROMPTS,
   WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE,
   WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE,
-  WORKSPACE_PLUGINS_PAGE_TYPE,
-  WORKSPACE_PLUGINS_SUGGESTED_PROMPTS,
   WORKSPACE_TOOLS_SUGGESTED_PROMPTS,
   WORKSPACE_USAGE_SUGGESTED_PROMPTS,
 } from "../assistant-scope.ts";
@@ -60,8 +56,6 @@ describe("workspace Owner/Admin starters — one set per page context", () => {
       [WORKSPACE_INSIGHTS_PAGE_TYPE, WORKSPACE_INSIGHTS_SUGGESTED_PROMPTS],
       [WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE, WORKSPACE_USAGE_SUGGESTED_PROMPTS],
       [WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE, WORKSPACE_TOOLS_SUGGESTED_PROMPTS],
-      [WORKSPACE_BILLING_PAGE_TYPE, WORKSPACE_BILLING_SUGGESTED_PROMPTS],
-      [WORKSPACE_PLUGINS_PAGE_TYPE, WORKSPACE_PLUGINS_SUGGESTED_PROMPTS],
     ] as const;
     const seen = new Set<string>();
     for (const [pageType, prompts] of surfaces) {
@@ -75,7 +69,7 @@ describe("workspace Owner/Admin starters — one set per page context", () => {
   });
 
   test("a page type that only looks like one of them offers nothing", () => {
-    for (const pageType of ["workspace_billing_extra", "constructor", "toString", "__proto__", "WORKSPACE_BILLING"]) {
+    for (const pageType of ["workspace_insights_extra", "workspace_billing", "constructor", "toString", "__proto__", "WORKSPACE_INSIGHTS"]) {
       assert.deepEqual([...suggestedPromptsFor({ scope: "workspace", pageType })], [], pageType);
     }
   });
@@ -99,34 +93,6 @@ describe("workspace Insights starters — the owner's twins of the platform ones
       [...suggestedPromptsFor({ scope: "platform", pageType: WORKSPACE_INSIGHTS_PAGE_TYPE })],
       [...PLATFORM_SUGGESTED_PROMPTS],
     );
-  });
-});
-
-describe("workspace Settings starters — every settings tab an owner opens", () => {
-  test("each settings page type has its own three starters, and no two pages share a set", () => {
-    const pageTypes = [
-      "workspace_settings",
-      "workspace_security",
-      "workspace_member_roles",
-      "workspace_features",
-      "workspace_invoices",
-      "workspace_plugin_activity",
-    ];
-    const seen = new Set<string>();
-    for (const pageType of pageTypes) {
-      const prompts = suggestedPromptsFor({ scope: "workspace", pageType });
-      assert.equal(prompts.length, 3, pageType);
-      for (const prompt of prompts) {
-        assert.equal(seen.has(prompt), false, `${pageType}: "${prompt}" is offered on another page too`);
-        seen.add(prompt);
-      }
-    }
-  });
-
-  test("member roles asks for counts: WarpBot is never told who", () => {
-    for (const prompt of suggestedPromptsFor({ scope: "workspace", pageType: "workspace_member_roles" })) {
-      assert.match(prompt, /^How many /, prompt);
-    }
   });
 });
 

@@ -118,14 +118,6 @@ const SURFACES = [
   { file: "src/components/workspace/insights/insights-dashboard.tsx", type: "WORKSPACE_INSIGHTS_PAGE_TYPE", snapshot: "insightsAssistantSnapshot", label: "pageContextLabels.insights" },
   { file: "src/components/workspace/insights/usage-tab.tsx", type: "WORKSPACE_INSIGHTS_USAGE_PAGE_TYPE", snapshot: "usageAssistantSnapshot", label: "pageContextLabels.insightsUsage" },
   { file: "src/components/workspace/insights/tools-tab.tsx", type: "WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE", snapshot: "toolsAssistantSnapshot", label: "pageContextLabels.insightsTools" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/billing/page.tsx", type: "WORKSPACE_BILLING_PAGE_TYPE", snapshot: "billingAssistantSnapshot", label: "pageContextLabels.billing" },
-  { file: "src/components/assistant/plugins/workspace-plugins-page.tsx", type: "WORKSPACE_PLUGINS_PAGE_TYPE", snapshot: "pluginsAssistantSnapshot", label: "pageContextLabels.workspacePlugins" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/page.tsx", type: "WORKSPACE_SETTINGS_PAGE_TYPE", snapshot: "workspaceSettingsAssistantSnapshot", label: "pageContextLabels.workspaceSettings" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/security/page.tsx", type: "WORKSPACE_SECURITY_PAGE_TYPE", snapshot: "securityAssistantSnapshot", label: "pageContextLabels.security" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/member-roles/page.tsx", type: "WORKSPACE_MEMBER_ROLES_PAGE_TYPE", snapshot: "memberRolesAssistantSnapshot", label: "pageContextLabels.memberRoles" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/features/page.tsx", type: "WORKSPACE_FEATURES_PAGE_TYPE", snapshot: "featuresAssistantSnapshot", label: "pageContextLabels.features" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/billing/invoices/page.tsx", type: "WORKSPACE_INVOICES_PAGE_TYPE", snapshot: "invoicesAssistantSnapshot", label: "pageContextLabels.invoices" },
-  { file: "src/app/(app)/[workspaceSlug]/settings/plugin-activity/page.tsx", type: "WORKSPACE_PLUGIN_ACTIVITY_PAGE_TYPE", snapshot: "pluginActivityAssistantSnapshot", label: "pageContextLabels.pluginActivity" },
 ];
 for (const surface of SURFACES) {
   const page = code(read(surface.file));

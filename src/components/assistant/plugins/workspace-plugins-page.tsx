@@ -57,7 +57,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { WorkspacePage } from "@/components/workspace/page-chrome";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceRole, useWorkspaceRoleLoaded } from "@/hooks/use-workspace-role";
 import {
   useAddWorkspacePlugin,
@@ -86,11 +85,9 @@ import {
   type PrivatePluginDraftErrors,
 } from "@/lib/assistant/plugin-availability";
 import { pluginErrorMessage } from "@/lib/assistant/plugin-errors";
-import { WORKSPACE_PLUGINS_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
 import { WORKSPACE_TOOL_RULE_OPTIONS } from "@/lib/assistant/tool-policy";
 import { dateFnsCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { cn } from "@/lib/utils";
-import { pluginsAssistantSnapshot } from "@/lib/workspace/plugins-assistant-snapshot";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   PluginAuthMode,
@@ -821,18 +818,6 @@ export function WorkspacePluginsPage() {
 
   const overview = overviewQuery.data;
   const canManage = canManageWorkspacePlugins(overview, role);
-
-  // WarpBot answers this page's starters from the list on it (plugins-assistant-snapshot.ts). Only
-  // once the list has been read, and only for the roles that can read it.
-  const assistantSnapshot = useMemo(
-    () => (overview && isOwnerOrAdmin ? pluginsAssistantSnapshot(overview, canManage) : null),
-    [overview, isOwnerOrAdmin, canManage],
-  );
-  useRegisterAssistantContext(
-    assistantSnapshot && workspaceId
-      ? { pageType: WORKSPACE_PLUGINS_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot }
-      : null,
-  );
 
   // Everyone the page names: who asked, and who added a plugin the server did not name itself.
   const peopleToName = useMemo(

@@ -354,14 +354,6 @@ function buildPageContextLabels(
     workspace_insights: t("pageContextLabels.insights"),
     workspace_insights_usage: t("pageContextLabels.insightsUsage"),
     workspace_insights_tools: t("pageContextLabels.insightsTools"),
-    workspace_billing: t("pageContextLabels.billing"),
-    workspace_plugins: t("pageContextLabels.workspacePlugins"),
-    workspace_settings: t("pageContextLabels.workspaceSettings"),
-    workspace_security: t("pageContextLabels.security"),
-    workspace_member_roles: t("pageContextLabels.memberRoles"),
-    workspace_features: t("pageContextLabels.features"),
-    workspace_invoices: t("pageContextLabels.invoices"),
-    workspace_plugin_activity: t("pageContextLabels.pluginActivity"),
   };
 }
 

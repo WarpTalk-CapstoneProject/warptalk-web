@@ -34,10 +34,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceRole, useWorkspaceRoleLoaded } from "@/hooks/use-workspace-role";
-import { WORKSPACE_INVOICES_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
-import { invoicesAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 import { useInvoiceCheckout, useWorkspacePaymentHistory } from "@/hooks/use-workspace-payments";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import {
@@ -149,19 +146,6 @@ export default function WorkspaceInvoicesPage() {
   }, [invoices]);
 
   const total = data?.totalCount ?? invoices.length;
-
-  // WarpBot answers this page's starters from the invoices on screen
-  // (settings-assistant-snapshots.ts). Not registered until the list has been read.
-  const invoicesRead = data !== undefined;
-  const assistantSnapshot = useMemo(
-    () => (canView && invoicesRead ? invoicesAssistantSnapshot({ invoices, totalCount: total, page }) : null),
-    [canView, invoicesRead, invoices, total, page],
-  );
-  useRegisterAssistantContext(
-    assistantSnapshot && workspaceId
-      ? { pageType: WORKSPACE_INVOICES_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot }
-      : null,
-  );
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Until the role resolves, `useWorkspaceRole` reads as "member" — rendering the refusal then

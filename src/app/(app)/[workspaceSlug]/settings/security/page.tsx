@@ -64,9 +64,6 @@ import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { WORKSPACE_SECURITY_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
-import { securityAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 
 type ApiErrorLike = { response?: { status?: number } };
 
@@ -186,24 +183,6 @@ export default function WorkspaceSecurityPage() {
   const domains = useMemo(
     () => (verifiedDomainsQuery.data || []).map((entry: { domain: string }) => entry.domain),
     [verifiedDomainsQuery.data],
-  );
-
-  // WarpBot answers this page's starters from the SAVED settings (settings-assistant-snapshots.ts),
-  // never the draft. A domain list that was not read is left out rather than sent as "none".
-  const assistantRole = (workspaceQuery.data?.role || storeRole || "").toLowerCase();
-  const savedSettings = settingsQuery.data;
-  const domainsRead = verifiedDomainsQuery.data !== undefined;
-  const assistantSnapshot = useMemo(
-    () =>
-      savedSettings && (assistantRole === "owner" || assistantRole === "admin")
-        ? securityAssistantSnapshot({ settings: savedSettings, domains: domainsRead ? domains : undefined })
-        : null,
-    [savedSettings, assistantRole, domainsRead, domains],
-  );
-  useRegisterAssistantContext(
-    assistantSnapshot && activeWorkspaceId
-      ? { pageType: WORKSPACE_SECURITY_PAGE_TYPE, workspaceId: activeWorkspaceId, snapshot: assistantSnapshot }
-      : null,
   );
 
   if (!activeWorkspaceId) return null;

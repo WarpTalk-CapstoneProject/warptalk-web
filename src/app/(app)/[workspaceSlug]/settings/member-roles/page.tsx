@@ -13,10 +13,7 @@ import {
   usePreviewWorkspaceMemberRoleChange,
   useWorkspaceMembers,
 } from "@/hooks/use-workspace";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceRole, useWorkspaceRoleLoaded } from "@/hooks/use-workspace-role";
-import { WORKSPACE_MEMBER_ROLES_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
-import { memberRolesAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 import { getErrorMessage } from "@/lib/api/errors";
 import {
   buildMemberRoleChangeRequest,
@@ -193,20 +190,6 @@ export default function MemberRolesPage() {
       );
     }
   };
-
-  // WarpBot answers this page's starters from counts of the list (settings-assistant-snapshots.ts);
-  // nobody on it is named. Owner only, as the list itself is.
-  const membersTotal = membersQuery.data?.total;
-  const membersRead = membersQuery.data !== undefined;
-  const assistantSnapshot = useMemo(
-    () => (role === "owner" && membersRead ? memberRolesAssistantSnapshot({ members, total: membersTotal }) : null),
-    [role, membersRead, members, membersTotal],
-  );
-  useRegisterAssistantContext(
-    assistantSnapshot && workspaceId
-      ? { pageType: WORKSPACE_MEMBER_ROLES_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot }
-      : null,
-  );
 
   if (!workspaceId || !roleLoaded) {
     return (

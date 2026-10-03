@@ -353,14 +353,6 @@
       "insights": "Insights",
       "insightsUsage": "Insights · Usage",
       "insightsTools": "Insights · Tools",
-      "billing": "Billing",
-      "workspacePlugins": "Plugins",
-      "workspaceSettings": "Workspace Settings",
-      "security": "Security",
-      "memberRoles": "Member roles",
-      "features": "Features",
-      "invoices": "Invoices",
-      "pluginActivity": "Plugin activity",
       "fallback": "Page"
     }
   },
