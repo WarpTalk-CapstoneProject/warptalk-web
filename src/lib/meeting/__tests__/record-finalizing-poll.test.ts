@@ -142,3 +142,11 @@ test("deadline: a client clock behind the server's is capped to one window per l
   const delay = finalizingDeadlineDelayMs({ status: "ended", endedAt: ENDED_AT }, ENDED_MS - 10 * 60_000);
   assert.equal(delay, RECORD_FINALIZING_WINDOW_MS + 1);
 });
+
+test("finalizing: a client clock more than one window behind the server's shows the record", () => {
+  const room = { status: "ended", endedAt: ENDED_AT, record: null };
+  // Three hours behind: without a bound the spinner (and its polling) would last three hours.
+  assert.equal(isRecordFinalizing(room, ENDED_MS - 3 * 60 * 60_000), false);
+  // A few minutes behind is still a fresh end.
+  assert.equal(isRecordFinalizing(room, ENDED_MS - 2 * 60_000), true);
+});

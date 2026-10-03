@@ -68,8 +68,8 @@ export function endedRecordRefetchInterval(
  * The page sets ONE timer for this delay. Without it, isRecordFinalizing's cap was only ever
  * evaluated on a render, and a page with nothing re-rendering it stayed on the spinner past five
  * minutes until a reload. A clock behind the server's reads a fresh end as being in the future;
- * the delay is then simply longer than five minutes, capped so a wildly wrong clock cannot park
- * the screen for hours.
+ * the delay is then longer than five minutes, one window per leg. isRecordFinalizing stops
+ * treating an end more than one window in the future as finalizing, so at most two legs run.
  */
 export function finalizingDeadlineDelayMs(
   input: { status?: string | null; endedAt?: string | null },
