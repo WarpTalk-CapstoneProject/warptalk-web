@@ -251,6 +251,8 @@
     "nextWeek": "次の週"
   },
   "chatbot": {
+    "stopReply": "停止",
+    "replyStopped": "停止しました",
     "askWarpBot": "WarpBotに質問",
     "newChat": "新しいチャット",
     "chatHistory": "チャット履歴",

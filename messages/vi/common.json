@@ -251,6 +251,8 @@
     "nextWeek": "Tuần sau"
   },
   "chatbot": {
+    "stopReply": "Dừng",
+    "replyStopped": "Đã dừng",
     "askWarpBot": "Hỏi WarpBot",
     "newChat": "Cuộc trò chuyện mới",
     "chatHistory": "Lịch sử trò chuyện",

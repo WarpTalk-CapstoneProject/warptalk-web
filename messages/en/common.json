@@ -251,6 +251,8 @@
     "nextWeek": "Next week"
   },
   "chatbot": {
+    "stopReply": "Stop",
+    "replyStopped": "Stopped",
     "askWarpBot": "Ask WarpBot",
     "newChat": "New chat",
     "chatHistory": "Chat history",

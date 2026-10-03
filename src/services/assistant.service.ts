@@ -46,6 +46,11 @@ export const assistantService = {
     });
   },
 
+  /** WarpBot's Stop: the worker ends the turn and keeps what it had written. */
+  stopReply(conversationId: string, messageId: string) {
+    return apiClient.post<void>(API.assistant.stopReply(conversationId, messageId));
+  },
+
   sendMessage(
     conversationId: string,
     content: string,
@@ -102,6 +107,9 @@ export const assistantService = {
         API.assistant.platform.sendMessage(conversationId),
         { content },
       );
+    },
+    stopReply(conversationId: string, messageId: string) {
+      return apiClient.post<void>(API.assistant.platform.stopReply(conversationId, messageId));
     },
     archiveConversation(id: string) {
       return apiClient.delete<void>(API.assistant.platform.conversation(id));
