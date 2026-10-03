@@ -255,6 +255,7 @@
     "replyStopped": "Stopped",
     "askWarpBot": "Ask WarpBot",
     "newChat": "New chat",
+    "closeChat": "Close",
     "chatHistory": "Chat history",
     "activePageContext": "Active page context",
     "removePageContext": "Remove page context",

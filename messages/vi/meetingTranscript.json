@@ -160,7 +160,13 @@
       "findWhoKnows": "Tìm người có thể biết",
       "checkInDocuments": "Đối chiếu với tài liệu",
       "checkWhichIsRight": "Kiểm tra bên nào đúng",
-      "draftTask": "Soạn thành công việc"
+      "draftTask": "Soạn thành công việc",
+      "researchTopic": "Nghiên cứu",
+      "planExecution": "Lên kế hoạch thực hiện",
+      "draftGlossaryEntry": "Soạn mục thuật ngữ",
+      "verifyOnline": "Kiểm chứng trên web",
+      "researchHowTo": "Tìm hiểu cách làm",
+      "findRelatedWork": "Tìm việc liên quan"
     },
     "disclaimer": "Được tạo tự động — hãy kiểm tra trước khi dựa vào.",
     "dismissAria": "Bỏ qua gợi ý"

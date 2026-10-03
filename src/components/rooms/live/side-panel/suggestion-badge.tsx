@@ -9,9 +9,14 @@ import {
   Warning,
   X,
   MagnifyingGlass,
+  ListChecks,
+  Globe,
+  Notebook,
+  UsersThree,
+  ChatCircleDots,
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { AiSuggestionDto } from "@/types/realtime";
 import { actionsFor } from "@/lib/meeting/suggestion-actions";
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
@@ -43,6 +48,20 @@ const CATEGORY_ICONS = {
  */
 const KNOWN_CATEGORIES = new Set(["clarification", "term", "action", "correction", "fact"]);
 
+/** What each action does, at a glance — research reads as a globe, a plan as a checklist. */
+const ACTION_ICONS = {
+  askWarpBot: ChatCircleDots,
+  askQuestion: ChatCircleDots,
+  researchTopic: Globe,
+  researchTerm: Globe,
+  researchHowTo: Globe,
+  verifyOnline: Globe,
+  planExecution: ListChecks,
+  draftTask: CheckSquare,
+  draftGlossaryEntry: Notebook,
+  findWhoKnows: UsersThree,
+} as const;
+
 function categoryKey(category: string) {
   return KNOWN_CATEGORIES.has(category) ? category : "other";
 }
@@ -64,8 +83,8 @@ function categoryKey(category: string) {
  *     wants asking, a figure wants checking against the documents it should have come from, a
  *     contradiction wants resolving. One label for all five would have fitted none of them.
  *
- * Two at most. This card sits inside a transcript bubble in a side panel, and a row of
- * choices there competes with the conversation it is commenting on.
+ * Up to four (MAX_ACTIONS): the primary step for the category, then the broader ones —
+ * research, a plan — that make the hint a place work starts. They wrap onto a second row.
  */
 /**
  * The mark on a transcript bubble that says the AI noticed something about this line.
@@ -137,6 +156,9 @@ export function SuggestionDetail({
   const category = categoryKey(suggestion.category);
   const hasDetail = Boolean(suggestion.detail?.trim());
   const askWarpBot = useAssistantWidgetStore((state) => state.askWarpBot);
+  // The reader's interface language decides WarpBot's reply language — not the transcript's,
+  // which is what the suggestion text is written in.
+  const locale = useLocale();
   // Indexed here too rather than shared through a helper — same reason as in SuggestionBadge:
   // react-hooks/static-components has to see the fixed set, and cannot through a call.
   const Icon =
@@ -198,7 +220,10 @@ export function SuggestionDetail({
           {/* The action, under the evidence and above the disclaimer: it is only worth offering
               once the reader has seen what the hint is and where it came from. */}
           <div className="mt-2 flex flex-wrap gap-1">
-            {actionsFor(suggestion).map((action) => (
+            {actionsFor(suggestion, locale).map((action) => {
+              const ActionIcon =
+                ACTION_ICONS[action.id as keyof typeof ACTION_ICONS] ?? MagnifyingGlass;
+              return (
               <button
                 key={action.id}
                 type="button"
@@ -209,10 +234,11 @@ export function SuggestionDetail({
                     : "bg-primary/10 text-primary hover:bg-primary/20"
                 }`}
               >
-                <MagnifyingGlass className="h-2.5 w-2.5" weight="bold" aria-hidden />
+                <ActionIcon className="h-2.5 w-2.5" weight="bold" aria-hidden />
                 {t(`actions.${action.id}`)}
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {/* Said once, at the bottom, because an unprompted hint that does not say where it

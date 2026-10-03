@@ -160,7 +160,13 @@
       "findWhoKnows": "詳しい人を探す",
       "checkInDocuments": "資料と照合する",
       "checkWhichIsRight": "どちらが正しいか確認",
-      "draftTask": "タスクとして作成"
+      "draftTask": "タスクとして作成",
+      "researchTopic": "調べる",
+      "planExecution": "実行計画を立てる",
+      "draftGlossaryEntry": "用語集の項目を作成",
+      "verifyOnline": "Webで検証",
+      "researchHowTo": "やり方を調べる",
+      "findRelatedWork": "関連する作業を探す"
     },
     "disclaimer": "自動生成されています。参考にする前に内容をご確認ください。",
     "dismissAria": "提案を閉じる"

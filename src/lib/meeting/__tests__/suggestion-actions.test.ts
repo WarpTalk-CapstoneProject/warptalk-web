@@ -16,7 +16,9 @@ import {
   CATEGORY_ACTIONS,
   GENERIC_ACTIONS,
   IMPERATIVE_OPENERS,
+  MAX_ACTIONS,
   actionsFor,
+  replyLanguageFor,
 } from "../suggestion-actions.ts";
 
 const SUBJECT = "Nói cái gì vậy?";
@@ -87,10 +89,36 @@ test("an unknown category still gets a real request rather than nothing", () => 
   assert.match(action.prompt, /^Answer this/);
 });
 
-test("no more than two actions reach the card", () => {
+test("no more than MAX_ACTIONS reach the card", () => {
   for (const category of Object.keys(CATEGORY_ACTIONS)) {
-    assert.ok(actionsFor({ category, content: SUBJECT, detail: DETAIL }).length <= 2);
+    assert.ok(actionsFor({ category, content: SUBJECT, detail: DETAIL }).length <= MAX_ACTIONS);
   }
+});
+
+// Reported: an action item offered only "Draft this task", so the hint could hand WarpBot a task
+// and nothing else — no research, no plan.
+test("an action item can be planned and researched, not only drafted", () => {
+  const ids = actionsFor({ category: "action", content: SUBJECT, detail: DETAIL }).map((a) => a.id);
+  for (const id of ["draftTask", "planExecution", "researchHowTo"]) {
+    assert.ok(ids.includes(id), `action suggestions are missing ${id}`);
+  }
+});
+
+test("every category offers more than one step", () => {
+  for (const category of [...Object.keys(CATEGORY_ACTIONS), "something-new"]) {
+    assert.ok(actionsFor({ category, content: SUBJECT }).length >= 2, `${category} offers one step`);
+  }
+});
+
+// Reported: an English reader pressed an English button under a Vietnamese suggestion and got a
+// Vietnamese ask card back. The prompt now names the reply language from the reader's locale.
+test("every prompt names the reader's language, and English when the locale is unknown", () => {
+  for (const [locale, language] of [["en", "English"], ["vi", "Vietnamese"], ["ja", "Japanese"], ["ja-JP", "Japanese"], ["fr", "English"], [undefined, "English"]] as const) {
+    for (const action of actionsFor({ category: "action", content: SUBJECT, detail: DETAIL }, locale)) {
+      assert.ok(action.prompt.endsWith(`Reply in ${language}, including any questions you ask me — even where the meeting quote above is in another language.`), `${locale}: ${action.id}`);
+    }
+  }
+  assert.equal(replyLanguageFor(null), "English");
 });
 
 // WT-922. The card prints `t(\`actions.${id}\`)`, not `label`, so the reader sees the button in
@@ -106,7 +134,8 @@ function suggestionCatalog(locale: string): {
 }
 
 test("every action id has a button label in every interface language", () => {
-  const ids = [...GENERIC_ACTIONS, ...Object.values(CATEGORY_ACTIONS).flat()].map((action) => action.id);
+  // Deduplicated by identity: one shared action (Research this) is offered in several categories.
+  const ids = [...new Set([...GENERIC_ACTIONS, ...Object.values(CATEGORY_ACTIONS).flat()])].map((action) => action.id);
   assert.equal(new Set(ids).size, ids.length, "two actions share an id, so one of them shows the other's label");
   for (const locale of ["en", "vi", "ja"]) {
     const { actions } = suggestionCatalog(locale);
