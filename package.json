@@ -91,7 +91,7 @@
     "test:hub-transport": "node scripts/check-hub-transport-contract.mjs",
     "test:meeting-ai-trigger": "node scripts/check-meeting-ai-trigger-contract.mjs",
     "test:meeting-duration": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-duration.test.ts",
-    "test:recording-control": "node scripts/check-recording-control-contract.mjs",
+    "test:recording-control": "node scripts/check-recording-control-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/join-host-state.test.ts",
     "test:track-processors": "node scripts/check-track-processors-contract.mjs",
     "test:room-detail-thread": "node scripts/check-room-detail-thread-flow.mjs",
     "test:production-billing": "node scripts/check-production-billing-surface.mjs",
