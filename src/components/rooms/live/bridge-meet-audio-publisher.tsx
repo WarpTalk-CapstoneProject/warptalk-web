@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ConnectionState, RoomEvent, Track, type LocalTrackPublication } from "livekit-client";
+import { ConnectionState, RoomEvent, Track, type LocalTrack } from "livekit-client";
 import { useRoomContext } from "@livekit/components-react";
 
 import { useSupervisedPublish } from "@/hooks/use-supervised-publish";
@@ -17,8 +17,9 @@ import {
   meetAudioMicGain,
   meetAudioMicrophoneCandidates,
   meetAudioMicrophoneConstraints,
-  meetAudioPublishState,
+  meetAudioPublicationStatus,
   reduceFarSpeech,
+  settleLatest,
   settleWithin,
   shouldReopenMeetAudioMic,
   type FarSpeechState,
@@ -42,7 +43,11 @@ interface Mix {
   /** The gain last scheduled on localGain: a new ramp only when the target changes. */
   gainTarget: number;
   vadTimer: ReturnType<typeof setInterval>;
-  publication: LocalTrackPublication | null;
+  /**
+   * The LiveKit track the mix was published as. Its publication is looked up by this object at
+   * every check: LiveKit's own republish creates a new publication for the same track.
+   */
+  localTrack: LocalTrack | null;
   drop: () => void;
 }
 
@@ -152,8 +157,15 @@ export function BridgeMeetAudioPublisher({
     /** Serializes openMic: a getUserMedia that lands after a newer request is discarded. */
     const micRequests = createLatestRequest();
 
+    /** The newest openMic call: publish() waits for the one that wins (settleLatest). */
+    let latestMicOpen: Promise<boolean> = Promise.resolve(false);
+    const openMic = (mix: Mix): Promise<boolean> => {
+      latestMicOpen = openMicNow(mix);
+      return latestMicOpen;
+    };
+
     /** Opens the microphone copy into `mix`, replacing the one there. Device first, then default. */
-    const openMic = async (mix: Mix): Promise<boolean> => {
+    const openMicNow = async (mix: Mix): Promise<boolean> => {
       const request = micRequests.begin();
       const current = () => micRequests.isLatest(request) && mixRef.current === mix && alive;
       const wantedDevice = deviceRef.current;
@@ -212,16 +224,44 @@ export function BridgeMeetAudioPublisher({
       if (mix && mix.mic?.deviceId !== deviceRef.current) void openMic(mix);
     };
 
+    /** The local publication of `track`, if the participant has one (by object, not by sid). */
+    const publicationOf = (track: LocalTrack | null) => {
+      if (!track) return undefined;
+      for (const publication of room.localParticipant.trackPublications.values()) {
+        if (publication.track === track) return publication;
+      }
+      return undefined;
+    };
+
+    /** Unpublishes every `meet-audio` this participant still has: never two of them. */
+    const unpublishEveryMeetAudio = async () => {
+      const stale = Array.from(room.localParticipant.trackPublications.values()).filter(
+        (publication) => publication.trackName === MEET_AUDIO_TRACK_NAME && publication.track,
+      );
+      await Promise.all(
+        stale.map((publication) =>
+          room.localParticipant.unpublishTrack(publication.track as LocalTrack, true).catch(() => undefined),
+        ),
+      );
+    };
+
     const publish = async (): Promise<string> => {
+      // The ONE lifecycle check (meetAudioPublicationStatus), run by the supervisor every few
+      // seconds. No event handler drops the mix: LiveKit's republishAllTracks unpublishes and
+      // republishes the same track, and tearing it down in between left two publications.
       const existing = mixRef.current;
-      const state = meetAudioPublishState({
+      const status = meetAudioPublicationStatus({
         hasMix: Boolean(existing),
-        publishedTrackSid: existing?.publication?.trackSid ?? null,
-        localTrackSids: room.localParticipant.trackPublications.keys(),
+        publicationPresent: Boolean(publicationOf(existing?.localTrack ?? null)),
+        roomConnected: room.state === ConnectionState.Connected,
+        // Private in livekit-client; set for exactly the length of republishAllTracks.
+        liveKitRepublishing: Boolean(
+          (room.localParticipant as unknown as { republishPromise?: unknown }).republishPromise,
+        ),
       });
-      if (state === "published") return "published";
-      if (state === "stale") {
-        // The mix is here but its publication is not: torn down, and published afresh below.
+      if (status === "present") return "published";
+      if (status === "republishing") return "LiveKit is reconnecting or republishing meet-audio";
+      if (status === "lost") {
         console.warn("[bridge] meet-audio was no longer published; publishing it again.");
         existing?.drop();
       }
@@ -276,9 +316,13 @@ export function BridgeMeetAudioPublisher({
         clearInterval(current.vadTimer);
         current.far?.node.disconnect();
         current.mic?.stream.getTracks().forEach((track) => track.stop());
-        const published = current.publication?.track;
-        if (published) void room.localParticipant.unpublishTrack(published, true).catch(() => {});
-        else mixed.stop();
+        // Unpublished only if the participant still has it; the track and the context are always
+        // stopped here, whatever unpublishTrack does (it returns early, without stopping anything,
+        // for a publication that is already gone).
+        const published = publicationOf(current.localTrack);
+        if (published?.track) void room.localParticipant.unpublishTrack(published.track, true).catch(() => {});
+        current.localTrack?.stop();
+        mixed.stop();
         void context.close().catch(() => {});
       };
       const mix: Mix = {
@@ -292,19 +336,24 @@ export function BridgeMeetAudioPublisher({
         farSpeech: INITIAL_FAR_SPEECH,
         gainTarget: 0,
         vadTimer,
-        publication: null,
+        localTrack: null,
         drop,
       };
       mixRef.current = mix;
       connectFarSide(farSideRef.current);
       // Before the publish, so MEET_AUDIO_MIC_ATTRIBUTE is set (or its failure logged, at most
       // MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS later) when the template first sees the track.
-      await openMic(mix);
+      // If a newer open (a device switch, an unplug) superseded this one, wait for the one that
+      // won, so the attribute published before the track describes the microphone actually in it.
+      void openMic(mix);
+      await settleLatest(() => latestMicOpen);
       if (mixRef.current !== mix || !alive) {
         drop();
         return "the recording no longer needs it";
       }
 
+      // Never two: whatever meet-audio is still on this participant goes before the new one.
+      await unpublishEveryMeetAudio();
       try {
         const publication = await room.localParticipant.publishTrack(mixed, {
           name: MEET_AUDIO_TRACK_NAME,
@@ -317,9 +366,10 @@ export function BridgeMeetAudioPublisher({
         if (mixRef.current !== mix) {
           // Torn down while the publish was in flight.
           void room.localParticipant.unpublishTrack(mixed, true).catch(() => {});
+          publication.track?.stop();
           return "the recording no longer needs it";
         }
-        mix.publication = publication;
+        mix.localTrack = publication.track ?? null;
       } catch {
         drop();
         return "the publish was refused";
@@ -347,23 +397,12 @@ export function BridgeMeetAudioPublisher({
       deviceRef.current = deviceId;
       reopenMicRef.current?.();
     };
-    // The publication went away under a live mix (the SFU, a reconnect that did not carry it): the
-    // mix is torn down now, and the supervisor's next check publishes a fresh one.
-    const onLocalTrackUnpublished = (publication: LocalTrackPublication) => {
-      const mix = mixRef.current;
-      if (!mix?.publication || publication.trackSid !== mix.publication.trackSid) return;
-      console.warn("[bridge] meet-audio was unpublished; the supervisor will publish it again.");
-      mix.publication = null;
-      mix.drop();
-    };
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveDeviceChanged, onActiveDeviceChanged);
-    room.on(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
     return () => {
       alive = false;
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.ActiveDeviceChanged, onActiveDeviceChanged);
-      room.off(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
       controlRef.current = null;
       reopenMicRef.current = null;
       mixRef.current?.drop();

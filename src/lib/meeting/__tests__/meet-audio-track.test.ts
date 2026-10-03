@@ -11,7 +11,8 @@ import { rmsToDbfs } from "../barge-in.ts";
 import {
   INITIAL_FAR_SPEECH,
   createLatestRequest,
-  meetAudioPublishState,
+  meetAudioPublicationStatus,
+  settleLatest,
   settleWithin,
   MEET_AUDIO_DUCK_GAIN,
   MEET_AUDIO_FAR_SPEECH_HANG_MS,
@@ -150,15 +151,25 @@ test("settleWithin reports ok, error and timeout, and never throws", async () =>
   assert.deepEqual(await settleWithin(new Promise(() => {}), 5), { outcome: "timeout" });
 });
 
-test("a mix whose publication left the local participant is stale, not published", () => {
-  assert.equal(meetAudioPublishState({ hasMix: false, publishedTrackSid: null, localTrackSids: [] }), "none");
-  assert.equal(
-    meetAudioPublishState({ hasMix: true, publishedTrackSid: "TR_a", localTrackSids: ["TR_mic", "TR_a"] }),
-    "published",
-  );
-  assert.equal(
-    meetAudioPublishState({ hasMix: true, publishedTrackSid: "TR_a", localTrackSids: ["TR_mic"] }),
-    "stale",
-  );
-  assert.equal(meetAudioPublishState({ hasMix: true, publishedTrackSid: null, localTrackSids: [] }), "stale");
+test("lifecycle: present, republishing (keep the track), lost (tear down), none", () => {
+  const base = { hasMix: true, publicationPresent: true, roomConnected: true, liveKitRepublishing: false };
+  assert.equal(meetAudioPublicationStatus({ ...base, hasMix: false }), "none");
+  assert.equal(meetAudioPublicationStatus(base), "present");
+  // LiveKit's republishAllTracks: unpublished for a moment, the same track about to come back.
+  assert.equal(meetAudioPublicationStatus({ ...base, publicationPresent: false, liveKitRepublishing: true }), "republishing");
+  // Reconnecting: not connected, so not lost either.
+  assert.equal(meetAudioPublicationStatus({ ...base, publicationPresent: false, roomConnected: false }), "republishing");
+  assert.equal(meetAudioPublicationStatus({ ...base, publicationPresent: false }), "lost");
+});
+
+test("settleLatest returns the result of the newest request, waiting for one issued meanwhile", async () => {
+  let resolveNewer: (value: string) => void = () => {};
+  const older = Promise.resolve("old: no microphone");
+  const newer = new Promise<string>((resolve) => (resolveNewer = resolve));
+  let latest: Promise<string> = older;
+  const settled = settleLatest(() => latest);
+  latest = newer; // a newer open superseded it before it settled
+  resolveNewer("new: microphone open");
+  assert.equal(await settled, "new: microphone open");
+  assert.equal(await settleLatest(() => older), "old: no microphone");
 });

@@ -82,6 +82,17 @@ expect(
   "the microphone copy must be ducked while the far side sounds (echo of Meet's speakers)",
 );
 expect(
+  publisher,
+  /await unpublishEveryMeetAudio\(\);\s*try \{\s*const publication = await room\.localParticipant\.publishTrack\(mixed,/,
+  PUBLISHER,
+  "every leftover meet-audio must be unpublished before a new mix is published (never two)",
+);
+if (/RoomEvent\.LocalTrackUnpublished/.test(publisher)) {
+  failures.push(
+    `${PUBLISHER}: no LocalTrackUnpublished handler may drop the mix (LiveKit's republishAllTracks unpublishes and republishes the same track)`,
+  );
+}
+expect(
   template,
   /ParticipantAttributesChanged/,
   TEMPLATE,

@@ -212,21 +212,44 @@ export async function settleWithin(
 }
 
 /**
- * Whether `meet-audio` is really on the wire. A mix in memory is not enough: the publication can
- * go away under it (unpublished by the SFU, a reconnect that did not carry it back) while the mix
- * stays, and the supervisor was then told "published" for a track nobody could subscribe to.
- *
- *   none       no mix: publish one.
- *   published  the mix's publication is one the local participant still has.
- *   stale      a mix whose publication is gone: tear it down and publish again.
+ * Waits until the LATEST of a series of requests has settled, and returns its result. `latest` is
+ * read again after every settle: a newer request issued meanwhile is waited for too. The publisher
+ * uses it so the microphone attribute it publishes before the track reflects the open that won,
+ * not one a newer open superseded.
  */
-export function meetAudioPublishState(input: {
+export async function settleLatest<T>(latest: () => Promise<T>): Promise<T> {
+  let current = latest();
+  for (;;) {
+    const value = await current;
+    const next = latest();
+    if (next === current) return value;
+    current = next;
+  }
+}
+
+/**
+ * Where `meet-audio` stands, decided once per supervisor check (the ONE lifecycle check; no event
+ * handler tears the mix down any more).
+ *
+ *   none          no mix: publish one.
+ *   present       the local participant has a publication of the mix's own track (looked up by
+ *                 the track object, so a publication LiveKit re-created for it still counts).
+ *   republishing  absent, but the room is reconnecting or LiveKit is in republishAllTracks, which
+ *                 unpublishes every track (without stopping it) and publishes the same track
+ *                 again. Tearing the mix down here republished a STOPPED track as a silent
+ *                 meet-audio next to a fresh mix: two publications. Keep the track alive and wait.
+ *   lost          absent while connected and nothing is republishing it: tear down, publish anew.
+ */
+export type MeetAudioPublicationStatus = "none" | "present" | "republishing" | "lost";
+
+export function meetAudioPublicationStatus(input: {
   hasMix: boolean;
-  publishedTrackSid: string | null;
-  localTrackSids: Iterable<string>;
-}): "none" | "published" | "stale" {
+  publicationPresent: boolean;
+  roomConnected: boolean;
+  liveKitRepublishing: boolean;
+}): MeetAudioPublicationStatus {
   if (!input.hasMix) return "none";
-  if (!input.publishedTrackSid) return "stale";
-  for (const sid of input.localTrackSids) if (sid === input.publishedTrackSid) return "published";
-  return "stale";
+  if (input.publicationPresent) return "present";
+  if (!input.roomConnected || input.liveKitRepublishing) return "republishing";
+  return "lost";
 }
