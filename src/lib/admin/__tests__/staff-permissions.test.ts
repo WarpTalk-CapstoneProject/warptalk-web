@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { parseAdminAccountTab } from "../account-tabs.ts";
 import { ADMIN_PALETTE_ACTIONS, ADMIN_PALETTE_PAGES } from "../command-palette.ts";
 import {
   ADMIN_PALETTE_ACTION_PERMISSIONS,
@@ -100,5 +101,28 @@ describe("staff permissions (G10)", () => {
     assert.equal(canManageStaffMember(lead, "a", { ...target, isSuperAdmin: true }), false);
     assert.equal(canManageStaffMember(SUPER, "a", { ...target, isSuperAdmin: true }), true);
     assert.equal(canManageStaffMember(SUPER, "b", target), false);
+  });
+});
+
+describe("3 Oct 2026 — /admin/account, every staff member's own profile and plugin connections", () => {
+  it("is open to any staff member, whatever their role grants", () => {
+    assert.equal(canViewAdminPath(staff(), "/admin/account"), true);
+    assert.equal(canViewAdminPath(staff(ADMIN_PERMISSIONS.billingRead), "/admin/account"), true);
+  });
+
+  it("is never where a staff member lands instead of a platform page", () => {
+    // The first viewable entry is the landing page; /admin itself is open to everyone and first.
+    assert.equal(firstViewableAdminHref(staff()), "/admin");
+    assert.equal(
+      ADMIN_ROUTE_PERMISSIONS[ADMIN_ROUTE_PERMISSIONS.length - 1]?.href,
+      "/admin/account",
+    );
+  });
+
+  it("reads its tab from the URL and falls back to the profile", () => {
+    assert.equal(parseAdminAccountTab("connections"), "connections");
+    assert.equal(parseAdminAccountTab("profile"), "profile");
+    assert.equal(parseAdminAccountTab(null), "profile");
+    assert.equal(parseAdminAccountTab("billing"), "profile");
   });
 });

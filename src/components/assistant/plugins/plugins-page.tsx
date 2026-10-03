@@ -864,6 +864,15 @@ const CONSENT_CALLBACK_ERROR_KEYS = [
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
 
 export default function PluginsPage() {
+  return <PluginsPageView />;
+}
+
+/**
+ * The page body. `personal` is the admin portal's account page (3 Oct 2026): staff connect plugins
+ * for their own account, used by the platform WarpBot, which has no workspace - so nothing here is
+ * read from or sent with the workspace the shell happens to remember.
+ */
+export function PluginsPageView({ personal = false }: { personal?: boolean } = {}) {
   // The catalog is personal — a plugin is installed and connected by a person — but the workspace
   // the user is browsing from decides whether its members may use plugins at all, and only a listing
   // that NAMES that workspace comes back carrying its verdict. Without this the block notice, the
@@ -874,8 +883,10 @@ export default function PluginsPage() {
   // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
   // the shell reads the active workspace on routes like this one.
   const t = useTranslations("pluginsPage");
-  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const storedWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const storedWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const workspaceId = personal ? null : storedWorkspaceId;
+  const workspaceName = personal ? null : storedWorkspaceName;
 
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();

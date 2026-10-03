@@ -85,6 +85,7 @@ import {
   LinkSimple,
   Devices,
   IdentificationBadge,
+  IdentificationCard,
   UserGear,
   Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
@@ -614,6 +615,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               so the button stands alone — an admin console with no way to sign out is how the
               portal shipped once already. */}
           <div className="flex shrink-0 flex-col items-center gap-1 border-t border-border/30 py-3">
+            <Link
+              href="/admin/account"
+              title={t("adminNav.items.accountSettings")}
+              aria-label={t("adminNav.items.accountSettings")}
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <IdentificationCard size={16} weight="duotone" />
+            </Link>
             {backHref && (
               <Link
                 href={backHref}
@@ -687,6 +696,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
         {user && (
           <div className="group flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+            {/* The staff member's own profile and plugin connections (/admin/account). */}
+            <Link
+              href="/admin/account"
+              title={t("adminNav.items.accountSettings")}
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md -mx-1 px-1 py-0.5 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
             <Avatar className="size-7 rounded-full">
               <AvatarImage src={user.avatarUrl} alt="" />
               <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
@@ -699,6 +714,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </p>
               <p className="truncate text-[11px] text-ink-subtle">{t("adminNav.platformAdmin")}</p>
             </div>
+            </Link>
             {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
                 and a control nobody can see shipped once already as "no way to sign out". */}
             <button

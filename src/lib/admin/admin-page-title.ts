@@ -33,6 +33,7 @@ export const ADMIN_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
   "global-glossary": "globalGlossary",
   staff: "staff",
   roles: "roles",
+  account: "accountSettings",
 };
 
 /** The label key for an admin path; "insights" only for /admin itself; null when unknown. */

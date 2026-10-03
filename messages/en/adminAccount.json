@@ -1,0 +1,11 @@
+{
+  "eyebrow": "Your account",
+  "title": "Account settings",
+  "description": "Your own profile. It is the same account you use in every workspace.",
+  "connectionsDescription": "Plugins connected to your own account. The admin portal's WarpBot can use them; nothing here belongs to a workspace.",
+  "tabsLabel": "Account settings sections",
+  "tabs": {
+    "profile": "Profile",
+    "connections": "My connections"
+  }
+}

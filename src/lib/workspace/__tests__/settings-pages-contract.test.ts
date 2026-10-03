@@ -118,7 +118,13 @@ test("workspace security gates domains and the danger zone on owner, and auto-sa
 });
 
 test("profile settings auto-save text fields and select fields without a manual save button", () => {
-  const source = page("../../../app/(app)/[workspaceSlug]/settings/account/profile/page.tsx");
+  // The form moved into a shared component (3 Oct 2026) so the admin portal's account page renders
+  // the same one; the workspace route is now a one-line wrapper around it.
+  assert.match(
+    page("../../../app/(app)/[workspaceSlug]/settings/account/profile/page.tsx"),
+    /<AccountProfileSettings \/>/,
+  );
+  const source = page("../../../components/features/settings/account-profile-settings.tsx");
   const executableSource = source
     .split("\n")
     .filter((line) => !line.trimStart().startsWith("//"))

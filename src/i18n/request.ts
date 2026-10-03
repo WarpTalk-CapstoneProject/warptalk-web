@@ -66,6 +66,7 @@ const NAMESPACES = [
   "settingsBillingCatalog",
   "adminProviders",
   "adminFinance",
+  "adminAccount",
   "adminInbox",
   "adminPlatformSettings",
   "platformStatus",

@@ -165,6 +165,9 @@ export const ADMIN_ROUTE_PERMISSIONS: readonly { href: string; permission: Admin
   { href: "/admin/inbox", permission: ADMIN_PERMISSIONS.inboxRead },
   { href: "/admin/finance", permission: ADMIN_PERMISSIONS.financeRead },
   { href: "/admin/finance/expenses", permission: ADMIN_PERMISSIONS.financeRead },
+  // Every staff member's own account. Last on purpose: this list also picks a staff member's
+  // landing page (the first entry they may view), and that should be a platform page.
+  { href: "/admin/account", permission: null },
 ];
 
 function routeEntryFor(pathname: string) {
