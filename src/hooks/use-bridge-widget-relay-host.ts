@@ -314,6 +314,7 @@ export function useBridgeWidgetRelayHost({
   // And for the two WT-912 / WT-913 objects.
   const micEnabled = mic?.enabled;
   const micControl = mic?.control;
+  const micOverride = mic?.override;
   const meetLeaveState = meetLeave?.state;
   const meetLeaveEndsAtMs = meetLeave?.state === "countdown" ? meetLeave.endsAtMs : undefined;
   const outboundLeg = outbound?.leg;
@@ -382,6 +383,7 @@ export function useBridgeWidgetRelayHost({
     meetCaptionsOff,
     micEnabled,
     micControl,
+    micOverride,
     meetLeaveState,
     meetLeaveEndsAtMs,
     outboundLeg,
@@ -480,14 +482,14 @@ export function useBridgeWidgetRelayHost({
             sendSnapshot();
           }
           break;
-        // WT-912. Stale once the mic follows Meet's own button (or the user is out of the call):
-        // the chip the press came from no longer exists, so say what is true instead.
         // No reply when applied, like set-language: the switch changes `micDeviceId`, and the field
         // effect reports it. A main window that cannot switch answers with what is true.
         case "set-mic-device":
           if (handlers.onSetMicDevice) handlers.onSetMicDevice(message.deviceId);
           else sendSnapshot();
           break;
+        // WT-912. Stale once the user is out of the call ("none"): the strip the press came from no
+        // longer exists, so say what is true instead. While following Meet it is an override.
         case "set-mic-enabled":
           if (handlers.onSetMicEnabled && acceptsManualMic(fieldsRef.current.mic?.control)) {
             handlers.onSetMicEnabled(message.enabled);

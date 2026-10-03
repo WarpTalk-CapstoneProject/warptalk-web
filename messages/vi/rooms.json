@@ -305,7 +305,9 @@
       "text": "Chữ",
       "voice": "Giọng",
       "textHint": "Chữ: bạn đọc bản dịch và nghe cuộc gọi như bình thường.",
-      "voiceHint": "Giọng: bạn nghe họ được dịch, giọng gốc nhỏ hơn bên dưới."
+      "voiceHint": "Giọng: bạn nghe họ được dịch, giọng gốc nhỏ hơn bên dưới.",
+      "prefix": "Bạn nghe",
+      "onlyYou": "Chỉ thay đổi những gì bạn nghe. Người trong Meet không bị ảnh hưởng."
     },
     "devices": {
       "hint": "Mở phần thiết lập thiết bị trong cửa sổ WarpTalk"
@@ -348,7 +350,7 @@
       "unknown": "Đang kết nối với WarpTalk…",
       "voiceNeedsCable": "Giọng đã dịch cần VB-CABLE. Cài đặt trong Cài đặt thiết bị.",
       "textUnavailable": "Máy này không dùng được chế độ giọng thật.",
-      "lockedHint": "Bạn có thể chuyển lại giọng đã dịch sau khi dừng dịch.",
+      "lockedHint": "Để chuyển lại giọng đã dịch: bấm Dừng, chọn Giọng đã dịch ở đây, rồi bấm Bắt đầu lại.",
       "headphones": "Hãy dùng tai nghe: loa phát cuộc gọi, và micro của bạn có thể thu lại tiếng đó.",
       "nowText": "Meet giờ nghe giọng thật của bạn.",
       "nowVoice": "Meet giờ nghe giọng đã dịch của bạn.",
@@ -361,7 +363,8 @@
       "textOnCable": {
         "title": "Người trong cuộc gọi Meet không nghe thấy bạn.",
         "body": "Micro của Meet đang là “CABLE Output”, nơi chỉ có giọng đã dịch của bạn, trong khi WarpTalk đang gửi giọng thật. Trong Meet, bấm mũi tên cạnh nút micro rồi chọn micro thật của bạn.",
-        "action": "Gửi giọng đã dịch thay vào"
+        "action": "Gửi giọng đã dịch thay vào",
+        "locked": "Không thể bật giọng đã dịch khi đang dịch. Hãy chọn micro thật trong Meet, hoặc bấm Dừng, đặt ⚙ → “Meet nghe bạn” thành Giọng đã dịch, rồi bấm Bắt đầu lại."
       },
       "voiceOnReal": {
         "title": "Người trong cuộc gọi Meet đang nghe bạn chưa qua dịch.",
@@ -386,7 +389,10 @@
       "on": "Mic WarpTalk đang bật",
       "turnOn": "Bật",
       "turnOff": "Tắt",
-      "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay."
+      "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay.",
+      "followsMeet": "theo nút tắt tiếng của Meet",
+      "overridden": "đang đặt bằng tay cho đến khi bạn bấm nút tắt tiếng của Meet",
+      "meetHint": "WarpTalk làm theo nút tắt tiếng của Google Meet. Nếu Meet đang bật tiếng mà ở đây báo tắt, hãy bật ở đây: mic sẽ bật cho đến lần tới bạn bấm nút tắt tiếng của Meet."
     },
     "voiceCloneMode": {
       "label": "Chế độ sao chép giọng",
@@ -402,6 +408,22 @@
       "statusFailed": "Chưa kiểm tra được những ai đã được đánh dấu.",
       "retry": "Thử lại",
       "saveFailed": "Chưa lưu được lựa chọn này."
+    },
+    "micDevice": {
+      "settingsRow": "Micro",
+      "title": "Micro của WarpTalk",
+      "hint": "Micro mà WarpTalk nghe. Micro của Meet vẫn để là “CABLE Output”.",
+      "none": "Không tìm thấy micro nào. Hãy cắm micro, hoặc cho phép truy cập micro.",
+      "unknown": "Chưa rõ",
+      "virtual": "WarpTalk đang thu “{label}”, một cáp ảo, không phải micro của bạn. Hãy chọn micro thật bên dưới."
+    },
+    "rawMic": {
+      "title": "Người trong Meet đang nghe giọng thật của bạn, chưa được dịch.",
+      "body": "Giọng đã dịch từ WarpTalk chưa tới, nên Meet nhận micro của bạn như bình thường. Nếu thông báo này không mất, hãy kiểm tra bản dịch đang chạy và micro đúng đã được chọn ở ⚙ → Micro."
+    },
+    "meetSpeaker": {
+      "title": "Loa của Meet đang là “CABLE Input”.",
+      "body": "Bạn không nghe được cuộc gọi, và giọng phía bên kia bị dội ngược vào micro của bạn. Trong Meet, mở Cài đặt → Âm thanh và đặt Loa thành tai nghe của bạn."
     }
   }
 }

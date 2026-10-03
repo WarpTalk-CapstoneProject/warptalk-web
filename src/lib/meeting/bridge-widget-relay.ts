@@ -122,12 +122,14 @@
  *
  *   WT-912 / WT-913 (PO, 2026-10-02): Meet is the source of truth. The main window follows the
  *   desktop's read of Meet's own buttons (lib/meeting/bridge-meet-follow) and says two things here:
- *     - `mic`: whether the WarpTalk microphone is on, and who decides it. While it follows Meet's
- *       mute button ("meet") the popup shows nothing. Where Meet cannot be read ("manual": an
- *       older desktop, macOS, a button the sensor never saw) the popup shows one compact chip, and
- *       `set-mic-enabled` is its press. The main window applies it only while it still says
- *       "manual" (`acceptsManualMic`); a press that arrives after the mic started following Meet is
- *       answered with a snapshot instead.
+ *     - `mic`: whether the WarpTalk microphone is on, and who decides it. The popup always shows
+ *       it while the user is in the call (field evidence 2026-10-03: the desktop misread Meet's
+ *       button as muted and the mic went off with nothing on screen). Where Meet cannot be read
+ *       ("manual": an older desktop, macOS, a button the sensor never saw) its press is applied
+ *       directly; while the mic follows Meet ("meet") it is an override, held until Meet's button
+ *       next changes, and `override` says one is in force. `set-mic-enabled` is the press; the
+ *       main window applies it only while it says "manual" or "meet" (`acceptsManualMic`), and
+ *       answers a press from out of the call ("none") with a snapshot instead.
  *     - `meetLeave`: the user left the Meet call. "countdown" carries when the main window will end
  *       the room by itself; the popup asks "End the WarpTalk room?" and `answer-meet-left` is the
  *       answer. This is the one way the popup has a say in ending, and it is not an End button: it
@@ -292,7 +294,12 @@ export type BridgeWidgetSnapshot = {
   at: number;
 };
 
-export type BridgeWidgetMicSnapshot = { enabled: boolean; control: MeetMicControl };
+export type BridgeWidgetMicSnapshot = {
+  enabled: boolean;
+  control: MeetMicControl;
+  /** "meet" only: the mic is on the popup's override, not on Meet's reading. Absent: false. */
+  override?: boolean;
+};
 
 export type BridgeWidgetOutboundSnapshot = { leg: BridgeOutboundLeg; sinceMs: number };
 
@@ -437,7 +444,9 @@ function parseTranscriptPause(raw: unknown): BridgeWidgetTranscriptPauseSnapshot
 function parseMic(raw: unknown): BridgeWidgetMicSnapshot | null {
   if (!isRecord(raw) || typeof raw.enabled !== "boolean") return null;
   if (typeof raw.control !== "string" || !MIC_CONTROLS.has(raw.control)) return null;
-  return { enabled: raw.enabled, control: raw.control as MeetMicControl };
+  const mic: BridgeWidgetMicSnapshot = { enabled: raw.enabled, control: raw.control as MeetMicControl };
+  if (raw.override === true) mic.override = true;
+  return mic;
 }
 
 function parseOutbound(raw: unknown): BridgeWidgetOutboundSnapshot | null {
@@ -793,7 +802,10 @@ export function buildBridgeWidgetSnapshot(
   if (fields.audioMode) snapshot.audioMode = fields.audioMode;
   if (fields.sessionDisplaced !== undefined) snapshot.sessionDisplaced = fields.sessionDisplaced;
   if (fields.meetCaptionsOff !== undefined) snapshot.meetCaptionsOff = fields.meetCaptionsOff;
-  if (fields.mic) snapshot.mic = { enabled: fields.mic.enabled, control: fields.mic.control };
+  if (fields.mic) {
+    snapshot.mic = { enabled: fields.mic.enabled, control: fields.mic.control };
+    if (fields.mic.override) snapshot.mic.override = true;
+  }
   if (fields.meetLeave) {
     snapshot.meetLeave =
       fields.meetLeave.state === "countdown"
@@ -1119,19 +1131,22 @@ export function bridgeWidgetMeetingStatus(view: BridgeWidgetRelayView): BridgeWi
 }
 
 /**
- * WT-912: the fallback chip, or null for nothing to draw.
+ * WT-912: the WarpTalk mic strip, or null for nothing to draw.
  *
- * Only while the main window says Meet's mute button cannot be read ("manual") and its meeting is
- * connected: a chip over a meeting that is still connecting, reaped or displaced would offer a
- * microphone nothing can publish. While the mic follows Meet, and while the user is not in the
- * call at all, there is nothing to offer. `enabled` is the microphone as it is now, so the chip
- * can also turn off a microphone that was turned on by hand.
+ * While the user is in the call — Meet's button read ("meet") or not ("manual") — and the meeting
+ * is connected: a strip over a meeting that is still connecting, reaped or displaced would offer a
+ * microphone nothing can publish, and out of the call ("none") there is no mic to offer. `enabled`
+ * is the microphone as it is now, so the strip can turn it either way; `override` says it is on
+ * the popup's override of Meet's reading.
  */
-export function bridgeWidgetMicChip(view: BridgeWidgetRelayView): { enabled: boolean } | null {
+export function bridgeWidgetMicChip(
+  view: BridgeWidgetRelayView,
+): { enabled: boolean; control: "meet" | "manual"; override: boolean } | null {
   const snapshot = liveSnapshot(view);
-  if (!snapshot?.mic || snapshot.mic.control !== "manual") return null;
+  const control = snapshot?.mic?.control;
+  if (!snapshot?.mic || (control !== "manual" && control !== "meet")) return null;
   if (snapshot.connection !== "connected" || snapshot.roomEnded) return null;
-  return { enabled: snapshot.mic.enabled };
+  return { enabled: snapshot.mic.enabled, control, override: control === "meet" && snapshot.mic.override === true };
 }
 
 /** WT-913: what the main window says about the user having left the Meet call, or null. */

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
 import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
+import { bridgeOutboundLeg, type BridgeOutboundLeg } from "@/lib/meeting/bridge-mic-device";
 import {
   dubbedHistoryScope,
   EMPTY_DUBBED_HISTORY,
@@ -86,6 +87,7 @@ export function FilteredRoomAudio({
   bridgeOutboundDeviceId,
   bridgeStandInIdentity,
   onBridgeOutboundError,
+  onBridgeOutboundLegChange,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -120,6 +122,12 @@ export function FilteredRoomAudio({
   bridgeStandInIdentity?: string | null;
   /** Surfaces a failed hand-off to the virtual device; silence here is indistinguishable from a working bridge. */
   onBridgeOutboundError?: (message: string) => void;
+  /**
+   * What Meet hears from this person, on every change (lib/meeting/bridge-mic-device): the session
+   * logs it to main.log and the popup says when it has been the untranslated voice for too long.
+   * `outboundIdentity` is the dub's bot when the leg is "dub".
+   */
+  onBridgeOutboundLegChange?: (leg: BridgeOutboundLeg, outboundIdentity: string | null) => void;
 }) {
   const bridgeActive = Boolean(bridgeOutboundDeviceId);
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
@@ -223,6 +231,23 @@ export function FilteredRoomAudio({
     : undefined;
   const audibleTracks = wantedTracks.filter((trackRef) => trackRef !== outboundTrack);
 
+  // What is actually rendered into the cable below, not what routing would like: a dub that routing
+  // names but that is not a track here yet plays nothing.
+  const playsRawMic = Boolean(routing.outboundRawMic && !outboundTrack && bridgeOutboundDeviceId);
+  const outboundIdentity = outboundTrack && bridgeOutboundDeviceId ? outboundTrack.participant.identity : null;
+  const outboundLeg = bridgeOutboundLeg({
+    deviceReady: bridgeActive,
+    outboundIdentity,
+    outboundRawMic: playsRawMic,
+  });
+  const onLegChangeRef = useRef(onBridgeOutboundLegChange);
+  useEffect(() => {
+    onLegChangeRef.current = onBridgeOutboundLegChange;
+  });
+  useEffect(() => {
+    onLegChangeRef.current?.(outboundLeg, outboundIdentity);
+  }, [outboundLeg, outboundIdentity]);
+
   // Exactly the dubs going to this listener's own speakers — the outbound bridge leg is excluded
   // because it plays into a virtual device Meet listens to, not into the room the user is sitting
   // in, so it cannot come back through their microphone.
@@ -248,7 +273,7 @@ export function FilteredRoomAudio({
           together with the dub above: routing already guarantees it, and !outboundTrack says so
           here too, because two elements on one device would mix the original under the dub. See
           bridge-outbound-mic.tsx for why this is the published track itself and not a copy. */}
-      {routing.outboundRawMic && !outboundTrack && bridgeOutboundDeviceId && (
+      {playsRawMic && bridgeOutboundDeviceId && (
         <BridgeOutboundMic
           key="bridge-out-raw-mic"
           outputDeviceId={bridgeOutboundDeviceId}

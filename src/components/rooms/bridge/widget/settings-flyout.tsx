@@ -12,6 +12,8 @@
  *   positioned against.
  *
  * WHAT IS HERE, AND WHAT IS NOT
+ *   Microphone ›         voice mode only: the microphone WarpTalk records, since Meet's own stays
+ *                        on the cable (settings/mic-device-panel.tsx, PO 2026-10-03)
  *   Mic noise filter ›   the caller's own STT denoising (settings/mic-noise-filter-panel.tsx)
  *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx), then,
  *                        for the room host, Voice clone mode: whose voice on the Meet side may
@@ -38,6 +40,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import {
   GearSix,
+  Headset,
   Lightning,
   Microphone,
   MicrophoneStage,
@@ -53,13 +56,14 @@ import { cn } from "@/lib/utils";
 import { BridgeAudioModeChoice } from "./audio-mode-choice";
 import { DockIconButton } from "./dock-icon-button";
 import { FlashModeRow } from "./settings/flash-mode-row";
+import { MicDeviceOptions, useBridgeMicDevices, useBridgeMicSummary } from "./settings/mic-device-panel";
 import { MicNoiseFilterOptions, useMicNoiseFilterMode } from "./settings/mic-noise-filter-panel";
 import { SettingsPanelHeader, SettingsRow } from "./settings/settings-rows";
 import { VoiceCloneModeBlock } from "./settings/voice-clone-mode-block";
 import { VoicePanelSlot } from "./settings/voice-panel-slot";
 import { useBridgeWidget } from "./widget-context";
 
-type SettingsSection = "root" | "microphone" | "voice" | "audioMode";
+type SettingsSection = "root" | "micDevice" | "microphone" | "voice" | "audioMode";
 
 const FLYOUT_LABEL = "Voice & translation settings";
 
@@ -76,6 +80,9 @@ export function SettingsFlyout() {
 
   // Read here rather than inside the sub-panel so the root row can name the current mode.
   const noiseReductionMode = useMicNoiseFilterMode(roomId);
+  // The same for the microphone, voice mode only; listed only while the flyout is open.
+  const micDevices = useBridgeMicDevices(open && audioMode === "voice");
+  const micSummary = useBridgeMicSummary(micDevices);
 
   function close({ returnFocus = false } = {}) {
     setOpen(false);
@@ -171,6 +178,16 @@ export function SettingsFlyout() {
           >
             {section === "root" ? (
               <>
+                {audioMode === "voice" ? (
+                  <SettingsRow
+                    label={tWidget("micDevice.settingsRow")}
+                    icon={<Headset className="h-4 w-4" />}
+                    value={micSummary.label ?? tWidget("micDevice.unknown")}
+                    hint={micSummary.virtual ? tWidget("micDevice.virtual", { label: micSummary.label ?? "" }) : undefined}
+                    onClick={() => setSection("micDevice")}
+                    hasSubmenu
+                  />
+                ) : null}
                 <SettingsRow
                   label="Mic noise filter"
                   icon={<Microphone className="h-4 w-4" />}
@@ -210,6 +227,17 @@ export function SettingsFlyout() {
                   Room speed
                 </p>
                 <FlashModeRow roomId={roomId} isHost={isHost} />
+              </>
+            ) : null}
+
+            {section === "micDevice" ? (
+              <>
+                <SettingsPanelHeader
+                  ref={backRef}
+                  title={tWidget("micDevice.title")}
+                  onBack={() => setSection("root")}
+                />
+                <MicDeviceOptions devices={micDevices} onPicked={() => close({ returnFocus: true })} />
               </>
             ) : null}
 
