@@ -81,7 +81,7 @@ import {
 } from "@/components/user/user-chip";
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { useEndedRoomRecord } from "@/hooks/use-room-history";
+import { useEndedRoomRecord, useFinalizingDeadline } from "@/hooks/use-room-history";
 import { findSegmentAtMs, formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   isRetryableRenderingError,
@@ -371,7 +371,10 @@ export default function RoomInformationPage() {
       : workspaces?.items?.[0]?.id;
   // The AI summary and retained files for this meeting. Keyed on the room's own
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
-  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
+  // B4: the room's own status and end time let the record poll while it is finalizing, even
+  // before the just-ended room is in the list; the deadline re-renders when the window closes.
+  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId, room);
+  useFinalizingDeadline(room);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
@@ -944,8 +947,10 @@ export default function RoomInformationPage() {
   // WT-930: the desktop app lands here the moment End is pressed, with the main window brought up
   // over Meet, while the finalizer is still writing the transcript and summary. Rendering the full
   // record against half-written data is the moment the window went white in the report. Until the
-  // record exists this page is a loading state and nothing else; `useEndedRoomRecord` polls, so it
-  // clears on its own. See isRecordFinalizing for why the transcript artifact is the signal.
+  // record exists this page is a loading state and nothing else. `useEndedRoomRecord` polls every
+  // few seconds while this holds (also while the room is not in the list yet), and
+  // `useFinalizingDeadline` re-renders when the window closes, so it always clears on its own.
+  // See isRecordFinalizing for why the transcript artifact is the signal.
   if (
     isDesktopApp()
     && isRecordFinalizing({ status: room.status, endedAt: room.endedAt, record: endedRecordQuery.data })

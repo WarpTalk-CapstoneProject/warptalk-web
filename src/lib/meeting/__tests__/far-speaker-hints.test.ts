@@ -229,3 +229,34 @@ test("the batcher rebases at receipt, so a jumped clock does not age a fresh hin
   assert.equal(h.calls[0].hints[0].tEndMs, NOW + 60_000 - 1_000);
   assert.equal(h.calls[0].now, NOW + 60_000 + waited);
 });
+
+test("B3: a failed send is reported to onSendError with the run's failure count; success resets it", async () => {
+  let fail = true;
+  const reported: { reason: string; failures: number }[] = [];
+  const batcher = new FarSpeakerHintBatcher({
+    meetCode: MEET,
+    now: () => NOW,
+    setTimer: () => 1,
+    clearTimer: () => {},
+    send: () =>
+      fail
+        ? Promise.reject(new Error("Only the participant capturing the external meeting can report its speakers."))
+        : Promise.resolve(1),
+    onSendError: (error, failures) => reported.push({ reason: (error as Error).message, failures }),
+  });
+  batcher.add(caption());
+  batcher.flushNow();
+  await new Promise((resolve) => setImmediate(resolve));
+  batcher.flushNow(); // a reconnect resets the backoff, not the observer's count of this failure
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(
+    reported.map((r) => r.failures),
+    [1, 1],
+  );
+  assert.match(reported[0].reason, /capturing the external meeting/);
+  fail = false;
+  batcher.flushNow();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reported.length, 2, "a successful send reports nothing");
+  assert.equal(batcher.size, 0);
+});

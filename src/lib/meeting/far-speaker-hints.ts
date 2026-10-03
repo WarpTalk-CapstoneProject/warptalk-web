@@ -95,6 +95,12 @@ export type FarSpeakerHintBatcherOptions = {
   setTimer?: (callback: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
   intervalMs?: number;
+  /**
+   * Called after each failed send with the error and how many sends in a row have failed (1 for
+   * the first). Observability only (bug B3): a hub that refuses this window's hints — not the
+   * capturer, room not live — otherwise drops every Meet name without a trace.
+   */
+  onSendError?: (error: unknown, consecutiveFailures: number) => void;
 };
 
 /**
@@ -192,13 +198,15 @@ export class FarSpeakerHintBatcher {
 
     this.inFlight = true;
     let ok = true;
+    let sendError: unknown = null;
     try {
       await this.options.send(
         batch.map(([, hint]) => hint),
         nowMs,
       );
-    } catch {
+    } catch (error) {
       ok = false;
+      sendError = error;
     } finally {
       this.inFlight = false;
     }
@@ -208,6 +216,11 @@ export class FarSpeakerHintBatcher {
       this.failures = 0;
     } else {
       this.failures += 1;
+      try {
+        this.options.onSendError?.(sendError, this.failures);
+      } catch {
+        // An observer must never stop the retry.
+      }
       // Put the batch back, unless the block was updated while the call was out.
       for (const [blockId, hint] of batch) {
         if (!this.pending.has(blockId)) this.pending.set(blockId, hint);
