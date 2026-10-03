@@ -46,6 +46,8 @@ import {
   RateCardEditDialog,
 } from "@/components/admin/pricing-editors";
 import { PlanStorefrontPreview } from "@/components/admin/plan-storefront-preview";
+import { applyPlanEdits } from "@/lib/billing/plan-request";
+import { nextSortOrder } from "@/lib/billing/plan-order";
 import {
   useAdminPlans,
   useAdminPricingConfig,
@@ -859,6 +861,18 @@ function PlansAndPricing() {
           onRetry={() => void plansQuery.refetch()}
           onEdit={setEditingPlan}
           onCreate={() => setIsCreatingPlan(true)}
+          // Both through the same full-record PUT the editor uses, so nothing else on the plan
+          // moves (applyPlanEdits lays the one change over the stored plan).
+          onToggleActive={(plan, isActive) =>
+            updatePlan.mutateAsync({ id: plan.id, request: applyPlanEdits(plan, { isActive }) })
+          }
+          onReorder={async (updates) => {
+            // One at a time: each is a whole-plan replacement, and a failure part-way leaves the
+            // plans already saved in their new places rather than racing each other.
+            for (const { plan, sortOrder } of updates) {
+              await updatePlan.mutateAsync({ id: plan.id, request: applyPlanEdits(plan, { sortOrder }) });
+            }
+          }}
         />
       ) : tab === "rate-cards" ? (
         <RateCardsList
@@ -938,6 +952,7 @@ function PlansAndPricing() {
         onOpenChange={setIsCreatingPlan}
         onSubmit={(request) => createPlan.mutateAsync(request)}
         isSaving={createPlan.isPending}
+        sortOrder={nextSortOrder(plans)}
       />
 
       <PlanEditDialog

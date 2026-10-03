@@ -79,7 +79,14 @@
       "adjust": "Chỉnh {name}",
       "addPlan": "Thêm gói",
       "error": "Không tải được danh sách gói.",
-      "retry": "Thử lại"
+      "retry": "Thử lại",
+      "active": "Đang bán",
+      "activeToggle": "Hiển thị {name} cho người mua",
+      "moveLeft": "Đưa {name} lên trước",
+      "moveRight": "Đưa {name} ra sau",
+      "dragHint": "Kéo một card thả lên card khác để đổi thứ tự người mua thấy, hoặc dùng ‹ ›. Công tắc trên card để hiện hoặc ẩn plan.",
+      "reorderError": "Không lưu được thứ tự mới. Tải lại trang để xem thứ tự đang được giữ.",
+      "toggleError": "Không hiện/ẩn được {name}."
     },
     "tabs": {
       "plans": "Gói",
@@ -343,7 +350,11 @@
         "glossary": "Bảng thuật ngữ",
         "dedicatedGpu": "GPU riêng",
         "features": "Tính năng",
-        "featuresHint": "Khối JSON mà trang bảng giá đọc. Có thể là mảng hoặc object."
+        "featuresHint": "Khối JSON mà trang bảng giá đọc. Có thể là mảng hoặc object.",
+        "overagePriceHint": "Giá một credit khi đã dùng hết hạn mức, tính bằng {currency}.",
+        "rolloverCapHint": "Credit chưa dùng được chuyển sang kỳ sau.",
+        "invoiceTermsHint": "Hoá đơn được để chưa thanh toán trong bao lâu.",
+        "invoiceGraceHint": "Plan còn chạy bao lâu sau khi lỡ một lần thanh toán."
       },
       "editDialog": {
         "title": "Chỉnh sửa gói",
@@ -356,7 +367,45 @@
       "cancel": "Hủy",
       "save": "Lưu gói",
       "saving": "Đang lưu…",
-      "saveError": "Không thể lưu gói."
+      "saveError": "Không thể lưu gói.",
+      "vat": {
+        "charged": "Người mua trả {total} trên Stripe (đã cộng {percent}% VAT).",
+        "hint": "Nhập giá CHƯA gồm VAT. Mức VAT chỉnh trong Platform settings.",
+        "off": "VAT đang tắt (0% trong Platform settings): người mua trả đúng giá này."
+      },
+      "presets": {
+        "custom": "Tuỳ chỉnh…",
+        "customValue": "Giá trị tuỳ chỉnh cho {label}",
+        "overageCapNone": "Không cho vượt — dừng khi hết hạn mức",
+        "overageCapShare": "Vượt tối đa {percent}% — {credits} credit",
+        "overagePriceSame": "Bằng giá credit trong plan",
+        "overagePriceMultiple": "Gấp {multiple} lần giá credit trong plan",
+        "lowBalanceOff": "Không cảnh báo sắp hết",
+        "lowBalanceShare": "Cảnh báo khi còn {percent}% — {credits} credit",
+        "rolloverNone": "Không chuyển sang kỳ sau",
+        "rolloverShare": "Chuyển tối đa {percent}% — {credits} credit",
+        "termsOnReceipt": "Thanh toán ngay khi nhận",
+        "termsDays": "{days} ngày",
+        "graceNone": "Không gia hạn — dừng ngay",
+        "graceDays": "{days} ngày",
+        "participants": "{count} người",
+        "languages": "{count} ngôn ngữ",
+        "voiceCloneUnlimited": "Không giới hạn",
+        "voiceCloneMinutes": "{minutes} phút mỗi kỳ"
+      },
+      "featureControls": {
+        "googleMeet": "Cầu nối Google Meet",
+        "googleMeetHint": "Dịch cuộc gọi Google Meet qua WarpTalk.",
+        "contractBilling": "Tính tiền theo hợp đồng",
+        "contractBillingHint": "Thanh toán theo hợp đồng; phần dùng vượt hạn mức được xuất hoá đơn.",
+        "voiceCloneLimit": "Giới hạn clone giọng",
+        "voiceCloneLimitUnset": "Chưa đặt",
+        "highlights": "Hiển thị trên trang bảng giá",
+        "highlightsHint": "Tick các dòng muốn liệt kê dưới plan này, hoặc thêm dòng riêng.",
+        "addHighlight": "Thêm một dòng",
+        "add": "Thêm",
+        "keptKeys": "Được giữ nguyên: {keys}"
+      }
     },
     "rateCard": {
       "editDialog": {
@@ -428,16 +477,38 @@
         "description": "Áp dụng toàn nền tảng. Đây là các mức sàn và tỷ lệ mà mọi gói được kiểm tra dựa vào và mọi báo giá được xây dựng từ đó, nên một thay đổi ở đây có thể khiến một gói hiện có trở nên không hợp lệ ở lần chỉnh sửa tiếp theo."
       },
       "fields": {
-        "fxRateUsdVnd": { "label": "Tỷ giá USD→VND", "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND." },
-        "minimumContractPriceUsd": { "label": "Giá hợp đồng tối thiểu (USD)" },
-        "salesUsageWeight": { "label": "Trọng số bán hàng · mức sử dụng" },
-        "salesMembersWeight": { "label": "Trọng số bán hàng · thành viên" },
-        "salesLanguagesWeight": { "label": "Trọng số bán hàng · ngôn ngữ" },
-        "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
-        "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
-        "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
-        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
-        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
+        "fxRateUsdVnd": {
+          "label": "Tỷ giá USD→VND",
+          "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND."
+        },
+        "minimumContractPriceUsd": {
+          "label": "Giá hợp đồng tối thiểu (USD)"
+        },
+        "salesUsageWeight": {
+          "label": "Trọng số bán hàng · mức sử dụng"
+        },
+        "salesMembersWeight": {
+          "label": "Trọng số bán hàng · thành viên"
+        },
+        "salesLanguagesWeight": {
+          "label": "Trọng số bán hàng · ngôn ngữ"
+        },
+        "salesAiServicesWeight": {
+          "label": "Trọng số bán hàng · dịch vụ AI"
+        },
+        "defaultOverageCapRatio": {
+          "label": "Tỷ lệ trần vượt mức mặc định"
+        },
+        "defaultInvoiceTermsDays": {
+          "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)"
+        },
+        "defaultInvoiceGraceHours": {
+          "label": "Thời gian gia hạn hóa đơn mặc định (giờ)"
+        },
+        "cartesiaUsdPerCredit": {
+          "label": "Giá USD mỗi credit Cartesia",
+          "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại."
+        }
       },
       "cancel": "Hủy",
       "save": "Lưu cấu hình",

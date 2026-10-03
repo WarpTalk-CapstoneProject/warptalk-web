@@ -77,7 +77,8 @@
       "ariaLabel": "Billing period",
       "monthly": "Monthly",
       "yearly": "Yearly · Save {percent}%"
-    }
+    },
+    "plusVat": "+ {percent}% VAT · {total} at checkout"
   },
   "planPanel": {
     "currentPlan": "Current plan",

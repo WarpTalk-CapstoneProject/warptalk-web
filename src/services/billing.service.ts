@@ -364,6 +364,17 @@ export const billingService = {
    * would drop it out of the only list that page has, and there would be no way to switch it back
    * on. Deactivation would be a one-way door.
    */
+  /**
+   * The VAT checkout adds on top of a price (3 Oct 2026). Prices are stored without VAT, so every
+   * card that shows a price reads this to print "+ VAT" and the amount Stripe will charge.
+   */
+  getPlanTax: async (): Promise<{ vatPercent: number; pricesIncludeVat: boolean }> => {
+    const { data } = await apiClient.get<{ vatPercent: number; pricesIncludeVat: boolean }>(
+      `/plans/tax`,
+    );
+    return data;
+  },
+
   getAllPlansForAdmin: async (): Promise<import("@/types/billing").PlanDto[]> => {
     const { data } =
       await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans/all`);
