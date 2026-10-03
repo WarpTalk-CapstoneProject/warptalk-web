@@ -379,3 +379,34 @@ export function meetWindowSlateAudioLine(input: {
   return "No audio is reaching the recording yet.";
 }
 
+/**
+ * The decoded-frame set without the elements of a track that went away. The set used to only
+ * grow: every re-published Meet window left its dead <video> in it for the rest of the recording.
+ * Returns the same set when nothing was in it, so a state update can bail out.
+ */
+export function pruneFramedElements<T>(framed: ReadonlySet<T>, gone: Iterable<T>): ReadonlySet<T> {
+  let next: Set<T> | null = null;
+  for (const element of gone) {
+    if (!framed.has(element)) continue;
+    next ??= new Set(framed);
+    next.delete(element);
+  }
+  return next ?? framed;
+}
+
+/** The widest a held-frame snapshot is kept: one per second for the whole meeting, so kept small. */
+export const MEET_WINDOW_SNAPSHOT_MAX_WIDTH = 640;
+
+/**
+ * A snapshot's canvas size: the window's aspect ratio, at most MEET_WINDOW_SNAPSHOT_MAX_WIDTH wide
+ * (never upscaled). Shown letterboxed and scaled up only while the window is away, where a softer
+ * still is fine; the copy and the memory are about a quarter of a 1280-wide frame.
+ */
+export function meetWindowSnapshotSize(
+  videoWidth: number,
+  videoHeight: number,
+  maxWidth: number = MEET_WINDOW_SNAPSHOT_MAX_WIDTH,
+): { width: number; height: number } {
+  if (videoWidth <= maxWidth) return { width: videoWidth, height: videoHeight };
+  return { width: maxWidth, height: Math.max(1, Math.round((videoHeight * maxWidth) / videoWidth)) };
+}

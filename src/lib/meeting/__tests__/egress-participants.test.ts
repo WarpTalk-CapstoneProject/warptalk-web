@@ -17,6 +17,7 @@ import {
   MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
   MEET_WINDOW_HOLD_LOOKBACK_MS,
   MEET_WINDOW_SNAPSHOT_INTERVAL_MS,
+  MEET_WINDOW_SNAPSHOT_MAX_WIDTH,
   MEET_WINDOW_SNAPSHOT_RING,
   MEET_WINDOW_TRACK_NAME,
   isBridgeRecording,
@@ -25,7 +26,9 @@ import {
   isRecordableParticipant,
   isRecordedBridgeDub,
   meetWindowShowsPicture,
+  meetWindowSnapshotSize,
   meetWindowStage,
+  pruneFramedElements,
   pickHeldMeetFrame,
   meetWindowSlateAudioLine,
   resolveEgressAudioContext,
@@ -354,3 +357,21 @@ test("the slate says when the local voice is the WarpTalk microphone and not mee
   );
 });
 
+test("a detached track's elements leave the decoded-frame set; nothing else does", () => {
+  const a = { id: "a" };
+  const b = { id: "b" };
+  const framed = new Set([a, b]);
+  const pruned = pruneFramedElements(framed, [a]);
+  assert.deepEqual([...pruned], [b]);
+  assert.equal(framed.size, 2, "the old set is not mutated (React state)");
+  // Nothing of it was framed: the same set back, so the state update bails out.
+  assert.equal(pruneFramedElements(framed, [{ id: "c" }]), framed);
+});
+
+test("held-frame snapshots are kept at most 640 wide, in the window's aspect ratio", () => {
+  assert.equal(MEET_WINDOW_SNAPSHOT_MAX_WIDTH, 640);
+  assert.deepEqual(meetWindowSnapshotSize(1920, 1080), { width: 640, height: 360 });
+  assert.deepEqual(meetWindowSnapshotSize(1366, 705), { width: 640, height: 330 });
+  // Never upscaled.
+  assert.deepEqual(meetWindowSnapshotSize(480, 270), { width: 480, height: 270 });
+});

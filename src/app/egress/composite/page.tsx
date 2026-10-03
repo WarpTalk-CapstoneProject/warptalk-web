@@ -95,7 +95,9 @@ import {
   MEET_WINDOW_SNAPSHOT_INTERVAL_MS,
   MEET_WINDOW_SNAPSHOT_RING,
   meetWindowStage,
+  meetWindowSnapshotSize,
   pickHeldMeetFrame,
+  pruneFramedElements,
   resolveEgressDisplayName,
   resolveEgressLayout,
   shouldResubscribeMeetWindow,
@@ -352,7 +354,10 @@ export default function EgressCompositePage() {
     }
 
     function detach(track: RemoteTrack) {
-      track.detach().forEach((element) => element.remove());
+      const gone = track.detach();
+      gone.forEach((element) => element.remove());
+      // Not kept for the rest of the file: a re-published window would leave its dead <video> here.
+      setFramedElements((current) => pruneFramedElements(current, gone));
       // By the track, not by `isConnected`: a subscribed tile the current layout does not mount (a
       // camera under the Meet window) is still subscribed and must survive somebody else leaving.
       setTiles((current) => current.filter((tile) => tile.track !== track));
@@ -480,10 +485,14 @@ export default function EgressCompositePage() {
       // Reuse the oldest canvas once the ring is full: this runs for the length of the meeting.
       const recycled = ring.length >= MEET_WINDOW_SNAPSHOT_RING ? ring.shift() : undefined;
       const canvas = recycled?.canvas ?? document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Reduced (meetWindowSnapshotSize): one copy a second for the whole meeting.
+      const size = meetWindowSnapshotSize(video.videoWidth, video.videoHeight);
+      canvas.width = size.width;
+      canvas.height = size.height;
       try {
-        canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const context2d = canvas.getContext("2d");
+        if (context2d) context2d.imageSmoothingQuality = "high";
+        context2d?.drawImage(video, 0, 0, canvas.width, canvas.height);
       } catch {
         return;
       }
