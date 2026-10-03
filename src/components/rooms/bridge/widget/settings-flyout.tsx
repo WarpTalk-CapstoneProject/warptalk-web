@@ -13,7 +13,9 @@
  *
  * WHAT IS HERE, AND WHAT IS NOT
  *   Mic noise filter ›   the caller's own STT denoising (settings/mic-noise-filter-panel.tsx)
- *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx)
+ *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx), then,
+ *                        for the room host, Voice clone mode: whose voice on the Meet side may
+ *                        be cloned (settings/voice-clone-mode-block.tsx, WT-933)
  *   Meet hears you ›     text-only bridge: Translated voice (VB-CABLE) or Your own voice (real mic,
  *                        text only). Once live only voice → text is offered (audio-mode-choice.tsx).
  *   Device settings      opens the bridge setup wizard IN THE MAIN WINDOW (relay `open-setup`).
@@ -53,6 +55,7 @@ import { DockIconButton } from "./dock-icon-button";
 import { FlashModeRow } from "./settings/flash-mode-row";
 import { MicNoiseFilterOptions, useMicNoiseFilterMode } from "./settings/mic-noise-filter-panel";
 import { SettingsPanelHeader, SettingsRow } from "./settings/settings-rows";
+import { VoiceCloneModeBlock } from "./settings/voice-clone-mode-block";
 import { VoicePanelSlot } from "./settings/voice-panel-slot";
 import { useBridgeWidget } from "./widget-context";
 
@@ -240,6 +243,9 @@ export function SettingsFlyout() {
               <>
                 <SettingsPanelHeader ref={backRef} title="Voice" onBack={() => setSection("root")} />
                 <VoicePanelSlot />
+                {/* WT-933: the host records which Meet-side people agreed to voice cloning. Draws
+                    nothing for anyone else. */}
+                <VoiceCloneModeBlock />
               </>
             ) : null}
           </motion.div>

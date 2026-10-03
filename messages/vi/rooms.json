@@ -387,6 +387,21 @@
       "turnOn": "Bật",
       "turnOff": "Tắt",
       "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay."
+    },
+    "voiceCloneMode": {
+      "label": "Chế độ sao chép giọng",
+      "description": "Đọc bản dịch của một người bên Meet bằng bản sao giọng của chính họ, sau khi bạn đã ghi nhận là họ đồng ý.",
+      "noticeLabel": "Thông báo để dán vào khung chat của Meet",
+      "notice": "WarpTalk đang dịch cuộc gọi này. Nếu bạn đồng ý, WarpTalk sẽ đọc bản dịch lời bạn nói bằng một bản sao giọng của chính bạn, chỉ trong cuộc họp này. Nếu bạn không muốn, cứ nói với tôi nhé.",
+      "copy": "Sao chép",
+      "copied": "Đã sao chép",
+      "copyFailed": "Chưa sao chép được thông báo. Hãy bôi chọn đoạn văn bản rồi tự sao chép.",
+      "peopleLabel": "Người trong cuộc gọi Meet",
+      "empty": "Tên sẽ hiện ở đây khi có người nói và phụ đề (CC) của Meet đang bật.",
+      "hint": "Chỉ đánh dấu những người đã nói đồng ý. Bỏ dấu ở một tên sẽ xoá bản sao giọng của người đó. Tắt chế độ này không bỏ dấu của ai cả.",
+      "statusFailed": "Chưa kiểm tra được những ai đã được đánh dấu.",
+      "retry": "Thử lại",
+      "saveFailed": "Chưa lưu được lựa chọn này."
     }
   }
 }

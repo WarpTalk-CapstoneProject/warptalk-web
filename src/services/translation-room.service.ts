@@ -98,6 +98,17 @@ export type BridgeAudioModeResult = {
   translationActive: boolean;
 };
 
+/** WT-933 — one Meet-side person's voice-clone consent, as the host recorded it (the PUT's echo). */
+export type BridgeVoiceCloneConsent = {
+  displayName: string;
+  consented: boolean;
+};
+
+/** WT-933 — the submitted names that have a consent on record, each exactly as submitted. */
+export type BridgeVoiceCloneConsentStatus = {
+  consented: string[];
+};
+
 /** W4b — heartbeat / takeover answer (BridgeCapturerStatusDto). */
 export type BridgeCapturerStatus = {
   roomId: string;
@@ -213,6 +224,17 @@ export type FlashModeState = {
   /** "room" = a host chose it · "deployment" = following the default · "unknown" = neither is known. */
   source: "room" | "deployment" | "unknown";
 };
+
+/**
+ * The body of a voice-clone consent answer (WT-933). This service's endpoints answer with the DTO
+ * itself; the same DTO under a `data` key is read too, so the popup does not show an empty list
+ * of ticks should the gateway ever wrap it.
+ */
+function bridgeVoiceCloneBody<T extends object>(body: unknown): Partial<T> | null {
+  if (!body || typeof body !== "object") return null;
+  const inner = (body as { data?: unknown }).data;
+  return (inner && typeof inner === "object" ? inner : body) as Partial<T>;
+}
 
 export const translationRoomService = {
   async create(data: CreateTranslationRoomRequest) {
@@ -562,6 +584,48 @@ export const translationRoomService = {
       mode: parseBridgeAudioMode(body.mode) ?? mode,
       translationActive: body.translationActive === true,
     };
+  },
+
+  /**
+   * WT-933 — the host records that a Meet-side person agreed to have their voice cloned for this
+   * meeting (`consented: true`), or withdraws it (`false`, which also removes the voice copy).
+   * Idempotent both ways. Host-only; 400 for an empty name or one over 100 characters.
+   */
+  async setBridgeVoiceCloneConsent(
+    id: string,
+    displayName: string,
+    consented: boolean,
+  ): Promise<BridgeVoiceCloneConsent> {
+    const response = await apiClient.put<BridgeVoiceCloneConsent>(
+      API.translationRooms.bridgeVoiceCloneConsents(id),
+      { displayName, consented },
+    );
+    const data = bridgeVoiceCloneBody<BridgeVoiceCloneConsent>(response.data);
+    // What we asked for when the echo is unreadable: a 200 means it was applied.
+    return {
+      displayName: typeof data?.displayName === "string" ? data.displayName : displayName,
+      consented: typeof data?.consented === "boolean" ? data.consented : consented,
+    };
+  },
+
+  /**
+   * WT-933 — which of these Meet-side names have a consent on record. The answer is the subset of
+   * `displayNames`, each exactly as submitted. In the body, not the URL: these are people's names.
+   */
+  async getBridgeVoiceCloneConsentStatus(
+    id: string,
+    displayNames: string[],
+  ): Promise<BridgeVoiceCloneConsentStatus> {
+    const response = await apiClient.post<BridgeVoiceCloneConsentStatus>(
+      API.translationRooms.bridgeVoiceCloneConsentsStatus(id),
+      { displayNames },
+    );
+    const data = bridgeVoiceCloneBody<BridgeVoiceCloneConsentStatus>(response.data);
+    // Not read as "nobody": an answer with no list in it would untick people who agreed.
+    if (!Array.isArray(data?.consented)) {
+      throw new Error("The voice-clone consent status answer could not be read.");
+    }
+    return { consented: data.consented.filter((name): name is string => typeof name === "string") };
   },
 
   /** W4b — renew this desktop's capturer lease. Rejects (409 CONFLICT) once it is not the capturer. */

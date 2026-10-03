@@ -152,6 +152,17 @@ export const API = {
      * BRIDGE_AUDIO_MODE_LOCKED for text → voice while translation runs.
      */
     bridgeAudioMode: (id: string) => `/translation-rooms/${id}/bridge/audio-mode`,
+    /**
+     * WT-933 — the host records that one Meet-side person agreed to voice cloning, or withdraws it:
+     * PUT `{ displayName, consented }`. Host-only, bridge rooms only, not once ENDED.
+     */
+    bridgeVoiceCloneConsents: (id: string) => `/translation-rooms/${id}/bridge/voice-clone-consents`,
+    /**
+     * WT-933 — which of these names are consented: POST `{ displayNames }` (at most 50). A POST
+     * with a body on purpose: a person's name must not travel in a URL.
+     */
+    bridgeVoiceCloneConsentsStatus: (id: string) =>
+      `/translation-rooms/${id}/bridge/voice-clone-consents/status`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
     /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,
