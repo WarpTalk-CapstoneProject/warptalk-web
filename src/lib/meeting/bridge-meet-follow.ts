@@ -45,13 +45,72 @@
  *   "manual"`), validated here by `acceptsManualMic`. While the mic follows Meet there is no chip.
  *   The Google Meet plugin is never asked for, hinted at or required.
  *
+ * CLOSING THE MEET TAB IS LEAVING (PO, 2026-10-03)
+ *   A newer desktop says WHY a call was left: the tab was closed, navigated away, its window closed
+ *   or the browser is gone (`MeetCallTabGoneReason`). That is the same `left` and the same 30 s
+ *   countdown - closing the Meet tab means the Meet ended for this user - and only the popup's
+ *   wording changes (`leaveCause`). A desktop that never sends a reason reads as an ordinary leave.
+ *
+ * AN END THAT FAILS IS TRIED AGAIN (prod incident 2026-10-03)
+ *   The countdown used to be cleared the moment it ran out, before the End was even sent. With the
+ *   backend hung at that moment the End failed, a toast nobody saw said so (the user is looking at
+ *   Meet), and the room stayed open with nothing left to end it - an orphan that then held the
+ *   bridge trigger. So the leave now stays pending until the End lands: a failure that could pass
+ *   on another try (`meetLeaveFailureRetryable`) pushes the deadline out by a growing delay
+ *   (`meetLeaveRetryDelayMs`) and the same timer fires again. It stops the way any leave stops:
+ *   "Keep open", or the user back `in-call`. A failure no retry can change (the server refusing
+ *   this user, say) drops the leave instead of knocking on the same door forever.
+ *
  * Relative imports with the extension: the unit tests run under the plain node test runner.
  */
 
-import type { MeetCallState, MeetSelfMic } from "../desktop/bridge.ts";
+import type { MeetCallState, MeetCallTabGoneReason, MeetSelfMic } from "../desktop/bridge.ts";
 
 /** How long after the user leaves the Meet call the room is ended (or left) unless they answer. */
 export const MEET_LEFT_COUNTDOWN_MS = 30_000;
+
+/** The first retry of a failed End after the countdown, doubling from here. */
+export const MEET_LEAVE_RETRY_BASE_MS = 5_000;
+/** The longest gap between two retries: a hung backend is retried about once a minute. */
+export const MEET_LEAVE_RETRY_MAX_MS = 60_000;
+
+/**
+ * What made the user leave, for the popup's wording only. The flow is identical.
+ *
+ *   left-call   Meet's own Leave button (or any `left` the desktop gave no tab-gone reason for)
+ *   tab-closed  the Meet tab, its window or the browser went away
+ */
+export type MeetLeaveCause = "left-call" | "tab-closed";
+
+const TAB_GONE_REASONS: readonly MeetCallTabGoneReason[] = [
+  "tab-closed",
+  "tab-navigated",
+  "window-closed",
+  "browser-gone",
+];
+
+/** The cause a `left` reading's `reason` names. Unknown and absent reasons are a plain leave. */
+export function meetLeaveCause(reason: string | null | undefined): MeetLeaveCause {
+  return reason && (TAB_GONE_REASONS as readonly string[]).includes(reason) ? "tab-closed" : "left-call";
+}
+
+/** How long to wait before retry number `failures` (1-based) of a failed End. */
+export function meetLeaveRetryDelayMs(failures: number): number {
+  const exponent = Math.max(0, failures - 1);
+  return Math.min(MEET_LEAVE_RETRY_MAX_MS, MEET_LEAVE_RETRY_BASE_MS * 2 ** exponent);
+}
+
+/**
+ * Whether a failed End (or Leave) might succeed on another try.
+ *
+ * The same line `canConnectToRoom` draws: no response at all (a timeout, a dropped connection), a
+ * 5xx, 408 and 429 are the server not answering yet; any other 4xx is the server answering, and
+ * the same request will get the same answer.
+ */
+export function meetLeaveFailureRetryable(httpStatus: number | undefined): boolean {
+  if (httpStatus === undefined) return true;
+  return httpStatus >= 500 || httpStatus === 408 || httpStatus === 429;
+}
 
 /** Whether a desktop reading is about this room's Meet call. See WHICH CALL above. */
 export function trustsMeetReading(
@@ -75,8 +134,13 @@ export type MeetFollowState = {
   leaveArmed: boolean;
   /** Meet's mute button as last READ (fresh, not stale); null until it has been read once. */
   meetMuted: boolean | null;
-  /** The countdown running after the user left the call, or null. */
-  leave: { endsAtMs: number } | null;
+  /**
+   * The countdown running after the user left the call, or null. `failures` counts Ends that did
+   * not land; absent until the first one fails. See AN END THAT FAILS IS TRIED AGAIN.
+   */
+  leave: { endsAtMs: number; failures?: number } | null;
+  /** Why the last leave happened, for the popup's wording; null (or absent) before the first. */
+  leaveCause?: MeetLeaveCause | null;
   /** "Keep open" was pressed for this leave; cleared by the next `in-call`. */
   leaveKept: boolean;
   /**
@@ -102,6 +166,8 @@ export type MeetFollowEvent =
   | { type: "keep-open" }
   /** The countdown was acted on (ended, left) and must not fire again. */
   | { type: "leave-resolved" }
+  /** The End (or Leave) the countdown ran into did not land. See AN END THAT FAILS IS TRIED AGAIN. */
+  | { type: "leave-failed"; now: number; retryable: boolean }
   /** The popup's press while the mic follows Meet: overrides Meet's reading (see above). */
   | { type: "mic-override"; enabled: boolean };
 
@@ -132,6 +198,7 @@ export function reduceMeetFollow(state: MeetFollowState, event: MeetFollowEvent)
             micOverride: null,
             leaveArmed: false,
             leave: { endsAtMs: event.now + MEET_LEFT_COUNTDOWN_MS },
+            leaveCause: meetLeaveCause(call.reason),
             leaveKept: false,
           };
         }
@@ -160,6 +227,13 @@ export function reduceMeetFollow(state: MeetFollowState, event: MeetFollowEvent)
       return state.leave ? { ...state, leave: null, leaveKept: true } : state;
     case "leave-resolved":
       return state.leave ? { ...state, leave: null } : state;
+    case "leave-failed": {
+      // Nothing pending: the user rejoined or chose Keep open while the request was in flight.
+      if (!state.leave) return state;
+      if (!event.retryable) return { ...state, leave: null };
+      const failures = (state.leave.failures ?? 0) + 1;
+      return { ...state, leave: { endsAtMs: event.now + meetLeaveRetryDelayMs(failures), failures } };
+    }
     default:
       return state;
   }
@@ -261,18 +335,33 @@ export function meetLeaveOutcome(input: { mayEndRoom: boolean }): MeetLeaveOutco
  *   countdown  "You left the Meet call. End the WarpTalk room?" with End now / Keep open
  *   kept       the room was kept open; said so, because this desktop no longer listens to Meet
  *
+ * `cause` picks the wording ("The Google Meet tab was closed" for the tab-gone family) and
+ * `retrying` says the End already failed and the countdown is now the wait for the next try. Both
+ * optional, so a snapshot without them still reads as the plain leave it always was.
+ *
  * Only for someone who may end the room. A member is asked nothing: their countdown runs silently
  * and ends in a leave, and they have no "kept" state to report.
  */
-export type MeetLeavePrompt = { state: "countdown"; endsAtMs: number } | { state: "kept" };
+export type MeetLeavePrompt =
+  | { state: "countdown"; endsAtMs: number; cause?: MeetLeaveCause; retrying?: boolean }
+  | { state: "kept"; cause?: MeetLeaveCause };
 
 export function meetLeavePrompt(
   state: MeetFollowState,
   input: { mayEndRoom: boolean },
 ): MeetLeavePrompt | undefined {
   if (!input.mayEndRoom) return undefined;
-  if (state.leave) return { state: "countdown", endsAtMs: state.leave.endsAtMs };
-  if (state.leaveKept && state.believed === "left") return { state: "kept" };
+  // Only the tab-gone cause is written out: a plain leave stays the exact shape it always had.
+  const cause = state.leaveCause === "tab-closed" ? ({ cause: "tab-closed" } as const) : {};
+  if (state.leave) {
+    return {
+      state: "countdown",
+      endsAtMs: state.leave.endsAtMs,
+      ...cause,
+      ...(state.leave.failures ? { retrying: true } : {}),
+    };
+  }
+  if (state.leaveKept && state.believed === "left") return { state: "kept", ...cause };
   return undefined;
 }
 

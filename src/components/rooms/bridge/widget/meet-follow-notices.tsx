@@ -15,6 +15,10 @@
  *      Meet was left, and the ending is the main window's native one (the popup only answers).
  *      After "Keep open", one quiet line says the room is open and WarpTalk is not listening,
  *      because it is not: this desktop stopped hearing Meet when the user left the call.
+ *      Closing the Meet TAB is the same leave (PO, 2026-10-03) and only the words differ: "The
+ *      Google Meet tab was closed" (`cause: "tab-closed"`), because "You left the Meet call" reads
+ *      as wrong to someone who only closed a tab. And when the End already failed (a backend hang)
+ *      the countdown is the wait for the next try, and says so instead of "Ends automatically".
  *   2. The WarpTalk mic, always, while the user is in the call. It used to appear only where Meet's
  *      mute button cannot be read (an older desktop, macOS, a button the sensor never saw); while
  *      the mic followed Meet the popup said nothing — and on 2026-10-03 the desktop misread Meet's
@@ -72,22 +76,32 @@ function MeetLeftPrompt() {
 
   if (!prompt) return null;
 
+  const tabClosed = prompt.cause === "tab-closed";
+
   if (prompt.state === "kept") {
     return (
       <div data-bridge-meet-left-kept role="status" className={`${STRIP} bg-surface-2 text-ink-muted`}>
-        {t("kept")}
+        {tabClosed ? t("keptTabClosed") : t("kept")}
       </div>
     );
   }
 
+  const title = tabClosed ? t("titleTabClosed") : t("title");
+  const seconds = meetLeaveSecondsLeft(prompt.endsAtMs, now);
   return (
-    <div data-bridge-meet-left role="alertdialog" aria-label={t("title")} className={`${STRIP} bg-status-waiting/15`}>
+    <div
+      data-bridge-meet-left={prompt.cause ?? "left-call"}
+      data-bridge-meet-left-retrying={prompt.retrying ? "" : undefined}
+      role="alertdialog"
+      aria-label={title}
+      className={`${STRIP} bg-status-waiting/15`}
+    >
       <p className="flex items-start gap-1.5">
         <SignOut size={14} weight="bold" className="mt-px shrink-0 text-status-waiting" aria-hidden="true" />
         <span>
-          <span className="font-semibold">{t("title")}</span>{" "}
+          <span className="font-semibold">{title}</span>{" "}
           <span className="text-ink-muted" aria-live="off">
-            {t("countdown", { seconds: meetLeaveSecondsLeft(prompt.endsAtMs, now) })}
+            {prompt.retrying ? t("retrying", { seconds }) : t("countdown", { seconds })}
           </span>
         </span>
       </p>

@@ -317,6 +317,8 @@ export function useBridgeWidgetRelayHost({
   const micOverride = mic?.override;
   const meetLeaveState = meetLeave?.state;
   const meetLeaveEndsAtMs = meetLeave?.state === "countdown" ? meetLeave.endsAtMs : undefined;
+  const meetLeaveCause = meetLeave?.cause;
+  const meetLeaveRetrying = meetLeave?.state === "countdown" ? meetLeave.retrying : undefined;
   const outboundLeg = outbound?.leg;
   const outboundSinceMs = outbound?.sinceMs;
 
@@ -386,6 +388,8 @@ export function useBridgeWidgetRelayHost({
     micOverride,
     meetLeaveState,
     meetLeaveEndsAtMs,
+    meetLeaveCause,
+    meetLeaveRetrying,
     outboundLeg,
     outboundSinceMs,
   ]);

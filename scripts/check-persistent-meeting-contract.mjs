@@ -326,8 +326,9 @@ assert.match(
 );
 assert.match(
   meetingSession,
-  /const meetingRoomIsGone = isRestoredMeetingStale\(\{[\s\S]*?roomLoadFailed: roomQuery\.isError,[\s\S]*?canConnectRoom: canConnectMeeting,/,
-  "a restored room id that no longer resolves must retire the session, not mount a dead panel",
+  /const meetingRoomIsGone = isRestoredMeetingStale\(\{[\s\S]*?roomLoadFailed: roomQuery\.isError,[\s\S]*?roomLoadErrorStatus:[\s\S]*?canConnectRoom: canConnectMeeting,/,
+  "a restored room id that no longer resolves must retire the session, not mount a dead panel - " +
+    "and only on the server's answer (roomLoadErrorStatus), never on a timeout (prod 2026-10-03)",
 );
 assert.doesNotMatch(
   withoutComments(appLayout),

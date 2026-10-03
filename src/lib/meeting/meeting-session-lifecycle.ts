@@ -270,21 +270,43 @@ export function evaluateIdleMeeting({
  * cancelled, or simply no longer readable by this account. Only asked of a MINIMISED session —
  * on /room/{id} the TranslationRoomEnded broadcast already retires the session AND routes the
  * person somewhere, whereas closing from here would leave them staring at a bare spinner.
+ *
+ * ONLY A DEFINITIVE ANSWER RETIRES IT (prod incident 2026-10-03)
+ *   This used to retire the session on ANY failed lookup. The backend hung for a few seconds, the
+ *   room query timed out, and a LIVE external-bridge session was torn down about 41 s in - and with
+ *   it the transcript popup, the idle reaper and the Meet-left countdown, every one of the things
+ *   that would otherwise have ended the room. The room was never ended, stayed in the room list
+ *   with no end, and held the bridge trigger for its whole one-hour tail.
+ *
+ *   It is the same mistake `canConnectToRoom` already fixed for LiveKit, and the same rule fixes
+ *   it: ABSENCE IS NOT EVIDENCE. A timeout, a 5xx or a request that never left the machine says
+ *   nothing about the room, so the session holds and the query's own retry/poll gets another go.
+ *   Only the server answering about THIS room ends it: 404/410 (gone, as `canConnectToRoom` reads
+ *   them) and 403, which is the "no longer readable by this account" case WT-306 named above - a
+ *   definite answer, and one no retry will change.
  */
 export function isRestoredMeetingStale({
   compact,
   roomLoadFailed,
+  roomLoadErrorStatus,
   hasRoom,
   canConnectRoom,
 }: {
   compact: boolean;
   roomLoadFailed: boolean;
+  /** HTTP status of the failed lookup; undefined for a network error or timeout with no response. */
+  roomLoadErrorStatus?: number;
   hasRoom: boolean;
   canConnectRoom: boolean;
 }): boolean {
   if (!compact) return false;
-  if (roomLoadFailed) return true;
+  if (roomLoadFailed && isDefinitiveRoomLookupFailure(roomLoadErrorStatus)) return true;
   return hasRoom && !canConnectRoom;
+}
+
+/** A failed room lookup the server ANSWERED, about this room, in a way no retry will change. */
+function isDefinitiveRoomLookupFailure(status: number | undefined): boolean {
+  return status === 403 || status === 404 || status === 410;
 }
 
 /**

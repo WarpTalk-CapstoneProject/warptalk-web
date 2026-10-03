@@ -144,13 +144,18 @@ export interface MeetMicState {
  *   unknown  nothing readable: Meet is a background tab with no PiP, the read failed, the watch is
  *            off, or the platform has no sensor (macOS). It NEVER means the call ended.
  *
- * `reason` is for logs only; nothing may branch on it.
+ * `reason` is for logs only, with ONE exception: on a `left` reading, the tab-gone family below
+ * (`MeetCallTabGoneReason`) picks the popup's wording - "the Google Meet tab was closed" rather than
+ * "you left the Meet call" - and nothing else. The flow is the same 30 s countdown either way (PO,
+ * 2026-10-03: closing the Meet tab = Meet ended). Any other string, and a desktop build that never
+ * sends these, reads as an ordinary leave.
  */
 export interface MeetCallState {
   phase: "lobby" | "in-call" | "left" | "unknown";
   via: "tab" | "pip" | null;
   meetCode: string | null;
-  reason: string;
+  /** Free text for logs; see `MeetCallTabGoneReason` for the only values the web reads. */
+  reason: string | MeetCallTabGoneReason;
   atMs: number;
   /**
    * The HWND of the browser window hosting the Meet TAB (`via: "tab"` readings only; a PiP reading
@@ -166,6 +171,14 @@ export interface MeetCallState {
    */
   windowGeometry?: MeetWindowGeometry;
 }
+
+/**
+ * The `reason` a newer desktop puts on a `left` reading when the Meet TAB went away rather than
+ * the user pressing Leave in it: the tab was closed, navigated off Meet, its window was closed, or
+ * the browser itself is gone. The reading carries the closed tab's Meet code, so the usual
+ * which-call check (`trustsMeetReading`) still applies.
+ */
+export type MeetCallTabGoneReason = "tab-closed" | "tab-navigated" | "window-closed" | "browser-gone";
 
 /** Mirrors warptalk-desktop `MeetWindowRect`: physical pixels, relative to the visible frame. */
 export interface MeetWindowRect {
