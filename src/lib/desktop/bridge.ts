@@ -146,9 +146,11 @@ export interface MeetCallState {
   reason: string;
   atMs: number;
   /**
-   * The HWND of the window the reading came from (the browser window hosting the Meet tab, or the
-   * PiP window). A Meet tab dragged into another window changes it, and the recording re-arms its
-   * capture on the new one (lib/meeting/meet-window-crop). Absent from older desktop builds.
+   * The HWND of the browser window hosting the Meet TAB (`via: "tab"` readings only; a PiP reading
+   * carries none, so a tab/PiP switch does not change it). A Meet tab dragged into another window
+   * changes it, and the recording re-arms its capture on the new one (meetWindowNeedsRearm in
+   * lib/meeting/bridge-recording). Absent from older desktop builds, which also sent the PiP
+   * window's HWND here on PiP readings — meetWindowNeedsRearm ignores those (`via !== "tab"`).
    */
   windowHandle?: number;
   /**
