@@ -64,6 +64,30 @@ expect(
   "meet-audio must be published by name, as ScreenShareAudio (never Microphone/Unknown: the STT ingest would read it)",
 );
 expect(
+  publisher,
+  /useSupervisedPublish\(\{\s*enabled: wanted,/,
+  PUBLISHER,
+  "meet-audio must be kept on the wire by the supervisor (a failed publish or a reconnect is retried)",
+);
+expect(
+  publisher,
+  /setAttributes\(\{ \[MEET_AUDIO_MIC_ATTRIBUTE\]/,
+  PUBLISHER,
+  "the publisher must say whether its microphone is in meet-audio (MEET_AUDIO_MIC_ATTRIBUTE)",
+);
+expect(
+  publisher,
+  /meetAudioMicGain\(\{/,
+  PUBLISHER,
+  "the microphone copy must be ducked while the far side sounds (echo of Meet's speakers)",
+);
+expect(
+  template,
+  /ParticipantAttributesChanged/,
+  TEMPLATE,
+  "the template must re-decide the mix when the meet-audio microphone attribute changes",
+);
+expect(
   template,
   /shouldRecordAudio\(/,
   TEMPLATE,

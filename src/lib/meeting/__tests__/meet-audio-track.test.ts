@@ -8,7 +8,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  INITIAL_FAR_SPEECH,
+  MEET_AUDIO_DUCK_GAIN,
+  MEET_AUDIO_FAR_SPEECH_HANG_MS,
+  farSpeechActive,
   meetAudioLocalVoiceOn,
+  meetAudioMicGain,
+  meetAudioMicrophoneCandidates,
+  reduceFarSpeech,
+  rmsToDbfs,
+  shouldReopenMeetAudioMic,
   meetAudioMicrophoneConstraints,
   shouldPublishMeetAudio,
 } from "../meet-audio-track.ts";
@@ -71,4 +80,52 @@ test("the recording's microphone copy uses the meeting's device, with echo cance
     autoGainControl: true,
   });
   assert.equal("deviceId" in meetAudioMicrophoneConstraints(""), false);
+});
+
+// Echo: on laptop speakers the mic copy hears Meet's far side, which this window cannot cancel.
+
+test("the far side is sounding from its first loud sample until the hang runs out", () => {
+  let state = reduceFarSpeech(INITIAL_FAR_SPEECH, { dbfs: rmsToDbfs(0), nowMs: 0 });
+  assert.equal(farSpeechActive(state, 0), false, "digital silence on the loopback is not speech");
+  state = reduceFarSpeech(state, { dbfs: -30, nowMs: 1_000 });
+  assert.equal(farSpeechActive(state, 1_000), true);
+  // Quiet again: still ducked through the room's tail.
+  state = reduceFarSpeech(state, { dbfs: -80, nowMs: 1_200 });
+  assert.equal(farSpeechActive(state, 1_000 + MEET_AUDIO_FAR_SPEECH_HANG_MS), true);
+  assert.equal(farSpeechActive(state, 1_001 + MEET_AUDIO_FAR_SPEECH_HANG_MS), false);
+});
+
+test("the user alone is at full level; under the far side ducked, not cut (double talk)", () => {
+  assert.equal(meetAudioMicGain({ localVoiceOn: true, farSpeechActive: false }), 1);
+  assert.equal(meetAudioMicGain({ localVoiceOn: true, farSpeechActive: true }), MEET_AUDIO_DUCK_GAIN);
+  assert.ok(MEET_AUDIO_DUCK_GAIN > 0 && MEET_AUDIO_DUCK_GAIN < 0.25);
+  // Meet not sending the user: silent whatever the far side does.
+  assert.equal(meetAudioMicGain({ localVoiceOn: false, farSpeechActive: false }), 0);
+  assert.equal(meetAudioMicGain({ localVoiceOn: false, farSpeechActive: true }), 0);
+});
+
+test("rmsToDbfs: full scale is 0 dBFS, silence passes no threshold", () => {
+  assert.equal(rmsToDbfs(1), 0);
+  assert.equal(Math.round(rmsToDbfs(0.01)), -40);
+  assert.equal(rmsToDbfs(0), Number.NEGATIVE_INFINITY);
+});
+
+// The microphone copy coming back: device switch, unplug.
+
+test("an ended microphone copy is reopened, at most three times a minute", () => {
+  let recent: number[] = [];
+  for (const at of [0, 10_000, 20_000]) {
+    const answer = shouldReopenMeetAudioMic(recent, at);
+    assert.equal(answer.reopen, true);
+    recent = answer.recent;
+  }
+  assert.equal(shouldReopenMeetAudioMic(recent, 30_000).reopen, false);
+  // A minute after the first, one slot is free again.
+  assert.equal(shouldReopenMeetAudioMic(recent, 60_001).reopen, true);
+});
+
+test("the microphone copy tries the meeting's device, then the default", () => {
+  assert.deepEqual(meetAudioMicrophoneCandidates("headset-abc"), ["headset-abc", ""]);
+  assert.deepEqual(meetAudioMicrophoneCandidates(""), [""]);
+  assert.deepEqual(meetAudioMicrophoneCandidates("default"), [""]);
 });

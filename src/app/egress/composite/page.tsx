@@ -172,6 +172,8 @@ export default function EgressCompositePage() {
    * in both layouts; a dub is not a person and gets no tile.
    */
   const [callAudio, setCallAudio] = useState<Tile[]>([]);
+  /** A `meet-audio` publisher says its own microphone is not in it (MEET_AUDIO_MIC_ATTRIBUTE). */
+  const [meetAudioWithoutMic, setMeetAudioWithoutMic] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -224,11 +226,13 @@ export default function EgressCompositePage() {
         participants.map((participant) => ({
           identity: participant.identity,
           trackNames: Array.from(participant.trackPublications.values()).map((pub) => pub.trackName),
+          attributes: participant.attributes,
         })),
         { latched: bridgeLatched },
       );
       if (context.bridge) latchBridge();
-      const sources = `bridge=${context.bridge} meetAudio=${context.meetAudio}`;
+      setMeetAudioWithoutMic(context.meetAudioWithoutMic.length > 0);
+      const sources = `bridge=${context.bridge} meetAudio=${context.meetAudio} withoutMic=${context.meetAudioWithoutMic.join(",") || "-"}`;
       if (sources !== audioSources) {
         audioSources = sources;
         // The egress logs see this page's console and nothing else.
@@ -238,7 +242,7 @@ export default function EgressCompositePage() {
         participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
           if (publication.kind !== Track.Kind.Audio) return;
           const wanted = shouldRecordAudio(
-            { identity: participant.identity, trackName: publication.trackName },
+            { identity: participant.identity, trackName: publication.trackName, source: publication.source },
             context,
           );
           if (audioRequested.get(publication.trackSid) === wanted) return;
@@ -410,6 +414,8 @@ export default function EgressCompositePage() {
         // `meet-audio` going away hands the mix back to everyone's own tracks.
         room.on(RoomEvent.TrackUnpublished, () => noteBridge());
         room.on(RoomEvent.ParticipantDisconnected, () => noteBridge());
+        // MEET_AUDIO_MIC_ATTRIBUTE: the meet-audio publisher's microphone came or went.
+        room.on(RoomEvent.ParticipantAttributesChanged, () => noteBridge());
 
         EgressHelper.startRecording();
       } catch (cause) {
@@ -459,6 +465,7 @@ export default function EgressCompositePage() {
 
   const slateAudioLine = meetWindowSlateAudioLine({
     meetAudio: callAudio.some((tile) => tile.meetAudio === true),
+    meetAudioWithoutMic,
     otherAudio:
       callAudio.length > 0 || tiles.some((tile) => tile.kind === Track.Kind.Audio),
   });

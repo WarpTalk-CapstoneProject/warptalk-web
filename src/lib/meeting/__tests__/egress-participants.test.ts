@@ -12,6 +12,7 @@ import { test } from "node:test";
 
 import {
   BRIDGE_STAND_IN_IDENTITY,
+  MEET_AUDIO_MIC_ATTRIBUTE,
   MEET_AUDIO_TRACK_NAME,
   MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
   MEET_WINDOW_HOLD_LOOKBACK_MS,
@@ -229,6 +230,7 @@ test("a room is a bridge when the stand-in, the Meet window or the Meet audio is
   assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: [""] }]), {
     bridge: false,
     meetAudio: false,
+    meetAudioWithoutMic: [],
   });
   assert.equal(resolveEgressAudioContext([{ identity: STAND_IN, trackNames: [""] }]).bridge, true);
   assert.equal(
@@ -238,6 +240,7 @@ test("a room is a bridge when the stand-in, the Meet window or the Meet audio is
   assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: ["", "meet-audio"] }]), {
     bridge: true,
     meetAudio: true,
+    meetAudioWithoutMic: [],
   });
 });
 
@@ -254,18 +257,19 @@ test("the layout's latch carries into the audio: a bridge stays a bridge after t
   assert.deepEqual(resolveEgressAudioContext([{ identity: HOST, trackNames: [""] }], { latched: true }), {
     bridge: true,
     meetAudio: false,
+    meetAudioWithoutMic: [],
   });
 });
 
 test("a bot naming a track meet-audio does not take over the mix", () => {
   assert.deepEqual(
     resolveEgressAudioContext([{ identity: DUB_FOR_HOST, trackNames: ["meet-audio"] }]),
-    { bridge: false, meetAudio: false },
+    { bridge: false, meetAudio: false, meetAudioWithoutMic: [] },
   );
 });
 
 test("a native meeting records every person's audio and no dub, exactly as before", () => {
-  const native = { bridge: false, meetAudio: false };
+  const native = { bridge: false, meetAudio: false, meetAudioWithoutMic: [] };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, native), true);
   assert.equal(shouldRecordAudio({ identity: MEMBER, trackName: "" }, native), true);
   assert.equal(shouldRecordAudio({ identity: DUB_FOR_HOST, trackName: "" }, native), false);
@@ -273,7 +277,7 @@ test("a native meeting records every person's audio and no dub, exactly as befor
 });
 
 test("a bridge recording with meet-audio mixes the call once, plus each default dub", () => {
-  const bridge = { bridge: true, meetAudio: true };
+  const bridge = { bridge: true, meetAudio: true, meetAudioWithoutMic: [] };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "meet-audio" }, bridge), true);
   // Already inside meet-audio: the host's WarpTalk mic, the stand-in's capture, a member's mic.
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), false);
@@ -288,7 +292,7 @@ test("a bridge recording with meet-audio mixes the call once, plus each default 
 });
 
 test("a bridge recording without meet-audio (older client) keeps WarpTalk's tracks, and the dubs", () => {
-  const bridge = { bridge: true, meetAudio: false };
+  const bridge = { bridge: true, meetAudio: false, meetAudioWithoutMic: [] };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), true);
   assert.equal(shouldRecordAudio({ identity: STAND_IN, trackName: "" }, bridge), true);
   assert.equal(shouldRecordAudio({ identity: DUB_FOR_FAR_SIDE, trackName: "" }, bridge), true);
@@ -319,3 +323,34 @@ test("the slate says which audio is being recorded, never more than that", () =>
     assert.doesNotMatch(line, /^Audio is being recorded/);
   }
 });
+
+test("meet-audio without the publisher's microphone keeps that publisher's WarpTalk mic, and only it", () => {
+  const context = resolveEgressAudioContext([
+    { identity: HOST, trackNames: ["", "meet-audio"], attributes: { [MEET_AUDIO_MIC_ATTRIBUTE]: "0" } },
+    { identity: STAND_IN, trackNames: [""] },
+    { identity: MEMBER, trackNames: [""] },
+  ]);
+  assert.deepEqual(context.meetAudioWithoutMic, [HOST]);
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "", source: "microphone" }, context), true);
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "meet-audio", source: "screen_share_audio" }, context), true);
+  // Not the stand-in (its far side is in meet-audio), not a member, not another source of the host.
+  assert.equal(shouldRecordAudio({ identity: STAND_IN, trackName: "", source: "unknown" }, context), false);
+  assert.equal(shouldRecordAudio({ identity: MEMBER, trackName: "", source: "microphone" }, context), false);
+  assert.equal(shouldRecordAudio({ identity: HOST, trackName: "", source: "unknown" }, context), false);
+});
+
+test("meet-audio with its microphone (\"1\" or no attribute yet) replaces the WarpTalk mic", () => {
+  for (const attributes of [{ [MEET_AUDIO_MIC_ATTRIBUTE]: "1" }, undefined]) {
+    const context = resolveEgressAudioContext([{ identity: HOST, trackNames: ["", "meet-audio"], attributes }]);
+    assert.deepEqual(context.meetAudioWithoutMic, []);
+    assert.equal(shouldRecordAudio({ identity: HOST, trackName: "", source: "microphone" }, context), false);
+  }
+});
+
+test("the slate says when the local voice is the WarpTalk microphone and not meet-audio", () => {
+  assert.match(
+    meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true, meetAudioWithoutMic: true }),
+    /WarpTalk microphone/,
+  );
+});
+

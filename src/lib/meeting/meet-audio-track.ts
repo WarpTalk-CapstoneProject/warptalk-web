@@ -79,3 +79,90 @@ export function meetAudioMicrophoneConstraints(selectedMicrophoneId: string): Me
 
 /** Seconds for the microphone's gain to follow a Meet mute: quick, but no click. */
 export const MEET_AUDIO_LOCAL_RAMP_S = 0.03;
+
+// ── Echo: the far side heard twice ───────────────────────────────────────────
+
+/**
+ * WHY THE MIC COPY IS DUCKED WHILE THE FAR SIDE TALKS
+ *   On laptop speakers the microphone hears Meet's playback of the far side. That playback comes
+ *   from another process (Chrome), so this window's echo canceller has no reference for it and
+ *   cannot remove it. The far side then reaches `meet-audio` twice: clean through the loopback, and
+ *   again, delayed and roomy, through the microphone.
+ *
+ *   We do have the reference, though: the loopback IS Meet's playback. So the same idea as the
+ *   half-duplex gate (half-duplex-mic.tsx) applies, with an exact signal: while the inbound leg
+ *   carries sound (a plain energy VAD, MEET_AUDIO_FAR_SPEECH_DBFS) and for a short hang after it
+ *   (the room's tail, Meet's jitter buffer), the microphone copy is ducked to MEET_AUDIO_DUCK_GAIN.
+ *   When only the user speaks, the loopback is silent and their voice is at full level.
+ *
+ * THE TRADE-OFF: DOUBLE TALK
+ *   When both sides talk at once, the user is ducked too (about -16 dB), so in overlaps the user is
+ *   quieter than the far side in the file. A duck rather than a hard gate on purpose: their words
+ *   stay audible in an overlap, while the echo (already 10-20 dB down acoustically) falls about
+ *   another 16 dB under the clean loopback copy, where it is masked. On a headset there is no echo
+ *   and the duck only costs that overlap level. The first tens of milliseconds of each far-side
+ *   phrase can leak before the VAD sees it (one analyser window plus one tick).
+ */
+export const MEET_AUDIO_FAR_SPEECH_DBFS = -50;
+/** How long the duck holds after the far side falls silent. */
+export const MEET_AUDIO_FAR_SPEECH_HANG_MS = 400;
+/** The microphone copy's gain while the far side is sounding (about -16 dB). */
+export const MEET_AUDIO_DUCK_GAIN = 0.15;
+/** How often the far side's level is measured. The desktop window is never timer-throttled. */
+export const MEET_AUDIO_VAD_TICK_MS = 20;
+
+export interface FarSpeechState {
+  /** When the inbound leg last measured above the threshold; null if never. */
+  lastSoundAtMs: number | null;
+}
+
+export const INITIAL_FAR_SPEECH: FarSpeechState = { lastSoundAtMs: null };
+
+/** RMS (0..1) as dBFS; silence is -Infinity, which no threshold passes. */
+export function rmsToDbfs(rms: number): number {
+  return rms > 0 ? 20 * Math.log10(rms) : Number.NEGATIVE_INFINITY;
+}
+
+export function reduceFarSpeech(
+  state: FarSpeechState,
+  sample: { dbfs: number; nowMs: number },
+): FarSpeechState {
+  return sample.dbfs >= MEET_AUDIO_FAR_SPEECH_DBFS ? { lastSoundAtMs: sample.nowMs } : state;
+}
+
+export function farSpeechActive(state: FarSpeechState, nowMs: number): boolean {
+  return state.lastSoundAtMs !== null && nowMs - state.lastSoundAtMs <= MEET_AUDIO_FAR_SPEECH_HANG_MS;
+}
+
+/** The microphone copy's gain: off when Meet is not sending the user, ducked under the far side. */
+export function meetAudioMicGain(input: { localVoiceOn: boolean; farSpeechActive: boolean }): number {
+  if (!input.localVoiceOn) return 0;
+  return input.farSpeechActive ? MEET_AUDIO_DUCK_GAIN : 1;
+}
+
+// ── The microphone copy coming back ──────────────────────────────────────────
+
+/** At most this many reopens of an ended microphone per minute: a device that dies on open is broken. */
+export const MEET_AUDIO_MIC_REOPENS_PER_MINUTE = 3;
+
+/**
+ * Whether an ended microphone copy (unplugged, driver restart) is reopened now. Same bound the
+ * inbound leg uses for its own track, for the same reason: no tight loop on a dead device.
+ */
+export function shouldReopenMeetAudioMic(
+  recentReopensMs: readonly number[],
+  nowMs: number,
+): { reopen: boolean; recent: number[] } {
+  const recent = recentReopensMs.filter((at) => nowMs - at < 60_000);
+  if (recent.length >= MEET_AUDIO_MIC_REOPENS_PER_MINUTE) return { reopen: false, recent };
+  return { reopen: true, recent: [...recent, nowMs] };
+}
+
+/**
+ * Which devices to try, in order, when (re)opening the microphone copy: the meeting's current
+ * device, then the browser default. `ideal` already falls back for a device that is gone, but a
+ * device that is present and refuses (busy, driver fault) needs the explicit second try.
+ */
+export function meetAudioMicrophoneCandidates(deviceId: string): string[] {
+  return deviceId && deviceId !== "default" ? [deviceId, ""] : [""];
+}

@@ -273,10 +273,25 @@ export function isRecordedBridgeDub(identity: string | null | undefined): boolea
 }
 
 /** One remote participant as the audio policy sees it. */
+/**
+ * The participant attribute the `meet-audio` publisher sets to say whether its own microphone is in
+ * the mix: "1" when the microphone copy is open, "0" when it could not be opened (getUserMedia
+ * refused, no device, a device that keeps dying). The far side is in `meet-audio` either way.
+ * Absent means "1": the publisher sets it before the track is published.
+ */
+export const MEET_AUDIO_MIC_ATTRIBUTE = "warptalk.meet-audio.mic";
+
+/** Whether this participant's `meet-audio` lacks their own voice, from their attributes. */
+export function meetAudioLacksMicrophone(attributes: Readonly<Record<string, string>> | undefined): boolean {
+  return attributes?.[MEET_AUDIO_MIC_ATTRIBUTE] === "0";
+}
+
 export interface EgressAudioParticipant {
   identity: string;
   /** Names of every track the participant has PUBLISHED (subscribed or not). */
   trackNames: readonly (string | null | undefined)[];
+  /** LiveKit participant attributes (MEET_AUDIO_MIC_ATTRIBUTE). */
+  attributes?: Readonly<Record<string, string>>;
 }
 
 export interface EgressAudioContext {
@@ -284,6 +299,11 @@ export interface EgressAudioContext {
   bridge: boolean;
   /** A person publishes `meet-audio`: the call's own mix replaces every other human's audio. */
   meetAudio: boolean;
+  /**
+   * Who publishes `meet-audio` WITHOUT their own microphone in it. Their WarpTalk microphone is
+   * then kept in the mix (theirs only; the stand-in and members are inside `meet-audio`).
+   */
+  meetAudioWithoutMic: readonly string[];
 }
 
 /**
@@ -299,7 +319,11 @@ export function resolveEgressAudioContext(
   const people = participants.filter((participant) => isRecordableParticipant(participant.identity));
   const published = (match: (name: string | null | undefined) => boolean) =>
     people.some((participant) => participant.trackNames.some(match));
-  const meetAudio = published(isMeetAudioTrack);
+  const meetAudioPublishers = people.filter((participant) => participant.trackNames.some(isMeetAudioTrack));
+  const meetAudio = meetAudioPublishers.length > 0;
+  const meetAudioWithoutMic = meetAudioPublishers
+    .filter((participant) => meetAudioLacksMicrophone(participant.attributes))
+    .map((participant) => participant.identity);
   const bridge =
     options.latched === true ||
     isBridgeRecording({
@@ -307,7 +331,7 @@ export function resolveEgressAudioContext(
       meetWindowPublished: published(isMeetWindowTrack),
       meetAudioPublished: meetAudio,
     });
-  return { bridge, meetAudio };
+  return { bridge, meetAudio, meetAudioWithoutMic };
 }
 
 /**
@@ -318,18 +342,22 @@ export function resolveEgressAudioContext(
  *                                  and language. A native meeting keeps recording no dubs (the
  *                                  original reason for this template).
  *   a person's `meet-audio`        always.
- *   any other human audio          unless the room has `meet-audio`, which already contains it.
+ *   any other human audio          unless the room has `meet-audio`, which already contains it —
+ *                                  except the `meet-audio` publisher's own MICROPHONE when their
+ *                                  `meet-audio` says it has no microphone in it (their voice would
+ *                                  otherwise be missing from the file).
  */
 export function shouldRecordAudio(
-  publication: { identity: string; trackName: string | null | undefined },
+  publication: { identity: string; trackName: string | null | undefined; source?: string },
   context: EgressAudioContext,
 ): boolean {
-  const { identity, trackName } = publication;
+  const { identity, trackName, source } = publication;
   if (!identity || identity.startsWith("AIBot_")) return false;
   if (identity.startsWith("ai-interpreter-")) return context.bridge && isRecordedBridgeDub(identity);
   if (!isRecordableParticipant(identity)) return false;
   if (isMeetAudioTrack(trackName)) return true;
-  return !context.meetAudio;
+  if (!context.meetAudio) return true;
+  return source === "microphone" && context.meetAudioWithoutMic.includes(identity);
 }
 
 /**
@@ -337,8 +365,17 @@ export function shouldRecordAudio(
  * the silent production file it said so over 222 s of nothing. It now says what is actually
  * subscribed. It cannot hear the signal, so it names the source and nothing more.
  */
-export function meetWindowSlateAudioLine(input: { meetAudio: boolean; otherAudio: boolean }): string {
+export function meetWindowSlateAudioLine(input: {
+  meetAudio: boolean;
+  otherAudio: boolean;
+  /** `meet-audio` carries the far side only; the local voice is their WarpTalk microphone. */
+  meetAudioWithoutMic?: boolean;
+}): string {
+  if (input.meetAudio && input.meetAudioWithoutMic) {
+    return "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone.";
+  }
   if (input.meetAudio) return "The Google Meet call audio is being recorded.";
   if (input.otherAudio) return "Only audio published in WarpTalk is being recorded, not the Meet call itself.";
   return "No audio is reaching the recording yet.";
 }
+
