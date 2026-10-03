@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CaretDown,
   GlobeHemisphereWest,
@@ -32,8 +32,6 @@ import type { VoiceCloneStateDto, VoiceOptionDto } from "@/types/realtime";
 /** Sentinel for the "clone me live in this meeting" entry, which is not a provider voice id. */
 const LIVE_CLONING_OPTION = "__live_cloning__";
 
-/** One library row's height plus the gap under it — the five-row box is sized from this. */
-const ROW_PITCH_PX = 46;
 
 /**
  * The Voice panel — how you sound, and what you hear other people in — for any surface that has
@@ -149,6 +147,17 @@ export function VoicePanel({
     [catalogs.byLanguage, libraryCodes, libraryLanguage],
   );
   const visible = libraryWindow(voices, libraryExpanded);
+
+  // The five-row box is MEASURED while closed and held at that height while open, so "Show all"
+  // fills the same box instead of growing the panel. A fixed pixel guess cut the fifth row in half
+  // whenever a detail line or a flag made rows taller than the guess.
+  const libraryBoxRef = useRef<HTMLDivElement>(null);
+  const [closedLibraryHeight, setClosedLibraryHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (libraryExpanded || !libraryBoxRef.current) return;
+    const height = libraryBoxRef.current.getBoundingClientRect().height;
+    if (height > 0) setClosedLibraryHeight(height);
+  }, [libraryExpanded, voices]);
 
   // The control bar's rule, kept there as it was; a bridge room turns it off — see
   // `pickWithdrawsConsent` in planVoicePanel for why it is harmful there.
@@ -372,8 +381,9 @@ export function VoicePanel({
               {/* Five rows tall whether or not "Show all" is on, so the panel never grows under the
                   pointer; "Show all" fills the same box and lets it scroll. */}
               <div
-                className={visible.scrolls ? "overflow-y-auto overscroll-contain" : "overflow-hidden"}
-                style={visible.hiddenCount > 0 ? { height: ROW_PITCH_PX * 5 } : undefined}
+                ref={libraryBoxRef}
+                className={visible.scrolls ? "overflow-y-auto overscroll-contain" : undefined}
+                style={visible.scrolls && closedLibraryHeight ? { height: closedLibraryHeight } : undefined}
               >
                 <div role="radiogroup" aria-label="Library voices" className="space-y-0.5 px-1">
                   {catalogs.loading && voices.length === 0 ? (
