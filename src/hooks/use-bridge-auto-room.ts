@@ -9,7 +9,7 @@ import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/api/errors";
 import { isDesktopApp, readVirtualAudioStatus } from "@/lib/desktop/bridge";
 import { claimAudioModeFor } from "@/lib/meeting/bridge-audio-mode";
-import { planBridgeClaim } from "@/lib/meeting/bridge-auto-room";
+import { claimKeyAfterTrigger, planBridgeClaim } from "@/lib/meeting/bridge-auto-room";
 import type { BridgeTriggerState } from "@/lib/meeting/bridge-trigger";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
@@ -33,7 +33,8 @@ import { useBridgeCapturerStore } from "@/stores/bridge-capturer-store";
  * ONE ATTEMPT PER CALL
  *   The trigger stays in `offer` for as long as Meet is on screen and the room list has not caught
  *   up, which is several renders. `handled` keys on the Meet code, so a call gets one claim — and a
- *   refusal is shown once, not every three seconds. A different call is a new attempt.
+ *   refusal is shown once, not every three seconds. A different call is a new attempt, and so is
+ *   the same call once a room has taken the trigger and let it go again - see claimKeyAfterTrigger.
  *
  * WHERE A FAILURE IS SHOWN
  *   The user is looking at Google Meet, not at this window, so a toast alone would go unseen. A
@@ -57,6 +58,13 @@ export function useBridgeAutoRoom({
   );
   const { data: userSettings, isFetched: userSettingsFetched } = useUserSettings();
   const handled = useRef<string | null>(null);
+
+  // Before the claim effect, so a return to `offer` in the same commit sees the reset. Without it
+  // the key lived forever: re-opening a Meet link whose room had ended answered `offer` and claimed
+  // nothing (prod, 2026-10-03).
+  useEffect(() => {
+    handled.current = claimKeyAfterTrigger(handled.current, triggerState);
+  }, [triggerState]);
 
   const desktop = isDesktopApp();
   // Waiting on the language inputs, not guessing without them: a room created before the
