@@ -160,11 +160,12 @@
   },
   "pairEditor": {
     "label": "Language pair",
+    "edit": "Change pair",
     "source": "Source language",
     "target": "Target language",
     "changed": "Language pair changed to {source} → {target}.",
     "changeFailed": "Could not change the language pair.",
-    "confirm": "Existing translations stay as they are. Change to {source} → {target}?",
+    "confirm": "Only the label changes — the {count, plural, one {# term stays} other {# terms stay}} as written, nothing is translated. Change to {source} → {target}?",
     "confirmButton": "Change",
     "cancel": "Cancel"
   },
