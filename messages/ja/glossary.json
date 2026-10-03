@@ -145,7 +145,6 @@
     "downloadXlsx": ".xlsx をダウンロード",
     "downloadCsv": ".csv をダウンロード",
     "downloadFailed": "ファイルを作成できませんでした。.csv をお試しください。",
-    "fallbackNotice": "保存済みのテンプレートを読み込めなかったため、既定のテンプレートを表示しています。",
     "columnsTitle": "列",
     "columnHeader": "列",
     "groupHeader": "グループ",

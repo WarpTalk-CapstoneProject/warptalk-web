@@ -145,7 +145,6 @@
     "downloadXlsx": "Tải .xlsx",
     "downloadCsv": "Tải .csv",
     "downloadFailed": "Không tạo được file. Hãy thử tải .csv.",
-    "fallbackNotice": "Đang hiện mẫu mặc định: không tải được mẫu đã lưu.",
     "columnsTitle": "Các cột",
     "columnHeader": "Cột",
     "groupHeader": "Nhóm",

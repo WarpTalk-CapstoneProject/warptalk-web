@@ -16,15 +16,12 @@ import {
   Upload,
 } from "@phosphor-icons/react/dist/ssr";
 import { useTranslations } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
-import { CmsTabBar } from "@/components/admin/cms/cms-editor";
-import { GlossaryImportTemplateEditor } from "@/components/admin/glossary/import-template-editor";
 import {
   AdminDataTable,
   AdminListToolbar,
@@ -103,8 +100,6 @@ function buildTermSchema(t: TermFormTranslator) {
 
 type TermFormData = z.infer<ReturnType<typeof buildTermSchema>>;
 
-type GlossarySection = "terms" | "import-template";
-
 const statusFilters = ["all", "draft", "published", "archived"] as const;
 const TERM_STATUSES = ["draft", "published", "archived"] as const;
 
@@ -171,21 +166,6 @@ function GlobalGlossaryAdmin() {
   const isSystemAdmin = useIsSystemAdmin();
   const list = useAdminListState(LIST_CONFIG);
   const { state } = list;
-
-  // WT-880: "Terms" or "Import template", kept in the URL (?tab=import-template) so the retired
-  // /admin/glossary-templates address can forward straight to it.
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const section: GlossarySection =
-    searchParams.get("tab") === "import-template" ? "import-template" : "terms";
-  const setSection = (next: GlossarySection) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "terms") params.delete("tab");
-    else params.set("tab", next);
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
@@ -638,37 +618,23 @@ function GlobalGlossaryAdmin() {
         title={t("header.title")}
         description={t("header.description")}
         actions={
-          section === "terms" ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
-                <Upload className="h-4 w-4" />
-                {t("actions.bulkImportCsv")}
-              </Button>
-              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-                <Plus className="h-4 w-4" />
-                {t("actions.newTerm")}
-              </Button>
-            </>
-          ) : null
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              {t("actions.bulkImportCsv")}
+            </Button>
+            <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("actions.newTerm")}
+            </Button>
+          </>
         }
       />
 
-      {/* WT-880: the import template's CRUD lives here, beside the terms, instead of on its own
-          /admin/glossary-templates page (which only ever held client state). */}
-      <CmsTabBar
-        tabs={[
-          { value: "terms", label: t("tabs.terms") },
-          { value: "import-template", label: t("tabs.importTemplate") },
-        ]}
-        value={section}
-        onChange={setSection}
-        label={t("tabs.label")}
-      />
-
-      {section === "import-template" ? (
-        <GlossaryImportTemplateEditor />
-      ) : (
-      <>
+      {/* WT-880 option B (PO 2026-10-02): the import template is a fixed default the web owns -
+          it generates the file and parses it - so there is nothing to edit here and no tab. The
+          backend's admin endpoint was removed with it; the tab that still called it read "could
+          not be loaded" on every visit (3 Oct 2026). */}
       <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filters.statusLabel")} />
 
       {domains.length > 0 && (
@@ -759,8 +725,6 @@ function GlobalGlossaryAdmin() {
           minWidth={900}
         />
       </AdminPanel>
-      </>
-      )}
 
       {/* Create Term Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

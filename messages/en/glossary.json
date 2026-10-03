@@ -145,7 +145,6 @@
     "downloadXlsx": "Download .xlsx",
     "downloadCsv": "Download .csv",
     "downloadFailed": "Could not build the file. Try the .csv instead.",
-    "fallbackNotice": "Showing the built-in template: the saved one could not be loaded.",
     "columnsTitle": "Columns",
     "columnHeader": "Column",
     "groupHeader": "Group",

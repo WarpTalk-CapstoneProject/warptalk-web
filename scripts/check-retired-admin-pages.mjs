@@ -104,8 +104,8 @@ for (const file of walk(path.join(root, "src"))) {
   assert.ok(!/["'`]\/admin\/glossary-templates/.test(source), `${rel} still links to /admin/glossary-templates`);
 }
 assert.ok(
-  proxy.includes('new URL("/admin/global-glossary?tab=import-template", request.url)'),
-  "/admin/glossary-templates must forward to the Import template tab",
+  proxy.includes('new URL("/admin/global-glossary", request.url)'),
+  "/admin/glossary-templates must forward to the Global glossary (the template is fixed in code, WT-880 option B)",
 );
 for (const locale of ["en", "vi", "ja"]) {
   const nav = JSON.parse(read(`messages/${locale}/common.json`)).sidebar.adminNav;
