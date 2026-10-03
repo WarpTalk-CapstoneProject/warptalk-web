@@ -108,9 +108,16 @@ function pluginActionLabel(plugin: AssistantPluginCatalogItemDto, t: PluginsT) {
 function WorkspaceBlockNotice({
   block,
   className,
+  onAdd,
+  isAdding = false,
+  addLabel,
 }: {
   block: PluginWorkspaceBlock;
   className?: string;
+  /** The Owner's way out of "not added": only passed where adding is possible (block.ownerCanAdd). */
+  onAdd?: () => void;
+  isAdding?: boolean;
+  addLabel?: string;
 }) {
   return (
     <div
@@ -125,6 +132,20 @@ function WorkspaceBlockNotice({
         <p className="text-xs font-medium leading-5 text-ink">{block.reason}</p>
         {block.remedy ? (
           <p className="mt-0.5 text-xs leading-5 text-ink-muted">{block.remedy}</p>
+        ) : null}
+        {onAdd ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7 shadow-none"
+            onClick={onAdd}
+            disabled={isAdding}
+            data-testid="workspace-policy-block-add"
+          >
+            {isAdding ? <Spinner className="animate-spin" size={14} /> : null}
+            {addLabel}
+          </Button>
         ) : null}
       </div>
     </div>
@@ -328,6 +349,8 @@ function ConnectPluginDialog({
   onSubmitApiKey,
   onDisconnect,
   onRemove,
+  onAddToWorkspace,
+  isAddingToWorkspace = false,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -360,6 +383,12 @@ function ConnectPluginDialog({
   onSubmitApiKey: (apiKey: string) => Promise<string | null>;
   onDisconnect: () => void;
   onRemove: () => void;
+  /**
+   * The Owner adding a plugin their workspace does not have yet, from inside this dialog. Once it
+   * lands the catalog refetches, the block disappears and Continue enables on the same row.
+   */
+  onAddToWorkspace?: () => void;
+  isAddingToWorkspace?: boolean;
 }) {
   const t = useTranslations("pluginsPage");
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
@@ -456,7 +485,13 @@ function ConnectPluginDialog({
         </div>
 
         {workspaceBlock ? (
-          <WorkspaceBlockNotice block={workspaceBlock} className="mt-6" />
+          <WorkspaceBlockNotice
+            block={workspaceBlock}
+            className="mt-6"
+            onAdd={workspaceBlock.ownerCanAdd ? onAddToWorkspace : undefined}
+            isAdding={isAddingToWorkspace}
+            addLabel={t("addToWorkspace")}
+          />
         ) : null}
 
         {/* Not offered once the plugin is connected: "Continue to ..." beside "Connected as ..."
@@ -1575,6 +1610,8 @@ export default function PluginsPage() {
           onSubmitApiKey={(apiKey) => submitApiKey(selectedPlugin, apiKey)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
+          onAddToWorkspace={() => void addToWorkspace(selectedPlugin)}
+          isAddingToWorkspace={addWorkspacePlugin.isPending}
         />
       ) : null}
     </div>
