@@ -57,7 +57,7 @@ assert.match(
 const session = await read("src/components/rooms/live/persistent-meeting-session.tsx");
 assert.match(
   session,
-  /async function handleExit\(action: "leave" \| "end"\) \{\s*(?:\/\/[^\n]*\n\s*)*if \(exitInFlightRef\.current\) return;/,
+  /async function handleExit\(\s*action: "leave" \| "end"[^)]*\)[^{]*(?:\{[^}]*\}[^{]*)*\{\s*(?:\/\/[^\n]*\n\s*)*if \(exitInFlightRef\.current\) return\b/,
   "handleExit must return early while another leave/end is in flight.",
 );
 assert.match(

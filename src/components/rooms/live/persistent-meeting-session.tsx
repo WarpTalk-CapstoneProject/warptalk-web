@@ -182,7 +182,11 @@ import {
 } from "@/lib/meeting/bridge-mic-device";
 import type { BridgeWidgetOutboundSnapshot } from "@/lib/meeting/bridge-widget-relay";
 import { LocalMicSupervisor } from "./local-mic-supervisor";
-import { meetLeaveOutcome, meetLeavePrompt } from "@/lib/meeting/bridge-meet-follow";
+import {
+  meetLeaveFailureRetryable,
+  meetLeaveOutcome,
+  meetLeavePrompt,
+} from "@/lib/meeting/bridge-meet-follow";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
 import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
 import { canControlBridge } from "@/lib/meeting/bridge-capturer";
@@ -2087,10 +2091,14 @@ export function PersistentMeetingSession({
 
   // WT-306: `activeRoomId` now survives a reload, so it can name a room that has since ended,
   // been cancelled, or that this account can no longer read. A restored id must not mount a
-  // mini window onto a dead room — retire the session instead.
+  // mini window onto a dead room — retire the session instead. Only when the SERVER says so: a
+  // timeout here used to retire a live bridge session mid-call (prod, 2026-10-03), the same
+  // "absence is not evidence" mistake canConnectMeeting above was fixed for.
   const meetingRoomIsGone = isRestoredMeetingStale({
     compact,
     roomLoadFailed: roomQuery.isError,
+    roomLoadErrorStatus: (roomQuery.error as { response?: { status?: number } } | null)?.response
+      ?.status,
     hasRoom: Boolean(roomQuery.data),
     canConnectRoom: canConnectMeeting,
   });
@@ -3830,11 +3838,28 @@ export function PersistentMeetingSession({
   // WT-913: the countdown ran out, or "End now". The room's host ends the room through the native
   // End (handleExit, which tells the popup and finalizes the meeting as any End does); anybody
   // else only leaves it on their side, and the room stays for the others.
+  //
+  // The leave is resolved only once the exit LANDS (prod, 2026-10-03). It used to be cleared
+  // before the request was sent, so an End that failed against a hung backend left an open room
+  // with nothing left to end it. A failure now goes back to the reducer, which moves the deadline
+  // out and re-arms the hook's timer (bridge-meet-follow: AN END THAT FAILS IS TRIED AGAIN). Only
+  // the first failure is toasted: the retries are the wait the popup already shows. An exit that
+  // is already in flight (another press, or the user's own Leave) is not doubled; it is retried
+  // after the backoff, by which time that exit has either closed this session or failed too.
   useEffect(() => {
     finishMeetLeaveRef.current = () => {
       if (!isBridgeRoom) return;
-      meetFollow.resolveLeave();
-      void handleExit(meetLeaveOutcome({ mayEndRoom: isRoomHost }) === "end-room" ? "end" : "leave");
+      if (exitInFlightRef.current) {
+        meetFollow.leaveFailed(true);
+        return;
+      }
+      const action = meetLeaveOutcome({ mayEndRoom: isRoomHost }) === "end-room" ? "end" : "leave";
+      const quiet = Boolean(meetFollow.state.leave?.failures);
+      void handleExit(action, { quiet }).then((result) => {
+        if (result.kind === "done") meetFollow.resolveLeave();
+        else if (result.kind === "failed") meetFollow.leaveFailed(meetLeaveFailureRetryable(result.status));
+        else meetFollow.leaveFailed(true);
+      });
     };
   });
 
@@ -4675,10 +4700,18 @@ export function PersistentMeetingSession({
     toast.success(`${label} copied.`);
   }
 
-  async function handleExit(action: "leave" | "end") {
+  /**
+   * The native Leave / End. Resolves with what happened rather than throwing, so the bridge's
+   * Meet-left countdown can retry an End that did not land (see finishMeetLeaveRef). `quiet`
+   * drops the failure toast for those retries; every other caller ignores both.
+   */
+  async function handleExit(
+    action: "leave" | "end",
+    { quiet = false }: { quiet?: boolean } = {},
+  ): Promise<{ kind: "done" } | { kind: "busy" } | { kind: "failed"; status?: number }> {
     // Single-flight: an exit already under way owns the redirect and the toast; a second call
     // (another press, or the end dialog racing the leave menu) is ignored until it settles.
-    if (exitInFlightRef.current) return;
+    if (exitInFlightRef.current) return { kind: "busy" };
     exitInFlightRef.current = true;
     try {
       // Displaced: this account is still in the meeting on the other device, and the leave is
@@ -4686,7 +4719,7 @@ export function PersistentMeetingSession({
       if (action === "leave" && sessionDisplacedRef.current) {
         onMeetingClosed();
         router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
-        return;
+        return { kind: "done" };
       }
       if (action === "end") {
         // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
@@ -4725,13 +4758,20 @@ export function PersistentMeetingSession({
           ? roomDetailPath(activeWorkspaceSlug || "workspace", roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
       );
+      return { kind: "done" };
     } catch (error) {
       // The end never landed, so this client is not the one that ended the room after all —
       // let a later TranslationRoomEnded broadcast redirect it like any other participant.
       endedByMeRef.current = false;
-      toast.error(
-        error instanceof Error ? error.message : "Could not leave the room.",
-      );
+      if (!quiet) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not leave the room.",
+        );
+      }
+      return {
+        kind: "failed",
+        status: (error as { response?: { status?: number } } | null)?.response?.status,
+      };
     } finally {
       exitInFlightRef.current = false;
     }
@@ -5085,7 +5125,13 @@ export function PersistentMeetingSession({
     return <WaitingRoomView onRetry={retryMeetingConnection} />;
   }
 
-  if (roomQuery.isError || !room) {
+  // `!room`, not `roomQuery.isError || !room`. React Query keeps the last good room through a failed
+  // REFETCH, and the old test swapped a running meeting for this panel on any one of them - which
+  // unmounts LiveKit, the bridge popup's relay and the leave countdown exactly as the stale-session
+  // retire above used to (prod, 2026-10-03: a backend hang). A room that is really gone is retired
+  // by meetingRoomIsGone / canConnectMeeting on the server's answer; a lookup that never produced a
+  // room still lands here.
+  if (!room) {
     return (
       <StatePanel
         icon={<WarningCircle className="h-8 w-8" />}

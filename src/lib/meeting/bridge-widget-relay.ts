@@ -137,7 +137,10 @@
  *       saying nothing ends the room anyway. "kept" says the room was kept open. Sent only to
  *       somebody who may end the room; a member is asked nothing. An answer that arrives when no
  *       countdown is running (already answered, or the user rejoined) is stale and is dropped
- *       (`acceptsMeetLeftAnswer`).
+ *       (`acceptsMeetLeftAnswer`). Two optional extras (2026-10-03): `cause: "tab-closed"` when the
+ *       Meet TAB went away rather than the user pressing Leave (the popup says so instead of "You
+ *       left the Meet call"), and `retrying: true` when the End already failed and the countdown is
+ *       the wait for the next try. Unknown values are dropped, not the whole prompt.
  *   Both optional and forgiving like the WT-901 fields.
  *
  *   Translated-voice bridge (PO, 2026-10-03): devices are picked in the popup, never in Meet, once
@@ -457,10 +460,16 @@ function parseOutbound(raw: unknown): BridgeWidgetOutboundSnapshot | null {
 
 function parseMeetLeave(raw: unknown): MeetLeavePrompt | null {
   if (!isRecord(raw)) return null;
-  if (raw.state === "kept") return { state: "kept" };
+  const cause = raw.cause === "tab-closed" ? ({ cause: "tab-closed" } as const) : {};
+  if (raw.state === "kept") return { state: "kept", ...cause };
   if (raw.state !== "countdown") return null;
   if (typeof raw.endsAtMs !== "number" || !Number.isFinite(raw.endsAtMs) || raw.endsAtMs < 0) return null;
-  return { state: "countdown", endsAtMs: raw.endsAtMs };
+  return {
+    state: "countdown",
+    endsAtMs: raw.endsAtMs,
+    ...cause,
+    ...(raw.retrying === true ? { retrying: true } : {}),
+  };
 }
 
 /**
@@ -807,10 +816,17 @@ export function buildBridgeWidgetSnapshot(
     if (fields.mic.override) snapshot.mic.override = true;
   }
   if (fields.meetLeave) {
+    const leave = fields.meetLeave;
+    const cause = leave.cause === "tab-closed" ? ({ cause: "tab-closed" } as const) : {};
     snapshot.meetLeave =
-      fields.meetLeave.state === "countdown"
-        ? { state: "countdown", endsAtMs: fields.meetLeave.endsAtMs }
-        : { state: "kept" };
+      leave.state === "countdown"
+        ? {
+            state: "countdown",
+            endsAtMs: leave.endsAtMs,
+            ...cause,
+            ...(leave.retrying ? { retrying: true } : {}),
+          }
+        : { state: "kept", ...cause };
   }
   if (fields.outbound) snapshot.outbound = { leg: fields.outbound.leg, sinceMs: fields.outbound.sinceMs };
   return snapshot;

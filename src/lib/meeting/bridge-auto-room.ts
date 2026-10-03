@@ -48,6 +48,7 @@
 
 import { suggestLanguageProfile, normalizeLanguage } from "../language/language-profile.ts";
 import { planBridgeRoomLanguages } from "./bridge-far-side-language.ts";
+import type { BridgeTriggerState } from "./bridge-trigger.ts";
 
 export interface BridgeClaimPlanInput {
   /** The room code the desktop sensor read off the browser's address bar. */
@@ -120,4 +121,32 @@ export function planBridgeClaim(input: BridgeClaimPlanInput): BridgeClaimPlan {
       externalMeetingLanguage: languages.externalMeetingLanguage,
     },
   };
+}
+
+/**
+ * The Meet code already claimed (or refused) in this stretch of `offer`, after the trigger moved.
+ *
+ * `use-bridge-auto-room` keeps one key so a call gets one claim while the trigger sits in `offer`
+ * for several renders, and a refusal is toasted once rather than every three seconds. The key used
+ * to live forever, which made re-opening the SAME Meet link after its room had ended a dead end:
+ * the trigger answered `offer` again, the key still said "done", and nothing was claimed - the
+ * same symptom as the stale-room incident (prod, 2026-10-03), from the other side.
+ *
+ * WHEN IT RESETS
+ *   On `upcoming`, `ready` or `running`: a room took the trigger, so the claim's job is over and the
+ *   next `offer` for that code is a new call (or the same link after its room ended).
+ *
+ *   NOT on `idle`. The trigger falls to idle every time the user leaves the Meet tab for longer
+ *   than the offer's grace, and comes back to `offer` when they return. A claim that FAILED never
+ *   reaches `ready`, so resetting on idle would re-try - and re-toast, and re-notify - each time
+ *   the user glanced back at the call. One refusal per call is the contract; a new room or a
+ *   different code is what earns another attempt.
+ */
+export function claimKeyAfterTrigger(
+  handledMeetCode: string | null,
+  triggerState: BridgeTriggerState,
+): string | null {
+  return triggerState === "upcoming" || triggerState === "ready" || triggerState === "running"
+    ? null
+    : handledMeetCode;
 }
