@@ -59,6 +59,10 @@ import {
   useTranscriptTranslations,
 } from "@/hooks/use-transcripts";
 import { mergeCleanSentences, upsertCleanSentence } from "@/lib/transcript/clean-transcript";
+import {
+  applyLateFarSpeakerName,
+  revisedFarSideSpeakerName,
+} from "@/lib/transcript/speaker-identity";
 import { useTranslationRoom, useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import {
   normalizeLanguageCode,
@@ -94,7 +98,11 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
-import type { TranscriptCleanSentenceEventDto, TranscriptSegmentDto } from "@/types/realtime";
+import type {
+  TranscriptCleanSentenceEventDto,
+  TranscriptSegmentDto,
+  TranscriptSegmentSpeakerNamedDto,
+} from "@/types/realtime";
 
 import { useBridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import type {
@@ -279,9 +287,22 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
         if (index === -1 && transcriptPausedRef.current) return previous;
         if (index === -1) return [...previous, segment];
         const next = [...previous];
-        next[index] = segment;
+        // Not back to "Google Meet participants" once named — see revisedFarSideSpeakerName.
+        next[index] = {
+          ...segment,
+          speakerName: revisedFarSideSpeakerName(previous[index], segment),
+        };
         return next;
       });
+    });
+
+    // The late far-speaker name, on the same terms as the segment handler above: silent today
+    // (this connection never joins the room group — see the header), live the day it can listen.
+    // Until then the saved transcript answers: TranscriptService writes the same name onto the
+    // saved row, and the slow poll below reads it. Same rule as the meeting's store, so both
+    // windows name the same lines and nothing else; an unknown id leaves the state untouched.
+    connection.on("TranscriptSegmentSpeakerNamed", (late: TranscriptSegmentSpeakerNamedDto) => {
+      setLiveSegments((previous) => applyLateFarSpeakerName(previous, late));
     });
 
     // WT-716 tier 2, registered on the same terms as the segment handler above: silent today,

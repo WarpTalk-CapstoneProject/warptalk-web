@@ -46,9 +46,57 @@ Two bugs followed:
   drives the colour, and never a face. The panel builds `speakerLabels` once and passes it to rows,
   turns, the `.txt` (`assembleTranscriptText`) and the `.docx` model (`buildTranscriptDocumentModel`'s
   `speakerLabels`).
+- Late far-speaker name (hub event `TranscriptSegmentSpeakerNamed { segmentId, speakerName }`, see
+  below).
 - Relabel pickup: `useTranscriptSegments` sets `refetchOnMount` / `refetchOnWindowFocus` explicitly.
   With the shared 60 s `staleTime`, the record re-reads its segments when the reader comes back
   and picks up the relabelled names without a hard reload. There is no polling.
+
+## Late far-speaker name (`TranscriptSegmentSpeakerNamed`)
+
+**Why.** Meet's captions name a new speaker about a second after their first words. So the first
+line after a change of speaker is finalized with nobody on it and goes out as "Google Meet
+participants", although it is the line that most needs a name. PO decision: show it at once,
+unchanged, then rename it in place. The ai worker looks again at ~+1 s / ~+2.5 s and publishes at
+most one late name per segment, only at confidence ≥ 0.6. The gateway broadcasts
+`TranscriptSegmentSpeakerNamed { segmentId, speakerName }` to `translationRoom:{roomId}`, and
+TranscriptService writes the same name onto the saved row.
+
+**Rule** (`applyLateFarSpeakerName` in `speaker-identity.ts`, pure, one rule for every holder of
+live lines):
+
+- Only the line with that `segmentId` (GUID compared case-insensitively). Unknown id → the same
+  array back. Nothing is created.
+- Only a stand-in line, and only while it names nobody (`bridgeFarSideSpeakerName` null: the wire
+  fallback, "External Meeting", a GUID, empty). A real name is never overwritten.
+- A late name that is itself "nobody" changes nothing. Idempotent: a repeat returns the same array.
+- Text, translations, clock and the segment id stay. Grouping needs nothing extra:
+  `transcriptSpeakerKey` reads the name, so on the next render the line leaves the unnamed run and
+  joins its person's turn. React keys stay the segment ids, so nothing is drawn twice.
+
+**Where it is applied:**
+
+- In-meeting: `persistent-meeting-session.tsx` registers the handler next to
+  `TranscriptSegmentReceived`. The store action `nameTranscriptSegmentSpeaker` renames in both lanes
+  (caption + transcript) and returns `{}` when neither changed. It is not behind the transcript gate,
+  because it adds no line. It goes away with the connection (`connection.stop()` in the effect
+  cleanup), like every other handler on it.
+- A name that arrives BEFORE its line (the gateway's two consumer loops are not ordered, so this is
+  rare but real) is held in `heldLateSpeakerNames` and applied by `addTranscriptSegment` when the
+  line lands, by the same rule (`lateFarSpeakerNameFor`). It is held only when neither lane has that
+  id at all. The hold is bounded: `LATE_NAME_HOLD_MS` (10 s) and `LATE_NAME_HOLD_MAX` (50, oldest
+  dropped). Each entry is used once and cleared by `reset()`. Pure helpers:
+  `holdLateFarSpeakerName` / `takeLateFarSpeakerName`.
+- A revision of the same segment (`mergeTranscriptSegment`) keeps the name:
+  `revisedFarSideSpeakerName` does not let a copy carrying the fallback take a named Meet line back
+  to "nobody". A revision with a real name of its own still wins.
+- Bridge popup (`use-bridge-widget-state.ts`): it registers the same handler on its hub connection.
+  That handler is silent today, because the popup never joins the room group. The popup picks the
+  name up from the saved transcript poll, because TranscriptService updated the row.
+- Saved-row backstop (`buildCatchUpTranscript`): a live line that still says nobody adopts the saved
+  row's name by the same rule (`lateFarSpeakerNameFor`), in one pass over the live lines. This covers
+  a client that missed the event, for example during a reconnect, once its saved segments refetch.
+- Old backends never send the event. Every line then keeps the fallback, as before.
 
 ## Files affected
 
@@ -70,6 +118,14 @@ Two bugs followed:
 - `src/hooks/use-transcripts.ts`
 - `messages/{en,vi,ja}/meetingTranscript.json`: `speaker.googleMeetParticipants`
 - `scripts/check-transcript-speaker-contract.mjs`: rule 6
+- Late name: `speaker-identity.ts` (`applyLateFarSpeakerName`, `lateFarSpeakerNameFor`,
+  `revisedFarSideSpeakerName`, `holdLateFarSpeakerName`, `takeLateFarSpeakerName`),
+  `src/types/realtime.ts` (`TranscriptSegmentSpeakerNamedDto`),
+  `src/stores/translationRoom-store.ts` (`nameTranscriptSegmentSpeaker`, `heldLateSpeakerNames`,
+  `addTranscriptSegment`, `mergeTranscriptSegment`),
+  `persistent-meeting-session.tsx` (handler), `use-bridge-widget-state.ts` (handler + revision),
+  `transcript-catch-up.ts` (saved-row backstop), `__tests__/far-speaker-late-name.test.ts` (in
+  `test:transcript-speaker`)
 
 ## Known limitations
 
@@ -88,4 +144,10 @@ Two bugs followed:
 - [ ] After the meeting's relabel job, switch away from the record tab and back (> 60 s later). The
       names update without a reload.
 - [ ] `.txt` and `.docx` downloads print the Meet person, or the localized fallback, never `…b21d`.
+- [ ] Late name, in a real call with at least two people on the Meet side: when the speaker changes,
+      the first line appears as "Google Meet participants" and is renamed to the new speaker
+      within about 1–3 s. It joins that person's bubble without a duplicate, and its translation
+      stays under it. A line that already had a name is never renamed.
+- [ ] Late name, after the meeting: the record shows the same name on that line (the saved row was
+      updated), and the bridge popup shows it on its next poll.
 - [ ] `npm run test:transcript-speaker` passes.

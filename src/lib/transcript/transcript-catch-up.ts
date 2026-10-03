@@ -1,5 +1,8 @@
 import type { TranscriptSegmentDto as LiveSegment } from "@/types/realtime";
 import type { TranscriptSegmentDto as SavedSegment } from "@/types/transcript";
+// Relative, with the extension: this module's tests run under node's strip-types runner, which
+// does not resolve "@/" for a real (non-type) import.
+import { lateFarSpeakerNameFor } from "./speaker-identity.ts";
 
 /**
  * What someone who joined late should be able to read.
@@ -52,6 +55,16 @@ export type CatchUpTranscript = {
  *
  * The live copy wins on conflict: it is the one that may already carry a translation, and for
  * a segment corrected mid-meeting it is the more recent text.
+ *
+ * ONE EXCEPTION, THE MEET PERSON ON A LINE THAT SAID NOBODY
+ *   A bridge line that went out live as "Google Meet participants" is named about a second later
+ *   by `TranscriptSegmentSpeakerNamed`, and TranscriptService writes the same name onto the saved
+ *   row. A client that missed the event (a reconnect at that second, a window that cannot listen
+ *   yet) would otherwise keep the live copy's "nobody" over a saved row that knows who it was. So
+ *   the saved name is applied to the live copy by the very rule the event uses
+ *   (lateFarSpeakerNameFor, the per-line half of applyLateFarSpeakerName): stand-in lines only,
+ *   never over a real name. One pass over the live lines against a map — this runs on every new
+ *   live line, and a long meeting holds thousands of each.
  */
 export function buildCatchUpTranscript(
   saved: SavedSegment[],
@@ -64,8 +77,19 @@ export function buildCatchUpTranscript(
     .filter((segment) => !liveIds.has(segment.id))
     .map(toLiveSegment);
 
+  const savedNames = new Map<string, string>();
+  for (const segment of saved) {
+    if (liveIds.has(segment.id) && segment.speakerName) savedNames.set(segment.id, segment.speakerName);
+  }
+  const named = savedNames.size === 0
+    ? live
+    : live.map((segment) => {
+        const name = lateFarSpeakerNameFor(segment, savedNames.get(segment.segmentId));
+        return name ? { ...segment, speakerName: name } : segment;
+      });
+
   return {
-    segments: [...missed, ...live],
+    segments: [...missed, ...named],
     missedCount: missed.length,
     joinedAtSegmentId: live[0]?.segmentId ?? null,
   };
