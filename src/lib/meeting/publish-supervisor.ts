@@ -12,6 +12,10 @@
  *     attempt in flight runs one more check right after it instead of a second concurrent one.
  *   - stop() is final for that run: an attempt still in flight from it never schedules anything.
  *     start() begins a new run with a fresh failure count (a new recording).
+ *   - "In flight" belongs to a run. An attempt left over from a stopped run never blocks the new
+ *     run's checks (it used to: the new run's check saw it and returned without rescheduling, the
+ *     old attempt then settled into a run that was over, and nothing was ever scheduled again).
+ *     The publishers are single flight, so a new run's attempt simply shares the old one.
  *
  * Relative imports with the extension: the unit tests run under the plain node test runner.
  */
@@ -54,7 +58,8 @@ export function createPublishSupervisor(options: {
   let run = 0;
   let running = false;
   let timer: unknown = null;
-  let inFlight = false;
+  /** The run whose attempt is in flight, or null. Per run: see the guarantees above. */
+  let inFlightRun: number | null = null;
   let kickedDuringFlight = false;
   let failures = 0;
   let lastFailure: string | null = null;
@@ -68,9 +73,9 @@ export function createPublishSupervisor(options: {
   };
 
   const check = async () => {
-    if (!running || inFlight) return;
+    if (!running || inFlightRun === run) return;
     const thisRun = run;
-    inFlight = true;
+    inFlightRun = thisRun;
     let result: string;
     try {
       const attempt = options.publish();
@@ -78,7 +83,8 @@ export function createPublishSupervisor(options: {
     } catch (error) {
       result = `the publish threw: ${error instanceof Error ? error.message : String(error)}`;
     } finally {
-      inFlight = false;
+      // Only our own mark: a newer run's attempt may have taken it over meanwhile.
+      if (inFlightRun === thisRun) inFlightRun = null;
     }
     if (!running || thisRun !== run) return;
     if (supervisedPublishSucceeded(result)) {
@@ -114,7 +120,7 @@ export function createPublishSupervisor(options: {
     },
     kick: () => {
       if (!running) return;
-      if (inFlight) {
+      if (inFlightRun === run) {
         kickedDuringFlight = true;
         return;
       }

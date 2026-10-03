@@ -133,3 +133,57 @@ test("stop is final for its run: an attempt that settles afterwards schedules no
   assert.equal(supervisor.failures, 0);
   assert.deepEqual(time.pending(), [3_000]);
 });
+
+test("an attempt in flight across stop()+start() never leaves the new run without a timer", async () => {
+  const time = fakeClock();
+  const releases: Array<(value: string) => void> = [];
+  const supervisor = createPublishSupervisor({
+    publish: () => new Promise<string>((resolve) => releases.push(resolve)),
+    label: "Meet audio",
+    clock: time.clock,
+    log: quiet,
+  });
+  supervisor.start();
+  await time.fire(); // attempt 1 in flight (run 1)
+  supervisor.stop();
+  supervisor.start(); // run 2
+  supervisor.kick(); // the kick on start is not lost to run 1's attempt
+  assert.deepEqual(time.pending(), [0]);
+  await time.fire(); // run 2's check is not blocked by run 1's attempt
+  assert.equal(releases.length, 2);
+  // Run 1's attempt settles late: it schedules nothing, and run 2 is still in flight.
+  releases[0]("published");
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  assert.deepEqual(time.pending(), []);
+  // Run 2's attempt settles: the loop goes on.
+  releases[1]("the meeting is not connected");
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  assert.deepEqual(time.pending(), [2_000]);
+  assert.equal(supervisor.failures, 1);
+});
+
+test("the reviewer's repro: stop/start during an attempt still has a timer after the old one settles", async () => {
+  const time = fakeClock();
+  let release: (value: string) => void = () => {};
+  let calls = 0;
+  const supervisor = createPublishSupervisor({
+    publish: () => {
+      calls += 1;
+      return calls === 1 ? new Promise<string>((resolve) => (release = resolve)) : Promise.resolve("published");
+    },
+    label: "Meet window",
+    clock: time.clock,
+    log: quiet,
+  });
+  supervisor.start();
+  await time.fire(); // attempt 1 in flight
+  supervisor.stop();
+  supervisor.start();
+  // The new run's 3 s check fires while run 1's attempt is still in flight.
+  await time.fire();
+  assert.equal(calls, 2, "the new run's check ran instead of returning on run 1's in-flight mark");
+  assert.deepEqual(time.pending(), [3_000]);
+  release("published");
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  assert.deepEqual(time.pending(), [3_000], "still exactly one timer after the old attempt settles");
+});
