@@ -59,6 +59,7 @@ import {
 } from "@/hooks/use-transcripts";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { orderedLiveLines } from "@/lib/transcript/live-text";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
 
 /** Within this many pixels of the end counts as "following the live transcript". */
@@ -139,6 +140,12 @@ export function TranscriptPanel({
   // routes them to captions only. What the placeholder counts now that the render filter below
   // rarely has anything left to drop.
   const withheldWhilePaused = useTranslationRoomStore((state) => state.withheldWhilePaused);
+  // Live text: the words of a turn still being spoken, shown under the record while the transcript
+  // is running and replaced by the speaker's final line. See lib/transcript/live-text.ts.
+  const liveLines = useTranslationRoomStore((state) => state.liveLines);
+  // The panel's own pause answer — the one its "Transcript paused" banner draws from — so the
+  // banner and a live line can never disagree about whether words are being written down.
+  const shownLiveLines = transcriptPause?.paused ? [] : orderedLiveLines(liveLines);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
@@ -388,6 +395,9 @@ export function TranscriptPanel({
           </div>
         ))}
       </AnimatePresence>
+      {shownLiveLines.map((live) => (
+        <LiveTextLine key={`live-${live.speakerId}`} speakerName={live.speakerName} text={live.text} />
+      ))}
       {/* Once something has actually been dropped — or once the filter is known to be unable to
           drop anything while the transcript is paused. The banner above already says the
           transcript is paused; this says the different, sharper thing — that the list you are
@@ -401,6 +411,19 @@ export function TranscriptPanel({
           them stranded in the middle of an hour of talking with the newest line somewhere below
           and nothing saying so. */}
       <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
+    </div>
+  );
+}
+
+/**
+ * The words of a turn still being spoken — drawn muted, without a timestamp, because it is not a
+ * line of the record yet. The speaker's final line replaces it.
+ */
+function LiveTextLine({ speakerName, text }: { speakerName: string; text: string }) {
+  return (
+    <div aria-live="polite" className="px-1 py-1.5">
+      <p className="text-[11px] font-medium text-ink-subtle">{speakerName}</p>
+      <p className="text-[13px] leading-snug text-ink-muted">{text}</p>
     </div>
   );
 }

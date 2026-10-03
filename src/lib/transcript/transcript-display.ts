@@ -103,13 +103,15 @@ export function resolveSegmentTranslation(
  *                            original IS the reader's language and must be shown as-is. Filter
  *                            it out and a room where everyone shares a language has no captions
  *                            at all, and nobody ever sees their own words.
- *     not translated YET   — the transcript segment arrives before its translation. Showing the
- *                            original here is what the decision above rejects: the line would
- *                            appear in the wrong language and then change under the reader.
+ *     not translated YET   — the transcript segment arrives before its translation.
  *
- *   Null therefore means only the second: hold this line until its translation lands.
+ *   REVISED BY THE OWNER, 4 Oct 2026: the second case now SHOWS the original instead of holding
+ *   the line. Holding cost every cross-language caption the whole translation stage (~1s p50) on
+ *   top of recognition, which put a short sentence ~2.5s behind the speaker. The line goes up as
+ *   spoken, marked pending (see isCaptionPending) so the lane can draw it muted, and the
+ *   translation replaces it when it lands. Null is now only "nothing to show".
  *
- * WHY `translationActive` IS A PARAMETER AND NOT AN ASSUMPTION
+ * WHY `translationActive` MATTERS (now to isCaptionPending, below)
  *   Holding a line only makes sense while a translation is actually coming. Transcription runs
  *   for any live meeting — livekit_ingress_worker joins on the first published mic and
  *   translation_worker is the stage gated behind Start Translation — so before anybody presses
@@ -127,7 +129,6 @@ export function captionTextForReader(
     "translations" | "translatedText" | "targetLanguage" | "originalLanguage" | "originalText"
   >,
   readerLanguage: string | null | undefined,
-  translationActive = true,
 ): string | null {
   const language = normalizeLanguageCode(readerLanguage ?? "");
   if (!language) return segment.originalText?.trim() || null;
@@ -139,7 +140,28 @@ export function captionTextForReader(
   const translated = resolveSegmentTranslation(segment, readerLanguage);
   if (translated) return translated;
 
-  return translationActive ? null : segment.originalText?.trim() || null;
+  // Not translated yet, or never going to be: either way the reader sees what was said now.
+  return segment.originalText?.trim() || null;
+}
+
+/**
+ * Whether the caption shown for this line is the ORIGINAL standing in for a translation that is
+ * still on its way — the lane draws it muted, and it is replaced when the translation lands. False
+ * when the original IS the reader's language, when a translation is in hand, and when no
+ * translation is coming (translation not running, or no reader language yet).
+ */
+export function isCaptionPending(
+  segment: Pick<
+    TranscriptSegmentDto,
+    "translations" | "translatedText" | "targetLanguage" | "originalLanguage" | "originalText"
+  >,
+  readerLanguage: string | null | undefined,
+  translationActive = true,
+): boolean {
+  const language = normalizeLanguageCode(readerLanguage ?? "");
+  if (!language || !translationActive) return false;
+  if (normalizeLanguageCode(segment.originalLanguage) === language) return false;
+  return !resolveSegmentTranslation(segment, readerLanguage);
 }
 
 /**

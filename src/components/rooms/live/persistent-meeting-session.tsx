@@ -123,12 +123,14 @@ import {
 } from "@/lib/meeting/voice-clone-prompt";
 import { VoiceCloneConsentPrompt } from "@/components/rooms/live/voice-clone-consent-prompt";
 import { meetingVoiceProfiles } from "@/lib/voice/profile-status";
+import { LIVE_LINE_MAX_AGE_MS } from "@/lib/transcript/live-text";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
   TranscriptCleanSentenceEventDto,
+  TranscriptInterimDto,
   TranscriptSegmentDto,
   TranscriptSegmentSpeakerNamedDto,
   TranslationRoomStateDto,
@@ -3983,6 +3985,33 @@ export function PersistentMeetingSession({
     // a line one of the lanes already holds, and an id neither holds is ignored (the store's rule,
     // applyLateFarSpeakerName). An older backend never sends it; the line then keeps the fallback,
     // as it always did.
+    // Live text: the words of a turn still being spoken. A preview the speaker's final line
+    // replaces (see lib/transcript/live-text.ts); expired here if no final line ever comes.
+    connection.on(
+      "TranscriptInterimReceived",
+      (interim: TranscriptInterimDto) => {
+        if (!transcriptOpenRef.current) return;
+        const receivedAt = Date.now();
+        const store = useTranslationRoomStore.getState();
+        store.upsertLiveLine(
+          {
+            speakerId: interim.speakerId,
+            speakerName: resolveTranscriptSpeakerName(
+              { speakerId: interim.speakerId, speakerName: interim.speakerName } as TranscriptSegmentDto,
+              participantsRef.current,
+            ),
+            itemId: interim.itemId,
+            text: interim.text,
+            language: interim.language,
+          },
+          receivedAt,
+        );
+        window.setTimeout(
+          () => useTranslationRoomStore.getState().expireLiveLine(interim.speakerId, receivedAt),
+          LIVE_LINE_MAX_AGE_MS,
+        );
+      },
+    );
     connection.on(
       "TranscriptSegmentSpeakerNamed",
       (late: TranscriptSegmentSpeakerNamedDto) => {

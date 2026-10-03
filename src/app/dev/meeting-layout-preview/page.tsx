@@ -88,6 +88,19 @@ export default function MeetingLayoutPreview() {
     }));
   }
 
+  /** Kenji mid-sentence: the live caption the pipeline sends before the turn closes. */
+  function speakLive() {
+    const store = useTranslationRoomStore.getState();
+    const current = store.liveLines.u3?.text ?? "";
+    // i18n-allow: a transcript line, like SEGMENTS above.
+    const words = ["遅延の", "数字を", "先に", "確認", "しましょう。"];
+    const next = words.slice(0, Math.min(words.length, current ? current.split(" ").length + 1 : 1)).join(" ");
+    store.upsertLiveLine(
+      { speakerId: "u3", speakerName: "Kenji Watanabe", itemId: "preview-item", text: next, language: "ja" },
+      Date.now(),
+    );
+  }
+
   return (
     <MeetingIdentityProvider identities={identities}>
       <div className="min-h-screen bg-canvas p-6 text-ink">
@@ -112,7 +125,9 @@ export default function MeetingLayoutPreview() {
           </section>
 
           <div className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center">
-            <LiveSubtitleOverlay enabled onOpenTranscript={() => undefined} />
+            {/* Read as Sarah (listens in English): a vi/ja line whose translation has not arrived is
+                shown as spoken and muted, and "live" adds Kenji's words of a turn still being said. */}
+            <LiveSubtitleOverlay enabled readerLanguage="en" onOpenTranscript={() => undefined} />
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-2">
@@ -130,6 +145,14 @@ export default function MeetingLayoutPreview() {
                 className="grid h-10 place-items-center rounded-xl bg-surface-2 px-3 text-[12px] font-medium"
               >
                 + line
+              </button>
+              <button
+                type="button"
+                data-preview-live-caption
+                onClick={speakLive}
+                className="grid h-10 place-items-center rounded-xl bg-surface-2 px-3 text-[12px] font-medium"
+              >
+                live
               </button>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>
