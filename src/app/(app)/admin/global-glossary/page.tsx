@@ -15,15 +15,16 @@ import {
   Trash,
   Upload,
 } from "@phosphor-icons/react/dist/ssr";
-import { Sparkle, UploadSimple } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { GlossaryTemplateGallery } from "@/components/glossary/glossary-template-gallery";
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
+import { CmsTabBar } from "@/components/admin/cms/cms-editor";
+import { GlossaryImportTemplateEditor } from "@/components/admin/glossary/import-template-editor";
 import {
   AdminDataTable,
   AdminListToolbar,
@@ -56,7 +57,6 @@ import {
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { enumValue, singleEnumFilter, type ListStateConfig } from "@/lib/admin/list-state";
-import { cn } from "@/lib/utils";
 import { languagesInScope } from "@/lib/language/languages";
 import type {
   GlobalGlossaryTermDto,
@@ -102,6 +102,8 @@ function buildTermSchema(t: TermFormTranslator) {
 }
 
 type TermFormData = z.infer<ReturnType<typeof buildTermSchema>>;
+
+type GlossarySection = "terms" | "import-template";
 
 const statusFilters = ["all", "draft", "published", "archived"] as const;
 const TERM_STATUSES = ["draft", "published", "archived"] as const;
@@ -170,6 +172,21 @@ function GlobalGlossaryAdmin() {
   const list = useAdminListState(LIST_CONFIG);
   const { state } = list;
 
+  // WT-880: "Terms" or "Import template", kept in the URL (?tab=import-template) so the retired
+  // /admin/glossary-templates address can forward straight to it.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const section: GlossarySection =
+    searchParams.get("tab") === "import-template" ? "import-template" : "terms";
+  const setSection = (next: GlossarySection) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "terms") params.delete("tab");
+    else params.set("tab", next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [termToEdit, setTermToEdit] = useState<GlobalGlossaryTermDto | null>(null);
@@ -179,7 +196,6 @@ function GlobalGlossaryAdmin() {
     term: string;
   } | null>(null);
   const [csvText, setCsvText] = useState("");
-  const [bulkImportTab, setBulkImportTab] = useState<"csv" | "templates">("csv");
 
   // The palette's "Add glossary term" and "Import glossary" actions.
   useAdminActionIntent({
@@ -622,19 +638,37 @@ function GlobalGlossaryAdmin() {
         title={t("header.title")}
         description={t("header.description")}
         actions={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
-              <Upload className="h-4 w-4" />
-              {t("actions.bulkImportCsv")}
-            </Button>
-            <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-              {t("actions.newTerm")}
-            </Button>
-          </>
+          section === "terms" ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+                {t("actions.bulkImportCsv")}
+              </Button>
+              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t("actions.newTerm")}
+              </Button>
+            </>
+          ) : null
         }
       />
 
+      {/* WT-880: the import template's CRUD lives here, beside the terms, instead of on its own
+          /admin/glossary-templates page (which only ever held client state). */}
+      <CmsTabBar
+        tabs={[
+          { value: "terms", label: t("tabs.terms") },
+          { value: "import-template", label: t("tabs.importTemplate") },
+        ]}
+        value={section}
+        onChange={setSection}
+        label={t("tabs.label")}
+      />
+
+      {section === "import-template" ? (
+        <GlossaryImportTemplateEditor />
+      ) : (
+      <>
       <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filters.statusLabel")} />
 
       {domains.length > 0 && (
@@ -725,6 +759,8 @@ function GlobalGlossaryAdmin() {
           minWidth={900}
         />
       </AdminPanel>
+      </>
+      )}
 
       {/* Create Term Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -966,90 +1002,29 @@ function GlobalGlossaryAdmin() {
       </Dialog>
 
       {/* Bulk Import Dialog */}
-      <Dialog open={isBulkImportOpen} onOpenChange={(open) => {
-        if (!open) setBulkImportTab("csv");
-        setIsBulkImportOpen(open);
-      }}>
+      <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
         {/* WT-879. `sm:` prefix, not bare `max-w-2xl`: the base DialogContent sets `sm:max-w-sm`,
             which beats an unprefixed width at ≥sm and squeezed this dialog to 384px. DialogContent is
             a grid, so every child below also carries `min-w-0` — without it the unbreakable column
-            list and the textarea size the grid track to their own width and spill past the card. */}
-        <DialogContent className="border-hairline bg-surface-1 sm:max-w-2xl">
+            list and the textarea size the grid track to their own width and spill past the card.
+            WT-907: capped to the viewport with a `minmax(0,1fr)` body row so the body scrolls inside
+            the dialog instead of pushing the header and footer off-screen.
+            WT-880: the "Templates Catalog" tab is gone — the import template is a file shape,
+            configured on this page's Import template tab, not a pack of terms to load. */}
+        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-hairline bg-surface-1 sm:max-h-[90dvh] sm:max-w-2xl">
           <DialogHeader className="min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <DialogTitle className="font-bold text-base">
-                {t("bulkImportDialog.title")}
-              </DialogTitle>
-              <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5 text-[11.5px]">
-                <button
-                  type="button"
-                  onClick={() => setBulkImportTab("csv")}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
-                    bulkImportTab === "csv"
-                      ? "bg-surface-1 text-ink shadow-sm"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                >
-                  <UploadSimple className="h-3.5 w-3.5" />
-                  Direct CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBulkImportTab("templates")}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors",
-                    bulkImportTab === "templates"
-                      ? "bg-surface-1 text-ink shadow-sm"
-                      : "text-ink-muted hover:text-ink",
-                  )}
-                >
-                  <Sparkle className="h-3.5 w-3.5 text-primary" weight="fill" />
-                  Templates Catalog
-                </button>
-              </div>
-            </div>
+            <DialogTitle className="font-bold text-base">
+              {t("bulkImportDialog.title")}
+            </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
               {t("bulkImportDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
-          {bulkImportTab === "templates" ? (
-            <div className="min-w-0 py-1">
-              <GlossaryTemplateGallery
-                onSelectTemplate={(template) => {
-                  const header = "Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority";
-                  const rows = template.sampleTerms.map((item) => {
-                    const cells = [
-                      `"${item.term.replace(/"/g, '""')}"`,
-                      `"${item.translation.replace(/"/g, '""')}"`,
-                      `"${template.sourceLanguage}"`,
-                      `"${template.targetLanguage}"`,
-                      `"${(item.domain || "").replace(/"/g, '""')}"`,
-                      `"${(item.definition || "").replace(/"/g, '""')}"`,
-                      `"${(item.usageNote || "").replace(/"/g, '""')}"`,
-                      String(item.priority ?? 5),
-                    ];
-                    return cells.join(",");
-                  });
-                  setCsvText([header, ...rows].join("\n"));
-                  setBulkImportTab("csv");
-                  toast.success(`Loaded ${template.sampleTerms.length} rows from template "${template.name}" with standard language and domain configuration`);
-                }}
-              />
-            </div>
-          ) : (
+          <div className="-mx-4 min-h-0 min-w-0 overflow-y-auto overscroll-contain px-4">
             <div className="min-w-0">
-              <div className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-ink-muted">
-                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
-                <button
-                  type="button"
-                  onClick={() => setBulkImportTab("templates")}
-                  className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  <Sparkle className="h-3.5 w-3.5" />
-                  Choose from Template Catalog
-                </button>
+              <div className="mb-2 text-xs text-ink-muted">
+                <span className="min-w-0 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
               </div>
               <textarea
                 value={csvText}
@@ -1058,7 +1033,7 @@ function GlobalGlossaryAdmin() {
                 className="block h-48 w-full min-w-0 resize-y rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
               />
             </div>
-          )}
+          </div>
 
           <DialogFooter className="mt-2 flex gap-2">
             <button

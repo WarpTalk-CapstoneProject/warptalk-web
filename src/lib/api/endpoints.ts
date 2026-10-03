@@ -50,6 +50,11 @@ export const API = {
   voiceProfiles: {
     list: "/auth/voice-profiles",
     create: "/auth/voice-profiles",
+    /**
+     * WT-888 — a random phrase to read aloud for a new profile. The recording must say it, and is
+     * uploaded to `create` with the returned challengeId; nothing else becomes a voice profile.
+     */
+    challenges: "/auth/voice-profiles/challenges",
     delete: (id: string) => `/auth/voice-profiles/${id}`,
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
@@ -85,6 +90,11 @@ export const API = {
     revoke: "/auth/voice-consent/revoke",
   },
   translationRooms: {
+    /**
+     * WT-880 — the languages the platform admin has published (enabled catalog rows), for any
+     * signed-in user. The glossary import template is offered for these.
+     */
+    publishedLanguages: "/translation-rooms/published-languages",
     create: "/translation-rooms",
     list: "/translation-rooms",
     history: "/translation-rooms/history",
@@ -109,6 +119,12 @@ export const API = {
      * room past WAITING and this act only makes sense once the meeting has ended.
      */
     artifactAccess: (id: string) => `/translation-rooms/${id}/artifact-access`,
+    /**
+     * WT-709 — the host adds ONE language to a meeting that is open (WAITING, IN_PROGRESS or
+     * PAUSED). POST to the collection with `{ language }`, never the whole set: the backend keeps
+     * removal inexpressible. Answers the meeting's languages afterwards.
+     */
+    languages: (id: string) => `/translation-rooms/${id}/languages`,
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,
@@ -122,6 +138,31 @@ export const API = {
       `/translation-rooms/${id}/participants/${participantId}/kick`,
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
+    /**
+     * W4b — bridge claim: find-or-create this Google Meet call's room in the workspace, join it, and
+     * learn whether this desktop captures the far side ("capturer") or only its mic ("member").
+     */
+    bridgeClaim: "/translation-rooms/bridge/claim",
+    /** W4b — the capturer renews its lease. 409 CONFLICT once someone else holds it. */
+    bridgeCapturerHeartbeat: (id: string) => `/translation-rooms/${id}/bridge/capturer/heartbeat`,
+    /** W4b — a participant takes the capture over once the lease is stale. 409 while it is live. */
+    bridgeCapturerTakeover: (id: string) => `/translation-rooms/${id}/bridge/capturer/takeover`,
+    /**
+     * Text-only bridge — the caller's OWN audio mode, `{ mode: "voice" | "text" }`. 409
+     * BRIDGE_AUDIO_MODE_LOCKED for text → voice while translation runs.
+     */
+    bridgeAudioMode: (id: string) => `/translation-rooms/${id}/bridge/audio-mode`,
+    /**
+     * WT-933 — the host records that one Meet-side person agreed to voice cloning, or withdraws it:
+     * PUT `{ displayName, consented }`. Host-only, bridge rooms only, not once ENDED.
+     */
+    bridgeVoiceCloneConsents: (id: string) => `/translation-rooms/${id}/bridge/voice-clone-consents`,
+    /**
+     * WT-933 — which of these names are consented: POST `{ displayNames }` (at most 50). A POST
+     * with a body on purpose: a person's name must not travel in a URL.
+     */
+    bridgeVoiceCloneConsentsStatus: (id: string) =>
+      `/translation-rooms/${id}/bridge/voice-clone-consents/status`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
     /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,
@@ -364,9 +405,19 @@ export const API = {
     documentPublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/publish`,
     /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
     documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
+    // WT-854 — the corrected file awaiting review. `documentDownload` keeps serving the approved
+    // one to everybody else; this is for reviewers and the uploader only.
+    documentPendingRevisionDownload: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/revision/download`,
     /** A document's approval and feedback history, newest first. WT-633. */
     documentHistory: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/history`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
+    /** The PII-masked copy of a restricted document, in its uploaded format. */
+    documentMaskedDownload: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/masked/download`,
+    /** Owner/Admin: scan a restricted document again so its masked copy is produced. */
+    documentMaskedRescan: (workspaceId: string, docId: string) =>
+      `/workspaces/${workspaceId}/documents/${docId}/masked/rescan`,
     documentPolicies: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies`,
     documentPolicyDetail: (workspaceId: string, docId: string, policyId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies/${policyId}`,
   },
@@ -382,7 +433,13 @@ export const API = {
      */
     bulkTerms: (id: string) => `/glossaries/${id}/terms/bulk`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+    /** PUT { sourceLanguage, targetLanguage } — change the pair in place; terms are kept as they are. */
+    languages: (id: string) => `/glossaries/${id}/languages`,
+    /** PO 2026-10-02: whether the glossary's terms have reached WarpBot's knowledge. */
+    warpbotStatus: (id: string) => `/glossaries/${id}/warpbot-status`,
     global: "/glossaries/global",
+    /** WT-880 — the admin-configured import file shape, read-only, any signed-in user. */
+    importTemplate: "/glossaries/import-template",
   },
   assistant: {
     conversations: "/assistant/conversations",
@@ -398,6 +455,8 @@ export const API = {
       sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
     },
     skills: "/assistant/skills",
+    /** GET ?workspaceId= — WarpBot's built-in tools, web search state and offered plugin tools. */
+    tools: "/assistant/tools",
     plugins: "/assistant/plugins",
     installPlugin: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
@@ -427,6 +486,13 @@ export const API = {
      */
     workspacePluginToolAudits: "/assistant/mcp/tools/audits",
     /**
+     * Every WarpBot tool call of one workspace over `from`/`to` (ISO, UTC), counted by the
+     * assistant service: totals, by source, by UTC day and by tool (wave 4). Owner/Admin only, the
+     * audit log's check. At most 180 days; the default is the last 30.
+     */
+    workspaceToolInsights: (workspaceId: string) =>
+      `/assistant/workspaces/${encodeURIComponent(workspaceId)}/insights/tools`,
+    /**
      * The workspace half of the plugin marketplace (2026-09-17). Its own prefix rather than more
      * literals under `/assistant/plugins`, where every literal beside `{pluginKey}` reserves a key.
      * Authorised against the workspace in the path: reads Owner/Admin, writes Owner, requests any
@@ -445,6 +511,9 @@ export const API = {
       /** Members who connected the plugin — Owner or Admin; connection metadata only. */
       members: (workspaceId: string, pluginKey: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/members`,
+      /** The Owner's per-tool rules — GET Owner or Admin, PUT Owner. */
+      toolPolicies: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/tool-policies`,
       requests: (workspaceId: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
       myRequests: (workspaceId: string) =>
@@ -571,6 +640,8 @@ export const API = {
     rateCardPreview: "/usages/rate-card/preview",
     /** PUT. Records the provider cost of a credit-unit (CRD) card; its credit price stays. */
     rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
+    /** PUT. Sets what a credit-unit (CRD) card charges per unit; supersedes the card. */
+    rateCardCreditPrice: (id: string) => `/usages/rate-card/${id}/credit-price`,
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform announcements. Read-only in the UI; sending is its own release. */
@@ -677,6 +748,8 @@ export const API = {
     workspaces: "/admin/workspaces/insights",
     meetings: "/admin/meetings/insights",
     pnl: "/admin/billing/insights/pnl",
+    /** Every WarpBot tool call, platform-wide (assistant service, plugins.read). */
+    warpbotTools: "/assistant/admin/insights/tools",
   },
   /** The USD→VND rate: Stripe's by default, recorded daily, overridable. System admin only. */
   /**
@@ -920,5 +993,7 @@ export const API = {
     archive: (id: string) => `/admin/global-glossary/${id}/archive`,
     bulkImport: "/admin/global-glossary/bulk-import",
     audits: (id: string) => `/admin/global-glossary/${id}/audits`,
+    /** WT-880 — GET / PUT (whole config) / DELETE (back to the built-in default). */
+    importTemplate: "/admin/global-glossary/import-template",
   },
 } as const;

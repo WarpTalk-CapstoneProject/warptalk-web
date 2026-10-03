@@ -44,7 +44,11 @@ import {
 export interface BridgeConsentPrompt {
   view: BridgeConsentPromptView;
   selectSource: (sourceId: string) => void;
-  decide: (granted: boolean) => void;
+  /**
+   * WT-910: `record` is the "Record this meeting" checkbox, sent only from the ask (where the
+   * checkbox is). Left out, nothing is said about recording — "Stop listening" leaves it out.
+   */
+  decide: (granted: boolean, options?: { record?: boolean }) => void;
   reconsider: () => void;
 }
 
@@ -68,11 +72,15 @@ export function useBridgeConsentPrompt(roomId: string): BridgeConsentPrompt {
 
     const post = (intent: BridgeConsentIntent) => channel.postMessage(intent);
 
+    /** The last snapshot, for the visibility handler below; the state copy is for rendering. */
+    let lastSnapshot: BridgeConsentSnapshot | null = null;
+
     channel.onmessage = (event) => {
       const message = parseBridgeConsentMessage(event.data);
       // Intents are the popup's own voice coming back at it, and another room's snapshot belongs to
       // another session. Neither is news here.
       if (!message || message.kind !== "snapshot" || message.roomId !== roomId) return;
+      lastSnapshot = message;
       setSnapshot(message);
       if (
         shouldAcknowledgeConsentSnapshot(message, roomId, document.visibilityState === "visible")
@@ -84,9 +92,14 @@ export function useBridgeConsentPrompt(roomId: string): BridgeConsentPrompt {
     const askAgainWhenVisible = () => {
       // Only on the way back to visible: main republishes, and the ack path above then runs for a
       // prompt that is genuinely on screen this time.
-      if (document.visibilityState === "visible") {
-        post({ v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "hello", roomId });
+      if (document.visibilityState !== "visible") return;
+      // WT-900: and the ack goes straight away for a question this window already holds. Main is
+      // counting raises that nobody acknowledged and hands the question to its own modal after
+      // two; a restored popup must not lose that race to a republish round trip.
+      if (shouldAcknowledgeConsentSnapshot(lastSnapshot, roomId, true)) {
+        post({ v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "ack", roomId });
       }
+      post({ v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "hello", roomId });
     };
     document.addEventListener("visibilitychange", askAgainWhenVisible);
 
@@ -111,8 +124,12 @@ export function useBridgeConsentPrompt(roomId: string): BridgeConsentPrompt {
   );
 
   const decide = useCallback(
-    (granted: boolean) =>
-      post({ v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted }),
+    (granted: boolean, options?: { record?: boolean }) =>
+      post(
+        typeof options?.record === "boolean"
+          ? { v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted, record: options.record }
+          : { v: BRIDGE_CONSENT_PROTOCOL_VERSION, kind: "decide", roomId, granted },
+      ),
     [post, roomId],
   );
 

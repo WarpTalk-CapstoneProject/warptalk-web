@@ -1,387 +1,314 @@
-export type ToolScope = "all_users" | "workspace_members" | "platform_admin";
+/**
+ * Presentation copy and category metadata for WarpBot's BUILT-IN tools on /{slug}/tools.
+ *
+ * NOT THE LIST OF WHAT EXISTS. That comes from `GET /api/v1/assistant/tools` (`builtIn`): the AI
+ * worker publishes its real tool registry to Redis and AssistantService serves it, already filtered
+ * for the caller (`platform_staff` tools reach platform staff only). This file only dresses those
+ * rows: a human display name, a longer explanation and sample prompts, keyed by tool `name`.
+ *
+ *   - A tool this file has no copy for is still listed: its name humanised plus the manifest's own
+ *     description, no sample prompts. No row is ever hidden because it lacks copy.
+ *   - Copy for a tool the worker no longer has is simply never used.
+ *   - When the manifest is unavailable the page says so; it never falls back to this file as if it
+ *     were the truth.
+ *
+ * Copy stays English, like the rest of WarpBot's tool vocabulary (see
+ * src/lib/meeting/assistant-tool-labels.ts); only the page chrome around it is translated.
+ *
+ * Imports are type-only and relative: this file runs under plain `node --test`.
+ */
 
-export type ToolCategory =
-  | "all"
+import type {
+  WarpBotBuiltInToolDto,
+  WarpBotToolAudience,
+  WarpBotToolEffect,
+} from "../../types/assistant.ts";
+
+export type { WarpBotToolAudience, WarpBotToolEffect };
+
+export type WarpBotToolCategory =
   | "meetings"
-  | "transcripts"
   | "knowledge"
   | "documents"
+  | "glossary"
   | "translation"
-  | "members"
-  | "interactive"
-  | "analytics";
+  | "workspace"
+  | "conversation"
+  | "platform"
+  | "other";
 
-export interface ToolCategoryMeta {
-  id: ToolCategory;
-  label: string;
-  badge: string;
-  iconName: string;
-}
+/** Chip order on the page. A chip is offered only when at least one listed tool is in it. */
+export const WARPBOT_TOOL_CATEGORIES: readonly WarpBotToolCategory[] = [
+  "meetings",
+  "knowledge",
+  "documents",
+  "glossary",
+  "translation",
+  "workspace",
+  "conversation",
+  "platform",
+  "other",
+] as const;
 
-export interface WarpBotToolItem {
-  id: string;
-  name: string;
-  category: Exclude<ToolCategory, "all">;
-  categoryLabel: string;
-  scope: ToolScope;
-  scopeBadge: string;
-  isAdminOnly: boolean;
-  shortDescription: string;
-  detailedDescription: string;
-  parametersSummary: string[];
+export interface WarpBotToolCopy {
+  displayName: string;
+  /** One line, shown on the collapsed row. */
+  description: string;
+  /** The longer explanation, shown when the row is expanded. */
+  details: string;
   samplePrompts: string[];
-  iconName: string;
 }
 
-export const TOOL_CATEGORIES: readonly ToolCategoryMeta[] = [
-  { id: "all", label: "All Tools", badge: "14", iconName: "SquaresFour" },
-  { id: "meetings", label: "Meetings", badge: "4", iconName: "VideoCamera" },
-  { id: "transcripts", label: "Transcripts", badge: "1", iconName: "ChatsCircle" },
-  { id: "knowledge", label: "Knowledge & Facts", badge: "3", iconName: "BookOpen" },
-  { id: "documents", label: "Documents", badge: "2", iconName: "FileText" },
-  { id: "translation", label: "Instant Translation", badge: "1", iconName: "Translate" },
-  { id: "members", label: "Workspace & Directory", badge: "1", iconName: "Users" },
-  { id: "interactive", label: "Interactive Clarification", badge: "1", iconName: "Brain" },
-  { id: "analytics", label: "Platform Analytics", badge: "1", iconName: "ChartBar" },
-] as const;
+/** A built-in tool as the page draws it: a manifest row plus its copy (or a fallback). */
+export interface WarpBotBuiltInTool {
+  /** The function name the model calls — the id shown in mono under the display name. */
+  name: string;
+  displayName: string;
+  category: WarpBotToolCategory;
+  effect: WarpBotToolEffect;
+  audience: WarpBotToolAudience;
+  description: string;
+  /** Empty when there is no copy for the tool. */
+  details: string;
+  samplePrompts: string[];
+}
 
-export const WARPBOT_TOOLS_CATALOG: readonly WarpBotToolItem[] = [
-  {
-    id: "ask_user",
-    name: "Multi-choice Inquiry",
-    category: "interactive",
-    categoryLabel: "Interactive Clarification",
-    scope: "all_users",
-    scopeBadge: "All Users",
-    isAdminOnly: false,
-    shortDescription: "Prompt the user with multiple-choice questions when essential parameters or intent need clarification.",
-    detailedDescription:
-      "When an action requires missing details (e.g. target languages, schedule time, or room configuration), WarpBot renders an interactive form with selectable options instead of guessing.",
-    parametersSummary: ["questions (array of structured questions with title, options, and multi-select setting)"],
+export const WARPBOT_TOOL_COPY: Readonly<Record<string, WarpBotToolCopy>> = {
+  // ── Meetings ────────────────────────────────────────────────────────────────────────────
+  create_meeting: {
+    displayName: "Create meeting room",
+    description: "Creates a WarpTalk translation room in this workspace, now, later or on a repeating schedule.",
+    details:
+      "Sets up a WarpTalk room with a title, meeting type, source language and target languages. It can be a one-off at a set time or a repeating schedule, and can be a follow-up to the meeting in progress. If a detail is missing, WarpBot asks you first. People you name are invited by email, so WarpBot only uses addresses you give it.",
     samplePrompts: [
-      "Schedule a meeting for tomorrow afternoon but I'm unsure which translation language pair to pick",
-      "Set up a design review session for next week",
+      "Create a meeting room called Weekly sync tomorrow at 9am, English to Vietnamese",
+      "Schedule a follow-up to this meeting next Monday at 2pm",
     ],
-    iconName: "Brain",
   },
-  {
-    id: "create_meeting",
-    name: "Create Meeting Room",
-    category: "meetings",
-    categoryLabel: "Meetings",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Create a live translation meeting room with real-time multilingual captioning and audio.",
-    detailedDescription:
-      "Automatically sets up a translation room in the active workspace with source and target languages configured, supporting instant, scheduled, or recurring meetings.",
-    parametersSummary: [
-      "title (meeting room title)",
-      "meeting_type (instant, scheduled, recurring)",
-      "source_language (host speaking language)",
-      "target_languages (array of target translation languages)",
-      "scheduled_start_at (optional scheduled start timestamp)",
-    ],
+  create_action_item: {
+    displayName: "Save action item",
+    description: "Saves a task to a meeting, with its owner and deadline.",
+    details:
+      "When you state a task, commitment or to-do, WarpBot saves it as an action item on the meeting instead of only acknowledging it. The task then appears on the meeting's page with its owner and deadline, and WarpBot links to it.",
     samplePrompts: [
-      "Create a 'Sprint Planning' meeting with Vietnamese translated to English today at 2:00 PM",
-      "Start an instant 'Global All-Hands' room translating Japanese to Vietnamese and English",
+      "Action: send the revised quote to the client, owner me, deadline Friday",
+      "Add a task for Linh to review the contract by next Wednesday",
     ],
-    iconName: "VideoCamera",
   },
-  {
-    id: "list_recent_meetings",
-    name: "List Recent Meetings",
-    category: "meetings",
-    categoryLabel: "Meetings",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "List recent meetings and active translation rooms across the workspace.",
-    detailedDescription:
-      "Look up past and ongoing translation rooms that the user has access to, displaying status (active or ended), duration, language configuration, and host information.",
-    parametersSummary: ["days (lookback window in days, default 7)", "limit (maximum number of rooms, up to 20)"],
+  share_meeting_minutes: {
+    displayName: "Share meeting minutes",
+    description: "Gives someone access to a meeting's minutes by email and returns the share link.",
+    details:
+      "Grants a person access to a meeting's minutes and hands you the share link. WarpTalk does not email the link for you: send it yourself.",
+    samplePrompts: ["Share the minutes of yesterday's board meeting with an@example.com"],
+  },
+  list_recent_meetings: {
+    displayName: "List recent meetings",
+    description: "Lists your recent meetings that have ended, optionally by a word in the title.",
+    details:
+      "Finds your past WarpTalk meetings (ended or cancelled), optionally filtered by a keyword in the title. WarpBot uses it to find the right meeting before reading its summary, details or transcript.",
+    samplePrompts: ["What meetings did I have this week?", "Find my recent meetings about the product launch"],
+  },
+  get_meeting_summary: {
+    displayName: "Read meeting summary",
+    description: "Reads the AI summary and action items of a past meeting.",
+    details:
+      "Returns the summary and action items of a meeting that already has one. Summaries are produced automatically when a meeting's transcript is processed; WarpBot cannot generate one on demand.",
+    samplePrompts: ["Summarise my last meeting", "What were the action items from the sprint review?"],
+  },
+  get_room_detail: {
+    displayName: "Read meeting details",
+    description: "Reads a meeting's status, languages, host and schedule.",
+    details:
+      "Returns the full details of one meeting: its status, languages, host and schedule. It works from the meeting you are looking at, or from one WarpBot found by name.",
     samplePrompts: [
-      "Show me my meetings from the past 7 days",
-      "What translation rooms were held recently in this workspace?",
+      "Who is hosting this meeting and which languages does it use?",
+      "When is the next Weekly sync scheduled?",
     ],
-    iconName: "CalendarBlank",
   },
-  {
-    id: "get_room_detail",
-    name: "Meeting Details & Configuration",
-    category: "meetings",
-    categoryLabel: "Meetings",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "View detailed configuration, participants, and status for a specific meeting.",
-    detailedDescription:
-      "Retrieve complete metadata of a Translation Room: room code, host, duration, configured language pairs, and direct join link.",
-    parametersSummary: ["room_id (unique meeting room identifier)"],
+  get_transcript: {
+    displayName: "Read meeting transcript",
+    description: "Reads what was said in a meeting, by speaker and language.",
+    details:
+      "Reads transcript segments with speaker, language and text — the most recent ones first, paging back for earlier parts of a long meeting. Use it to ask what someone said, to find a quote, or to recap how the meeting opened.",
+    samplePrompts: ["What did the client say about the budget in the last meeting?", "Quote how the meeting opened"],
+  },
+
+  // ── Knowledge ───────────────────────────────────────────────────────────────────────────
+  search_facts: {
+    displayName: "Look up decisions and facts",
+    description: "Lists the decisions, requirements, commitments and risks recorded in this workspace.",
+    details:
+      "Lists the knowledge facts extracted from meetings and documents — decisions, requirements, definitions, commitments, risks and references. Best when the question names a kind of fact, such as what was decided or which risks were raised.",
+    samplePrompts: ["What did we decide about the release date?", "Which risks were raised this month?"],
+  },
+  semantic_search: {
+    displayName: "Search workspace knowledge",
+    description: "Searches documents, transcripts, glossaries and facts by meaning, not exact words.",
+    details:
+      "Searches everything indexed for this workspace — documents, meeting transcripts, glossaries and extracted facts — by meaning. Good for conceptual questions. It can come back empty when nothing relevant has been indexed yet.",
+    samplePrompts: ["What have we discussed about data retention?", "Find anything about onboarding new customers"],
+  },
+
+  // ── Documents ───────────────────────────────────────────────────────────────────────────
+  search_documents: {
+    displayName: "Find documents",
+    description: "Finds workspace documents by name, or lists what documents exist.",
+    details:
+      "Finds documents by name, ignoring case, Vietnamese diacritics and punctuation. When no name matches, it falls back to matching the documents' content.",
+    samplePrompts: ["Which documents do we have about pricing?", "Find the bug tracking document"],
+  },
+  get_document: {
+    displayName: "Read document",
+    description: "Reads a document's details and an excerpt of its text.",
+    details:
+      "Returns a workspace document's metadata and a text excerpt, so WarpBot can answer questions about it. It works from a document you mention, have open, or that WarpBot found by name.",
+    samplePrompts: ["What does the onboarding guide say about account setup?", "Summarise the latest product spec"],
+  },
+
+  // ── Glossary ────────────────────────────────────────────────────────────────────────────
+  search_terminology: {
+    displayName: "Look up a term",
+    description: "Looks up how a term is defined or translated, in your glossary first.",
+    details:
+      "Searches this workspace's glossary first, then the platform's global glossary of common IT and business terms. Use it to ask what a term means or how it should be translated.",
+    samplePrompts: ["How do we translate 'deployment pipeline' into Vietnamese?", "What does SLA mean in our glossary?"],
+  },
+  create_glossary: {
+    displayName: "Create glossary",
+    description: "Creates a new, empty glossary for a source and target language.",
+    details:
+      "Creates a named glossary for one language pair in this workspace. It needs a name and both languages — WarpBot asks if you did not say them. The glossary starts empty; add terms to it next.",
+    samplePrompts: ["Create a glossary called Legal terms, English to Japanese"],
+  },
+  add_glossary_term: {
+    displayName: "Add glossary term",
+    description: "Saves a term and its preferred translation, so live translation uses it.",
+    details:
+      "Adds a term and its preferred translation to this workspace's glossary. Live translation uses it from then on.",
     samplePrompts: [
-      "Get details and settings for the meeting that just finished",
-      "Which languages were enabled in the Project Kickoff room?",
+      "Add 'go-live' to our glossary, translated as 'launch day'",
+      "Always keep 'sprint' untranslated in live translation",
     ],
-    iconName: "Info",
   },
-  {
-    id: "get_meeting_summary",
-    name: "Meeting AI Summary & Action Items",
-    category: "meetings",
-    categoryLabel: "Meetings",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Extract AI-generated meeting minutes, key takeaways, and action items.",
-    detailedDescription:
-      "Read executive meeting recaps synthesized by the AI Worker from the diarized transcript, including overview, key decisions, and assigned action items.",
-    parametersSummary: ["room_id (unique room identifier to retrieve summary for)"],
+
+  // ── Translation ─────────────────────────────────────────────────────────────────────────
+  translate_text: {
+    displayName: "Translate text",
+    description: "Translates a piece of text into another language, right away.",
+    details: "Translates text you give WarpBot into the language you ask for. Nothing is saved.",
     samplePrompts: [
-      "Give me the summary and key decisions from yesterday's All-Hands meeting",
-      "What action items were assigned to the Frontend team in the last session?",
+      "Translate 'We will ship the fix on Friday' into Japanese",
+      "Translate this paragraph into Vietnamese",
     ],
-    iconName: "FileText",
   },
-  {
-    id: "get_transcript",
-    name: "Retrieve Meeting Transcript",
-    category: "transcripts",
-    categoryLabel: "Transcripts",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Retrieve timestamped, speaker-diarized transcript segments from a meeting.",
-    detailedDescription:
-      "Search and inspect exact spoken dialogue in the recorded meeting transcript. Supports keyword queries or filtering by speaker identity.",
-    parametersSummary: [
-      "room_id (unique meeting room identifier)",
-      "search_term (optional keyword query)",
-      "speaker_id (optional speaker filter)",
-      "limit (maximum transcript segments to return)",
-    ],
-    samplePrompts: [
-      "Did anyone mention 'marketing budget' in the last meeting?",
-      "Extract everything Alex said during this morning's call",
-    ],
-    iconName: "ChatsCircle",
+
+  // ── Workspace ───────────────────────────────────────────────────────────────────────────
+  search_workspace_members: {
+    displayName: "Find workspace members",
+    description: "Finds people in this workspace by name or email, with their role.",
+    details:
+      "Searches this workspace's members by name or email. Use it to ask who is in the workspace, how to reach a teammate, or what their role is.",
+    samplePrompts: ["Who are the admins of this workspace?", "Find Linh's email address"],
   },
-  {
-    id: "translate_text",
-    name: "Instant Neural Translation",
-    category: "translation",
-    categoryLabel: "Instant Translation",
-    scope: "all_users",
-    scopeBadge: "All Users",
-    isAdminOnly: false,
-    shortDescription: "Translate text into target languages honoring workspace tone and terminology.",
-    detailedDescription:
-      "Neural machine translation adhering to workspace AI usage policies (Translation Tone: Formal or Casual), ensuring fluent syntax and consistent domain glossary terms.",
-    parametersSummary: [
-      "text (input text to translate)",
-      "target_language (target language code, e.g. en, vi, ja, ko)",
-      "tone (Casual, Formal, or Default)",
-    ],
-    samplePrompts: [
-      "Translate this message to Japanese with a formal tone: 'We look forward to collaborating with your team.'",
-      "Translate this alert to Vietnamese: 'The deployment pipeline has succeeded with zero downtime.'",
-    ],
-    iconName: "Translate",
+
+  // ── Conversation ────────────────────────────────────────────────────────────────────────
+  ask_user: {
+    displayName: "Ask you a question",
+    description: "Asks you multiple-choice questions when WarpBot needs a detail it does not have.",
+    details:
+      "Instead of guessing a missing detail — a room's title, languages or type — WarpBot shows a card of up to four multiple-choice questions and waits for your answer. It runs on its own; there is nothing to ask for.",
+    samplePrompts: ["Set up a meeting room for me"],
   },
-  {
-    id: "search_terminology",
-    name: "Search Workspace Glossary",
-    category: "knowledge",
-    categoryLabel: "Knowledge & Facts",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Look up approved terms, definitions, and official translations in the Workspace Glossary.",
-    detailedDescription:
-      "Search terminology definitions, usage context, and standard translation pairs in the Global and Workspace glossaries approved by administrators.",
-    parametersSummary: ["query (term or phrase to search)", "domain (optional industry domain)"],
-    samplePrompts: [
-      "How is 'Gross Margin' defined in this workspace glossary?",
-      "Look up the term 'ASR' in our project terminology database",
-    ],
-    iconName: "BookOpen",
+
+  // ── Platform ────────────────────────────────────────────────────────────────────────────
+  get_platform_analytics: {
+    displayName: "Platform analytics",
+    description: "Reads platform-wide figures: workspaces, meetings, revenue, feedback and health.",
+    details:
+      "Reads the same reports as the admin console — workspace and meeting counts, recurring revenue, feedback ratings, sign-ups and infrastructure health — with your own admin credentials. These are totals across every workspace.",
+    samplePrompts: ["How many workspaces signed up this month?", "What is our monthly recurring revenue?"],
   },
-  {
-    id: "search_facts",
-    name: "Search Extracted Facts & Decisions",
-    category: "knowledge",
-    categoryLabel: "Knowledge & Facts",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Filter extracted facts, architectural decisions, and risks from past discussions.",
-    detailedDescription:
-      "Query the workspace knowledge base for structured facts categorized into decisions, risks, agreements, and blockers extracted across translation sessions.",
-    parametersSummary: [
-      "query (fact search keyword)",
-      "category (decisions, risks, agreements, or architecture)",
-      "limit (maximum facts to retrieve)",
-    ],
-    samplePrompts: [
-      "What key architectural decisions were approved in the past week?",
-      "Find recorded technical risks regarding real-time audio latency",
-    ],
-    iconName: "Lightbulb",
-  },
-  {
-    id: "semantic_search",
-    name: "Deep Semantic Vector Search",
-    category: "knowledge",
-    categoryLabel: "Knowledge & Facts",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Perform deep vector semantic search across documents, transcripts, and notes.",
-    detailedDescription:
-      "Executes vector similarity search powered by Qdrant beyond exact keywords, connecting user questions with the most relevant conceptual sections across workspace records.",
-    parametersSummary: [
-      "query (concept, question, or topic to search)",
-      "room_id (optional filter to scope to a specific room)",
-      "limit (maximum result segments)",
-    ],
-    samplePrompts: [
-      "Find documentation and discussions regarding customer data privacy policies",
-      "Where is the server outage escalation procedure documented?",
-    ],
-    iconName: "MagnifyingGlassPlus",
-  },
-  {
-    id: "search_documents",
-    name: "Search Workspace Documents",
-    category: "documents",
-    categoryLabel: "Documents",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Search uploaded files and documents in the workspace knowledge library.",
-    detailedDescription:
-      "Filter and locate documents by filename, format (PDF, DOCX, TXT), upload date, and AI indexing status for retrieval-augmented generation (RAG).",
-    parametersSummary: ["query (document title or content keyword)", "limit (maximum documents to return)"],
-    samplePrompts: [
-      "Search for the payment and refund policy document",
-      "Are there any files related to local development environment setup?",
-    ],
-    iconName: "FileText",
-  },
-  {
-    id: "get_document",
-    name: "Document Content Reader",
-    category: "documents",
-    categoryLabel: "Documents",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Read approved workspace document contents and cited excerpts.",
-    detailedDescription:
-      "Extracts actual verified text content from uploaded workspace documents (up to 4,000 characters per segment) for grounded answers and citations.",
-    parametersSummary: ["document_id (unique document identifier to read)"],
-    samplePrompts: [
-      "Read the User Guide document and summarize the first 3 onboarding steps",
-      "Extract the warranty clause from the service agreement",
-    ],
-    iconName: "FileMagnifyingGlass",
-  },
-  {
-    id: "search_workspace_members",
-    name: "Workspace Member Directory",
-    category: "members",
-    categoryLabel: "Workspace & Directory",
-    scope: "workspace_members",
-    scopeBadge: "Workspace Members",
-    isAdminOnly: false,
-    shortDescription: "Look up member directory, organizational roles, and contact emails.",
-    detailedDescription:
-      "Browse and search team members across the workspace by name, email, role (Owner, Admin, Member), and active status to facilitate meeting invites.",
-    parametersSummary: ["query (name or email keyword)", "limit (maximum members to return)"],
-    samplePrompts: [
-      "Who is the Workspace Owner for this organization?",
-      "Find the email address for our lead QA engineer",
-    ],
-    iconName: "Users",
-  },
-  {
-    id: "get_platform_analytics",
-    name: "Platform Analytics & Health",
-    category: "analytics",
-    categoryLabel: "Platform Analytics",
-    scope: "platform_admin",
-    scopeBadge: "Platform Admin Only",
-    isAdminOnly: true,
-    shortDescription: "Access system-wide tenant, revenue, user growth, and infrastructure health metrics.",
-    detailedDescription:
-      "Platform Administrator exclusive capability. Queries multi-tenant platform metrics: room activity overview, recurring revenue (MRR/ARR), feedback ratings, user signups, and cluster health (Redis, Qdrant, LiveKit).",
-    parametersSummary: [
-      "reports (array of reports: overview, revenue, feedback, users, health)",
-      "days (metric calculation window in days, default 30)",
-    ],
-    samplePrompts: [
-      "Generate platform metrics for total meetings and subscription revenue over the last 30 days",
-      "Check infrastructure health and active streaming pipeline capacity",
-    ],
-    iconName: "ChartBar",
-  },
-] as const;
+};
+
+/** The Try prompt on the web search row, offered only while `webSearch.state` is `on`. */
+export const WEB_SEARCH_SAMPLE_PROMPT = "Search the web for the latest news about real-time speech translation";
+
+/** `get_platform_analytics` → "Get platform analytics". */
+export function humaniseToolName(name: string): string {
+  const words = name.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
+}
+
+function asCategory(value: string): WarpBotToolCategory {
+  return (WARPBOT_TOOL_CATEGORIES as readonly string[]).includes(value) ? (value as WarpBotToolCategory) : "other";
+}
+
+function asAudience(value: string): WarpBotToolAudience {
+  return value === "host" || value === "platform_staff" ? value : "member";
+}
 
 /**
- * Filter tools based on category and optional text search query.
+ * The server's `builtIn` rows, dressed with copy, in the server's order. A name that appears twice
+ * is listed once. Category, effect and audience always come from the server; an id the page does
+ * not know is shown under "other".
  */
-export function filterWarpBotTools(
-  tools: readonly WarpBotToolItem[],
-  options: {
-    category?: ToolCategory;
-    searchQuery?: string;
-    scopeFilter?: "all" | "workspace_only" | "admin_only";
-  } = {},
-): WarpBotToolItem[] {
-  const { category = "all", searchQuery = "", scopeFilter = "all" } = options;
-  const normalizedQuery = searchQuery.trim().toLowerCase();
+export function builtInToolsFromManifest(rows: readonly WarpBotBuiltInToolDto[]): WarpBotBuiltInTool[] {
+  const seen = new Set<string>();
+  const tools: WarpBotBuiltInTool[] = [];
+  for (const row of rows) {
+    if (!row?.name || seen.has(row.name)) continue;
+    seen.add(row.name);
+    const copy = Object.prototype.hasOwnProperty.call(WARPBOT_TOOL_COPY, row.name)
+      ? WARPBOT_TOOL_COPY[row.name]
+      : undefined;
+    tools.push({
+      name: row.name,
+      displayName: copy?.displayName ?? humaniseToolName(row.name),
+      category: asCategory(row.category),
+      effect: row.effect === "write" ? "write" : "read",
+      audience: asAudience(row.audience),
+      description: copy?.description ?? row.description ?? "",
+      details: copy?.details ?? "",
+      samplePrompts: copy?.samplePrompts ?? [],
+    });
+  }
+  return tools;
+}
 
+/** The category chips to offer, in page order: only categories that have a listed tool. */
+export function toolCategoriesOf(tools: readonly WarpBotBuiltInTool[]): WarpBotToolCategory[] {
+  const present = new Set(tools.map((tool) => tool.category));
+  return WARPBOT_TOOL_CATEGORIES.filter((category) => present.has(category));
+}
+
+/** Lower-cased with diacritics folded, so a Vietnamese query matches with or without its marks. */
+export function foldSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+export interface BuiltInToolFilter {
+  /** Null for every category. */
+  category?: WarpBotToolCategory | null;
+  query?: string;
+}
+
+/** Category first, then a search over the name, id, descriptions and sample prompts. */
+export function filterBuiltInTools(
+  tools: readonly WarpBotBuiltInTool[],
+  { category = null, query = "" }: BuiltInToolFilter = {},
+): WarpBotBuiltInTool[] {
+  const needle = foldSearchText(query);
   return tools.filter((tool) => {
-    // 1. Category check
-    if (category !== "all" && tool.category !== category) {
-      return false;
-    }
-
-    // 2. Scope check
-    if (scopeFilter === "admin_only" && !tool.isAdminOnly) {
-      return false;
-    }
-    if (scopeFilter === "workspace_only" && tool.isAdminOnly) {
-      return false;
-    }
-
-    // 3. Search query check
-    if (!normalizedQuery) {
-      return true;
-    }
-
-    const matchesName = tool.name.toLowerCase().includes(normalizedQuery);
-    const matchesId = tool.id.toLowerCase().includes(normalizedQuery);
-    const matchesDesc = tool.shortDescription.toLowerCase().includes(normalizedQuery);
-    const matchesCategory = tool.categoryLabel.toLowerCase().includes(normalizedQuery);
-    const matchesPrompts = tool.samplePrompts.some((p) => p.toLowerCase().includes(normalizedQuery));
-
-    return matchesName || matchesId || matchesDesc || matchesCategory || matchesPrompts;
+    if (category && tool.category !== category) return false;
+    if (!needle) return true;
+    return [tool.name, tool.displayName, tool.description, tool.details, ...tool.samplePrompts].some(
+      (text) => foldSearchText(text).includes(needle),
+    );
   });
-}
-
-/**
- * Summary statistics of the catalog.
- */
-export function getWarpBotToolsStats(tools: readonly WarpBotToolItem[] = WARPBOT_TOOLS_CATALOG) {
-  const total = tools.length;
-  const adminOnlyCount = tools.filter((t) => t.isAdminOnly).length;
-  const workspaceCount = total - adminOnlyCount;
-  const categoriesCount = new Set(tools.map((t) => t.category)).size;
-
-  return {
-    total,
-    adminOnlyCount,
-    workspaceCount,
-    categoriesCount,
-  };
 }

@@ -31,6 +31,7 @@
   "editRoom": "Edit room",
   "startingLabel": "Starting...",
   "startError": "Could not start the meeting.",
+  "bridgeDesktopOnly": "This meeting is translated from the WarpTalk desktop app, beside Google Meet.",
   "occupancyNoun": {
     "attended": "attended",
     "inRoom": "in room"
@@ -50,6 +51,7 @@
     "panelTitle": "People",
     "participantsCount": "Participants: {label}",
     "noneInvited": "No one else invited yet.",
+    "bridgeConnection": "Google Meet call audio. Everyone on the Meet side is heard through this connection; it is not a participant.",
     "groupCount": "{label}: {count}",
     "groups": {
       "waitingToBeAdmitted": "Waiting to be admitted",
@@ -81,6 +83,10 @@
       "collapse": "Collapse the record",
       "expand": "Expand the record"
     },
+    "finalizing": {
+      "title": "Finishing up this meeting",
+      "body": "Saving the transcript and writing the summary. This page opens the record by itself in a moment."
+    },
     "writingUp": {
       "title": "Still writing this up",
       "body": "The transcript and the AI summary are produced after a meeting ends — usually within a minute. This page updates on its own."
@@ -104,6 +110,10 @@
       "toastKeptPrivate": "Record kept private. It will not be shared when the meeting ends.",
       "toastPublished": "Record published. Everyone who took part can read it.",
       "toastShareChangeFailed": "Could not change who this record is shared with."
+    },
+    "seekCoverage": {
+      "lateStart": "Recording started {time} into the meeting. Lines spoken before that are not in the recording, so their timestamps do not open it.",
+      "partial": "The recording covers only part of this meeting. Timestamps outside it do not open it."
     },
     "seekUnavailable": {
       "unalignable": "You can watch this recording, but jumping to a moment is not available for it — this meeting was transcribed before WarpTalk started recording where a video's timeline begins.",

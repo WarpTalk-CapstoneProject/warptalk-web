@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo } from "react";
 
 import {
   identityFor,
+  transcriptIdentityFor,
   type ParticipantIdentity,
 } from "@/lib/meeting/participant-identity";
 
@@ -52,5 +53,21 @@ export function useMeetingIdentity(
   return useMemo(
     () => identityFor(identities, userId, fallbackName),
     [identities, userId, fallbackName],
+  );
+}
+
+/**
+ * The speaker of a transcript line. useMeetingIdentity, except that the Google Meet stand-in is
+ * drawn as the person on the line rather than as its "External Meeting" seat — see
+ * transcriptIdentityFor.
+ */
+export function useTranscriptSpeakerIdentity(
+  userId: string | null | undefined,
+  lineSpeakerName?: string | null,
+): ParticipantIdentity {
+  const identities = useMeetingIdentities();
+  return useMemo(
+    () => transcriptIdentityFor(identities, userId, lineSpeakerName),
+    [identities, userId, lineSpeakerName],
   );
 }

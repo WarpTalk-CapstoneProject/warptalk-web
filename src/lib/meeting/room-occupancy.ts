@@ -19,6 +19,8 @@
  * Deliberately free of runtime imports so it stays a pure, node --test-able module.
  */
 
+import { isExternalBridgeStandIn } from "./meeting-types.ts";
+
 /** Statuses that occupy one of the room's `maxParticipants` seats. CONNECTED only. */
 export const SEAT_HOLDING_STATUSES = ["connected"] as const;
 
@@ -259,5 +261,47 @@ export function roomOccupancy<T extends ParticipantLike>(input: {
     label: `${seated.length}/${capacity}`,
     isFull: capacity > 0 && seated.length >= capacity,
     fromRoster: true,
+  };
+}
+
+/**
+ * WT-904 — an EXTERNAL_BRIDGE room's roster with the Google Meet stand-in taken out of the count.
+ *
+ * The stand-in holds one of the room's two seats from the moment the room is made, so the host's
+ * own room read "2/2 in room" and the People panel listed "External Meeting" as a second person.
+ * It is a connection that carries everyone on the far side, not an attendee:
+ *
+ *   - the roster loses its row (the page shows the connection separately);
+ *   - the capacity loses the seat it permanently occupies, so the host alone reads "1/1";
+ *   - attendance loses one when its row is present — the server counts every user id that ever
+ *     joined, and the stand-in's row is written as joined when the room is created.
+ *
+ * Every other room passes through untouched, which is the common case.
+ */
+export function discountBridgeStandIn<T extends { userId?: string | null }>(input: {
+  roster: readonly T[] | null;
+  capacity?: number | null;
+  attendedCount?: number | null;
+}): {
+  roster: T[] | null;
+  capacity: number | null | undefined;
+  attendedCount: number | null | undefined;
+  standIn: T | null;
+} {
+  const standIn = input.roster?.find((participant) => isExternalBridgeStandIn(participant.userId)) ?? null;
+  if (!standIn || !input.roster) {
+    return {
+      roster: input.roster ? [...input.roster] : null,
+      capacity: input.capacity,
+      attendedCount: input.attendedCount,
+      standIn: null,
+    };
+  }
+  return {
+    roster: input.roster.filter((participant) => participant !== standIn),
+    capacity: typeof input.capacity === "number" ? Math.max(0, input.capacity - 1) : input.capacity,
+    attendedCount:
+      typeof input.attendedCount === "number" ? Math.max(0, input.attendedCount - 1) : input.attendedCount,
+    standIn,
   };
 }

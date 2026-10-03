@@ -76,7 +76,7 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
   const revenueByDay: BillingInsightsDto["revenueByDay"] = days.map((day, index) => ({
     date: day.key,
     // Gaps: one day whose only payment was in a currency with no FX rate.
-    revenue: gaps && index === 3 ? null : Math.round(random() * 4.5) * 490_000,
+    revenue: gaps && index === 3 ? null : Math.round(random() * 4.5) * 19,
   }));
   const revenue = revenueByDay.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
   const aiCost = Math.round(revenue * 0.37);
@@ -101,12 +101,12 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     revenueByDayNote: gaps ? "excludes 1 EUR rows" : null,
     revenueByMonthNote: gaps ? "excludes 1 EUR rows" : null,
     revenueByMonth: [
-      { month: "2026-04", revenue: 24_000_000 },
-      { month: "2026-05", revenue: 23_100_000 },
-      { month: "2026-06", revenue: 20_400_000 },
-      { month: "2026-07", revenue: 31_000_000 },
-      { month: "2026-08", revenue: 39_150_000 },
-      { month: "2026-09", revenue: 48_900_000 },
+      { month: "2026-04", revenue: 923 },
+      { month: "2026-05", revenue: 889 },
+      { month: "2026-06", revenue: 785 },
+      { month: "2026-07", revenue: 1_193 },
+      { month: "2026-08", revenue: 1_506 },
+      { month: "2026-09", revenue: 1_881 },
     ],
     creditsByService: [
       { usageType: "TRANSLATION", credits: 4_378_400 },
@@ -130,14 +130,14 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
 
   const snapshot: BillingSnapshotDto = {
     generatedAt: NOW.toISOString(),
-    revenueToday: gaps ? null : 2_390_000,
+    revenueToday: gaps ? null : 91.95,
     revenueTodayNote: gaps ? "excludes 2 EUR rows" : null,
-    revenueYesterday: 4_480_000,
+    revenueYesterday: 172.37,
     revenueYesterdayNote: null,
-    mrr: gaps ? null : 21_634_333,
+    mrr: gaps ? null : 832.4,
     mrrNote: gaps
       ? "excludes 165 EUR rows"
-      : "includes 180.00 USD converted at 26,300 VND/USD (billing_pricing_config.fx_rate_usd_vnd)",
+      : "includes 4,734,000 VND converted at 26,300 VND/USD (billing_pricing_config.fx_rate_usd_vnd)",
     activeSubscriptions: 165,
     activeByCycle: { monthly: 95, yearly: 70, other: 0 },
     churnRateMonth: { cancelled: 3, atMonthStart: 168, rate: 1.79 },
@@ -149,7 +149,7 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     platformCreditBalance: 94_310_220,
     outstandingInvoices: gaps
       ? { count: 5, amount: null, amountNote: "excludes 5 EUR rows", pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: null }
-      : { count: 5, amount: 7_880_000, amountNote: null, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
+      : { count: 5, amount: 303.19, amountNote: null, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
     openSalesLeads: 4,
     subscriptionsByPlan: [
       { planSlug: "starter", planName: "Starter", active: 38, trial: 9, pastDue: 0 },
@@ -231,13 +231,13 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     suspendedNow: 1,
   };
 
-  // Profit and loss: the same revenue days, OpenAI (STT priced, TRANSLATION not) and Cartesia costs at
-  // ~25,990 VND/USD, and the gaps scenario's day without a rate.
+  // Profit and loss in USD: the same revenue days, OpenAI (STT priced, TRANSLATION not) and Cartesia
+  // costs, and the gaps scenario's day whose cost could not be reconstructed.
   const pnlDay = (key: string, index: number, revenueOfDay: number | null): PnlPeriodDto => {
     const openAiUsd = Math.round(random() * 40) / 10;
     const cartesiaUsd = Math.round(random() * 60) / 10;
     const noRate = gaps && index === 5;
-    const cost = noRate ? null : Math.round((openAiUsd + cartesiaUsd) * 25_990);
+    const cost = noRate ? null : Math.round((openAiUsd + cartesiaUsd) * 100) / 100;
     const margin = revenueOfDay === null || cost === null ? null : revenueOfDay - cost;
     return {
       key, revenue: revenueOfDay, aiCost: cost, aiCostUsd: openAiUsd + cartesiaUsd, grossMargin: margin,
@@ -245,8 +245,8 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
       credits: Math.round(random() * 90_000), costCoveragePercent: 58, activeWorkspaces: 4, arpa: null,
       fxRate: noRate ? null : 25_990,
       providers: [
-        { provider: "openai", credits: Math.round(random() * 60_000), costUsd: openAiUsd, costVnd: noRate ? null : Math.round(openAiUsd * 25_990) },
-        { provider: "cartesia", credits: Math.round(random() * 30_000), costUsd: cartesiaUsd, costVnd: noRate ? null : Math.round(cartesiaUsd * 25_990) },
+        { provider: "openai", credits: Math.round(random() * 60_000), costUsd: openAiUsd },
+        { provider: "cartesia", credits: Math.round(random() * 30_000), costUsd: cartesiaUsd },
       ],
     };
   };
@@ -268,15 +268,15 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     aiCostUsd: pnlDays.reduce((sum, row) => sum + row.aiCostUsd, 0),
     costCoveragePercent: 58,
     costNote: "covers 58% of consumed credits",
-    fxNote: "USD converted at each day's rate (25,950–26,010 VND/USD; Stripe FX quote, Stripe charge conversion)",
+    fxNote: "VND converted at each day's rate (25,950–26,010 VND/USD; Stripe FX quote, Stripe charge conversion)",
     days: pnlDays,
     months: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map((key, index) =>
-      pnlDay(key, index + 20, Math.round((4 + index) * 4_100_000))),
+      pnlDay(key, index + 20, Math.round((4 + index) * 158))),
     providers: [
-      { provider: "cartesia", credits: 620_000, coveredCredits: 620_000, coveragePercent: 100, costUsd: 96.4, costVnd: 2_505_436, measuredUsd: 80.1,
+      { provider: "cartesia", credits: 620_000, coveredCredits: 620_000, coveragePercent: 100, costUsd: 96.4, measuredUsd: 80.1,
         services: [{ chargeType: "AUDIO_DUBBING_STANDARD", service: "TTS", credits: 540_000, coveredCredits: 540_000, costUsd: 84 }, { chargeType: "AUDIO_DUBBING_VOICE_CLONE", service: "TTS", credits: 80_000, coveredCredits: 80_000, costUsd: 12.4 }],
         note: "measured from the provider's usage API on synced days" },
-      { provider: "openai", credits: 1_220_000, coveredCredits: 440_000, coveragePercent: 36.1, costUsd: 22, costVnd: 571_780, measuredUsd: 0,
+      { provider: "openai", credits: 1_220_000, coveredCredits: 440_000, coveragePercent: 36.1, costUsd: 22, measuredUsd: 0,
         services: [{ chargeType: "TRANSLATION", service: "MT", credits: 780_000, coveredCredits: 0, costUsd: 0 }, { chargeType: "STT", service: "STT", credits: 440_000, coveredCredits: 440_000, costUsd: 22 }],
         note: "no provider price for TRANSLATION: its cost is not in this figure" },
     ],

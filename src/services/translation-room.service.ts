@@ -1,6 +1,17 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  parseBridgeClaimLease,
+  type BridgeClaimLease,
+  type BridgeClaimRequest,
+  type BridgeRole,
+} from "@/lib/meeting/bridge-capturer";
+import {
+  parseBridgeAudioMode,
+  resolveBridgeAudioMode,
+  type BridgeAudioMode,
+} from "@/lib/meeting/bridge-audio-mode";
 import type {
   SummaryRenderingDto,
   SummaryRenderingSummaryDto,
@@ -54,6 +65,57 @@ type BackendRecurringCreate = {
   firstOccurrence: BackendRoom;
   materializedOccurrenceCount: number;
   totalOccurrenceCount: number;
+};
+
+/** W4b — POST /translation-rooms/bridge/claim, before normalisation. */
+type BackendBridgeClaim = {
+  room: BackendRoom;
+  participant?: BackendParticipant | null;
+  bridgeRole?: string;
+  created?: boolean;
+  capturerHeartbeatIntervalSeconds?: number;
+  capturerLeaseSeconds?: number;
+  /** Text-only bridge (backend #509): the caller's mode in force after the claim. */
+  audioMode?: string;
+};
+
+export type BridgeClaimResult = BridgeClaimLease & {
+  room: TranslationRoomDto;
+  participant: TranslationRoomParticipantDto | null;
+  /**
+   * The caller's bridge audio mode in force (lib/meeting/bridge-audio-mode). From `audioMode`, else
+   * the participant row's `isBridgeTextOnly`, else voice — what a server before #509 means.
+   */
+  audioMode: BridgeAudioMode;
+};
+
+/** Text-only bridge — PUT /translation-rooms/{id}/bridge/audio-mode (BridgeAudioModeDto). */
+export type BridgeAudioModeResult = {
+  roomId: string;
+  userId: string;
+  mode: BridgeAudioMode;
+  /** A translation session is running, i.e. text → voice is currently locked. */
+  translationActive: boolean;
+};
+
+/** WT-933 — one Meet-side person's voice-clone consent, as the host recorded it (the PUT's echo). */
+export type BridgeVoiceCloneConsent = {
+  displayName: string;
+  consented: boolean;
+};
+
+/** WT-933 — the submitted names that have a consent on record, each exactly as submitted. */
+export type BridgeVoiceCloneConsentStatus = {
+  consented: string[];
+};
+
+/** W4b — heartbeat / takeover answer (BridgeCapturerStatusDto). */
+export type BridgeCapturerStatus = {
+  roomId: string;
+  bridgeRole: BridgeRole;
+  capturerUserId: string | null;
+  capturerHeartbeatAt: string | null;
+  capturerLeaseSeconds: number;
 };
 
 type BackendJoinResponse = {
@@ -162,6 +224,17 @@ export type FlashModeState = {
   /** "room" = a host chose it · "deployment" = following the default · "unknown" = neither is known. */
   source: "room" | "deployment" | "unknown";
 };
+
+/**
+ * The body of a voice-clone consent answer (WT-933). This service's endpoints answer with the DTO
+ * itself; the same DTO under a `data` key is read too, so the popup does not show an empty list
+ * of ticks should the gateway ever wrap it.
+ */
+function bridgeVoiceCloneBody<T extends object>(body: unknown): Partial<T> | null {
+  if (!body || typeof body !== "object") return null;
+  const inner = (body as { data?: unknown }).data;
+  return (inner && typeof inner === "object" ? inner : body) as Partial<T>;
+}
 
 export const translationRoomService = {
   async create(data: CreateTranslationRoomRequest) {
@@ -337,9 +410,14 @@ export const translationRoomService = {
     // means "unrestricted from this source" and pre-intersecting would make either empty read as
     // "offer nothing". Optional in the type so a web build in front of an older backend degrades to
     // the previous behaviour instead of offering an empty picker.
+    //
+    // WT-866: `roomEnded` is true when the code belongs to a meeting that is over (ended,
+    // cancelled or expired). Optional for the same reason: an older backend never sends it, and
+    // absent reads as "not known to be over", which is the previous behaviour.
     const response = await apiClient.get<{
       allowedTargetLanguages: string[];
       roomLanguages?: string[];
+      roomEnded?: boolean;
     }>(API.translationRooms.joinLanguagePolicy(code));
     return response.data;
   },
@@ -464,6 +542,100 @@ export const translationRoomService = {
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
+  },
+
+  /**
+   * W4b — bridge claim. The room and the participant are normalized like every other read; the
+   * lease half (role, intervals) goes through parseBridgeClaimLease, which reads an unknown role as
+   * "member" rather than let two desktops capture the far side.
+   */
+  async claimBridgeRoom(request: BridgeClaimRequest): Promise<BridgeClaimResult> {
+    const response = await apiClient.post<BackendBridgeClaim>(API.translationRooms.bridgeClaim, request);
+    const body = response.data;
+    const participant = body.participant ? normalizeParticipant(body.participant) : null;
+    return {
+      room: normalizeRoom(body.room),
+      participant,
+      ...parseBridgeClaimLease(body),
+      audioMode: resolveBridgeAudioMode({
+        known: parseBridgeAudioMode(body.audioMode),
+        isBridgeTextOnly: participant?.isBridgeTextOnly,
+      }),
+    };
+  },
+
+  /**
+   * Text-only bridge (backend #509): set the CALLER's own audio mode in a bridge room. Voice → text
+   * is always allowed; text → voice rejects with 409 BRIDGE_AUDIO_MODE_LOCKED while translation
+   * runs (see bridgeAudioModeFailure). The same mode is a 200 no-op.
+   */
+  async setBridgeAudioMode(id: string, mode: BridgeAudioMode): Promise<BridgeAudioModeResult> {
+    const response = await apiClient.put<{
+      roomId: string;
+      userId: string;
+      mode: string;
+      translationActive?: boolean;
+    }>(API.translationRooms.bridgeAudioMode(id), { mode });
+    const body = response.data;
+    return {
+      roomId: body.roomId,
+      userId: body.userId,
+      // What we asked for when the server's answer is unreadable: a 200 means it was applied.
+      mode: parseBridgeAudioMode(body.mode) ?? mode,
+      translationActive: body.translationActive === true,
+    };
+  },
+
+  /**
+   * WT-933 — the host records that a Meet-side person agreed to have their voice cloned for this
+   * meeting (`consented: true`), or withdraws it (`false`, which also removes the voice copy).
+   * Idempotent both ways. Host-only; 400 for an empty name or one over 100 characters.
+   */
+  async setBridgeVoiceCloneConsent(
+    id: string,
+    displayName: string,
+    consented: boolean,
+  ): Promise<BridgeVoiceCloneConsent> {
+    const response = await apiClient.put<BridgeVoiceCloneConsent>(
+      API.translationRooms.bridgeVoiceCloneConsents(id),
+      { displayName, consented },
+    );
+    const data = bridgeVoiceCloneBody<BridgeVoiceCloneConsent>(response.data);
+    // What we asked for when the echo is unreadable: a 200 means it was applied.
+    return {
+      displayName: typeof data?.displayName === "string" ? data.displayName : displayName,
+      consented: typeof data?.consented === "boolean" ? data.consented : consented,
+    };
+  },
+
+  /**
+   * WT-933 — which of these Meet-side names have a consent on record. The answer is the subset of
+   * `displayNames`, each exactly as submitted. In the body, not the URL: these are people's names.
+   */
+  async getBridgeVoiceCloneConsentStatus(
+    id: string,
+    displayNames: string[],
+  ): Promise<BridgeVoiceCloneConsentStatus> {
+    const response = await apiClient.post<BridgeVoiceCloneConsentStatus>(
+      API.translationRooms.bridgeVoiceCloneConsentsStatus(id),
+      { displayNames },
+    );
+    const data = bridgeVoiceCloneBody<BridgeVoiceCloneConsentStatus>(response.data);
+    // Not read as "nobody": an answer with no list in it would untick people who agreed.
+    if (!Array.isArray(data?.consented)) {
+      throw new Error("The voice-clone consent status answer could not be read.");
+    }
+    return { consented: data.consented.filter((name): name is string => typeof name === "string") };
+  },
+
+  /** W4b — renew this desktop's capturer lease. Rejects (409 CONFLICT) once it is not the capturer. */
+  heartbeatBridgeCapturer(id: string) {
+    return apiClient.post<BridgeCapturerStatus>(API.translationRooms.bridgeCapturerHeartbeat(id));
+  },
+
+  /** W4b — take the far side's capture over. Rejects (409 CONFLICT) while a live capturer holds it. */
+  takeOverBridgeCapturer(id: string) {
+    return apiClient.post<BridgeCapturerStatus>(API.translationRooms.bridgeCapturerTakeover(id));
   },
 
   pause(id: string) {
@@ -659,6 +831,23 @@ export const translationRoomService = {
     const { data } = await apiClient.post<{ invited: number }>(
       API.translationRooms.invitations(id),
       { emails },
+    );
+    return data;
+  },
+
+  /**
+   * WT-709: the host adds a language to a meeting that is already open, so a participant who
+   * needs it can pick it. Host-only (the room's EFFECTIVE host — 403 otherwise), bounded by the
+   * workspace whitelist and the plan's language quota (400), and only while the meeting is open
+   * (409). A language already declared answers 200 with the set unchanged.
+   *
+   * Answers the meeting's languages afterwards — the same `{ sourceLanguage, targetLanguages }`
+   * the RoomLanguagesChanged broadcast carries — so the caller can repaint without a refetch.
+   */
+  async addRoomLanguage(id: string, language: string) {
+    const { data } = await apiClient.post<{ sourceLanguage: string; targetLanguages: string[] }>(
+      API.translationRooms.languages(id),
+      { language },
     );
     return data;
   },

@@ -5,10 +5,14 @@ import {
   DOCUMENT_TAB,
   DUPLICATE_ERROR_CODE,
   canUploadRevision,
+  documentFileRevision,
   documentMatchesTab,
+  hasPendingRevision,
   historyActionLabel,
+  isAwaitingReview,
   isDecisionAction,
   parseDuplicateConflict,
+  pendingRevisionFileRevision,
   shouldShowRejectionFeedback,
 } from "../document-review.ts";
 import type { WorkspaceDocumentDto } from "../../../types/workspace.ts";
@@ -176,4 +180,63 @@ test("the three decisions are the ones the history emphasises", () => {
   assert.equal(isDecisionAction("Reuploaded"), true);
   assert.equal(isDecisionAction("UploadDocument"), false);
   assert.equal(isDecisionAction("GetDocumentDetails"), false);
+});
+
+test("a file replaced in place is a new preview revision (WT-854, WT-857)", () => {
+  const original = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:04:29Z" });
+  const sameFileAgain = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:04:29Z" });
+  assert.equal(documentFileRevision(original), documentFileRevision(sameFileAgain));
+
+  // A corrected version of another format: the old bytes must not reach the new format's reader.
+  const asWorkbook = doc({ fileName: "report.xlsx", fileExtension: ".xlsx", sizeBytes: 9000, updatedAt: "2026-09-26T14:05:14Z" });
+  assert.notEqual(documentFileRevision(original), documentFileRevision(asWorkbook));
+
+  // Same name and size is still a different file once it was replaced.
+  const sameShapeNewBytes = doc({ fileName: "report.docx", fileExtension: ".docx", sizeBytes: 2048, updatedAt: "2026-09-26T14:05:14Z" });
+  assert.notEqual(documentFileRevision(original), documentFileRevision(sameShapeNewBytes));
+});
+
+// ── WT-854 part 2: a corrected version of a published document waits beside it ─────────────
+
+const pendingRevision = {
+  name: "Quarterly plan",
+  fileName: "plan-v2.docx",
+  fileExtension: ".docx",
+  mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  sizeBytes: 4096,
+  uploadedBy: "user-1",
+  uploadedAt: "2026-10-01T09:00:00Z",
+  note: "Fixed the totals.",
+};
+
+test("a published document with a correction waiting needs a decision but stays published", () => {
+  const waiting = doc({ status: "public", pendingRevision });
+
+  assert.equal(hasPendingRevision(waiting), true);
+  assert.equal(isAwaitingReview(waiting), true);
+  // Readers still have it, and a reviewer still owes a decision: both tabs, on purpose.
+  assert.equal(documentMatchesTab(waiting, DOCUMENT_TAB.PUBLISHED), true);
+  assert.equal(documentMatchesTab(waiting, DOCUMENT_TAB.PENDING), true);
+});
+
+test("a published document with nothing waiting is not in the review queue", () => {
+  const settled = doc({ status: "public", pendingRevision: null });
+
+  assert.equal(isAwaitingReview(settled), false);
+  assert.equal(documentMatchesTab(settled, DOCUMENT_TAB.PENDING), false);
+});
+
+test("a second correction cannot be uploaded while one is under review", () => {
+  assert.equal(canUploadRevision(doc({ status: "public", pendingRevision }), "user-1", false), false);
+  assert.equal(canUploadRevision(doc({ status: "public", pendingRevision }), "admin-1", true), false);
+  assert.equal(canUploadRevision(doc({ status: "public" }), "user-1", false), true);
+});
+
+test("the pending file is its own preview revision, never the approved file's", () => {
+  const waiting = doc({ status: "public", pendingRevision });
+
+  const pending = pendingRevisionFileRevision(waiting);
+  assert.ok(pending);
+  assert.notEqual(pending, documentFileRevision(waiting));
+  assert.equal(pendingRevisionFileRevision(doc({ pendingRevision: null })), null);
 });

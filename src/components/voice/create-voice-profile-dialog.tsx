@@ -27,10 +27,17 @@ import {
 } from "@/components/ui/select";
 import { useCreateVoiceProfile } from "@/hooks/use-voice-profiles";
 import { claimPlayback, type PlaybackClaim } from "@/lib/audio/exclusive-playback";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { languagesInScope, type SupportedLanguage } from "@/lib/language/languages";
 import { resolveProfileLanguage } from "@/lib/voice/library-languages";
 import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
+import {
+  challengeErrorKey,
+  isChallengeReusable,
+  isChallengeSpentBy,
+  type VoiceEnrollmentChallenge,
+} from "@/lib/voice/voice-enrollment-challenge";
+import { VoiceProfileService } from "@/services/voice-profile.service";
 
 const ALL_PROFILE_LANGUAGES = languagesInScope("voiceProfile");
 
@@ -83,7 +90,14 @@ const EMPTY_CONSENT: Record<ConsentKey, boolean> = {
 };
 
 /**
- * Record or upload one sample and turn it into a voice.
+ * Record one sample, reading a server-issued phrase aloud, and turn it into a voice.
+ *
+ * WT-888 — WHY THERE IS NO "UPLOAD A FILE" ANY MORE
+ *     The dialog used to take any audio file, and five self-attested checkboxes were all that
+ *     stood between a recording of somebody else and a clone of them. Pressing Record now fetches
+ *     a random phrase (lib/voice/voice-enrollment-challenge.ts); the take must say it, and the
+ *     server transcribes it and refuses the profile if it does not. The server refuses a sample
+ *     without a phrase too, so this is the only way in, not merely the advertised one.
  *
  * WHY THE CONSENT HERE IS NOT THE CONSENT ON THE PAGE BEHIND IT
  *     These five confirmations are the VOICE_PROFILE_UPLOAD consent, and they are about THIS
@@ -112,7 +126,7 @@ export function CreateVoiceProfileDialog({
   const createProfile = useCreateVoiceProfile();
 
   const [displayName, setDisplayName] = useState("");
-  const [chosenLanguage, setLanguage] = useState(defaultLanguage);
+  const [chosenLanguage, setChosenLanguage] = useState(defaultLanguage);
   // Snapped at render, not in the setter: the policy and the page's language can both change
   // while this dialog stays mounted, and a stale choice must never be what gets submitted.
   const language = resolveProfileLanguage(chosenLanguage, languages);
@@ -133,8 +147,11 @@ export function CreateVoiceProfileDialog({
   // to hear. "Too quiet" is an assertion until you play it back and hear that it is.
   const [sampleUrl, setSampleUrl] = useState<string | null>(null);
   const [isPlayingSample, setIsPlayingSample] = useState(false);
+  // WT-888 — the phrase the take must say. Reused for a re-take while it is fresh and in the
+  // same language; dropped once the server has checked a recording against it.
+  const [challenge, setChallenge] = useState<VoiceEnrollmentChallenge | null>(null);
+  const [isFetchingChallenge, setIsFetchingChallenge] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -146,9 +163,25 @@ export function CreateVoiceProfileDialog({
   const canSave =
     Boolean(displayName.trim()) &&
     Boolean(sampleFile) &&
+    Boolean(challenge) &&
     outstandingConsent === 0 &&
     !isCheckingSample &&
+    !isFetchingChallenge &&
     !isRecording;
+
+  /** A take read against one phrase is worthless against any other, so they are dropped together. */
+  function discardTake() {
+    setChallenge(null);
+    setSampleFile(null);
+    setSampleAssessment(null);
+    setSampleAccepted(false);
+    holdForPlayback(null);
+  }
+
+  function setLanguage(next: string) {
+    if (next !== language) discardTake();
+    setChosenLanguage(next);
+  }
 
   useEffect(
     () => () => {
@@ -234,13 +267,14 @@ export function CreateVoiceProfileDialog({
     recordingChunksRef.current = [];
     setIsRecording(false);
     setDisplayName("");
-    setLanguage(defaultLanguage);
+    setChosenLanguage(defaultLanguage);
+    setChallenge(null);
+    setIsFetchingChallenge(false);
     setSampleFile(null);
     setSampleAssessment(null);
     setSampleAccepted(false);
     setConsent(EMPTY_CONSENT);
     holdForPlayback(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function checkAndSetSample(file: File | null): Promise<boolean> {
@@ -280,10 +314,21 @@ export function CreateVoiceProfileDialog({
     return true;
   }
 
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    const accepted = await checkAndSetSample(file);
-    if (!accepted) event.target.value = "";
+  /** The phrase for this take: the current one while it is still good, otherwise a new one. */
+  async function phraseForTake(): Promise<VoiceEnrollmentChallenge | null> {
+    if (isChallengeReusable(challenge, language)) return challenge;
+    setIsFetchingChallenge(true);
+    try {
+      const issued = await VoiceProfileService.issueChallenge(language);
+      setChallenge(issued);
+      return issued;
+    } catch (error) {
+      setChallenge(null);
+      toast.error(getErrorMessage(error, t("toasts.challengeFailed")));
+      return null;
+    } finally {
+      setIsFetchingChallenge(false);
+    }
   }
 
   async function startRecording() {
@@ -291,6 +336,9 @@ export function CreateVoiceProfileDialog({
       toast.error(t("toasts.recordingUnsupported"));
       return;
     }
+
+    const phrase = await phraseForTake();
+    if (!phrase) return;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -339,7 +387,7 @@ export function CreateVoiceProfileDialog({
       toast.error(t("toasts.nameRequired"));
       return;
     }
-    if (!sampleFile) {
+    if (!sampleFile || !challenge) {
       toast.error(t("toasts.sampleRequired"));
       return;
     }
@@ -353,13 +401,19 @@ export function CreateVoiceProfileDialog({
         displayName: displayName.trim(),
         language,
         sample: sampleFile,
+        challengeId: challenge.challengeId,
         ...consent,
       });
       toast.success(t("toasts.created"));
       onOpenChange(false);
       resetForm();
     } catch (error) {
-      toast.error(getErrorMessage(error, t("toasts.createFailed")));
+      const code = apiErrorCode(error);
+      // The server consumes the phrase whenever it checks a recording, so after any verdict on
+      // the take the next one needs a new phrase — and a new take to go with it.
+      if (isChallengeSpentBy(code)) discardTake();
+      const key = challengeErrorKey(code);
+      toast.error(key ? t(`challengeErrors.${key}`) : getErrorMessage(error, t("toasts.createFailed")));
     }
   }
 
@@ -413,7 +467,7 @@ export function CreateVoiceProfileDialog({
           </div>
 
           <div className="grid grid-cols-[104px_minmax(0,1fr)] gap-3 border-b border-border py-3">
-            <Label htmlFor="sample" className="pt-1.5 text-[12.5px] font-normal text-ink-muted">
+            <Label className="pt-1.5 text-[12.5px] font-normal text-ink-muted">
               {t("sampleLabel")}
             </Label>
             <div className="flex flex-col gap-2">
@@ -424,20 +478,10 @@ export function CreateVoiceProfileDialog({
                   size="sm"
                   className="h-8 flex-1 text-[12.5px]"
                   onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isCheckingSample}
+                  disabled={isCheckingSample || isFetchingChallenge}
                 >
                   {isRecording ? <Stop size={13} weight="fill" /> : <Microphone size={13} />}
                   {isRecording ? t("stop") : t("record")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 flex-1 text-[12.5px]"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isCheckingSample || isRecording}
-                >
-                  {t("uploadFile")}
                 </Button>
                 {/*
                   WT-632 — hearing what was just recorded, before it is sent anywhere.
@@ -465,14 +509,23 @@ export function CreateVoiceProfileDialog({
                   )}
                 </Button>
               </div>
-              <input
-                id="sample"
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                className="sr-only"
-                onChange={handleFileChange}
-              />
+              {/*
+                WT-888 — the phrase this take must say. Shown the moment Record is pressed and
+                kept for re-takes while it is fresh; the server will not accept a take without it.
+              */}
+              <div
+                className="rounded-md border border-border bg-surface-2 px-3 py-2"
+                aria-live="polite"
+              >
+                <p className="text-[11px] text-ink-subtle">{t("phraseLabel")}</p>
+                <p className="pt-0.5 text-[13.5px] font-medium leading-[1.5] text-ink">
+                  {isFetchingChallenge
+                    ? t("fetchingPhrase")
+                    : challenge
+                      ? challenge.phrase
+                      : t("phrasePending")}
+                </p>
+              </div>
               <p className="text-[11px] leading-[1.55] text-ink-subtle">
                 {t("sampleInstructions")}
               </p>

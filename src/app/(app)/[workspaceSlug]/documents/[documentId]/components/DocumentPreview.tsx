@@ -120,6 +120,8 @@ export function DocumentPreview({
   fileName,
   fileExtension,
   sizeBytes,
+  revision,
+  source = "approved",
   onDownload,
 }: {
   workspaceId: string;
@@ -127,6 +129,18 @@ export function DocumentPreview({
   fileName: string;
   fileExtension: string;
   sizeBytes: number;
+  /** `documentFileRevision(doc)` — which stored file this id points at right now. WT-854. */
+  revision: string;
+  /**
+   * WT-854 — which file to show: the approved one everybody reads, or the corrected version
+   * awaiting review (reviewers and the uploader only). Pass `pendingRevisionFileRevision(doc)` as
+   * `revision` with "pending", so the two files can never share a cache entry.
+   *
+   * "masked" is the PII-masked copy of a restricted document, in the same format: all an ordinary
+   * member gets, and what Owner/Admin switch to in order to see what members see. It has its own
+   * revision too (`maskedFileRevision`), so it never shares bytes with the original.
+   */
+  source?: "approved" | "pending" | "masked";
   onDownload: () => void;
 }) {
   const kind = previewKind(fileExtension);
@@ -139,11 +153,18 @@ export function DocumentPreview({
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["workspace-document-preview", workspaceId, documentId],
-    queryFn: () => WorkspaceService.downloadDocument(workspaceId, documentId),
+    queryKey: ["workspace-document-preview", workspaceId, documentId, revision],
+    queryFn: () =>
+      source === "pending"
+        ? WorkspaceService.downloadPendingRevision(workspaceId, documentId)
+        : source === "masked"
+          ? WorkspaceService.downloadMaskedDocument(workspaceId, documentId)
+          : WorkspaceService.downloadDocument(workspaceId, documentId),
     enabled: Boolean(workspaceId) && Boolean(documentId) && canPreview,
-    // The bytes of a stored file do not change under us: a document is replaced by uploading a
-    // new one, which is a different id.
+    // The bytes behind one REVISION never change, so they are never re-read. The bytes behind a
+    // document id do: "Upload a corrected version" replaces the file in place (WT-633), and keying
+    // on the id alone kept showing the first file after every replacement and approval (WT-854,
+    // WT-857). The revision is in the key so a replaced file is a different cache entry.
     staleTime: Infinity,
   });
 

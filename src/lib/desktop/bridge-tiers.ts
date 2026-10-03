@@ -26,11 +26,12 @@
  *
  * PURE, LIKE ITS NEIGHBOUR
  *   No IPC, no DOM, no clock. Everything here is a function of one `VirtualAudioStatus` reading,
- *   which is what makes the whole ladder testable without a desktop build. The code that actually
- *   opens a device or a window lives in lib/audio/bridge-fallback-runtime.ts.
+ *   which is what makes the whole ladder testable without a desktop build. Opening a device or a
+ *   window is left to the callers that act on the chosen rung.
  */
 
 import type { VirtualAudioStatus } from "./bridge";
+import { bridgeCableInstalled, bridgeLoopbackCapable } from "./bridge-verdict.ts";
 
 export type BridgeTierId = "full-bridge" | "loopback-bridge" | "outbound-only" | "caption-only";
 
@@ -65,9 +66,9 @@ export interface BridgeTier {
   isAvailable: (status: VirtualAudioStatus) => boolean;
 }
 
-/** Is there a device installed for the leg WarpTalk plays the dub into? */
+/** Is there a device installed for the leg WarpTalk plays the dub into? The desktop's answer. */
 function hasInstalledOutboundDevice(status: VirtualAudioStatus): boolean {
-  return (status.devices ?? []).some((device) => device.leg === "outbound" && device.installed);
+  return bridgeCableInstalled(status);
 }
 
 /**
@@ -75,23 +76,23 @@ function hasInstalledOutboundDevice(status: VirtualAudioStatus): boolean {
  *
  * Rung 2's predicate, named so the inbound source decision below can ask it without going through
  * `selectBridgeTier` — which answers "full-bridge" on any machine with both cables and so used to
- * hide a perfectly good loopback path behind the cable. VB-CABLE stays a condition on purpose: the
- * loopback path only carries the far side IN, and a bridge that hears Meet but cannot speak into
- * it is not the product this rung promises.
+ * hide a perfectly good loopback path behind the cable. VB-CABLE stays a condition in voice mode:
+ * the loopback path only carries the far side IN, and a bridge that hears Meet but cannot speak
+ * into it is not the product this rung promises.
  *
- * Capability and runtime are two claims. `processLoopback` says this Windows build could do it
- * (build 20348 and later); `processLoopbackRuntime` says the capture is actually wired. Treating
- * the first as the second is how a path gets selected that then produces silence.
+ * TEXT-ONLY MODE (PO, 2026-10-01; desktop #45): the cable is where the DUB leaves for Meet, not
+ * part of listening to the browser, so `textOnly` drops that condition.
+ *
+ * The desktop decides (lib/desktop/bridge-verdict): its `bridgeModes` already says whether the
+ * loopback runtime is usable and whether the cable is in. This used to re-check the platform and
+ * the capability bits here first, and could disagree with the desktop's own start gate; that
+ * derivation now survives only as the FALLBACK for a desktop without `bridgeModes`.
  */
-export function canCaptureBrowserLoopback(status: VirtualAudioStatus | null): boolean {
-  return Boolean(
-    status
-      && status.supported
-      && status.platform === "win32"
-      && status.capabilities?.processLoopback === true
-      && status.capabilities?.processLoopbackRuntime === "available"
-      && hasInstalledOutboundDevice(status),
-  );
+export function canCaptureBrowserLoopback(
+  status: VirtualAudioStatus | null,
+  options: { textOnly?: boolean } = {},
+): boolean {
+  return bridgeLoopbackCapable(status, options);
 }
 
 /**
@@ -233,12 +234,18 @@ export function availableBridgeTiers(status: VirtualAudioStatus | null): BridgeT
  *   3  none       nothing reaches WarpTalk from Meet.
  *
  * CONSENT IS PART OF THE DECISION, NOT A GATE AFTER IT
- *   Loopback takes the whole browser, so it waits for the host's yes. While the question is open
- *   the answer is still "loopback, not yet" — NOT the cable in the meantime. Quietly running on the
- *   cable until someone answers would leave an unanswered prompt carrying no weight at all, and the
- *   wizard would already have told the user to leave Meet's speakers alone, so the cable would be
- *   carrying silence anyway. A "no" is different: it is a settled answer, and when a cable exists
- *   the far side can still be heard through it.
+ *   Loopback takes the whole browser, so it never starts before the host's yes. WT-900: while the
+ *   question is open, a machine that HAS the cable listens through it in the meantime
+ *   ("device-while-asking") instead of capturing nothing. Waiting on the answer used to leave the
+ *   far side silent for as long as the prompt sat unanswered — and a popup closed or minimised
+ *   without an answer left it silent for the whole meeting. The prompt still carries weight: a yes
+ *   moves the leg onto loopback (the capture key changes, so the running device capture is
+ *   replaced), a no keeps the cable. Without a cable there is nothing to listen through, and the
+ *   answer is still "loopback, not yet".
+ *
+ *   The ask itself gets quieter while the cable demonstrably carries Meet (see the consent relay's
+ *   compact prompt), and the far-side monitor stays off until it does, because Meet may still be
+ *   playing to the host's own speakers (bridge-far-side-monitor).
  */
 export type BridgeInboundPath = "loopback" | "device";
 
@@ -247,6 +254,11 @@ export type BridgeInboundReason =
   | "loopback"
   /** Loopback is the path, but the host has not answered the capture question yet. */
   | "awaiting-consent"
+  /**
+   * The device, for now: the host has not answered the capture question yet and a cable exists.
+   * A yes moves the leg to loopback, a no keeps it here (WT-900).
+   */
+  | "device-while-asking"
   /** Loopback is the path and allowed, but no browser window has been picked to capture yet. */
   | "awaiting-source"
   /** The device, because this machine cannot capture the browser. */
@@ -289,12 +301,73 @@ export function selectBridgeInboundSource(input: BridgeInboundInput): BridgeInbo
   if (input.loopbackFailed) return device("loopback-failed");
   if (input.consentAnswer === false) return device("consent-declined");
   if (input.consentAnswer === null) {
+    // WT-900: listen through the cable while asking rather than hear nothing until someone answers.
+    if (input.hasInboundDevice) return { path: "device", startable: true, reason: "device-while-asking" };
     return { path: "loopback", startable: false, reason: "awaiting-consent" };
   }
   if (!input.hasLoopbackSource) {
     return { path: "loopback", startable: false, reason: "awaiting-source" };
   }
   return { path: "loopback", startable: true, reason: "loopback" };
+}
+
+/**
+ * THE one inbound decision, from the raw facts — the meeting session and the setup wizard both
+ * call this, with the same inputs, so the capture and the wizard's Speakers line cannot disagree.
+ *
+ * Before this the wizard rebuilt `BridgeInboundInput` itself and took `hasInboundDevice` from its
+ * own tone probe, while the session took it from the device-id lookup.
+ */
+export interface BridgeInboundContext {
+  /** The desktop's status reading; null off the desktop. */
+  status: VirtualAudioStatus | null;
+  /** This user's bridge audio mode: text mode's loopback needs no cable. */
+  audioMode: "voice" | "text";
+  /** Loopback failed to start earlier in this room; see `isLoopbackFallbackActive`. */
+  loopbackFailed: boolean;
+  /** The inbound device's id from `findBridgeDeviceIds`, or null where it is not installed. */
+  inboundDeviceId: string | null;
+  /** What the host said about listening to the browser, for this room. Null while unanswered. */
+  consentAnswer: boolean | null;
+  /** A browser window has been picked for the loopback capture. */
+  hasLoopbackSource: boolean;
+}
+
+export interface BridgeInboundVerdict extends BridgeInboundDecision {
+  /** `canCaptureBrowserLoopback` for this status and mode — what the decision was based on. */
+  loopbackCapable: boolean;
+}
+
+export function decideBridgeInbound(context: BridgeInboundContext): BridgeInboundVerdict {
+  const loopbackCapable = canCaptureBrowserLoopback(context.status, {
+    textOnly: context.audioMode === "text",
+  });
+  return {
+    ...selectBridgeInboundSource({
+      loopbackCapable,
+      loopbackFailed: context.loopbackFailed,
+      hasInboundDevice: Boolean(context.inboundDeviceId),
+      consentAnswer: context.consentAnswer,
+      hasLoopbackSource: context.hasLoopbackSource,
+    }),
+    loopbackCapable,
+  };
+}
+
+/**
+ * W4a — the path the far side SETTLES on, for instructions that outlive the moment.
+ *
+ * `device-while-asking` is transient: the cable carries the far side only until the host answers
+ * the capture question, and the expected answer moves it to loopback. A Meet setting given on the
+ * strength of it — "point Meet's Speakers at Hi-Fi Cable Input" — would be the wrong setting the
+ * moment the host says yes, and the one people most often get wrong besides (see above). So the
+ * wizard's Speakers line reads this: loopback while the question is open, the cable only where the
+ * cable is where the far side will stay (no loopback here, it failed, or the host said no).
+ *
+ * The capture itself keeps reading `selectBridgeInboundSource(...).path`: what is opened NOW.
+ */
+export function finalBridgeInboundPath(decision: BridgeInboundDecision): BridgeInboundPath | null {
+  return decision.reason === "device-while-asking" ? "loopback" : decision.path;
 }
 
 /**

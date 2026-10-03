@@ -10,6 +10,8 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   lastSignOfLife,
+  leaveFailureMeansAlreadyOut,
+  roomEndedUnderSession,
   shouldConnectMeeting,
   type MeetSensorReading,
 } from "../meeting-session-lifecycle.ts";
@@ -48,6 +50,29 @@ test("a room that has ended never reconnects, however good the token is", () => 
       idleReaped: false,
     }),
     false,
+  );
+});
+
+test("a session evicted by the same account elsewhere stops connecting until it takes over", () => {
+  // Reconnecting here evicts the other device, which reconnects and evicts this one — the
+  // DUPLICATE_IDENTITY ping-pong from prod on 1 Oct 2026.
+  assert.equal(
+    shouldConnectMeeting({
+      hasToken: true,
+      canConnectRoom: true,
+      idleReaped: false,
+      displaced: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldConnectMeeting({
+      hasToken: true,
+      canConnectRoom: true,
+      idleReaped: false,
+      displaced: false,
+    }),
+    true,
   );
 });
 
@@ -469,4 +494,104 @@ test("main-window input still counts for a bridge when it is the newest sign", (
     }),
     now - MINUTE,
   );
+});
+
+// ── WT-912: the Meet call itself, and a far side that can be heard ───────────
+//
+// The reaper counted "somebody is speaking" by transcript lines. With the user's microphone never
+// published there were none, so a live bridge meeting was let go at 15 minutes (B7). And it
+// counted any Meet window as the call, so the "You left the meeting" page kept a room connected.
+
+test("WT-912 the reported defect: in the Meet call, a bridge is never reaped for a silent transcript", () => {
+  // 40 minutes in, no transcript line ever, the Meet tab in the background: only the phase says so.
+  assert.equal(
+    reaperAt(T0 + 40 * MINUTE, {
+      meetSensor: { meetWindowVisible: false, meetWindowLostAtMs: T0 },
+      lastSpeechAt: null,
+      meetCallPhase: "in-call",
+    }),
+    "none",
+  );
+});
+
+test("WT-912: a far side that can be heard keeps the bridge, where the desktop cannot read Meet", () => {
+  const now = T0 + 40 * MINUTE;
+  // "unknown": a background tab with no PiP. An older desktop (no phase at all) is the same.
+  assert.equal(reaperAt(now, { meetCallPhase: "unknown", farSideHeard: true }), "none");
+  assert.equal(reaperAt(now, { meetCallPhase: null, farSideHeard: true }), "none");
+});
+
+test("WT-912: 'left' is not liveness, even with the 'You left' page on screen and the browser playing", () => {
+  const now = T0 + MINI_MEETING_IDLE_TIMEOUT_MS;
+  assert.equal(
+    reaperAt(now, { meetSensor: MEET_ON_SCREEN, meetCallPhase: "left", farSideHeard: true }),
+    "disconnect",
+  );
+  // The join screen is a Meet window too, and nobody is in the call behind it.
+  assert.equal(reaperAt(now, { meetSensor: MEET_ON_SCREEN, meetCallPhase: "lobby" }), "disconnect");
+});
+
+test("WT-912: a long 'unknown' with nothing audible is not liveness", () => {
+  assert.equal(
+    reaperAt(T0 + MINI_MEETING_IDLE_TIMEOUT_MS, {
+      meetSensor: { meetWindowVisible: false, meetWindowLostAtMs: null },
+      meetCallPhase: "unknown",
+      farSideHeard: false,
+    }),
+    "disconnect",
+  );
+});
+
+test("WT-912: 'unknown' leaves the older signs standing: a Meet window still counts", () => {
+  // The desktop sees the Meet tab but cannot recognise its buttons (a locale, a redesign).
+  assert.equal(
+    reaperAt(T0 + 40 * MINUTE, { meetSensor: MEET_ON_SCREEN, meetCallPhase: "unknown" }),
+    "none",
+  );
+});
+
+test("WT-912: translation running is still not a sign of life", () => {
+  // A forgotten bridge: left the call, translation never stopped, a capture still open but silent.
+  // The rule takes no translation flag, so there is nothing to pass that could keep it alive.
+  assert.equal(
+    reaperAt(T0 + MINI_MEETING_IDLE_TIMEOUT_MS, { meetCallPhase: "left", farSideHeard: false }),
+    "disconnect",
+  );
+});
+
+test("WT-912: an ordinary meeting ignores both new signs", () => {
+  assert.equal(
+    lastSignOfLife({
+      now: T0 + 40 * MINUTE,
+      lastInteractionAt: T0,
+      isBridgeRoom: false,
+      meetSensor: null,
+      lastSpeechAt: null,
+      meetCallPhase: "in-call",
+      farSideHeard: true,
+    }),
+    T0,
+  );
+});
+
+test("WT-899: a room that ends under a running session closes it, even with no hub broadcast", () => {
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: true, exiting: false }), true);
+  assert.equal(roomEndedUnderSession({ status: "cancelled", sawJoinable: true, exiting: false }), true);
+  // Still running.
+  assert.equal(roomEndedUnderSession({ status: "in_progress", sawJoinable: true, exiting: false }), false);
+  // Restored onto a room that was already over: isRestoredMeetingStale's job, closed quietly.
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: false, exiting: false }), false);
+  // This client's own Leave / End owns the redirect.
+  assert.equal(roomEndedUnderSession({ status: "ended", sawJoinable: true, exiting: true }), false);
+  // Unknown is not ended.
+  assert.equal(roomEndedUnderSession({ status: undefined, sawJoinable: true, exiting: false }), false);
+});
+
+test("WT-899: Leave answered NOT_FOUND means there was no seat to give up", () => {
+  assert.equal(leaveFailureMeansAlreadyOut("NOT_FOUND"), true);
+  assert.equal(leaveFailureMeansAlreadyOut(404), true);
+  assert.equal(leaveFailureMeansAlreadyOut("FORBIDDEN"), false);
+  assert.equal(leaveFailureMeansAlreadyOut(500), false);
+  // A network failure has no code: keep the person in the room and say it failed.
+  assert.equal(leaveFailureMeansAlreadyOut(undefined), false);
 });

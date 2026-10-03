@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRef, useEffect, useMemo, useState } from "react";
 import { ClosedCaptioning, PauseCircle } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
+import { useTranslations } from "next-intl";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   confidencePercent,
@@ -26,6 +27,7 @@ import {
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
+import { localizeFarSideSpeakerName } from "@/lib/transcript/speaker-identity";
 import {
   buildCleanTranscriptView,
   mergeCleanSentences,
@@ -38,7 +40,7 @@ import {
   TranscriptViewModeToggle,
 } from "@/components/rooms/transcript-clean-controls";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
-import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
+import { useTranscriptSpeakerIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import {
   SuggestionBadge,
@@ -543,12 +545,20 @@ function TranscriptBubble({
   suggestion?: AiSuggestionDto;
   onDismissSuggestion: (segmentId: string) => void;
 }) {
-  const speakerName = segment.speakerName || "Speaker";
+  const t = useTranslations("meetingTranscript");
+  // A Google Meet line keeps its Meet person's name; only the gateway's "nobody identified"
+  // fallback is swapped for the reader's own label (speaker-identity.ts).
+  const speakerName = localizeFarSideSpeakerName(
+    segment.speakerId,
+    segment.speakerName || "Speaker",
+    t("speaker.googleMeetParticipants"),
+  );
   // The face and the language, from the one map the whole meeting resolves against. The NAME
   // still comes from the segment: resolveTranscriptSpeakerName already guarded it against a
   // roster that hands back a UUID as somebody's display name, and that guard must not be lost
-  // by preferring the roster copy here.
-  const person = useMeetingIdentity(segment.speakerId, speakerName);
+  // by preferring the roster copy here. The transcript variant draws the Google Meet stand-in as
+  // the person on the line, not as its shared "External Meeting" seat.
+  const person = useTranscriptSpeakerIdentity(segment.speakerId, speakerName);
   const translation = resolveSegmentTranslation(segment, readerLanguage);
   // Closed by default. The hint was not asked for, so it announces itself with a badge and
   // waits to be opened rather than pushing the line somebody actually said out of the way.

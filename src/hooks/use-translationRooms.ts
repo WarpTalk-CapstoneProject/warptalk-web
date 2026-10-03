@@ -1,8 +1,18 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getLanguageName } from "@/lib/language/languages";
+import {
+  readLanguagePolicyNotice,
+  readStartLanguagesRefusal,
+  StartLanguagesRefusedError,
+} from "@/lib/meeting/start-language-policy";
 import { translationRoomService } from "@/services/translation-room.service";
 import { applyRoomSettingsPatch } from "@/lib/meeting/room-settings-patch";
+import { applyRoomLanguages } from "@/lib/meeting/room-languages-changed";
 import { SERIES_ROOT_KEY } from "@/hooks/use-series";
 import { endRoomFlightKey, singleFlight } from "@/lib/meeting/single-flight";
 import type { FlashModeState } from "@/services/translation-room.service";
@@ -77,6 +87,15 @@ export function useTranslationRooms(params?: {
   });
 }
 
+/**
+ * The cache key of one room. Exported so a realtime handler that patches the room (WT-709's
+ * RoomLanguagesChanged) names the same key the query uses, rather than a second literal that a
+ * rename would silently leave behind.
+ */
+export function translationRoomQueryKey(id: string) {
+  return [...MEETING_KEY, id] as const;
+}
+
 /** Fetch a single translationRoom by ID */
 /**
  * @param refetchInterval poll the room's state, in ms. Off by default — only the waiting room
@@ -85,7 +104,7 @@ export function useTranslationRooms(params?: {
  */
 export function useTranslationRoom(id: string, refetchInterval?: number) {
   return useQuery({
-    queryKey: [...MEETING_KEY, id],
+    queryKey: translationRoomQueryKey(id),
     queryFn: async () => {
       const { data } = await translationRoomService.get(id);
       return data;
@@ -229,14 +248,64 @@ export function useSetArtifactAccess(roomId: string) {
   });
 }
 
+/**
+ * Start (or re-Start) a room.
+ *
+ * WT-708: Start re-checks the meeting's languages against the workspace's CURRENT whitelist, and
+ * both outcomes are handled here so every call site gets them — the room page, the lobby, the
+ * create dialog, the in-meeting Start and the bridge controls all go through this hook:
+ *   - narrowed: the response carries `languagePolicyNotice`, shown as a warning naming what was
+ *     dropped and what the meeting runs in;
+ *   - nothing left: the 403 is rethrown as a StartLanguagesRefusedError whose message is the
+ *     localized sentence naming both sets, so each caller's own `getErrorMessage(error, …)` toast
+ *     shows it instead of a generic "could not start".
+ */
 export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
+  const t = useTranslations("rooms.languagePolicy");
+  const locale = useLocale();
+
+  const languageNames = (codes: string[]) => {
+    let display: Intl.DisplayNames | null = null;
+    try {
+      display = new Intl.DisplayNames([locale], { type: "language" });
+    } catch {
+      display = null;
+    }
+    return codes.map((code) => display?.of(code) ?? getLanguageName(code)).join(", ");
+  };
+
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: translationRoom } = await translationRoomService.start(id);
-      return translationRoom;
+      try {
+        const { data: translationRoom } = await translationRoomService.start(id);
+        return translationRoom;
+      } catch (error) {
+        const refusal = readStartLanguagesRefusal(getErrorMessage(error, ""));
+        if (!refusal) throw error;
+        throw new StartLanguagesRefusedError(
+          t("startRefused", {
+            meeting: languageNames(refusal.meeting),
+            allowed: refusal.allowed.length > 0 ? languageNames(refusal.allowed) : t("none"),
+          }),
+          refusal,
+          error,
+        );
+      }
     },
-    onSuccess: (translationRoom, id) => {
+    onSuccess: (startedRoom, id) => {
+      const notice = readLanguagePolicyNotice(startedRoom);
+      if (notice) {
+        toast.warning(t("narrowedTitle", { dropped: languageNames(notice.dropped) }), {
+          description: t("narrowedDescription", {
+            dropped: languageNames(notice.dropped),
+            effective: languageNames(notice.effective),
+          }),
+          duration: 12_000,
+        });
+      }
+      // The notice belongs to this one response, not to the room: keep it out of the cache.
+      const translationRoom: TranslationRoomDto = { ...startedRoom, languagePolicyNotice: undefined };
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
       queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
@@ -487,6 +556,26 @@ export function useInviteToRoom(roomId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "invitations"] });
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
+  });
+}
+
+/**
+ * WT-709 — the host adds a language to the running meeting.
+ *
+ * The answer is the meeting's whole set, patched into the room query the picker reads — the same
+ * patch the RoomLanguagesChanged handler applies, so the host's own menu grows the moment the
+ * request succeeds instead of waiting for its own broadcast to come back round.
+ */
+export function useAddRoomLanguage(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (language: string) => translationRoomService.addRoomLanguage(roomId, language),
+    onSuccess: (languages) => {
+      queryClient.setQueryData<TranslationRoomDto>(translationRoomQueryKey(roomId), (room) =>
+        room ? applyRoomLanguages(room, languages) : room,
+      );
     },
   });
 }

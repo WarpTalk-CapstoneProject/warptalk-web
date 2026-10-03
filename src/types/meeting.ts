@@ -6,6 +6,16 @@ export interface JoinMeetingResponseDto {
   isWaitingRoom?: boolean;
   /** WT-04: room's mute-on-entry setting — frontend defaults the local mic to muted on first mount when true. */
   muteOnEntry?: boolean;
+  /**
+   * WT-282 / WT-935: the room is locked right now. Optional because an older backend does not send
+   * it — absent means "not told", never "unlocked" (see lib/meeting/join-host-state).
+   */
+  locked?: boolean;
+  /**
+   * WT-283 / WT-935: the room is being recorded right now (it has an active egress). Optional for
+   * the same reason as `locked`: absent means "not told", never "not recording".
+   */
+  recording?: boolean;
 }
 
 export interface RecordingStateDto {

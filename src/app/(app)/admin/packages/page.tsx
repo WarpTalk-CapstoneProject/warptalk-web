@@ -96,7 +96,7 @@ function isTab(value: string | null): value is Tab {
 
 const STATUSES = ["draft", "active", "archived"] as const;
 const SYNC_STATES = ["not_synced", "synced", "outdated", "error"] as const;
-const CURRENCIES = ["vnd", "usd"] as const;
+const CURRENCIES = ["usd", "vnd"] as const;
 const numberFormatter = new Intl.NumberFormat("en-US");
 
 /** Revenue in several currencies does not order meaningfully; units sold does. */

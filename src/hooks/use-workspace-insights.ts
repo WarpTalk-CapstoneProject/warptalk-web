@@ -9,10 +9,15 @@
  *   error: it is the account state "this workspace has no plan", returned as `null` data.
  *
  * READS THAT PAGE
- *   The credit ledger, room history and the plugin audit log have no per-period aggregate for a
- *   workspace, so they are read in pages over the period AND the one before it (for the deltas),
- *   each with a cap. A read that stops at its cap says so (`complete: false`) and the page prints a
- *   floor ("at least N"), never a total it did not see.
+ *   The credit ledger and room history have no per-period aggregate for a workspace, so they are
+ *   read in pages over the period AND the one before it (for the deltas), each with a cap. A read
+ *   that stops at its cap says so (`complete: false`) and the page prints a floor ("at least N"),
+ *   never a total it did not see.
+ *
+ * TOOL CALLS ARE COUNTED BY THE SERVER
+ *   Since wave 4 the tool figures come from `useWorkspaceToolInsights` (every WarpBot call, counted
+ *   by the assistant service), not from paging the plugin audit log. The log is still read here,
+ *   one short page, only to list the most recent plugin calls.
  *
  * FRESHNESS
  *   Every key sits under `INSIGHTS_QUERY_ROOT`, so `useInsightsUpdatedAt` can say when the newest
@@ -36,17 +41,15 @@ import {
   type MonthCredits,
   type RoomsRead,
 } from "@/lib/workspace/insights/overview-metrics";
-import {
-  AUDIT_MAX_PAGES,
-  AUDIT_PAGE_SIZE,
-  shouldReadNextAuditPage,
-  type AuditRead,
-} from "@/lib/workspace/insights/tool-audits";
 import { assistantService } from "@/services/assistant.service";
 import { billingService } from "@/services/billing.service";
 import { translationRoomService } from "@/services/translation-room.service";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { AssistantPluginCatalogItemDto, WorkspacePluginsOverviewDto } from "@/types/assistant";
+import type {
+  AssistantPluginCatalogItemDto,
+  WorkspacePluginToolAuditDto,
+  WorkspacePluginsOverviewDto,
+} from "@/types/assistant";
 import type {
   CreditBalanceDto,
   MonthlyUsagePoint,
@@ -72,6 +75,8 @@ const ROOMS_MAX_PAGES = 10;
 
 /** How many rows of up-next and of the member directory are read. */
 const UPCOMING_PAGE_SIZE = 100;
+/** The "Recent tool activity" list: one page of the plugin audit log, never paged further. */
+export const RECENT_TOOL_ACTIVITY_ROWS = 4;
 const MEMBERS_PAGE_SIZE = 100;
 
 export function insightsStateOf<T, R = T>(query: UseQueryResult<T>, select?: (data: T) => R): InsightsSourceState<R> {
@@ -158,24 +163,6 @@ async function readHeldRooms(workspaceId: string, from: Date, to: Date): Promise
   return { rooms, complete };
 }
 
-async function readToolAudits(workspaceId: string, stopBefore: Date): Promise<AuditRead> {
-  const rows: AuditRead["rows"] = [];
-  for (let page = 0; page < AUDIT_MAX_PAGES; page += 1) {
-    const { data } = await assistantService.listWorkspacePluginToolAudits({
-      workspaceId,
-      skip: page * AUDIT_PAGE_SIZE,
-      take: AUDIT_PAGE_SIZE,
-    });
-    rows.push(...data);
-    if (!shouldReadNextAuditPage(data, AUDIT_PAGE_SIZE, stopBefore.getTime())) {
-      // A short page is the end of the log; a covered window is not — older rows may exist, but
-      // everything the window needs has been read, which `auditCoveredSince` works out from rows.
-      return { rows, reachedEnd: data.length < AUDIT_PAGE_SIZE };
-    }
-  }
-  return { rows, reachedEnd: false };
-}
-
 async function readMonthlyCredits(workspaceId: string, keys: string[]): Promise<MonthCredits[]> {
   const years = yearsOfMonthKeys(keys);
   const charts = await Promise.all(
@@ -203,7 +190,8 @@ export interface WorkspaceInsightsOverviewSources {
   upcoming: InsightsSourceState<TranslationRoomDto[]>;
   memberUsage: InsightsSourceState<WorkspaceUsageByMemberDto>;
   members: InsightsSourceState<{ items: WorkspaceMemberDto[]; total: number }>;
-  audits: InsightsSourceState<AuditRead>;
+  /** The newest plugin calls, for the "Recent tool activity" list only — never counted. */
+  recentAudits: InsightsSourceState<WorkspacePluginToolAuditDto[]>;
   catalog: InsightsSourceState<AssistantPluginCatalogItemDto[]>;
   workspacePlugins: InsightsSourceState<WorkspacePluginsOverviewDto>;
 }
@@ -293,10 +281,11 @@ export function useWorkspaceInsightsOverview({
     staleTime: 5 * 60_000,
   });
 
-  const audits = useQuery({
-    queryKey: [...root, "tool-audits", previousFrom],
-    queryFn: () => readToolAudits(workspaceId, period.previousFrom),
-    ...windowed,
+  const recentAudits = useQuery({
+    queryKey: [...root, "recent-tool-audits"],
+    queryFn: async () =>
+      (await assistantService.listWorkspacePluginToolAudits({ workspaceId, skip: 0, take: RECENT_TOOL_ACTIVITY_ROWS })).data ?? [],
+    ...snapshot,
   });
   const catalog = useQuery({
     queryKey: [...root, "plugin-catalog"],
@@ -320,7 +309,7 @@ export function useWorkspaceInsightsOverview({
     upcoming: insightsStateOf(upcoming),
     memberUsage: insightsStateOf(memberUsage),
     members: insightsStateOf(members),
-    audits: insightsStateOf(audits),
+    recentAudits: insightsStateOf(recentAudits),
     catalog: insightsStateOf(catalog),
     workspacePlugins: insightsStateOf(workspacePlugins),
   };

@@ -16,9 +16,9 @@ import {
 
 const stored = {
   // Effective values present on the DTO must never leak into the draft.
-  effectiveContractPriceVnd: 5_000_000,
+  effectiveContractPrice: 190,
   effectiveCreditsPerCycle: 900,
-  contractPriceVnd: 12_000_000,
+  contractPriceUsd: 480,
   creditsPerCycleOverride: 2_000,
   overageCapCreditsOverride: 500,
   overagePricePerCreditOverride: 7_500,
@@ -30,7 +30,7 @@ describe("contract terms draft", () => {
   it("covers every key the request carries", () => {
     const sample: Record<keyof ContractTermsValues, true> = {
       creditsPerCycleOverride: true,
-      contractPriceVnd: true,
+      contractPriceUsd: true,
       overageCapCreditsOverride: true,
       overagePricePerCreditOverride: true,
       invoiceTermsDaysOverride: true,
@@ -46,7 +46,7 @@ describe("contract terms draft", () => {
     assert.equal(parsed.ok, true);
     assert.deepEqual(parsed.ok && parsed.terms, {
       creditsPerCycleOverride: 2_000,
-      contractPriceVnd: 12_000_000,
+      contractPriceUsd: 480,
       overageCapCreditsOverride: 500,
       overagePricePerCreditOverride: 7_500,
       invoiceTermsDaysOverride: 30,
@@ -55,23 +55,23 @@ describe("contract terms draft", () => {
   });
 
   it("seeds from overrides, never from effective values", () => {
-    const source = { effectiveContractPriceVnd: 5_000_000, contractPriceVnd: null };
+    const source = { effectiveContractPrice: 190, contractPriceUsd: null };
     const draft = draftFromSubscription(source);
-    assert.equal(draft.contractPriceVnd, "");
+    assert.equal(draft.contractPriceUsd, "");
   });
 
   it("treats blank as the plan default and a typed zero cap as zero", () => {
     const draft = { ...draftFromSubscription(null), overageCapCreditsOverride: "0" };
     const parsed = parseContractTermsDraft(draft);
     assert.ok(parsed.ok);
-    assert.equal(parsed.terms.contractPriceVnd, null);
+    assert.equal(parsed.terms.contractPriceUsd, null);
     assert.equal(parsed.terms.overageCapCreditsOverride, 0);
   });
 
   it("accepts thousands separators in amounts", () => {
-    const parsed = parseContractTermsDraft({ ...draftFromSubscription(null), contractPriceVnd: "12,000,000" });
+    const parsed = parseContractTermsDraft({ ...draftFromSubscription(null), contractPriceUsd: "1,480.50" });
     assert.ok(parsed.ok);
-    assert.equal(parsed.terms.contractPriceVnd, 12_000_000);
+    assert.equal(parsed.terms.contractPriceUsd, 1480.5);
   });
 
   it("refuses what the server refuses", () => {
@@ -79,8 +79,8 @@ describe("contract terms draft", () => {
     for (const bad of [
       { creditsPerCycleOverride: "0" },
       { creditsPerCycleOverride: "1.5" },
-      { contractPriceVnd: "-1" },
-      { contractPriceVnd: "100.5" },
+      { contractPriceUsd: "-1" },
+      { contractPriceUsd: "100.555" },
       { overageCapCreditsOverride: "-3" },
       { invoiceTermsDaysOverride: "0" },
       { billingContactEmail: "not-an-email" },
@@ -92,14 +92,14 @@ describe("contract terms draft", () => {
 });
 
 describe("describeContractTermsChanges", () => {
-  it("lists only what moves, with VND spelled out", () => {
+  it("lists only what moves, with USD spelled out", () => {
     const before = termsFromSubscription(stored);
-    const after = { ...before, contractPriceVnd: 15_000_000, billingContactEmail: null };
+    const after = { ...before, contractPriceUsd: 600, billingContactEmail: null };
     const changes = describeContractTermsChanges(before, after);
     assert.deepEqual(
       changes.map((change) => [change.key, change.from, change.to]),
       [
-        ["contractPriceVnd", "₫12,000,000 (VND)", "₫15,000,000 (VND)"],
+        ["contractPriceUsd", "$480.00 (USD)", "$600.00 (USD)"],
         ["billingContactEmail", "finance@acme.vn", "Plan default"],
       ],
     );

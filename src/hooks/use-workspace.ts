@@ -9,6 +9,7 @@ import type {
 } from "@/types/workspace-knowledge";
 import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
+import { isWarpBotLoading } from "@/lib/glossary/warpbot-status";
 
 // Query Keys
 export const WORKSPACE_KEYS = {
@@ -36,6 +37,7 @@ export const WORKSPACE_KEYS = {
   glossaries: (workspaceId: string) => ["glossaries", "list", workspaceId] as const,
   glossaryDetail: (id: string) => ["glossaries", "detail", id] as const,
   terms: (glossaryId: string) => ["glossaries", "terms", glossaryId] as const,
+  glossaryWarpBotStatus: (glossaryId: string) => ["glossaries", "warpbot-status", glossaryId] as const,
 };
 
 // ─── Workspaces ───
@@ -507,7 +509,9 @@ export function useWorkspaceDocument(workspaceId: string, docId: string) {
     refetchInterval: (query) => {
       const status = query.state.data?.ingestionStatus?.toLowerCase();
       const isProcessing = status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
-      return isProcessing ? 3000 : false;
+      // A requested re-scan of the masked copy reports back only through this route.
+      const isMasking = query.state.data?.maskedVersionStatus === "pending";
+      return isProcessing || isMasking ? 3000 : false;
     },
   });
 }
@@ -725,6 +729,19 @@ export function useUpdateGlossary(workspaceId: string, id: string) {
   });
 }
 
+/** PO 2026-10-02: change a glossary's pair in place; its chip moves to the new pair group. */
+export function useUpdateGlossaryLanguages(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...request }: { id: string; sourceLanguage: string; targetLanguage: string }) =>
+      WorkspaceService.updateGlossaryLanguages(id, request),
+    onSuccess: (glossary) => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaries(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryDetail(glossary.id) });
+    },
+  });
+}
+
 export function useDeleteGlossary(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -742,7 +759,24 @@ export function useAddGlossaryTerm(glossaryId: string) {
       WorkspaceService.addTerm(glossaryId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryWarpBotStatus(glossaryId) });
     },
+  });
+}
+
+/**
+ * PO 2026-10-02 — is this glossary in WarpBot's knowledgebase yet? Real state from the server
+ * (index results counted per glossary); polled only while a load is in flight, and re-read after
+ * every import / added term (those mutations invalidate this key).
+ */
+export function useGlossaryWarpBotStatus(glossaryId: string) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.glossaryWarpBotStatus(glossaryId),
+    queryFn: () => WorkspaceService.getGlossaryWarpBotStatus(glossaryId),
+    enabled: !!glossaryId,
+    staleTime: 0,
+    retry: false,
+    refetchInterval: (query) => (isWarpBotLoading(query.state.data) ? 2000 : false),
   });
 }
 
@@ -760,6 +794,7 @@ export function useBulkImportGlossaryTerms(glossaryId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
       queryClient.invalidateQueries({ queryKey: ["workspaces", "glossaries"] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryWarpBotStatus(glossaryId) });
     },
   });
 }
@@ -788,6 +823,7 @@ export function useUpdateGlossaryTerm(glossaryId: string) {
       WorkspaceService.updateTerm(glossaryId, termId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryWarpBotStatus(glossaryId) });
     },
   });
 }
@@ -798,6 +834,7 @@ export function useDeleteGlossaryTerm(glossaryId: string) {
     mutationFn: (termId: string) => WorkspaceService.deleteTerm(glossaryId, termId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.glossaryWarpBotStatus(glossaryId) });
     },
   });
 }
@@ -805,6 +842,25 @@ export function useDeleteGlossaryTerm(glossaryId: string) {
 export function useDownloadWorkspaceDocument(workspaceId: string) {
   return useMutation({
     mutationFn: (docId: string) => WorkspaceService.downloadDocument(workspaceId, docId),
+  });
+}
+
+/** The PII-masked copy, in the uploaded format. */
+export function useDownloadMaskedWorkspaceDocument(workspaceId: string) {
+  return useMutation({
+    mutationFn: (docId: string) => WorkspaceService.downloadMaskedDocument(workspaceId, docId),
+  });
+}
+
+/** Owner/Admin: produce the masked copy of a restricted document that predates masked copies. */
+export function useRescanMaskedDocumentVersion(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => WorkspaceService.rescanMaskedVersion(workspaceId, docId),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(WORKSPACE_KEYS.documentDetail(workspaceId, docId), doc);
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+    },
   });
 }
 

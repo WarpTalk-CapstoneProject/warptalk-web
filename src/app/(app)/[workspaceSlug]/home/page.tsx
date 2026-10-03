@@ -155,7 +155,7 @@ export default function WorkspaceHomePage() {
       {
         title: t("actions.dashboard"),
         icon: ChartBar,
-        href: `/${slug}/dashboard`,
+        href: `/${slug}/insights`,
       },
       {
         title: t("actions.settings"),

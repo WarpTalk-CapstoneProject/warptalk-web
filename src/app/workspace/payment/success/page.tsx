@@ -199,14 +199,11 @@ function SuccessContent() {
     if (phase === "active" && countdown === 0) router.push(returnLink);
   }, [phase, countdown, returnLink, router]);
 
-  const currency = session?.currency?.toUpperCase() || "VND";
+  const currency = session?.currency?.toUpperCase() || "USD";
   // Stripe VND is zero-decimal; everything else arrives in minor units.
   const rawAmount = session?.amountTotal ?? 0;
   const amountPaid = currency === "VND" ? rawAmount : rawAmount / 100;
-  const formattedAmount =
-    currency === "VND"
-      ? formatMoney(amountPaid, "VND")
-      : `$${amountPaid.toFixed(2)}`;
+  const formattedAmount = formatMoney(amountPaid, currency);
 
   const transactionId = session?.paymentIntentId || session?.id || null;
   const planName = session?.metadata?.PlanSlug

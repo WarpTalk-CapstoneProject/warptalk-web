@@ -24,6 +24,29 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   A meeting with **more than one** recording still has no player (the page cannot say which file a
   moment belongs to), and the pip now opens anyway to offer `Recording 1`, `Recording 2`… as
   separate downloads.
+  That header icon is the **only** recording download. The player's control bar used to carry a
+  second one calling the same flow; it was removed (WT-894).
+- **Player** (`MeetingRecordingPlayer`): the video frame is shown as recorded, nothing overlaid. The
+  controls sit on their own light card below it. Marks are hidden until the pointer is over the
+  timeline (or it has keyboard focus); then the track thickens and the dots appear.
+- **Marks on the timeline** (`recording-marks.ts`, built in `ReadingRail`): one per summary point
+  that carries a moment — decisions (green), action items (amber), open questions and blockers
+  (indigo), narrative sentences of the traceable template (grey), other template sections
+  (neutral). They come from the same points the rail draws, so a reader's own rendering puts its
+  own moments on the bar. A mark sits on the transcript row the jump lands on (the earliest row any
+  of the point's moments resolves to), and clicking it does what clicking the point's time in the
+  rail does. Points closer than 1.5% of the recording share one dot with a count; its tooltip lists
+  each point. No summary, or a summary whose points carry no moments, means no marks — there is no
+  per-turn fallback (a 37-minute meeting used to get several hundred dots). Speaker lanes and
+  user bookmarks are later work.
+- **What the recording itself looks like** (`/egress/composite`, the page LiveKit's recorder opens):
+  a camera-off person is drawn like the live meeting's camera-off tile — white tile, grey avatar,
+  "Camera is off" pill, mic badge top-right — not a per-person coloured block. The face is the
+  person's own avatar when their client published it as LiveKit participant metadata
+  (`{"avatarUrl":"https://…"}`, set by `LocalMediaController` after connect; the join token carries
+  `canUpdateOwnMetadata`). The page only draws a Google-hosted picture or the API's
+  `/api/v1/auth/profile/avatar/` route, through `AvatarImage`; anything else, or a picture that
+  fails to load, shows initials.
 - File names come from `recordFileName`:
   `{Meeting title} - Transcript[ (LANG)] - yyyy-MM-dd.docx|.txt`. The title is `room.title`; the date
   is the **meeting's** own start (WT-311(c)), the same source the duration chip counts from. The
@@ -33,6 +56,10 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   have to be filed under the same spelling of its name.
   A **recording's** name is the server's, set by `Content-Disposition` on the presigned link, so the
   client sets none.
+- Speaker names in both transcript downloads go through the same `speakerLabels` as the screen
+  (`transcriptSpeakerDisplayName`): a Google Meet bridge line prints the Meet person, or the
+  localized "Google Meet participants", never the stand-in's id or its "External Meeting" seat. Each
+  Meet person is a separate turn. See `transcript-speaker-identity.md`.
 
 ## Files Affected
 
@@ -70,6 +97,10 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
 
 - The retained files that are nobody's reading surface (debug logs, audio samples) are only listed
   on the workspace's Artifacts library page.
+- The avatar in a recording needs the backend's `canUpdateOwnMetadata` grant (warptalk-backend
+  `LiveKitTokenService`) deployed first or together; without it `setMetadata` is refused and every
+  tile shows initials. It also needs `NEXT_PUBLIC_API_URL` to be a public https origin, so uploaded
+  avatars never appear in recordings made against a local `http://localhost` API.
 - A meeting with several recordings still cannot be seeked into — that needs each file's duration,
   which the backend does not store yet (WT-655).
 - **WT-683's "owed outputs" placeholder rows are gone with the tab, deliberately.** `pendingOutputs`
@@ -96,4 +127,12 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
 - [ ] The recording's download button saves the file under the server's name, with no blank tab, and
       records consent on the first press.
 - [ ] A meeting with two recordings shows `Recording 1` / `Recording 2` and no player.
+- [ ] The player shows one download (in the pip header), controls below the frame, and no marks
+      until the pointer is over the timeline.
+- [ ] Hovering the timeline shows one dot per cited summary point (not per sentence), coloured by
+      kind; points close together show as one numbered dot listing them; clicking seeks the video
+      and lights the same rail point and transcript row a click in the rail would.
+- [ ] A meeting without a summary shows no dots.
+- [ ] In a recording, a person who turned the camera on mid-meeting appears on video; one with the
+      camera off shows their avatar (or initials), "Camera is off" and a mic badge.
 - [ ] The record has no Artifacts tab, and nothing links to one.

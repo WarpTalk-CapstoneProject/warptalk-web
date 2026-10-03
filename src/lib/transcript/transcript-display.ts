@@ -4,6 +4,12 @@
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
 import { appendParagraph, joinTranscriptText, startsNewParagraph } from "./sentence-flow.ts";
+import {
+  isBridgeStandInSpeaker,
+  transcriptSpeakerDisplayName,
+  transcriptSpeakerKey,
+  type SpeakerLabels,
+} from "./speaker-identity.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
@@ -164,8 +170,9 @@ export function dedupeTranscriptSegments(
   for (const segment of segments) {
     byId.set(segment.segmentId, segment);
   }
-  // Map preserves the first insertion position when an existing value is replaced.
-  // Arrival order stays valid when a reconnected ingress track resets startTimeMs.
+  // Map preserves the first insertion position when an existing value is replaced. Does NOT sort:
+  // the store already inserts each new live line by its start time (insertByStartTime), and keeping
+  // the list's own order here is what keeps a line on a restarted clock where it was put.
   return Array.from(byId.values());
 }
 
@@ -458,9 +465,12 @@ const MAX_TURN_SILENCE_MS = 30_000;
 /**
  * Groups a transcript into speaker turns for the timeline layout.
  *
- * Speaker identity follows the same rule the utterance merge uses — the participant id when
- * there is one, the display name otherwise — so the two groupings cannot disagree about who was
- * talking. Input must already be in chronological order.
+ * Speaker identity follows the same rule the utterance merge uses — transcriptSpeakerKey: the
+ * participant id when there is one, the display name otherwise, and for the Google Meet stand-in
+ * the id AND the name, because every Meet person shares that one id — so the two groupings cannot
+ * disagree about who was talking. Input must already be in chronological order.
+ *
+ * `labels` localizes the names a turn falls back to; omitted, they are the English defaults.
  */
 export function groupIntoSpeakerTurns<
   T extends {
@@ -470,16 +480,14 @@ export function groupIntoSpeakerTurns<
     startTimeMs: number;
     endTimeMs: number;
   },
->(segments: readonly T[]): TranscriptSpeakerTurn<T>[] {
+>(segments: readonly T[], labels?: SpeakerLabels): TranscriptSpeakerTurn<T>[] {
   const turns: TranscriptSpeakerTurn<T>[] = [];
 
   for (const segment of segments) {
-    const identity = segment.speakerParticipantId ?? segment.speakerName ?? "";
+    const identity = transcriptSpeakerKey(segment);
     const previous = turns[turns.length - 1];
     const previousLine = previous?.lines[previous.lines.length - 1];
-    const previousIdentity = previousLine
-      ? (previousLine.speakerParticipantId ?? previousLine.speakerName ?? "")
-      : null;
+    const previousIdentity = previousLine ? transcriptSpeakerKey(previousLine) : null;
     // A NEGATIVE gap is not silence: startTimeMs is an offset into the audio ingress track and
     // resets when that track reconnects (see formatTranscriptClockTime). Splitting on it would
     // put a turn boundary wherever the meeting dropped and rejoined.
@@ -496,7 +504,11 @@ export function groupIntoSpeakerTurns<
 
     turns.push({
       key: segment.id,
-      speakerName: segment.speakerName?.trim() || "Unknown speaker",
+      speakerName: transcriptSpeakerDisplayName(
+        segment.speakerParticipantId,
+        segment.speakerName,
+        labels,
+      ),
       speakerId: segment.speakerParticipantId ?? null,
       startTimeMs: segment.startTimeMs,
       lines: [segment],
@@ -724,9 +736,17 @@ export type TranscriptPauseBlock<T> = {
  */
 export function withLivePauseGap(
   gaps: readonly TranscriptPauseGap[],
-  pause: { paused: boolean; since: string | null } | undefined,
+  pause: { paused: boolean; since: string | null; known?: boolean } | undefined,
   baseTime?: string,
 ): TranscriptPauseGap[] {
+  // THE SAME LAG, THE OTHER WAY ROUND. After a resume this client is told "running" at once, and
+  // holds a window list that still has the pause open until the refetch lands — or for good, if
+  // that one request fails, since the query does not retry. An open gap is what
+  // `withoutSegmentsInOpenPauseGaps` withholds against, so every line spoken after the resume
+  // was hidden from that viewer while it was saved and shown to everybody else: "the transcript
+  // is there, my panel just does not show it" (prod, 2 Oct). When the room is KNOWN to be
+  // running, an open window is stale by definition and must not withhold anything.
+  if (pause?.known && !pause.paused) return gaps.filter((gap) => gap.endMs !== null);
   if (!pause?.paused) return [...gaps];
   // Already known from the window list — the host's case. Adding a second open gap would split the
   // same pause in two and draw its divider twice.
@@ -1112,6 +1132,14 @@ export function resolveTranscriptSpeakerName(
   segment: TranscriptSegmentDto,
   participants: readonly SpeakerParticipant[],
 ): string {
+  // The Google Meet stand-in is everybody on the Meet side, and its roster row is the SEAT
+  // ("External Meeting"), not a person. The gateway puts the person on the segment — the Meet
+  // speaker when it could tell, "Google Meet participants" when it could not — so the segment
+  // wins here and the roster is never asked. See speaker-identity.ts.
+  if (isBridgeStandInSpeaker(segment.speakerId)) {
+    return transcriptSpeakerDisplayName(segment.speakerId, segment.speakerName);
+  }
+
   // The same UUID guard the supplied-name branch below already applies. This branch trusted
   // the participant's displayName absolutely, and after a sign-out and sign-in the roster can
   // come back holding the user's id as their display name — which is how a transcript ended
@@ -1248,7 +1276,9 @@ function withinOneUtterance(previousEndMs: number, nextStartMs: number): boolean
 }
 
 function belongsToSameUtterance(previous: TranscriptSegmentDto, next: TranscriptSegmentDto): boolean {
-  if (previous.speakerId !== next.speakerId) return false;
+  // transcriptSpeakerKey, not the bare id: two people on the Google Meet side share the stand-in's
+  // id, and only the name on the segment tells them apart.
+  if (transcriptSpeakerKey(previous) !== transcriptSpeakerKey(next)) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
   // No target-language check any more. It existed to stop two bubbles with DIFFERENT
   // translations from being folded into one slot that could only hold a single language; the
@@ -1266,9 +1296,8 @@ function belongsToSameSavedUtterance(
   previous: SavedTranscriptSegmentDto,
   next: SavedTranscriptSegmentDto,
 ): boolean {
-  const previousSpeaker = previous.speakerParticipantId ?? previous.speakerName;
-  const nextSpeaker = next.speakerParticipantId ?? next.speakerName;
-  if (previousSpeaker !== nextSpeaker) return false;
+  // The same key the live merge and the speaker turns use — see transcriptSpeakerKey.
+  if (transcriptSpeakerKey(previous) !== transcriptSpeakerKey(next)) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
 
   return withinOneUtterance(previous.endTimeMs, next.startTimeMs);

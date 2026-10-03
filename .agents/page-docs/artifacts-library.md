@@ -13,7 +13,7 @@ The workspace's written record — transcripts, AI summaries and minutes — as 
 - Below the thumbnail: meeting title, then `You | host chip · Edited …`, plus a pill for a minutes state or a summary still being written.
 - **Grid / List** toggle. Kind, scope and layout are all in the URL (`?kind=summary&scope=mine&view=list`); defaults are omitted.
 - **Search by title only:** meeting name and room code, plus a minutes number. It never searches the body. The server gets the same term, and the client applies the title rule to what comes back.
-- Cards link to `/artifacts/{roomId}?kind=…`.
+- Cards link to `/artifacts/{roomId}?kind=…`. The detail page hides its "Records from this meeting" tab bar when opened with a valid `?kind=`; without one (deep link) the tab bar stays.
 
 ## What is NOT listed
 

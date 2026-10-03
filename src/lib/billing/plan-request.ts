@@ -37,9 +37,20 @@ import type { PlanDto } from "@/types/billing";
 export const PLAN_BILLING_CYCLE = "monthly";
 
 /** The currencies `ValidatePlanRequest` accepts. Anything else is refused before it reaches a row. */
-export const PLAN_CURRENCIES = ["VND", "USD"] as const;
+export const PLAN_CURRENCIES = ["USD", "VND"] as const;
 
 export type PlanCurrency = (typeof PLAN_CURRENCIES)[number];
+
+/**
+ * What the plan form offers. Every NEW plan is priced in USD, the accounting currency since
+ * 2 Oct 2026; a plan already sold in VND may keep VND when edited (its subscribers' Stripe prices
+ * are VND) or move to USD. Nothing moves into VND. Mirrors PlanService.ValidatePlanRequest.
+ *
+ * `existingCurrency` is the STORED plan's currency, or null/"" for a plan being created.
+ */
+export function planCurrencyOptions(existingCurrency?: string | null): PlanCurrency[] {
+  return existingCurrency?.trim().toUpperCase() === "VND" ? ["USD", "VND"] : ["USD"];
+}
 
 /**
  * Every key the request carries. Kept beside the builder so the test can assert the two agree —
@@ -134,7 +145,7 @@ export function validatePlanRequest(request: PlanRequest): string | null {
   if (tier.length > 20) return "Tier must be 20 characters or fewer.";
 
   if (!PLAN_CURRENCIES.includes(request.currency as PlanCurrency))
-    return "Currency must be VND or USD.";
+    return "Currency must be USD or VND.";
 
   if (request.billingCycle !== PLAN_BILLING_CYCLE)
     return "Billing cycle must be monthly — the update endpoint accepts no other value.";

@@ -66,7 +66,7 @@ import {
   type CreditLevel,
   type PeriodFigure,
 } from "@/lib/workspace/insights/overview-metrics";
-import { toolLineStatus } from "@/lib/workspace/insights/tool-audits";
+import { toolLineStatus } from "@/lib/workspace/insights/tool-insights";
 
 export interface OverviewTabProps extends InsightsTabProps {
   sources: WorkspaceInsightsOverviewSources;
@@ -110,7 +110,6 @@ const OUTCOME_TONE: Record<PluginActivityTone, InsightsTone> = {
 const LEVEL_TONE: Record<CreditLevel, InsightsTone> = { ok: "neutral", warning: "warning", critical: "danger" };
 const LEVEL_METER: Record<CreditLevel, string> = { ok: "bg-success", warning: "bg-warning", critical: "bg-destructive" };
 
-const RECENT_ACTIVITY_ROWS = 4;
 const TOP_MEMBERS = 5;
 
 function dayKeyTitle(key: string, locale: string): string {
@@ -260,19 +259,19 @@ function ToolsLine({ model, nowMs, locale, href }: { model: OverviewModel; nowMs
     );
   }
 
-  const { current, lastCallAt } = state.data;
-  const status = toolLineStatus(current);
+  // Every WarpBot call of the period — built-in, web search and plugin — as the server counted it.
+  const { totals, successRate, lastCallAt } = state.data;
+  const status = toolLineStatus(totals);
   const warn = status === "needsAttention";
   const parts =
     status === "noCalls"
       ? [t("toolLine.noCallsHint")]
       : [
-          current.complete
-            ? t("toolLine.calls", { count: current.calls, value: formatCount(current.calls) })
-            : t("toolLine.callsAtLeast", { count: current.calls, value: formatCount(current.calls) }),
-          current.successRate === null ? null : t("toolLine.success", { percent: formatInsightValue(current.successRate, "percent") }),
-          current.blocked > 0 ? t("toolLine.blocked", { count: current.blocked }) : null,
-          current.needsSetup > 0 ? t("toolLine.needsSetup", { count: current.needsSetup }) : null,
+          t("toolLine.calls", { count: totals.calls, value: formatCount(totals.calls) }),
+          successRate === null ? null : t("toolLine.success", { percent: formatInsightValue(successRate, "percent") }),
+          totals.blocked > 0 ? t("toolLine.blocked", { count: totals.blocked }) : null,
+          totals.needsSetup > 0 ? t("toolLine.needsSetup", { count: totals.needsSetup }) : null,
+          totals.error > 0 ? t("toolLine.failed", { count: totals.error }) : null,
         ];
   if (lastCallAt) parts.push(t("toolLine.lastCall", { time: relativeTime(lastCallAt, nowMs, locale) }));
 
@@ -405,7 +404,6 @@ export function OverviewTab(props: OverviewTabProps) {
       format: (value) => formatInsightValue(value, "percent"),
       higherIsBetter: true,
       href: href.tools,
-      note: tools && !tools.current.complete ? t("periodCards.successNote", { count: tools.current.calls }) : null,
       emptyNote: t("periodCards.noCalls"),
     },
   ];
@@ -537,9 +535,7 @@ export function OverviewTab(props: OverviewTabProps) {
         balance: sources.balance.status === "ready" ? sources.balance.data : undefined,
         subscription: sources.subscription.status === "ready" ? sources.subscription.data : undefined,
         recurring: sources.recurring.status === "ready" ? sources.recurring.data : undefined,
-        tools: tools
-          ? { needsSetupPlugins: tools.current.needsSetupPlugins, blocked: tools.current.blocked, complete: tools.current.complete }
-          : undefined,
+        tools: tools ? { needsSetupPlugins: tools.needsSetupPlugins, blocked: tools.totals.blocked, complete: true } : undefined,
         pendingRequests,
         pluginLabel: (key) => pluginLabels.get(key) ?? key,
       }),
@@ -740,25 +736,24 @@ export function OverviewTab(props: OverviewTabProps) {
           </div>
         </Panel>
 
-        <Panel chart title={t("charts.pluginsTitle")} link={{ href: href.tools, label: t("links.tools") }}>
+        <Panel chart title={t("charts.toolSourcesTitle")} link={{ href: href.tools, label: t("links.tools") }}>
           <div className="px-4 pb-3 pt-2">
-            <SourceBody state={model.tools} height={200} empty={t("charts.noToolCalls")} isEmpty={(data) => data.current.calls === 0}>
+            <SourceBody state={model.tools} height={200} empty={t("charts.noToolCalls")} isEmpty={(data) => data.totals.calls === 0}>
               {(data) => (
                 <>
                   <ChartFigure
-                    value={
-                      data.current.complete
-                        ? t("charts.callsValue", { count: data.current.calls, value: formatCount(data.current.calls) })
-                        : t("common.atLeast", { value: t("charts.callsValue", { count: data.current.calls, value: formatCount(data.current.calls) }) })
-                    }
-                    caption={t("charts.pluginsCaption", { period: period.label })}
+                    value={t("charts.callsValue", { count: data.totals.calls, value: formatCount(data.totals.calls) })}
+                    caption={t("charts.toolSourcesCaption", { period: period.label })}
                   />
                   <BarList
-                    ariaLabel={t("charts.pluginsAria")}
+                    ariaLabel={t("charts.toolSourcesAria")}
                     formatValue={formatCount}
-                    rows={data.current.byPlugin.slice(0, 6).map((row) => ({
-                      key: row.pluginKey,
-                      label: pluginLabel(row.pluginKey),
+                    rows={data.byOrigin.slice(0, 6).map((row) => ({
+                      key: row.key,
+                      label:
+                        row.kind === "plugin" && row.pluginKey
+                          ? pluginLabel(row.pluginKey)
+                          : t(`charts.toolOrigin.${row.kind}` as never),
                       segments: [{ key: "calls", label: t("charts.callsSeries"), value: row.calls }],
                     }))}
                   />
@@ -855,9 +850,9 @@ export function OverviewTab(props: OverviewTabProps) {
         </Panel>
 
         <Panel title={t("activity.title")} subtitle={t("activity.subtitle")} link={{ href: href.tools, label: t("links.tools") }}>
-          <ListState state={sources.audits}>
-            {(read) => {
-              const rows = toPluginActivityRows(read.rows.slice(0, RECENT_ACTIVITY_ROWS), members, catalog ?? [], (key) =>
+          <ListState state={sources.recentAudits}>
+            {(recent) => {
+              const rows = toPluginActivityRows(recent, members, catalog ?? [], (key) =>
                 t(`activity.${key}` as never),
               );
               if (rows.length === 0) return <ListEmpty>{t("activity.empty")}</ListEmpty>;

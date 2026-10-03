@@ -43,12 +43,35 @@
  */
 
 import type { BrowserCaptureConsentState } from "../audio/browser-capture-consent";
+import type { InboundHealth } from "../audio/bridge-inbound-health";
+import type { BridgeInboundPath, BridgeInboundReason } from "../desktop/bridge-tiers";
 
 /** Every message carries it, so a desktop build running an older popup is ignored, not misread. */
 export const BRIDGE_CONSENT_PROTOCOL_VERSION = 1;
 
 /** How long the main window waits for the popup to acknowledge a "required" snapshot before raising it. */
 export const CONSENT_POPUP_RAISE_GRACE_MS = 1500;
+
+/**
+ * WT-900. While the question stays open, how often main checks again that the popup is still
+ * showing it - and, after a raise, how long it waits for the raised popup to say so.
+ */
+export const CONSENT_POPUP_RECHECK_MS = 60_000;
+
+/** WT-900. Raises in a row that no `ack` followed before the question moves to the main window. */
+export const CONSENT_POPUP_MAX_UNANSWERED_RAISES = 2;
+
+/**
+ * Raises one question may cost in total, acknowledged or not, before it moves to the main window.
+ *
+ * CONSENT_POPUP_MAX_UNANSWERED_RAISES alone did not bound anything. Every raise opens the popup, the
+ * opened popup acks the moment it is on screen, and an ack resets that count at the next check. So
+ * a host who closed the popup without answering got it back - focused, with the OS notification -
+ * one recheck later, for as long as the question stayed open: in production, long after they had
+ * left the Meet call. This count is never reset by an ack, only by an answer or another room, and
+ * it outlives the raise loop's restarts (see ConsentRaiseBudget).
+ */
+export const CONSENT_POPUP_MAX_RAISES_PER_QUESTION = 3;
 
 /** A process the loopback could listen to, reduced to what the popup needs to offer it. */
 export interface BridgeConsentSource {
@@ -65,6 +88,21 @@ export interface BridgeConsentSnapshot {
   sources: BridgeConsentSource[];
   selectedSourceId: string | null;
   loadingSources: boolean;
+  /**
+   * WT-900, optional so an older main is still read: where the far side comes in right now, why,
+   * and whether anything is arriving. The popup uses them to ask quietly while the cable already
+   * carries Meet (see isCompactConsentAsk). Absent means "not said", never a guess.
+   */
+  inboundPath?: BridgeInboundPath;
+  inboundReason?: BridgeInboundReason;
+  inboundHealth?: InboundHealth;
+  /**
+   * WT-910, optional for the same reason: a virtual cable is installed that the far side can come
+   * in through. It decides what "Stop listening" is said to cost — with a cable the other side is
+   * still heard, without one it is not. Absent means "not said", and the popup words it for the
+   * case where nothing else carries the call.
+   */
+  cableAvailable?: boolean;
 }
 
 /** Popup to main: what the host asked for. A request, never a statement of state. */
@@ -74,7 +112,12 @@ export type BridgeConsentIntent =
   /** The popup is visibly showing the "required" prompt, so main need not raise it. */
   | { v: 1; kind: "ack"; roomId: string }
   | { v: 1; kind: "select-source"; roomId: string; sourceId: string }
-  | { v: 1; kind: "decide"; roomId: string; granted: boolean }
+  /**
+   * WT-910: `record` is the "Record this meeting" checkbox beside the question (default on,
+   * opt-out; see bridge-recording.ts). Optional: an older popup, the compact ask's "Keep cable"
+   * and "Stop listening" send none, and none means "nothing was said about recording".
+   */
+  | { v: 1; kind: "decide"; roomId: string; granted: boolean; record?: boolean }
   /** Declined, and now the host wants to be asked again. */
   | { v: 1; kind: "reconsider"; roomId: string };
 
@@ -86,6 +129,31 @@ const CONSENT_STATES: ReadonlySet<string> = new Set<BrowserCaptureConsentState>(
   "granted",
   "declined",
 ]);
+
+const INBOUND_PATHS: ReadonlySet<string> = new Set<BridgeInboundPath>(["loopback", "device"]);
+
+const INBOUND_REASONS: ReadonlySet<string> = new Set<BridgeInboundReason>([
+  "loopback",
+  "awaiting-consent",
+  "device-while-asking",
+  "awaiting-source",
+  "loopback-unavailable",
+  "loopback-failed",
+  "consent-declined",
+  "no-source",
+]);
+
+const INBOUND_HEALTHS: ReadonlySet<string> = new Set<InboundHealth>([
+  "unknown",
+  "listening",
+  "quiet",
+  "no-signal",
+]);
+
+/** An optional enum field: the value when it is one of `allowed`, otherwise nothing at all. */
+function optionalMember<T extends string>(value: unknown, allowed: ReadonlySet<string>): T | undefined {
+  return typeof value === "string" && allowed.has(value) ? (value as T) : undefined;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -113,6 +181,11 @@ function parseSources(value: unknown): BridgeConsentSource[] | null {
  * null. Never throws. Strips unknown extra fields (return a fresh object with only the known
  * fields).
  *
+ * The WT-900 inbound fields are the exception to "mistyped means rejected": they are optional
+ * hints added without a version bump, so a value this build does not know (a newer main, a new
+ * reason) is DROPPED and the rest of the snapshot kept. Rejecting the whole snapshot over a hint
+ * would hide the question itself.
+ *
  * Strict because the channel is open to every same-origin page, and one bad source in a list is
  * reason enough to distrust the rest of the message. Fresh objects because whatever came in was
  * structured-cloned from someone else's data, and nothing unknown should ride along into state.
@@ -134,7 +207,7 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
         const selectedSourceId = data.selectedSourceId;
         if (selectedSourceId !== null && !isNonEmptyString(selectedSourceId)) return null;
         if (typeof data.loadingSources !== "boolean") return null;
-        return {
+        const snapshot: BridgeConsentSnapshot = {
           v,
           kind: "snapshot",
           roomId,
@@ -143,6 +216,14 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
           selectedSourceId,
           loadingSources: data.loadingSources,
         };
+        const inboundPath = optionalMember<BridgeInboundPath>(data.inboundPath, INBOUND_PATHS);
+        const inboundReason = optionalMember<BridgeInboundReason>(data.inboundReason, INBOUND_REASONS);
+        const inboundHealth = optionalMember<InboundHealth>(data.inboundHealth, INBOUND_HEALTHS);
+        if (inboundPath) snapshot.inboundPath = inboundPath;
+        if (inboundReason) snapshot.inboundReason = inboundReason;
+        if (inboundHealth) snapshot.inboundHealth = inboundHealth;
+        if (typeof data.cableAvailable === "boolean") snapshot.cableAvailable = data.cableAvailable;
+        return snapshot;
       }
       case "hello":
         return { v, kind: "hello", roomId };
@@ -153,7 +234,11 @@ export function parseBridgeConsentMessage(data: unknown): BridgeConsentMessage |
         return { v, kind: "select-source", roomId, sourceId: data.sourceId };
       case "decide":
         if (typeof data.granted !== "boolean") return null;
-        return { v, kind: "decide", roomId, granted: data.granted };
+        // Unlike the snapshot's hints, a mistyped `record` rejects the message: it is an
+        // instruction with a consequence (a recording starts), not a hint about how to draw.
+        if (data.record === undefined) return { v, kind: "decide", roomId, granted: data.granted };
+        if (typeof data.record !== "boolean") return null;
+        return { v, kind: "decide", roomId, granted: data.granted, record: data.record };
       case "reconsider":
         return { v, kind: "reconsider", roomId };
       default:
@@ -179,8 +264,12 @@ export function buildBridgeConsentSnapshot(input: {
   sources: ReadonlyArray<{ id: string; name: string }>;
   selectedSourceId: string | null;
   loadingSources: boolean;
+  inboundPath?: BridgeInboundPath | null;
+  inboundReason?: BridgeInboundReason | null;
+  inboundHealth?: InboundHealth | null;
+  cableAvailable?: boolean | null;
 }): BridgeConsentSnapshot {
-  return {
+  const snapshot: BridgeConsentSnapshot = {
     v: BRIDGE_CONSENT_PROTOCOL_VERSION,
     kind: "snapshot",
     roomId: input.roomId,
@@ -189,6 +278,28 @@ export function buildBridgeConsentSnapshot(input: {
     selectedSourceId: input.selectedSourceId,
     loadingSources: input.loadingSources,
   };
+  if (input.inboundPath) snapshot.inboundPath = input.inboundPath;
+  if (input.inboundReason) snapshot.inboundReason = input.inboundReason;
+  if (input.inboundHealth) snapshot.inboundHealth = input.inboundHealth;
+  if (typeof input.cableAvailable === "boolean") snapshot.cableAvailable = input.cableAvailable;
+  return snapshot;
+}
+
+/**
+ * WT-900 - ask quietly, or ask prominently?
+ *
+ * Quietly (one line: "Listening through Hi-Fi Cable. Switch to listening to the browser?") only
+ * while the far side is ALREADY being heard through the cable: the leg is on the device because
+ * the question is open, and the meter says Meet is arriving. Then nothing is waiting on the answer,
+ * and a framed prompt over the transcript would be asking the host to fix something that is not
+ * broken. Anywhere else - the cable carrying silence, no reading yet, no cable at all - the answer
+ * is what stands between the host and hearing the far side, so it keeps the full prompt.
+ */
+export function isCompactConsentAsk(input: {
+  inboundReason?: BridgeInboundReason | null;
+  inboundHealth?: InboundHealth | null;
+}): boolean {
+  return input.inboundReason === "device-while-asking" && input.inboundHealth === "listening";
 }
 
 /** What main knows right now, which is what every intent is checked against. */
@@ -204,7 +315,8 @@ export type BridgeConsentAction =
   | { type: "republish" }
   | { type: "acknowledged" }
   | { type: "select-source"; sourceId: string }
-  | { type: "answer"; granted: boolean }
+  /** `record` only where the checkbox was on screen: an answer to an open question. */
+  | { type: "answer"; granted: boolean; record?: boolean }
   | { type: "reask" };
 
 /**
@@ -221,6 +333,9 @@ export type BridgeConsentAction =
  * - a refusal is honoured while asked (decline) and while listening (revoke, "Stop listening"),
  *   because stopping a capture must never need a precondition; it is ignored where there is
  *   nothing to refuse;
+ * - the recording choice (WT-910) rides only on an answer to an OPEN question, grant or decline,
+ *   because that is the only state in which the checkbox is on screen. A "Stop listening" carrying
+ *   one is a stale or forged press, and the choice is dropped rather than the stop refused;
  * - asking again only makes sense after a decline.
  */
 export function resolveBridgeConsentIntent(
@@ -244,17 +359,25 @@ export function resolveBridgeConsentIntent(
         if (host.consent !== "required") return null;
         if (host.selectedSourceId === null) return null;
         if (!host.sourceIds.includes(host.selectedSourceId)) return null;
-        return { type: "answer", granted: true };
+        return withRecordChoice({ type: "answer", granted: true }, message.record);
       }
-      if (host.consent === "required" || host.consent === "granted") {
-        return { type: "answer", granted: false };
+      if (host.consent === "required") {
+        return withRecordChoice({ type: "answer", granted: false }, message.record);
       }
+      if (host.consent === "granted") return { type: "answer", granted: false };
       return null;
     case "reconsider":
       return host.consent === "declined" ? { type: "reask" } : null;
     default:
       return null;
   }
+}
+
+function withRecordChoice(
+  action: { type: "answer"; granted: boolean },
+  record: boolean | undefined,
+): BridgeConsentAction {
+  return record === undefined ? action : { ...action, record };
 }
 
 /** Where the consent question is shown, if anywhere. */
@@ -303,6 +426,8 @@ export type BridgeConsentPromptView =
       selectedSourceId: string | null;
       loadingSources: boolean;
       canConfirm: boolean;
+      /** WT-900: render as the non-blocking one-line ask rather than the framed prompt. */
+      compact: boolean;
     }
   /**
    * The host said yes, and this is which source they said yes TO — a permission, not a live
@@ -310,8 +435,14 @@ export type BridgeConsentPromptView =
    * connection without any of them changing the answer, so a surface that renders this as
    * "listening right now" will say so while nothing is being captured.
    */
-  | { kind: "listening"; sourceName: string | null }
-  | { kind: "declined" };
+  | {
+      kind: "listening";
+      sourceName: string | null;
+      /** WT-910: a cable would still carry the far side after "Stop listening". */
+      cableAvailable: boolean;
+    }
+  /** `viaCable`: the far side is coming in through the cable instead, so it IS still heard. */
+  | { kind: "declined"; viaCable: boolean };
 
 /**
  * snapshot null, for another room, or "not-required" → hidden. required → ask (canConfirm =
@@ -340,11 +471,18 @@ export function bridgeConsentPromptView(
         selectedSourceId: snapshot.selectedSourceId,
         loadingSources: snapshot.loadingSources,
         canConfirm: selected !== undefined,
+        compact: isCompactConsentAsk(snapshot),
       };
     case "granted":
-      return { kind: "listening", sourceName: selected?.name ?? null };
+      return {
+        kind: "listening",
+        sourceName: selected?.name ?? null,
+        cableAvailable: snapshot.cableAvailable === true,
+      };
     case "declined":
-      return { kind: "declined" };
+      // The path main is actually on, not the hint: "declined" with the leg on the device is the
+      // cable carrying Meet (WT-900), and saying "not translated" there would be false.
+      return { kind: "declined", viaCable: snapshot.inboundPath === "device" };
     default:
       return { kind: "hidden" };
   }
@@ -368,4 +506,213 @@ export function shouldAcknowledgeConsentSnapshot(
     snapshot.consent === "required" &&
     documentVisible
   );
+}
+
+/**
+ * WT-900 - keeping the question in front of somebody until it is answered.
+ *
+ * WHAT WAS WRONG
+ *   Main raised the popup once per ask. A host who then closed or minimised the popup without
+ *   answering left the state "required" for the rest of the meeting: nothing raised it again, and
+ *   the main-window modal never took over because a popup was "available". On a machine without a
+ *   cable the far side stayed silent all meeting.
+ *
+ * THE LOOP
+ *   Every check goes out as a snapshot, and a popup that is visibly showing the question acks it.
+ *   - phase "check": the first is the ask itself; later ones are a republish every
+ *     CONSENT_POPUP_RECHECK_MS for as long as the popup keeps acknowledging. Silence past the grace
+ *     means the prompt is not on screen, so the popup is raised.
+ *   - phase "raised": a raised popup (reopened, restored) says hello and acks on becoming visible.
+ *     Silence for CONSENT_POPUP_RECHECK_MS after a raise is an unanswered raise, and it is raised
+ *     again.
+ *   After CONSENT_POPUP_MAX_UNANSWERED_RAISES of those in a row, or wherever no popup can be opened
+ *   at all, the question moves to the main window's modal ("use-main").
+ *
+ * An acknowledged check costs nothing the host can see: a republish of the same state, no raise,
+ * and so no OS notification over a popup they are already reading.
+ *
+ * TWO MORE LIMITS (popspam1002)
+ *   - Never while the Meet call is off screen. WarpTalk follows Meet silently: a raise is a focus
+ *     steal plus a notification, and once the host has left the call (or is looking at another tab)
+ *     it lands on top of whatever they are doing instead. A due raise is held ("hold") and goes out
+ *     when Meet is back on screen - if the question is still open by then.
+ *   - At most CONSENT_POPUP_MAX_RAISES_PER_QUESTION raises per question, counted in
+ *     `raisesThisQuestion`, which an ack does not reset.
+ */
+export interface ConsentRaiseState {
+  consent: BrowserCaptureConsentState;
+  /** `canOpenTranscriptWindow()` in a bridge room. */
+  popupAvailable: boolean;
+  /**
+   * This room's Google Meet call is on screen (isBridgeMeetCallOnScreen). Read live, like
+   * `acknowledged`: the hook refreshes it before every decision.
+   */
+  meetOnScreen: boolean;
+  /** Raises already spent on this question, across restarts of the loop. Never reset by an ack. */
+  raisesThisQuestion: number;
+  phase: "check" | "raised";
+  /** When the current check or raise went out. */
+  sentAtMs: number;
+  /** The popup has acked since `sentAtMs`. */
+  acknowledged: boolean;
+  /** Raises in a row that no ack followed. */
+  unansweredRaises: number;
+}
+
+export type ConsentRaiseDecision =
+  /** Nothing is being asked. */
+  | { type: "idle" }
+  /** Ask in the main window instead. Final for this ask. */
+  | { type: "use-main" }
+  /** Nothing to do until `atMs`. */
+  | { type: "wait"; atMs: number }
+  /** Republish and start a new check. */
+  | { type: "check" }
+  /**
+   * A raise is due but the Meet call is not on screen. Nothing is raised and nothing changes; ask
+   * again when Meet comes back (or at the next recheck).
+   */
+  | { type: "hold" }
+  /** Raise the popup. */
+  | { type: "raise" };
+
+/** The state of a question that has just been asked (or whose raise loop has just restarted). */
+export function initialConsentRaiseState(input: {
+  consent: BrowserCaptureConsentState;
+  popupAvailable: boolean;
+  nowMs: number;
+  /** Defaults to true: no reading is not a reading of "gone" (see isBridgeMeetCallOnScreen). */
+  meetOnScreen?: boolean;
+  /** Raises this question already cost before the loop (re)started. See ConsentRaiseBudget. */
+  raisesThisQuestion?: number;
+}): ConsentRaiseState {
+  return {
+    consent: input.consent,
+    popupAvailable: input.popupAvailable,
+    meetOnScreen: input.meetOnScreen ?? true,
+    raisesThisQuestion: input.raisesThisQuestion ?? 0,
+    phase: "check",
+    sentAtMs: input.nowMs,
+    acknowledged: false,
+    unansweredRaises: 0,
+  };
+}
+
+export function nextConsentRaise(
+  state: ConsentRaiseState,
+  nowMs: number,
+  options: {
+    graceMs?: number;
+    recheckMs?: number;
+    maxUnansweredRaises?: number;
+    maxRaisesPerQuestion?: number;
+  } = {},
+): ConsentRaiseDecision {
+  const graceMs = options.graceMs ?? CONSENT_POPUP_RAISE_GRACE_MS;
+  const recheckMs = options.recheckMs ?? CONSENT_POPUP_RECHECK_MS;
+  const maxUnanswered = options.maxUnansweredRaises ?? CONSENT_POPUP_MAX_UNANSWERED_RAISES;
+  const maxPerQuestion = options.maxRaisesPerQuestion ?? CONSENT_POPUP_MAX_RAISES_PER_QUESTION;
+
+  if (state.consent !== "required") return { type: "idle" };
+  if (!state.popupAvailable) return { type: "use-main" };
+
+  if (state.acknowledged) {
+    // Seen. Look again later, in case it is closed or minimised in the meantime.
+    const atMs = state.sentAtMs + recheckMs;
+    return nowMs < atMs ? { type: "wait", atMs } : { type: "check" };
+  }
+
+  const atMs = state.sentAtMs + (state.phase === "check" ? graceMs : recheckMs);
+  if (nowMs < atMs) return { type: "wait", atMs };
+  // Before either budget: with Meet off screen nothing is raised, and nothing is handed over either
+  // - the question is still the popup's for when the host is back in the call.
+  if (!state.meetOnScreen) return { type: "hold" };
+  if (state.phase === "raised" && state.unansweredRaises >= maxUnanswered) return { type: "use-main" };
+  if (state.raisesThisQuestion >= maxPerQuestion) return { type: "use-main" };
+  return { type: "raise" };
+}
+
+/**
+ * The state after acting on a decision at `nowMs`. A check is a fresh start (an ack proved the
+ * popup was seen); a raise counts against the limit until an ack follows it. `wait`, `idle` and
+ * `use-main` change nothing.
+ */
+export function applyConsentRaise(
+  state: ConsentRaiseState,
+  decision: ConsentRaiseDecision,
+  nowMs: number,
+): ConsentRaiseState {
+  switch (decision.type) {
+    case "check":
+      return { ...state, phase: "check", sentAtMs: nowMs, acknowledged: false, unansweredRaises: 0 };
+    case "raise":
+      return {
+        ...state,
+        phase: "raised",
+        sentAtMs: nowMs,
+        acknowledged: false,
+        unansweredRaises: state.unansweredRaises + 1,
+        raisesThisQuestion: state.raisesThisQuestion + 1,
+      };
+    default:
+      return state;
+  }
+}
+
+/**
+ * Is this bridge room's Google Meet call on screen, as far as the desktop sensor can tell?
+ *
+ * The same test the idle reaper uses (lastSignOfLife): a sighting counts unless its code names a
+ * DIFFERENT call from the room's; a code that is merely absent (picture-in-picture, a named event)
+ * proves nothing either way. No reading at all - a browser tab, macOS, a desktop build without the
+ * sensor, the first poll not back yet - is "unknown", and unknown keeps the old behaviour: it must
+ * never be read as "Meet is gone", or those hosts would never be asked at all.
+ *
+ * WT-911/913: where the desktop reads Meet's own call state, its phase for THIS room's call
+ * (`trustedMeetPhase`, already code-checked) comes first. `left` is off screen whatever the URL
+ * sensor says (the tab can still be open on Meet's "You left the meeting" page); `lobby` and
+ * `in-call` are only readable while Meet is on screen (tab or picture-in-picture), so they count as
+ * on screen. `unknown` and null (an older desktop, macOS, a background tab) say nothing, and the URL
+ * sensor decides as before.
+ */
+export function isBridgeMeetCallOnScreen(input: {
+  sensor: { meetWindowVisible: boolean; meetCode?: string } | null;
+  roomMeetCode?: string;
+  callPhase?: "lobby" | "in-call" | "left" | "unknown" | null;
+}): boolean {
+  const { sensor, roomMeetCode, callPhase } = input;
+  if (callPhase === "left") return false;
+  if (callPhase === "in-call" || callPhase === "lobby") return true;
+  if (sensor === null) return true;
+  const differentCall =
+    Boolean(sensor.meetCode) && Boolean(roomMeetCode) && sensor.meetCode !== roomMeetCode;
+  return sensor.meetWindowVisible && !differentCall;
+}
+
+/**
+ * The raise count that has to outlive the raise loop.
+ *
+ * The loop is an effect, and it restarts whenever the question flickers - `consent` leaving and
+ * re-entering "required" as the loopback falls back and recovers, or the popup's availability
+ * moving. Each restart used to start from zero, so a question nobody answered could be raised
+ * without end across restarts. This is held per room by the hook, spent by every raise, and given
+ * back only when the question is really over: answered (granted or declined), or another room.
+ */
+export interface ConsentRaiseBudget {
+  roomId: string;
+  raises: number;
+}
+
+/** What is left of `budget` for `roomId` while the consent state is `consent`. */
+export function consentRaiseBudgetFor(
+  budget: ConsentRaiseBudget | null,
+  roomId: string,
+  consent: BrowserCaptureConsentState,
+): ConsentRaiseBudget {
+  // An answer closes the question; "reconsider" after it is a new one with a full budget.
+  // "not-required" does NOT: that is the question going quiet (a fallback, a device), not answered.
+  if (!budget || budget.roomId !== roomId || consent === "granted" || consent === "declined") {
+    return { roomId, raises: 0 };
+  }
+  return budget;
 }

@@ -10,7 +10,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isRecordableParticipant, resolveEgressDisplayName } from "../egress-participants.ts";
+import {
+  MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
+  MEET_WINDOW_TRACK_NAME,
+  isMeetWindowTrack,
+  isRecordableParticipant,
+  meetWindowShowsPicture,
+  resolveEgressDisplayName,
+  resolveEgressLayout,
+  shouldResubscribeMeetWindow,
+} from "../egress-participants.ts";
 
 test("a person is recorded", () => {
   assert.equal(isRecordableParticipant("019ff9e1-e3e2-7024-99b7-6e37c6a18392"), true);
@@ -63,4 +72,54 @@ test("resolveEgressDisplayName never returns an empty label", () => {
   assert.equal(resolveEgressDisplayName(null, null), "Participant");
   assert.equal(resolveEgressDisplayName("", ""), "Participant");
   assert.equal(resolveEgressDisplayName(undefined, undefined), "Participant");
+});
+
+// WT-910: a bridge recording shows the Google Meet window, full frame.
+
+test("only the track published under the agreed name is the Meet window", () => {
+  assert.equal(MEET_WINDOW_TRACK_NAME, "meet-window");
+  assert.equal(isMeetWindowTrack("meet-window"), true);
+  // An ordinary screen share, a camera, a nameless track: recorded as they always were.
+  assert.equal(isMeetWindowTrack("screen_share"), false);
+  assert.equal(isMeetWindowTrack("Meet-Window"), false);
+  assert.equal(isMeetWindowTrack(""), false);
+  assert.equal(isMeetWindowTrack(undefined), false);
+  assert.equal(isMeetWindowTrack(null), false);
+});
+
+test("the frame is the Meet window only while its video is subscribed", () => {
+  assert.equal(resolveEgressLayout([]), "grid");
+  assert.equal(resolveEgressLayout([{ kind: "audio" }, { kind: "video" }]), "grid");
+  assert.equal(
+    resolveEgressLayout([{ kind: "audio" }, { kind: "video", meetWindow: true }]),
+    "meet-window",
+  );
+  // A flag on an audio tile is not a picture.
+  assert.equal(resolveEgressLayout([{ kind: "audio", meetWindow: true }]), "grid");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WT-910 follow-up: the first bridge recording was 3:25 of black over real audio.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("the Meet window shows only once it has decoded a frame, and not while muted", () => {
+  assert.equal(meetWindowShowsPicture({ firstFrameSeen: false, muted: false }), false);
+  assert.equal(meetWindowShowsPicture({ firstFrameSeen: true, muted: false }), true);
+  assert.equal(meetWindowShowsPicture({ firstFrameSeen: true, muted: true }), false);
+});
+
+test("a subscription that never produced a frame is renewed once, after the timeout", () => {
+  const base = { firstFrameSeen: false, subscribedAtMs: 0, alreadyRetried: false };
+  assert.equal(shouldResubscribeMeetWindow({ ...base, nowMs: MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS - 1 }), false);
+  assert.equal(shouldResubscribeMeetWindow({ ...base, nowMs: MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS }), true);
+  // Once per publication: a loop of resubscriptions would be churn, not recovery.
+  assert.equal(
+    shouldResubscribeMeetWindow({ ...base, alreadyRetried: true, nowMs: 60_000 }),
+    false,
+  );
+  // A picture that arrived is never renewed.
+  assert.equal(
+    shouldResubscribeMeetWindow({ ...base, firstFrameSeen: true, nowMs: 60_000 }),
+    false,
+  );
 });

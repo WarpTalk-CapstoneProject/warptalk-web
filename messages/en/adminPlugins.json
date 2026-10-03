@@ -526,5 +526,174 @@
       "saving": "Saving…",
       "failed": "The change wasn't made. Try again."
     }
+  },
+  "warpbotTools": {
+    "eyebrow": "Configuration",
+    "title": "WarpBot tools",
+    "description": "What WarpBot can do on this platform, and how it has gone. Counts and outcomes only: no arguments or answers are stored or shown.",
+    "refresh": "Refresh",
+    "tabsLabel": "WarpBot tools view",
+    "tabs": {
+      "catalog": "Catalog",
+      "usage": "Usage"
+    },
+    "source": {
+      "builtin": "Built in",
+      "webSearch": "Web search",
+      "plugin": "Plugin"
+    },
+    "health": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "failing": "Failing",
+      "notEnoughCalls": "Not enough calls"
+    },
+    "catalog": {
+      "loading": "Loading…",
+      "usageUnavailable": "Call counts are not available yet.",
+      "pluginsNote": "Plugin tools are managed per plugin.",
+      "pluginsLink": "Plugins →",
+      "webSearch": {
+        "title": "Web search",
+        "subtitle": "OpenAI hosted tool",
+        "flagLabel": "Platform flag",
+        "flagNoAccess": "You need settings.read to see this flag.",
+        "flagUnavailable": "The platform settings could not be read.",
+        "flagHint": "The default for every workspace",
+        "flagDenied": "{count} workspaces turned off by the flag",
+        "flagOverrides": "{count} plan or workspace overrides",
+        "flagRollout": "rolled out to {percent}%",
+        "state": {
+          "on": "On",
+          "off": "Off",
+          "unknown": "Unknown"
+        },
+        "changeInSettings": "Change in Platform settings",
+        "openInSettings": "Open in Platform settings",
+        "ceilingLabel": "Deploy setting",
+        "ceilingHint": "The ceiling: off in the AI worker's deployment means off everywhere, whatever the flag says. The portal cannot read it.",
+        "ceilingNotVisible": "Not visible here",
+        "usageLabel": "Calls, last 30 days",
+        "usageLine": "{calls} calls · {rate} success · {workspaces} workspaces",
+        "usageNone": "No web search calls recorded in the last 30 days."
+      },
+      "builtIn": {
+        "title": "Built-in tools",
+        "subtitle": "{count} tools · defined in the AI worker; read-only here",
+        "columns": {
+          "tool": "Tool",
+          "description": "What it does",
+          "calls": "Calls, 30 days",
+          "success": "Success"
+        },
+        "noCopy": "Seen in usage; no description yet.",
+        "note": "This is the tool copy the web ships. Each workspace's own list comes from the AI worker, filtered for that workspace. {webSearch} is listed above. Success counts only calls the tool ran."
+      }
+    },
+    "usage": {
+      "periodLabel": "Period",
+      "periods": {
+        "today": "Today",
+        "7d": "7 days",
+        "30d": "30 days",
+        "180d": "180 days"
+      },
+      "comparison": {
+        "today": "Today so far (UTC) · vs the same time before",
+        "7d": "Last 7 days · vs the 7 days before",
+        "30d": "Last 30 days · vs the 30 days before",
+        "180d": "Last 180 days · vs the 180 days before"
+      },
+      "loading": "Loading…",
+      "recordingSince": "Tool calls have been recorded since {date}. Days before that are blank, not quiet.",
+      "recordingNothingYet": "No tool calls have been recorded yet.",
+      "privacyNote": "Only counts and outcomes are shown. No arguments, answers or callers are stored or returned.",
+      "unavailable": {
+        "notYetTitle": "Not available yet",
+        "notYetBody": "This backend does not serve tool usage yet.",
+        "title": "Tool usage could not be loaded",
+        "body": "The assistant service did not answer. Try again in a moment.",
+        "forbidden": "Your staff role cannot read tool usage (plugins.read).",
+        "tryAgain": "Try again"
+      },
+      "cards": {
+        "calls": "Tool calls",
+        "successRate": "Success rate",
+        "failed": "Failed",
+        "failedSub": "Errors while running",
+        "medianDuration": "Median duration",
+        "medianDurationSub": "Web search not timed",
+        "needsSetup": "Needs setup",
+        "needsSetupSub": "A member has to connect or fix access",
+        "blocked": "Blocked by rule",
+        "blockedSub": "An owner or member rule, not a fault",
+        "awaiting": "Not run",
+        "awaitingSub": "Awaiting confirmation or declined ({declined} declined)",
+        "degraded": "Tools degraded",
+        "degradedSub": "of {count} tools called",
+        "noPrevious": "Nothing in the previous period",
+        "newSincePrevious": "New this period",
+        "fromPrevious": "from {value}",
+        "ratePoints": "{arrow} {points} pt",
+        "ratePointsFlat": "±0 pt"
+      },
+      "charts": {
+        "calls": "Calls",
+        "perDay": "Calls per day",
+        "perDayAria": "Tool calls per day, stacked by source",
+        "empty": "No tool calls in this period.",
+        "dayTotal": "{calls} calls",
+        "successRate": "Success rate",
+        "successRateAria": "Daily success rate against the target",
+        "target": "target {percent}%",
+        "noCalls": "No calls",
+        "dayFailed": "{failed} failed",
+        "outcomes": "Outcomes",
+        "outcomesAside": "all calls this period",
+        "byTool": "Calls by tool",
+        "sourceFilter": "Source",
+        "allSources": "All"
+      },
+      "outcomes": {
+        "ok": "Succeeded",
+        "blocked": "Blocked by rule",
+        "needsSetup": "Needs setup",
+        "confirmationRequired": "Awaiting confirmation",
+        "declined": "Declined",
+        "error": "Failed"
+      },
+      "failing": {
+        "title": "Failing most",
+        "aside": "failure rate, min {min} calls",
+        "none": "No tool with enough calls has failed.",
+        "detail": "{errors} errors in {ran} runs"
+      },
+      "health": {
+        "title": "Tool health",
+        "aside": "Healthy ≥ 95% · Degraded 85–95% · Failing < 85% (min {min} calls)",
+        "note": "Success here counts only calls the tool ran. Blocked by rule and needs setup are listed apart: the rule working, or a member's job, not the tool failing.",
+        "columns": {
+          "tool": "Tool",
+          "status": "Status",
+          "calls": "Calls",
+          "success": "Success",
+          "stopped": "Blocked / setup",
+          "median": "Median",
+          "workspaces": "Workspaces",
+          "lastCalled": "Last called"
+        }
+      },
+      "workspaces": {
+        "title": "Top workspaces",
+        "aside": "by calls",
+        "none": "No workspace called a tool in this period.",
+        "columns": {
+          "workspace": "Workspace",
+          "calls": "Calls",
+          "failed": "Failed",
+          "failedShare": "Failed share"
+        }
+      }
+    }
   }
 }

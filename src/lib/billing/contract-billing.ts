@@ -12,8 +12,9 @@
  *  2. Blank is not zero. A blank field means "no override, use the plan"; a typed 0 on the
  *     overage cap means "no overage at all". The two are different contracts.
  *
- *  3. Money is spelled with its currency on every confirmation. The contract price is VND by name
- *     (`ContractPriceVnd`); an invoice's currency is whatever the invoice row says. Neither is
+ *  3. Money is spelled with its currency on every confirmation. The contract price is USD by name
+ *     (`ContractPriceUsd`, the accounting currency); an invoice's currency is whatever the invoice
+ *     row says. Neither is
  *     assumed from the other — checkout currency was hardcoded once already.
  *
  * Deliberately free of React so `node:test` can exercise it without a renderer.
@@ -23,7 +24,7 @@ import { formatAdminMoney, type AdminMoneyLike } from "./admin-money.ts";
 
 export interface ContractTermsValues {
   creditsPerCycleOverride: number | null;
-  contractPriceVnd: number | null;
+  contractPriceUsd: number | null;
   overageCapCreditsOverride: number | null;
   overagePricePerCreditOverride: number | null;
   invoiceTermsDaysOverride: number | null;
@@ -32,7 +33,7 @@ export interface ContractTermsValues {
 
 /** Every key the request carries, in the order they are shown. The test pins this against the type. */
 export const CONTRACT_TERMS_KEYS = [
-  "contractPriceVnd",
+  "contractPriceUsd",
   "creditsPerCycleOverride",
   "overageCapCreditsOverride",
   "overagePricePerCreditOverride",
@@ -43,10 +44,10 @@ export const CONTRACT_TERMS_KEYS = [
 export type ContractTermsDraft = Record<keyof ContractTermsValues, string>;
 
 export const CONTRACT_TERMS_LABELS: Record<keyof ContractTermsValues, string> = {
-  contractPriceVnd: "Contract price per cycle (VND)",
+  contractPriceUsd: "Contract price per cycle (USD)",
   creditsPerCycleOverride: "Credits per cycle",
   overageCapCreditsOverride: "Overage cap (credits)",
-  overagePricePerCreditOverride: "Overage price per credit (VND)",
+  overagePricePerCreditOverride: "Overage price per credit (USD)",
   invoiceTermsDaysOverride: "Invoice terms (days)",
   billingContactEmail: "Billing contact email",
 };
@@ -57,7 +58,7 @@ export type ContractTermsSource = Partial<Record<keyof ContractTermsValues, numb
 /**
  * The form's starting point: the STORED overrides, never the effective values.
  *
- * Seeding from `effectiveContractPriceVnd` would look identical on screen and then write the
+ * Seeding from `effectiveContractPrice` would look identical on screen and then write the
  * plan's current price into the override on save — pinning the contract to a number the plan was
  * free to change.
  */
@@ -67,7 +68,7 @@ export function draftFromSubscription(source: ContractTermsSource | null | undef
     return value == null ? "" : String(value);
   };
   return {
-    contractPriceVnd: read("contractPriceVnd"),
+    contractPriceUsd: read("contractPriceUsd"),
     creditsPerCycleOverride: read("creditsPerCycleOverride"),
     overageCapCreditsOverride: read("overageCapCreditsOverride"),
     overagePricePerCreditOverride: read("overagePricePerCreditOverride"),
@@ -84,7 +85,7 @@ export function termsFromSubscription(source: ContractTermsSource | null | undef
     ? parsed.terms
     : {
         creditsPerCycleOverride: null,
-        contractPriceVnd: null,
+        contractPriceUsd: null,
         overageCapCreditsOverride: null,
         overagePricePerCreditOverride: null,
         invoiceTermsDaysOverride: null,
@@ -116,11 +117,11 @@ export function parseContractTermsDraft(draft: ContractTermsDraft): ParseResult 
   if (credits !== null && (!Number.isInteger(credits) || credits <= 0))
     return { ok: false, error: "Credits per cycle must be a whole number above zero, or blank for the plan's." };
 
-  const price = parseNumber(draft.contractPriceVnd);
+  const price = parseNumber(draft.contractPriceUsd);
   if (price !== null && (!Number.isFinite(price) || price < 0))
-    return { ok: false, error: "Contract price must be an amount in VND, or blank for the plan's price." };
-  if (price !== null && !Number.isInteger(price))
-    return { ok: false, error: "Contract price is in VND, which has no minor unit — use a whole amount." };
+    return { ok: false, error: "Contract price must be an amount in USD, or blank for the plan's price." };
+  if (price !== null && Math.round(price * 100) !== price * 100)
+    return { ok: false, error: "Contract price is in USD — use at most two decimals (cents)." };
 
   const cap = parseNumber(draft.overageCapCreditsOverride);
   if (cap !== null && (!Number.isInteger(cap) || cap < 0))
@@ -128,7 +129,7 @@ export function parseContractTermsDraft(draft: ContractTermsDraft): ParseResult 
 
   const overagePrice = parseNumber(draft.overagePricePerCreditOverride);
   if (overagePrice !== null && (!Number.isFinite(overagePrice) || overagePrice < 0))
-    return { ok: false, error: "Overage price must be an amount in VND per credit, or blank." };
+    return { ok: false, error: "Overage price must be an amount in USD per credit, or blank." };
 
   const days = parseNumber(draft.invoiceTermsDaysOverride);
   if (days !== null && (!Number.isInteger(days) || days <= 0))
@@ -145,7 +146,7 @@ export function parseContractTermsDraft(draft: ContractTermsDraft): ParseResult 
     ok: true,
     terms: {
       creditsPerCycleOverride: credits,
-      contractPriceVnd: price,
+      contractPriceUsd: price,
       overageCapCreditsOverride: cap,
       overagePricePerCreditOverride: overagePrice,
       invoiceTermsDaysOverride: days,
@@ -156,7 +157,7 @@ export function parseContractTermsDraft(draft: ContractTermsDraft): ParseResult 
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
-/** An amount with its currency written out, not just its symbol: "₫12,000,000 (VND)". */
+/** An amount with its currency written out, not just its symbol: "$72.00 (USD)". */
 export function spellMoney(money: AdminMoneyLike): string {
   return `${formatAdminMoney(money)} (${money.currency.toUpperCase()})`;
 }
@@ -165,9 +166,11 @@ export function spellMoney(money: AdminMoneyLike): string {
 export function formatContractTerm(key: keyof ContractTermsValues, value: number | string | null): string {
   if (value == null) return "Plan default";
   switch (key) {
-    case "contractPriceVnd":
+    case "contractPriceUsd":
+      return spellMoney({ amount: Number(value), currency: "USD" });
     case "overagePricePerCreditOverride":
-      return spellMoney({ amount: Number(value), currency: "VND" });
+      // A credit is a fraction of a cent: spelled with its own digits, not rounded to $0.00.
+      return `${Number(value).toLocaleString("en-US", { maximumFractionDigits: 10 })} USD per credit`;
     case "creditsPerCycleOverride":
     case "overageCapCreditsOverride":
       return `${numberFormatter.format(Number(value))} credits`;

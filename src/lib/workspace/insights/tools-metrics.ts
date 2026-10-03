@@ -1,149 +1,51 @@
 /**
- * The workspace Insights "Tools" tab, as pure arithmetic over the WarpBot plugin audit log. WT-878.
+ * The workspace Insights "Tools" tab, as pure shaping of the server's tool-call figures.
+ * WT-878, rebuilt on `GET /assistant/workspaces/{id}/insights/tools` in wave 4 (2026-10-01).
  *
- * WHERE THE NUMBERS COME FROM
- *   There is no aggregate endpoint for plugin tool calls. The only source is the audit log the
- *   Plugin activity page reads (`GET /assistant/mcp/tools/audits`): a plain list, newest first, paged
- *   by skip/take, with no total and no date filter. So the tab reads pages until it has walked past
- *   the start of the period (or reached the end of the log) and counts what it read. Every figure
- *   here is a count of real rows — nothing is seeded, defaulted or extrapolated:
- *     - zero calls is a success rate of `null` ("—"), never a friendly default;
- *     - when the read stops at its page cap before reaching the period start, `capped` is set and
- *       the page says "at least N", because older calls in the period were not read.
+ * WHAT THE TAB SHOWS
+ *   Every WarpBot tool call of the period — built-in tools, web search and plugin tools — as calls
+ *   per day stacked by source with the day's success rate, the split of outcomes, and one table of
+ *   every tool that ran with a source chip in front of it. The server does the counting (see
+ *   `tool-insights.ts`); this file only turns its lists into what the charts and table draw.
  *
- * DAYS ARE CUT IN THE PAGE'S TIME ZONE
- *   The admin insights charts plot the server's own day keys and never re-bucket instants in the
- *   browser. This log has no server-side days, so the bucketing has to happen here — and it is done
- *   in the IANA zone the period was resolved in (`timeZone`), never in UTC and never in whatever
- *   zone the test runner happens to be in.
+ * DAYS ARE THE SERVER'S
+ *   `byDay` holds every UTC day of the window, zero days included. They are plotted as they come;
+ *   nothing is re-bucketed in the browser. A month or custom range still in progress adds the days
+ *   still to come, drawn blank (null), never as 0.
  *
  * No `@/` imports: this file runs under `node --test` with type stripping.
  */
 
-export type ToolOutcomeTone = "success" | "blocked" | "attention" | "failed";
+import type {
+  ToolInsightsDayDto,
+  ToolInsightsSourceDto,
+  ToolInsightsToolDto,
+  ToolInsightsTotalsDto,
+} from "../../../types/assistant-tool-insights.ts";
+import { WARPBOT_TOOL_COPY, humaniseToolName } from "../../assistant/warpbot-tools-catalog.ts";
 
-/** What a counted call needs: when, which plugin, and how it ended (a `PluginActivityRow` fits). */
-export interface ToolCallLike {
-  createdAt: string;
-  pluginKey: string;
-  pluginLabel?: string | null;
-  outcome: { tone: ToolOutcomeTone; code?: string | null };
+export type ToolSourceKey = "builtin" | "webSearch" | "plugin" | "other";
+
+/** Chip and stack order: WarpBot's own tools first, then the web, then plugins. */
+export const TOOL_SOURCE_ORDER: readonly Exclude<ToolSourceKey, "other">[] = ["builtin", "webSearch", "plugin"];
+
+/** The server's `source` value to the view's key. Anything unknown is "other", never dropped. */
+export function toolSourceKey(source: string | null | undefined): ToolSourceKey {
+  switch ((source ?? "").toLowerCase()) {
+    case "builtin":
+      return "builtin";
+    case "web_search":
+      return "webSearch";
+    case "plugin":
+      return "plugin";
+    default:
+      return "other";
+  }
 }
 
-/** The three stacks of the outcomes chart. */
-export type ToolOutcomeBucket = "succeeded" | "blocked" | "problem";
-
-export type ToolsHealth = "idle" | "healthy" | "attention";
-
-export interface ToolsPeriodInput {
-  /** Inclusive. */
-  from: Date;
-  /** Exclusive. */
-  to: Date;
-  timeZone: string;
-  /**
-   * Exclusive YYYY-MM-DD end of the day axis when the period runs past `to` (a month or custom
-   * range still in progress); the days in between are drawn blank. Null for the to-now presets.
-   */
-  axisEndDay?: string | null;
-  /** The read stopped at its page cap before reaching `from`. */
-  capped?: boolean;
-}
-
-export interface ToolsPluginCount {
-  key: string;
-  label: string;
-  calls: number;
-  succeeded: number;
-  blocked: number;
-  problem: number;
-}
-
-export interface ToolsDay {
-  /** YYYY-MM-DD in the period's time zone. */
-  key: string;
-  /** A day after the end of the period (still to come): every figure is null. */
-  future: boolean;
-  succeeded: number | null;
-  blocked: number | null;
-  problem: number | null;
-  total: number | null;
-  /** 0–100; null on a day with no calls, and on a day still to come. */
-  successRate: number | null;
-}
-
-export interface ToolsMetrics<T extends ToolCallLike = ToolCallLike> {
-  /** The calls inside [from, to), newest first. */
-  rows: T[];
-  calls: number;
-  succeeded: number;
-  blocked: number;
-  needsSetup: number;
-  awaitingConfirmation: number;
-  failed: number;
-  /** 0–100, unrounded; null when there were no calls. */
-  successRate: number | null;
-  /** ISO instant of the newest call in the period; null when there were none. */
-  lastCallAt: string | null;
-  capped: boolean;
-  health: ToolsHealth;
-  byPlugin: ToolsPluginCount[];
-  days: ToolsDay[];
-}
-
-/** The awaiting-confirmation code; every other "attention" row is a setup problem. */
-const CONFIRMATION_REQUIRED = "confirmation_required";
-
-/** The server refuses longer insights ranges; the axis never needs more. */
-const MAX_AXIS_DAYS = 366;
+// ── days ─────────────────────────────────────────────────────────────────────
 
 const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-// ── classification ───────────────────────────────────────────────────────────
-
-export function isNeedsSetup(outcome: ToolCallLike["outcome"]): boolean {
-  return outcome.tone === "attention" && (outcome.code ?? "").toLowerCase() !== CONFIRMATION_REQUIRED;
-}
-
-export function isAwaitingConfirmation(outcome: ToolCallLike["outcome"]): boolean {
-  return outcome.tone === "attention" && (outcome.code ?? "").toLowerCase() === CONFIRMATION_REQUIRED;
-}
-
-/**
- * Which stack a call lands in. A refusal by the workspace's own policy is its own stack — it is the
- * policy working, not the plugin breaking. Everything that did not run for another reason (failed,
- * needs setup, still awaiting a yes) is the third.
- */
-export function outcomeBucket(outcome: ToolCallLike["outcome"]): ToolOutcomeBucket {
-  if (outcome.tone === "success") return "succeeded";
-  if (outcome.tone === "blocked") return "blocked";
-  return "problem";
-}
-
-// ── time ─────────────────────────────────────────────────────────────────────
-
-const dayFormatters = new Map<string, Intl.DateTimeFormat>();
-
-function dayFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = dayFormatters.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    dayFormatters.set(timeZone, formatter);
-  }
-  return formatter;
-}
-
-/** YYYY-MM-DD of an instant, on the calendar of `timeZone`. */
-export function dayKeyInZone(instant: Date | number, timeZone: string): string {
-  const parts = dayFormatter(timeZone).formatToParts(instant instanceof Date ? instant : new Date(instant));
-  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
 
 /** YYYY-MM-DD plus `days`, as calendar arithmetic on the key itself. */
 export function addDaysToDayKey(key: string, days: number): string {
@@ -153,178 +55,212 @@ export function addDaysToDayKey(key: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function instantOf(iso: string): number {
-  const ms = Date.parse(iso);
-  return Number.isFinite(ms) ? ms : Number.NaN;
-}
+/** The axis never needs more than a year (the period bar's own limit). */
+const MAX_AXIS_DAYS = 366;
 
-/** The calls whose instant is inside [from, to), newest first. Unparseable rows are dropped. */
-export function filterToPeriod<T extends { createdAt: string }>(rows: readonly T[], from: Date, to: Date): T[] {
-  const start = from.getTime();
-  const end = to.getTime();
-  return rows
-    .map((row) => ({ row, at: instantOf(row.createdAt) }))
-    .filter(({ at }) => Number.isFinite(at) && at >= start && at < end)
-    .sort((a, b) => b.at - a.at)
-    .map(({ row }) => row);
-}
-
-export interface PeriodAxisDay {
+export interface ToolsDay {
+  /** YYYY-MM-DD (UTC date, as the server cut it). */
   key: string;
+  /** A day after the end of the period: every figure is null. */
   future: boolean;
+  builtin: number | null;
+  webSearch: number | null;
+  plugin: number | null;
+  total: number | null;
+  ok: number | null;
+  failed: number | null;
+  /** 0–100; null on a day with no calls and on a day still to come. */
+  successRate: number | null;
 }
 
 /**
- * Every day of the period in its time zone: from the day `from` falls on to the day the last
- * instant before `to` falls on, then — when `axisEndDay` runs further — the days still to come.
+ * The per-day series: the server's days in date order (a repeated date is counted once), then —
+ * when `axisEndDay` (exclusive) runs past the last of them — the days still to come.
  */
-export function periodDayAxis(period: Pick<ToolsPeriodInput, "from" | "to" | "timeZone" | "axisEndDay">): PeriodAxisDay[] {
-  const { from, to, timeZone } = period;
-  if (!(to.getTime() > from.getTime())) return [];
-  const first = dayKeyInZone(from, timeZone);
-  const last = dayKeyInZone(to.getTime() - 1, timeZone);
-  const axisEnd = period.axisEndDay && DAY_KEY.test(period.axisEndDay) ? period.axisEndDay : null;
-
-  const days: PeriodAxisDay[] = [];
-  for (let key = first; key <= last && days.length < MAX_AXIS_DAYS; key = addDaysToDayKey(key, 1)) {
-    days.push({ key, future: false });
+export function toolDaySeries(byDay: readonly ToolInsightsDayDto[], axisEndDay?: string | null): ToolsDay[] {
+  const seen = new Set<string>();
+  const days: ToolsDay[] = [];
+  for (const row of [...byDay].filter((d) => DAY_KEY.test(d.date)).sort((a, b) => a.date.localeCompare(b.date))) {
+    if (seen.has(row.date) || days.length >= MAX_AXIS_DAYS) continue;
+    seen.add(row.date);
+    const total = row.builtin + row.webSearch + row.plugin;
+    days.push({
+      key: row.date,
+      future: false,
+      builtin: row.builtin,
+      webSearch: row.webSearch,
+      plugin: row.plugin,
+      total,
+      ok: row.ok,
+      failed: row.failed,
+      successRate: total > 0 ? (Math.min(row.ok, total) / total) * 100 : null,
+    });
   }
-  if (axisEnd) {
+  const end = axisEndDay && DAY_KEY.test(axisEndDay) ? axisEndDay : null;
+  if (end && days.length > 0) {
     for (
-      let key = addDaysToDayKey(last, 1);
-      key < axisEnd && days.length < MAX_AXIS_DAYS;
+      let key = addDaysToDayKey(days[days.length - 1].key, 1);
+      key < end && days.length < MAX_AXIS_DAYS;
       key = addDaysToDayKey(key, 1)
     ) {
-      days.push({ key, future: true });
+      days.push({ key, future: true, builtin: null, webSearch: null, plugin: null, total: null, ok: null, failed: null, successRate: null });
     }
   }
   return days;
 }
 
-// ── the metrics ──────────────────────────────────────────────────────────────
+// ── outcomes ─────────────────────────────────────────────────────────────────
 
-const percent = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
+export type ToolOutcomeKey = "ok" | "error" | "needsSetup" | "blocked" | "declined" | "confirmationRequired";
 
-export function toolsMetrics<T extends ToolCallLike>(allRows: readonly T[], period: ToolsPeriodInput): ToolsMetrics<T> {
-  const rows = filterToPeriod(allRows, period.from, period.to);
+/** Bar order: what ran, what broke, what someone has to fix, then the rules and choices working. */
+export const TOOL_OUTCOME_ORDER: readonly ToolOutcomeKey[] = [
+  "ok",
+  "error",
+  "needsSetup",
+  "blocked",
+  "declined",
+  "confirmationRequired",
+];
 
-  let succeeded = 0;
-  let blocked = 0;
-  let needsSetup = 0;
-  let awaitingConfirmation = 0;
-  let failed = 0;
-  const plugins = new Map<string, ToolsPluginCount>();
-  const perDay = new Map<string, { succeeded: number; blocked: number; problem: number }>();
+/** Every outcome with at least one call, in bar order, with its share of all calls (0–100). */
+export function outcomeSplit(totals: ToolInsightsTotalsDto): { key: ToolOutcomeKey; calls: number; share: number }[] {
+  return TOOL_OUTCOME_ORDER.map((key) => ({ key, calls: totals[key] })).filter((row) => row.calls > 0).map((row) => ({
+    ...row,
+    share: totals.calls > 0 ? (row.calls / totals.calls) * 100 : 0,
+  }));
+}
 
-  for (const row of rows) {
-    const { outcome } = row;
-    if (outcome.tone === "success") succeeded += 1;
-    else if (outcome.tone === "blocked") blocked += 1;
-    else if (outcome.tone === "failed") failed += 1;
-    else if (isAwaitingConfirmation(outcome)) awaitingConfirmation += 1;
-    else needsSetup += 1;
+export type ToolsHealth = "idle" | "healthy" | "attention";
 
-    const bucket = outcomeBucket(outcome);
+/** The Overview tool line's rule (`toolLineStatus`), named for the tab. */
+export function toolsHealth(totals: Pick<ToolInsightsTotalsDto, "calls" | "needsSetup" | "error">): ToolsHealth {
+  if (totals.calls === 0) return "idle";
+  return totals.needsSetup > 0 || totals.error > 0 ? "attention" : "healthy";
+}
 
-    const plugin = plugins.get(row.pluginKey) ?? {
-      key: row.pluginKey,
-      label: row.pluginLabel || row.pluginKey,
-      calls: 0,
-      succeeded: 0,
-      blocked: 0,
-      problem: 0,
-    };
-    plugin.calls += 1;
-    plugin[bucket] += 1;
-    plugins.set(row.pluginKey, plugin);
+// ── source chips ─────────────────────────────────────────────────────────────
 
-    const key = dayKeyInZone(instantOf(row.createdAt), period.timeZone);
-    const day = perDay.get(key) ?? { succeeded: 0, blocked: 0, problem: 0 };
-    day[bucket] += 1;
-    perDay.set(key, day);
-  }
+export type ToolSourceFilter = "all" | Exclude<ToolSourceKey, "other">;
 
-  const days: ToolsDay[] = periodDayAxis(period).map(({ key, future }) => {
-    if (future) {
-      return { key, future, succeeded: null, blocked: null, problem: null, total: null, successRate: null };
-    }
-    const day = perDay.get(key) ?? { succeeded: 0, blocked: 0, problem: 0 };
-    const total = day.succeeded + day.blocked + day.problem;
-    return { key, future, ...day, total, successRate: percent(day.succeeded, total) };
-  });
-
-  const calls = rows.length;
-  return {
-    rows,
-    calls,
-    succeeded,
-    blocked,
-    needsSetup,
-    awaitingConfirmation,
-    failed,
-    successRate: percent(succeeded, calls),
-    lastCallAt: rows[0]?.createdAt ?? null,
-    capped: Boolean(period.capped),
-    health: calls === 0 ? "idle" : needsSetup > 0 || failed > 0 ? "attention" : "healthy",
-    byPlugin: [...plugins.values()].sort((a, b) => b.calls - a.calls || a.label.localeCompare(b.label)),
-    days,
-  };
+export interface ToolSourceChip {
+  key: ToolSourceFilter;
+  calls: number;
 }
 
 /**
- * The plugins bar list: the largest `limit` plugins, then the rest summed into one "Other" row
- * (`key: null`) so the shares still add up to every call.
+ * The chips above the table: "All", then one per source that made a call this period, in source
+ * order, each with its count. A source with no calls has no chip (a chip that filters to an empty
+ * table is a dead end). Counts come from `bySource`; "other" sources only count toward "All".
  */
-export function topPlugins(
-  byPlugin: readonly ToolsPluginCount[],
-  limit: number,
-): { key: string | null; label: string; calls: number }[] {
-  const head = byPlugin.slice(0, Math.max(0, limit)).map((p) => ({ key: p.key as string | null, label: p.label, calls: p.calls }));
-  const rest = byPlugin.slice(Math.max(0, limit)).reduce((sum, p) => sum + p.calls, 0);
-  if (rest > 0) head.push({ key: null, label: "", calls: rest });
-  return head;
-}
-
-// ── reading the log ──────────────────────────────────────────────────────────
-
-export interface AuditWindowOptions {
-  /** Inclusive start of the period: once a page reaches back past it, the read stops. */
-  from: Date;
-  pageSize: number;
-  maxPages: number;
-}
-
-export interface AuditWindow<T> {
-  /** Every row read, newest first as the server sent them (including rows outside the period). */
-  rows: T[];
-  pagesRead: number;
-  /** Stopped at `maxPages` while the log still went on and had not yet reached `from`. */
-  capped: boolean;
-}
-
-/**
- * Read the newest-first log page by page until a page is short (the end of the log), a page
- * reaches back before `from` (the rest is older than the period), or `maxPages` pages were read.
- * Only the last of the three leaves the period possibly incomplete, and only it sets `capped`.
- */
-export async function collectAuditWindow<T extends { createdAt: string }>(
-  fetchPage: (skip: number, take: number) => Promise<readonly T[]>,
-  options: AuditWindowOptions,
-): Promise<AuditWindow<T>> {
-  const start = options.from.getTime();
-  const pageSize = Math.max(1, Math.floor(options.pageSize));
-  const maxPages = Math.max(1, Math.floor(options.maxPages));
-  const rows: T[] = [];
-
-  for (let page = 0; page < maxPages; page += 1) {
-    const batch = await fetchPage(page * pageSize, pageSize);
-    rows.push(...batch);
-    if (batch.length < pageSize) return { rows, pagesRead: page + 1, capped: false };
-    const reachedStart = batch.some((row) => {
-      const at = instantOf(row.createdAt);
-      return Number.isFinite(at) && at < start;
-    });
-    if (reachedStart) return { rows, pagesRead: page + 1, capped: false };
+export function sourceChips(bySource: readonly ToolInsightsSourceDto[], totalCalls: number): ToolSourceChip[] {
+  const perSource = new Map<ToolSourceKey, number>();
+  for (const row of bySource) {
+    const key = toolSourceKey(row.source);
+    perSource.set(key, (perSource.get(key) ?? 0) + Math.max(0, row.calls));
   }
-  return { rows, pagesRead: maxPages, capped: true };
+  const chips: ToolSourceChip[] = [{ key: "all", calls: totalCalls }];
+  for (const key of TOOL_SOURCE_ORDER) {
+    const calls = perSource.get(key) ?? 0;
+    if (calls > 0) chips.push({ key, calls });
+  }
+  return chips;
+}
+
+// ── the tool table ───────────────────────────────────────────────────────────
+
+/** Who acts on a plugin tool's problems: needs setup is the member's, a policy block the Owner's. */
+export type ToolFixer = "member" | "owner" | null;
+
+export interface ToolTableRow {
+  /** Unique per row: a tool name can repeat across plugins. */
+  id: string;
+  tool: string;
+  source: ToolSourceKey;
+  pluginKey: string | null;
+  label: string;
+  pluginLabel: string | null;
+  calls: number;
+  ok: number;
+  error: number;
+  blocked: number;
+  needsSetup: number;
+  /** Declined or awaiting confirmation: the calls not in the four columns. */
+  other: number;
+  successRate: number | null;
+  medianDurationMs: number | null;
+  lastCalledAt: string | null;
+  /** Set on plugin tools only; drives the "who to fix" link to Plugin activity. */
+  fixer: ToolFixer;
+}
+
+export interface ToolLabelSources {
+  /** "Web search", translated. */
+  webSearch: string;
+  /** Plugin key → label, from the plugin catalog. */
+  pluginLabel?: (pluginKey: string) => string | null | undefined;
+  /** Plugin key + tool name → the catalog's tool label. */
+  pluginToolLabel?: (pluginKey: string, tool: string) => string | null | undefined;
+}
+
+/** A tool's display name: the built-in copy, "Web search", the plugin catalog's label, or the name humanised. */
+export function toolDisplayName(
+  row: Pick<ToolInsightsToolDto, "tool" | "source" | "pluginKey">,
+  labels: ToolLabelSources,
+): string {
+  const source = toolSourceKey(row.source);
+  if (source === "webSearch") return labels.webSearch;
+  if (source === "builtin" && Object.prototype.hasOwnProperty.call(WARPBOT_TOOL_COPY, row.tool)) {
+    return WARPBOT_TOOL_COPY[row.tool].displayName;
+  }
+  if (source === "plugin" && row.pluginKey) {
+    const label = labels.pluginToolLabel?.(row.pluginKey, row.tool);
+    if (label) return label;
+  }
+  return humaniseToolName(row.tool);
+}
+
+/** Every tool that ran, most called first (then by name), labelled and with its success rate. */
+export function toolTableRows(byTool: readonly ToolInsightsToolDto[], labels: ToolLabelSources): ToolTableRow[] {
+  return byTool
+    .filter((row) => row.calls > 0)
+    .map((row) => {
+      const source = toolSourceKey(row.source);
+      const pluginKey = source === "plugin" ? row.pluginKey : null;
+      const counted = row.ok + row.error + row.blocked + row.needsSetup;
+      return {
+        id: `${row.source}:${row.pluginKey ?? ""}:${row.tool}`,
+        tool: row.tool,
+        source,
+        pluginKey,
+        label: toolDisplayName(row, labels),
+        pluginLabel: pluginKey ? labels.pluginLabel?.(pluginKey) || pluginKey : null,
+        calls: row.calls,
+        ok: row.ok,
+        error: row.error,
+        blocked: row.blocked,
+        needsSetup: row.needsSetup,
+        other: Math.max(0, row.calls - counted),
+        successRate: (Math.min(row.ok, row.calls) / row.calls) * 100,
+        medianDurationMs: row.medianDurationMs,
+        lastCalledAt: row.lastCalledAt,
+        fixer: source !== "plugin" ? null : row.needsSetup > 0 ? "member" : row.blocked > 0 ? "owner" : null,
+      } satisfies ToolTableRow;
+    })
+    .sort((a, b) => b.calls - a.calls || a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+}
+
+export function filterToolRows(rows: readonly ToolTableRow[], filter: ToolSourceFilter): ToolTableRow[] {
+  return filter === "all" ? [...rows] : rows.filter((row) => row.source === filter);
+}
+
+/** "850 ms", "1.2 s", "12 s", "2.5 min" — a median duration in the table. */
+export function formatDurationMs(ms: number | null | undefined, locale = "en"): string | null {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return null;
+  if (ms < 1000) return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(ms)} ms`;
+  if (ms < 60_000) {
+    const seconds = ms / 1000;
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: seconds < 10 ? 1 : 0 }).format(seconds)} s`;
+  }
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 60_000)} min`;
 }

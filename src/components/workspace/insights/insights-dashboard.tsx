@@ -31,6 +31,7 @@ import { PeriodBar, type PeriodChoice } from "@/components/workspace/insights/pe
 import { ToolsTab } from "@/components/workspace/insights/tools-tab";
 import { UsageTab } from "@/components/workspace/insights/usage-tab";
 import { useInsightsUpdatedAt, useWorkspaceInsightsOverview } from "@/hooks/use-workspace-insights";
+import { useWorkspaceToolInsights } from "@/hooks/use-workspace-tool-insights";
 import type { ResolvedInsightsPeriod } from "@/lib/admin/insights-period";
 import { downloadBlob } from "@/lib/ui/download-blob";
 import { overviewCsv } from "@/lib/workspace/insights/overview-metrics";
@@ -73,7 +74,9 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   const updatedAt = useInsightsUpdatedAt(workspaceId);
   const sources = useWorkspaceInsightsOverview({ workspaceId, period, nowMs, enabled: tab === "overview" });
-  const model = useMemo(() => buildOverviewModel(sources, period), [sources, period]);
+  // The Tools tab reads the same period through the same hook, so the two share one cached answer.
+  const { insights: toolInsights } = useWorkspaceToolInsights({ workspaceId, period, enabled: tab === "overview" });
+  const model = useMemo(() => buildOverviewModel(sources, toolInsights, period), [sources, toolInsights, period]);
 
   const tabProps: InsightsTabProps = { workspaceId, workspaceSlug, period, timeZone, updatedAt };
 
@@ -88,17 +91,17 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   return (
     <div className="flex flex-col gap-3.5 text-ink">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">{t("title")}</h1>
+      {/* No page title: the top bar and the sidebar already name the page (see page-chrome.tsx).
+          The tabs open the page, with the freshness pulse opposite them. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label={t("tabs.label")} className="inline-flex overflow-hidden rounded-lg border border-hairline bg-surface-1">
+          {INSIGHTS_TABS.map((id) => (
+            <button key={id} type="button" className={SEGMENT} aria-pressed={tab === id} onClick={() => props.onChooseTab(id)}>
+              {t(`tabs.${id}`)}
+            </button>
+          ))}
+        </div>
         <UpdatedPulse updatedAt={updatedAt} />
-      </div>
-
-      <div role="group" aria-label={t("tabs.label")} className="inline-flex self-start overflow-hidden rounded-lg border border-hairline bg-surface-1">
-        {INSIGHTS_TABS.map((id) => (
-          <button key={id} type="button" className={SEGMENT} aria-pressed={tab === id} onClick={() => props.onChooseTab(id)}>
-            {t(`tabs.${id}`)}
-          </button>
-        ))}
       </div>
 
       {tab === "usage" ? null : (

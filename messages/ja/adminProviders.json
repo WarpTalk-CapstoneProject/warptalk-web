@@ -22,7 +22,6 @@
     "day": "日別",
     "hour": "時間別",
     "hourlyLimit": "時間別は14日以内の期間でのみ利用できます",
-    "currency": "通貨",
     "search": "プロバイダーを検索",
     "sort": "並び替え",
     "sorts": {
@@ -66,7 +65,6 @@
     "usage": "使用量",
     "billedCredits": "請求クレジット",
     "costUsd": "コスト",
-    "costVnd": "コスト",
     "calls": "呼び出し",
     "failures": "失敗",
     "errorRate": "エラー率",
@@ -75,7 +73,7 @@
     "roomMinutes": "ルーム分",
     "recordings": "録画",
     "failedPayments": "失敗した支払い",
-    "volumeVnd": "支払い額"
+    "volumeUsd": "支払い額"
   },
   "chart": {
     "metricsLabel": "表示する指標",

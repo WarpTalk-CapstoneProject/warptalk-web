@@ -25,6 +25,7 @@ import {
   Paperclip,
   FileText,
   BookBookmark,
+  Lock,
   PlugsConnected,
   MagnifyingGlass,
   Sparkle,
@@ -105,6 +106,7 @@ import {
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
@@ -137,6 +139,7 @@ import {
   readDisabledPluginKeys,
   togglePluginKey,
   writeDisabledPluginKeys,
+  workspaceWriteLock,
   writeToolPolicyUpdate,
   type KeyValueStore,
 } from "@/lib/assistant/tool-policy";
@@ -2299,7 +2302,11 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                {/* Never overflow-hidden: the "/" and "@" menus below are `absolute bottom-full`
+                    children of this box, so clipping it cut both menus off entirely and left only
+                    their shadow on the composer's top edge (#591 → "@ shows no list", 3 Oct). The
+                    permission form rounds its own top corners instead. */}
+                <div className={`${contextInputShellClassName} relative z-10`}>
                   {/* What WarpBot is waiting on, where the user's hands already are. In the thread
                       it scrolled away behind the answer that followed it and was gone when the
                       conversation was reopened, leaving WarpBot talking about a card nobody could
@@ -2319,6 +2326,7 @@ export function GlobalChatbot() {
                       // Declined, or the receipt's four seconds are up. One path out, so a
                       // dismissal cannot leave the answered stamp behind for the next prompt.
                       onDismiss={clearPluginCards}
+                      className="overflow-hidden rounded-t-[inherit]"
                     />
                   ) : null}
                   {/* Slash Command Dropdown */}
@@ -2649,7 +2657,7 @@ export function GlobalChatbot() {
                                   onClick={() => setSkillsMenuOpen(false)}
                                   className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
                                 >
-                                  <span>Explore</span>
+                                  <span>{t("exploreTools")}</span>
                                   <ArrowSquareOut size={11} />
                                 </Link>
                               )}
@@ -2692,7 +2700,7 @@ export function GlobalChatbot() {
                                     onClick={() => setSkillsMenuOpen(false)}
                                     className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline pt-0.5"
                                   >
-                                    <span>Browse All 14 WarpBot Tools</span>
+                                    <span>{t("browseAllTools")}</span>
                                     <ArrowSquareOut size={11} />
                                   </Link>
                                 )}
@@ -2722,6 +2730,9 @@ export function GlobalChatbot() {
                                 {installedAssistantPlugins.map((plugin) => {
                                   const connected = plugin.connectionStatus === "connected";
                                   const alwaysAllowed = pluginWritesAlwaysAllowed(plugin.tools);
+                                  // Write tools the workspace Owner set to ask or blocked: the box
+                                  // leaves them alone, and is locked when they are all of them.
+                                  const writeLock = workspaceWriteLock(plugin.tools);
                                   return (
                                     <li
                                       key={plugin.key}
@@ -2740,16 +2751,37 @@ export function GlobalChatbot() {
                                               : t("connected")}
                                         </div>
                                         {connected && alwaysAllowed !== null ? (
-                                          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-ink-muted">
-                                            <input
-                                              type="checkbox"
-                                              checked={alwaysAllowed}
-                                              disabled={updateToolPolicy.isPending}
-                                              onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
-                                              className="size-3 accent-primary"
-                                            />
-                                            {t("alwaysAllowChanges")}
-                                          </label>
+                                          <Tooltip
+                                            content={
+                                              writeLock === "all"
+                                                ? t("alwaysAllowLockedHint")
+                                                : writeLock === "some"
+                                                  ? t("alwaysAllowPartlyLocked")
+                                                  : null
+                                            }
+                                          >
+                                            <label
+                                              className={cn(
+                                                "mt-1 flex w-fit items-center gap-1.5 text-[11px] text-ink-muted",
+                                                writeLock === "all" ? "cursor-not-allowed" : "cursor-pointer",
+                                              )}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={alwaysAllowed}
+                                                disabled={updateToolPolicy.isPending || writeLock === "all"}
+                                                onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
+                                                className="size-3 accent-primary"
+                                              />
+                                              {t("alwaysAllowChanges")}
+                                              {writeLock ? (
+                                                <span className="inline-flex items-center gap-0.5 text-ink-subtle">
+                                                  <Lock size={10} aria-hidden />
+                                                  {writeLock === "all" ? t("alwaysAllowLocked") : null}
+                                                </span>
+                                              ) : null}
+                                            </label>
+                                          </Tooltip>
                                         ) : null}
                                       </div>
                                       {connected ? (

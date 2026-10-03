@@ -3,17 +3,13 @@ import { useTranslations } from "next-intl";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
-import { getLanguageCode, isLanguageAllowedByPolicy, languagesInScope } from "@/lib/language/languages";
+import {
+  getLanguageCode,
+  isLanguageAllowedByPolicy,
+  meetingLanguagePickerOptions,
+} from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
-import { cn } from "@/lib/utils";
 import { normalizeLanguage } from "@/lib/language/language-profile";
-
-// Rooms store locale tags, so the option value is the tag; the name comes from the registry
-// rather than being spelled out again here.
-const languageOptions = languagesInScope("meeting").map((language) => ({
-  code: language.locale,
-  label: language.name,
-}));
 
 /**
  * Meeting-language picker. A meeting is defined by the SET of languages that will be
@@ -23,12 +19,11 @@ const languageOptions = languagesInScope("meeting").map((language) => ({
  * hallucination. At least one language must always remain selected.
  *
  * WT-271: the list is the "meeting" scope narrowed by the workspace's `allowedTargetLanguages`
- * policy. Languages the policy forbids are shown DISABLED with the reason attached rather
- * than dropped: a host who has run Korean meetings before would otherwise watch Korean
- * silently vanish and conclude the product broke, with nothing pointing at the workspace
- * setting or at the admin who owns it. The list also stays the same length in every
- * workspace, so "where did it go" never has to be asked. Hiding would have been fewer lines
- * and no more honest.
+ * policy. Languages the policy forbids are NOT listed — no greyed rows, no "Blocked" tag, no
+ * footnote (owner, 1 Oct 2026; this reverses the earlier show-disabled design). The one
+ * exception is a forbidden language the room already holds: it stays listed, selected, so the
+ * host can remove it — see `meetingLanguagePickerOptions`. The server still validates the set
+ * on save; hiding here is presentation only.
  *
  * A policy that is empty or absent means unrestricted — see `isLanguageAllowedByPolicy`.
  */
@@ -73,18 +68,19 @@ export function LanguageSelector({
       const bare = normalizeLanguage(code);
       onLanguagesChange(selected.filter((item) => normalizeLanguage(item) !== bare));
     } else {
-      // Belt to the disabled row's braces: a forbidden language never enters the set, even
-      // if something else calls this.
+      // A forbidden language is never listed unpicked, but it never enters the set either,
+      // even if something else calls this.
       if (!isLanguageAllowedByPolicy(code, allowedTargetLanguages)) return;
       onLanguagesChange([...selected, code]);
     }
   }
 
-  const options = languageOptions.map((language) => ({
-    ...language,
-    isAllowed: isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  // Rooms store locale tags, so the option value is the tag; the name comes from the registry
+  // rather than being spelled out again here.
+  const options = meetingLanguagePickerOptions(selected, allowedTargetLanguages).map((language) => ({
+    code: language.locale,
+    label: language.name,
   }));
-  const hasBlockedLanguage = options.some((language) => !language.isAllowed);
 
   if (readOnly) {
     return (
@@ -127,22 +123,11 @@ export function LanguageSelector({
               <CommandGroup heading={t("heading")} className="text-[11px] text-ink-muted">
                 {options.map((language) => {
                   const isSelected = isPicked(language.code);
-                  // A forbidden language that is somehow already picked (an older room, or a
-                  // policy tightened after the fact) stays clickable so it can be removed —
-                  // disabling it there would trap the host with a set the server refuses.
-                  const isDisabled = !language.isAllowed && !isSelected;
-                  const blockedReason = t("blockedReason", { language: language.label });
                   return (
                     <CommandItem
                       key={language.code}
-                      disabled={isDisabled}
                       onSelect={() => toggleLanguage(language.code)}
-                      title={language.isAllowed ? undefined : blockedReason}
-                      aria-label={language.isAllowed ? undefined : blockedReason}
-                      className={cn(
-                        "w-full rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 flex items-center justify-between gap-2",
-                        isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                      )}
+                      className="w-full rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 flex items-center justify-between gap-2 cursor-pointer"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[14px] leading-none">{getLanguageCode(language.code)}</span>
@@ -150,22 +135,11 @@ export function LanguageSelector({
                       </div>
                       <div data-slot="command-shortcut" className="flex shrink-0 ml-auto items-center">
                         {isSelected && <CheckCircle weight="fill" color="#3b82f6" className="h-3.5 w-3.5" />}
-                        {!language.isAllowed && !isSelected && (
-                          <span className="text-[10px] uppercase tracking-wide text-ink-muted">
-                            {t("blocked")}
-                          </span>
-                        )}
                       </div>
                     </CommandItem>
                   );
                 })}
               </CommandGroup>
-              {/* The reason, said once, rather than an unexplained gap in the list. */}
-              {hasBlockedLanguage && (
-                <p className="px-2 pt-1 pb-0.5 text-[10px] leading-snug text-ink-muted">
-                  {t("blockedFooter")}
-                </p>
-              )}
             </CommandList>
           </Command>
         </PopoverContent>

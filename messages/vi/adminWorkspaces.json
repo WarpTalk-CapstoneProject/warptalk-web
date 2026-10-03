@@ -275,10 +275,10 @@
   },
   "contractBilling": {
     "termLabels": {
-      "contractPriceVnd": "Giá hợp đồng mỗi chu kỳ (VND)",
+      "contractPriceUsd": "Giá hợp đồng mỗi chu kỳ (USD)",
       "creditsPerCycleOverride": "Credit mỗi chu kỳ",
       "overageCapCreditsOverride": "Giới hạn vượt mức (credit)",
-      "overagePricePerCreditOverride": "Giá mỗi credit vượt mức (VND)",
+      "overagePricePerCreditOverride": "Giá mỗi credit vượt mức (USD)",
       "invoiceTermsDaysOverride": "Thời hạn thanh toán hóa đơn (ngày)",
       "billingContactEmail": "Email liên hệ thanh toán"
     },
@@ -314,7 +314,6 @@
     "cancel": "Hủy",
     "review": "Xem lại",
     "errorChoosePlan": "Chọn gói mà hợp đồng này được lập dựa trên.",
-    "errorPlanCurrency": "{planName} được định giá bằng {currency}. Hãy nhập giá hợp đồng bằng VND.",
     "errorNoChanges": "Chưa có thay đổi nào.",
     "errorSaveTerms": "Không thể lưu điều khoản hợp đồng.",
     "errorCreateContract": "Không thể tạo hợp đồng.",

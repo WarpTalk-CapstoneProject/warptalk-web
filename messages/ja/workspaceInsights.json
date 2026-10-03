@@ -46,7 +46,6 @@
     "floorNote": "上限まで読み込みました。実際の数値はこれより多い可能性があります",
     "withoutDuration": "{count, plural, other {# 件の会議は所要時間が記録されていないため含まれていません}}",
     "hoursNote": "この期間に開催された会議の開始から終了までの時間",
-    "successNote": "読み込んだ最新 {count, plural, other {# 件}}の呼び出しに基づきます。期間内のそれより古い呼び出しは読み込んでいません",
     "noCalls": "この期間の呼び出しはありません"
   },
   "snapshot": {
@@ -90,12 +89,12 @@
       "healthy": "正常",
       "noCalls": "呼び出しなし"
     },
-    "noCallsHint": "この期間のプラグイン呼び出しはありません",
+    "noCallsHint": "この期間の WarpBot ツール呼び出しはありません",
     "calls": "この期間 {count, plural, other {{value} 件}}の呼び出し",
-    "callsAtLeast": "この期間 {count, plural, other {{value} 件}}以上の呼び出し",
     "success": "成功率 {percent}",
     "blocked": "ポリシーによるブロック {count} 件",
     "needsSetup": "設定が必要 {count} 件",
+    "failed": "失敗 {count} 件",
     "lastCall": "最終呼び出し {time}"
   },
   "links": {
@@ -132,10 +131,16 @@
     "hoursCaption": "{hours} を翻訳",
     "hoursUnknown": "時間は利用できません",
     "hoursSuffix": "{hours} を翻訳",
-    "pluginsTitle": "プラグイン別のツール呼び出し",
-    "pluginsCaption": "WarpBot の呼び出し · {period}",
-    "pluginsAria": "プラグイン別の WarpBot ツール呼び出し",
-    "noToolCalls": "この期間のプラグイン呼び出しはありません",
+    "toolSourcesTitle": "ソース別のツール呼び出し",
+    "toolSourcesCaption": "組み込み・ウェブ検索・プラグインの呼び出し · {period}",
+    "toolSourcesAria": "ソース別の WarpBot ツール呼び出し",
+    "toolOrigin": {
+      "builtin": "組み込みツール",
+      "webSearch": "ウェブ検索",
+      "plugin": "プラグイン",
+      "other": "その他"
+    },
+    "noToolCalls": "この期間のツール呼び出しはありません",
     "callsValue": "{count, plural, other {{value} 件の呼び出し}}"
   },
   "attention": {
@@ -213,6 +218,8 @@
       "succeeded": "成功",
       "blocked": "ブロック",
       "blockedHint": "ポリシーによりブロックされたか、確認が拒否されました。プラグイン設定で権限を確認してください。",
+      "workspaceToolBlocked": "ワークスペースがブロック",
+      "workspaceToolBlockedHint": "ワークスペースのオーナーがこのツールを WarpBot に対してブロックしました。再び許可できるのはオーナーだけで、ワークスペースのプラグインページから行います。",
       "awaitingConfirmation": "確認待ち",
       "awaitingConfirmationHint": "続行する前に WarpBot でユーザーの確認が必要です。",
       "needsSetup": "設定が必要",

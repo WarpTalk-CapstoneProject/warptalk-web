@@ -54,3 +54,67 @@ export function resolveEgressDisplayName(
 ): string {
   return name?.trim() || identity?.trim() || "Participant";
 }
+
+/**
+ * WT-910 — the Google Meet window, in a bridge room's recording.
+ *
+ * A bridged call happens in Google Meet, so the picture worth recording is Meet's own window: the
+ * desktop app captures it and the host's WarpTalk client publishes it under this track name
+ * (persistent-meeting-session's BridgeMeetWindowPublisher). WarpTalk's own participants have no
+ * cameras on in a bridge room — the popup has none — so a grid of them is a grid of initials.
+ *
+ * By NAME and not by source: it is published as a screen share, and an ordinary screen share in a
+ * native meeting must keep recording the way it does today.
+ */
+export const MEET_WINDOW_TRACK_NAME = "meet-window";
+
+export function isMeetWindowTrack(trackName: string | null | undefined): boolean {
+  return trackName === MEET_WINDOW_TRACK_NAME;
+}
+
+/**
+ * How the recording frame is laid out.
+ *
+ * `meet-window` when a Meet window video is subscribed: it fills the frame and nobody is drawn as
+ * a tile, while every recordable participant's AUDIO is still mounted and mixed. `grid` otherwise —
+ * every native meeting, and a bridge recording whose window could not be captured (audio-only).
+ */
+export type EgressLayout = "grid" | "meet-window";
+
+export function resolveEgressLayout(
+  tiles: ReadonlyArray<{ kind: string; meetWindow?: boolean }>,
+): EgressLayout {
+  return tiles.some((tile) => tile.kind === "video" && tile.meetWindow === true)
+    ? "meet-window"
+    : "grid";
+}
+
+/**
+ * WT-910 follow-up — the Meet window is shown only once it has a picture.
+ *
+ * The layout above switches to `meet-window` the moment the track is SUBSCRIBED, on a black stage.
+ * A track that never delivered a frame therefore recorded as an unbroken black rectangle for the
+ * whole meeting, indistinguishable from a broken file. Until the first frame is decoded (and while
+ * the publisher has the track muted) the stage shows a slate instead: the grid's own light ground
+ * with a line saying what is missing, so a recording without its picture explains itself.
+ */
+export function meetWindowShowsPicture(input: { firstFrameSeen: boolean; muted: boolean }): boolean {
+  return input.firstFrameSeen && !input.muted;
+}
+
+/**
+ * How long a subscribed Meet window may go without its first frame before the subscription is
+ * renewed. A fresh subscription is a fresh downtrack, and with it a fresh keyframe request.
+ */
+export const MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS = 8_000;
+
+/** Whether to renew the subscription now: once per publication, and only for a picture that never came. */
+export function shouldResubscribeMeetWindow(input: {
+  firstFrameSeen: boolean;
+  subscribedAtMs: number;
+  nowMs: number;
+  alreadyRetried: boolean;
+}): boolean {
+  if (input.firstFrameSeen || input.alreadyRetried) return false;
+  return input.nowMs - input.subscribedAtMs >= MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS;
+}

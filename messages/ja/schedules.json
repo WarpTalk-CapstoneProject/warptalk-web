@@ -34,7 +34,10 @@
     "youHost": "主催",
     "invited": "招待",
     "invitedBy": "{name}からの招待",
-    "invitedByLabel": "招待元"
+    "invitedByLabel": "招待元",
+    "participant": "参加者",
+    "hostedBy": "主催者: {name}",
+    "hostedByLabel": "主催者"
   },
   "monthView": {
     "noMeetingsMatchSearch": "この検索に一致する会議はありません。",

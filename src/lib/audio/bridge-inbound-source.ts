@@ -16,7 +16,12 @@
 // resolves neither tsconfig paths nor Next's bundler. Sibling modules get away with the alias
 // because they import only types, and those are stripped before Node ever sees them —
 // `getDesktopBridge` is a value, so the import has to be one Node can follow.
-import { getDesktopBridge, type WindowsLoopbackCaptureRequest } from "../desktop/bridge.ts";
+import {
+  getDesktopBridge,
+  supportsMeetSightingCapture,
+  type WindowsLoopbackCaptureRequest,
+  type WindowsLoopbackStartResult,
+} from "../desktop/bridge.ts";
 
 import type { BridgeInboundSource } from "./bridge-inbound-connection.ts";
 import { decodeS16lePcmChunk, WindowsLoopbackPcmTrackBridge } from "./windows-loopback-pcm.ts";
@@ -31,6 +36,24 @@ export interface BridgeInboundSourceHandles {
    * subscription and an AudioContext, none of which the publisher knows about.
    */
   dispose: () => Promise<void>;
+  /** How a loopback capture was aimed: the desktop's own Meet sighting, or the picked window. */
+  capturedVia?: "meet-sighting" | "picker";
+}
+
+/**
+ * Refusals that mean "the sighting could not aim this capture", not "this capture may not start".
+ * `target-process-required` is what a desktop older than `target` says: it ignored the field and
+ * found neither a window nor a PID. Anything else (consent, readiness, R1) would refuse the picked
+ * window just the same, so it is reported as it is.
+ */
+const MEET_SIGHTING_FALLBACK_REASONS = new Set([
+  "meet-sighting-missing",
+  "meet-sighting-no-process",
+  "target-process-required",
+]);
+
+export function shouldFallBackFromMeetSighting(result: WindowsLoopbackStartResult): boolean {
+  return !result.started && MEET_SIGHTING_FALLBACK_REASONS.has(result.reason);
 }
 
 /** The far side arrives on a real audio endpoint. Nothing to set up: the publisher opens it. */
@@ -77,6 +100,19 @@ export async function openLoopbackInboundSource(options: {
   sourceId?: string;
   /** Already-resolved PID, when the caller has one. The desktop side resolves `sourceId` if not. */
   targetProcessId?: number;
+  /**
+   * Text-only bridge (desktop #45): "text-only" lets the desktop start without VB-CABLE, because
+   * nothing is dubbed into Meet. Omitted is voice, the old contract.
+   */
+  mode?: "voice" | "text-only";
+  /**
+   * Try the desktop's own Meet sighting first (`target: "meet-sighting"`) when the desktop supports
+   * it, and fall back to `sourceId` when it cannot aim. A capture aimed this way is stopped by the
+   * desktop once Meet has been gone for its grace; `onCaptureStopped` is called then.
+   */
+  preferMeetSighting?: boolean;
+  /** The desktop stopped this capture on its own (Meet gone). Only for a sighting-aimed capture. */
+  onCaptureStopped?: (reason: string) => void;
 }): Promise<BridgeInboundSourceHandles> {
   const bridge = getDesktopBridge();
   if (!bridge?.startAudioCapture || !bridge.onWindowsLoopbackPcmChunk) {
@@ -101,12 +137,46 @@ export async function openLoopbackInboundSource(options: {
     includeTargetProcessTree: true,
     sourceId: options.sourceId,
     targetProcessId: options.targetProcessId,
+    ...(options.mode ? { mode: options.mode } : {}),
   };
 
-  let result;
+  // Subscribed before the start like the chunks, so a stop that lands right after it is not lost.
+  // Kept only for a capture the sighting aimed: the desktop never stops a picked window on its own.
+  const sighting = options.preferMeetSighting === true && supportsMeetSightingCapture(bridge);
+  let disposed = false;
+  let stoppedReason: string | null = null;
+  let unsubscribeStopped: (() => void) | null = null;
+  if (sighting && options.onCaptureStopped && bridge.onAudioCaptureStopped) {
+    try {
+      unsubscribeStopped = bridge.onAudioCaptureStopped((event) => {
+        stoppedReason = typeof event?.reason === "string" ? event.reason : "stopped";
+        if (!disposed && capturedVia === "meet-sighting") options.onCaptureStopped?.(stoppedReason);
+      });
+    } catch {
+      unsubscribeStopped = null;
+    }
+  }
+  let capturedVia: "meet-sighting" | "picker" | null = null;
+
+  let result: WindowsLoopbackStartResult | null = null;
   try {
-    result = await bridge.startAudioCapture(request);
+    if (sighting) {
+      try {
+        result = await bridge.startAudioCapture({ ...request, target: "meet-sighting", stopWhenMeetGone: true });
+      } catch {
+        // A failure on the new path is no reason to skip the old one.
+        result = null;
+      }
+      if (result?.started) capturedVia = "meet-sighting";
+    }
+    if (!result || shouldFallBackFromMeetSighting(result)) {
+      unsubscribeStopped?.();
+      unsubscribeStopped = null;
+      result = await bridge.startAudioCapture(request);
+      if (result.started) capturedVia = "picker";
+    }
   } catch (error) {
+    unsubscribeStopped?.();
     unsubscribe();
     pcm.close();
     throw new LoopbackInboundError(
@@ -115,6 +185,7 @@ export async function openLoopbackInboundSource(options: {
   }
 
   if (!result.started) {
+    unsubscribeStopped?.();
     unsubscribe();
     pcm.close();
     throw new LoopbackInboundError(
@@ -124,12 +195,21 @@ export async function openLoopbackInboundSource(options: {
     );
   }
 
-  let disposed = false;
+  // Stopped while the start was still resolving: the caller is told once it has the handles.
+  const stoppedEarly = stoppedReason;
+  if (stoppedEarly && capturedVia === "meet-sighting" && options.onCaptureStopped) {
+    queueMicrotask(() => {
+      if (!disposed) options.onCaptureStopped?.(stoppedEarly);
+    });
+  }
+
   return {
     source: { kind: "track", track: pcm.track },
+    capturedVia: capturedVia ?? "picker",
     dispose: async () => {
       if (disposed) return;
       disposed = true;
+      unsubscribeStopped?.();
       unsubscribe();
       pcm.close();
       // Last, and never allowed to throw past the caller: the local teardown above has already

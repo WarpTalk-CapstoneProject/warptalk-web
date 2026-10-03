@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canEditRoomSetup,
+  canEndRoom,
   canJoinTranslationRoom,
+  isRoomHost,
   resolveRoomEntryIntent,
   shouldEnterWaitingRoom,
 } from "../translation-room-access.ts";
@@ -192,4 +195,80 @@ test("somebody already in an open room is offered the way back, not device setup
 
   assert.equal(intent.mode, "join");
   assert.equal(intent.label, "Return to meeting");
+});
+
+test("WT-904: a non-host opens an external meeting on Google Meet, not WarpTalk's two-seat room", () => {
+  const base = {
+    status: "in_progress" as const,
+    statusLabel: "In Progress",
+    isExternalBridge: true,
+    externalMeetingUrl: "https://meet.google.com/ffo-iwxx-abc",
+  };
+  const guest = resolveRoomEntryIntent({ ...base, isHost: false });
+  assert.equal(guest.mode, "external_meeting");
+  assert.equal(guest.href, "https://meet.google.com/ffo-iwxx-abc");
+  assert.equal(guest.isActionable, true);
+
+  // Even before the host opened WarpTalk's side: the Meet call does not wait for it.
+  const early = resolveRoomEntryIntent({ ...base, status: "waiting", isHost: false });
+  assert.equal(early.mode, "external_meeting");
+
+  // The host still enters WarpTalk's side — that is where the translation runs.
+  assert.equal(resolveRoomEntryIntent({ ...base, isHost: true }).mode, "join");
+  // A finished meeting has nothing to open.
+  assert.equal(resolveRoomEntryIntent({ ...base, status: "ended", isHost: false }).mode, "unavailable");
+  // No usable link: fall back to the ordinary flow rather than a dead button.
+  assert.equal(resolveRoomEntryIntent({ ...base, externalMeetingUrl: null, isHost: false }).mode, "join");
+  assert.equal(
+    resolveRoomEntryIntent({ ...base, externalMeetingUrl: "javascript:alert(1)", isHost: false }).mode,
+    "join",
+  );
+  // Not a bridge room: unchanged.
+  assert.equal(
+    resolveRoomEntryIntent({ ...base, isExternalBridge: false, isHost: false }).mode,
+    "join",
+  );
+});
+
+test("WT-715: either host signal makes the viewer the host", () => {
+  const viewer = { id: "user-1" };
+  // Booked it.
+  assert.equal(isRoomHost({ status: "scheduled", hostId: "user-1" }, viewer), true);
+  // Handed it: the server says so even though hostId is the booker.
+  assert.equal(
+    isRoomHost({ status: "scheduled", hostId: "booker", isHost: true }, viewer),
+    true,
+  );
+  assert.equal(
+    isRoomHost({ status: "scheduled", hostId: "booker", isHost: false }, viewer),
+    false,
+  );
+  // An unresolved viewer is nobody's host, even against a room with no hostId.
+  assert.equal(isRoomHost({ status: "scheduled", hostId: undefined }, null), false);
+  assert.equal(isRoomHost({ status: "scheduled", hostId: "" }, { id: "" }), false);
+});
+
+test("WT-715: setup is editable only by the host, only before the meeting starts", () => {
+  const host = { id: "host" };
+  const editable = ["scheduled", "waiting", "open", "SCHEDULED", "WAITING", "OPEN"];
+  for (const status of editable) {
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, host), true, status);
+    assert.equal(canEditRoomSetup({ status, isHost: true }, { id: "someone" }), true, status);
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, { id: "guest" }), false, status);
+  }
+  for (const status of ["in_progress", "paused", "ended", "cancelled", "failed", "timeout", "unknown"]) {
+    assert.equal(canEditRoomSetup({ status, hostId: "host" }, host), false, status);
+  }
+});
+
+test("WT-715: End is offered only to the host, only where the backend accepts it", () => {
+  const host = { id: "host" };
+  for (const status of ["waiting", "open", "in_progress", "paused", "IN_PROGRESS"]) {
+    assert.equal(canEndRoom({ status, hostId: "host" }, host), true, status);
+    assert.equal(canEndRoom({ status, isHost: true }, null), true, status);
+    assert.equal(canEndRoom({ status, hostId: "host" }, { id: "guest" }), false, status);
+  }
+  for (const status of ["scheduled", "ended", "cancelled", "failed", "timeout", "unknown"]) {
+    assert.equal(canEndRoom({ status, hostId: "host" }, host), false, status);
+  }
 });

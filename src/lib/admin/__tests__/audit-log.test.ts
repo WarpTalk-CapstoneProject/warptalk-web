@@ -60,6 +60,7 @@ test("a verb reads as a sentence, and an unknown one still reads as words — ne
   assert.equal(auditActionLabel("suspend"), "Workspace suspended");
   assert.equal(auditActionLabel("subscription.plan_changed"), "Plan changed");
   assert.equal(auditActionLabel("rate_card.provider_cost_set"), "Provider cost set");
+  assert.equal(auditActionLabel("rate_card.credit_price_set"), "Meeting credit rate changed");
   assert.equal(auditActionLabel("widget.frobnicated"), "Widget frobnicated");
   assert.equal(auditEntityTypeLabel("supported_language"), "Language");
   assert.equal(auditEntityTypeLabel("mystery_thing"), "Mystery thing");

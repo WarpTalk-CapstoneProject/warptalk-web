@@ -98,7 +98,7 @@
     "record": "Ghi khoản chi",
     "emptyTitle": "Không có khoản chi trong kỳ này",
     "emptyDescription": "Hãy ghi một khoản, hoặc nhập từ CSV.",
-    "unconverted": "{count, plural, other {# khoản chi USD}} chưa có tỷ giá cho ngày của nó nên không nằm trong tổng VND."
+    "unconverted": "{count, plural, other {# khoản chi VND}} chưa có tỷ giá cho ngày của nó nên không nằm trong tổng USD."
   },
   "tiles": {
     "total": "Tổng",
@@ -111,9 +111,9 @@
     "invalid": "Ngân sách tháng {month} không phải số hợp lệ.",
     "saved": "{count, plural, other {Đã lưu # ngân sách}}",
     "saveFailed": "Không lưu được ngân sách.",
-    "alertOver": "{category} vượt ngân sách tháng {month}: {actual} trên {budget} VND ({percent}%).",
-    "alertNear": "{category} đã dùng {percent}% ngân sách tháng {month}: {actual} trên {budget} VND.",
-    "hint": "Ngân sách hằng tháng theo VND. Dưới mỗi ô: số đã chi và tỷ lệ so với ngân sách.",
+    "alertOver": "{category} vượt ngân sách tháng {month}: {actual} trên {budget} USD ({percent}%).",
+    "alertNear": "{category} đã dùng {percent}% ngân sách tháng {month}: {actual} trên {budget} USD.",
+    "hint": "Ngân sách hằng tháng theo USD. Dưới mỗi ô: số đã chi và tỷ lệ so với ngân sách.",
     "unsaved": "{count, plural, other {# ô chưa lưu}}",
     "discard": "Bỏ thay đổi",
     "save": "Lưu ngân sách",
@@ -199,7 +199,7 @@
     "validating": "Đang kiểm tra…",
     "validRows": "{count, plural, other {# dòng hợp lệ}}",
     "invalidRows": "{count, plural, other {# dòng có lỗi}}",
-    "totalVnd": "Tổng {total}",
+    "totalUsd": "Tổng {total}",
     "unknownColumns": "Cột bị bỏ qua: {columns}",
     "cancel": "Huỷ",
     "importAll": "Nhập {count, plural, other {# khoản chi}}",

@@ -526,5 +526,174 @@
       "saving": "保存中…",
       "failed": "変更できませんでした。もう一度お試しください。"
     }
+  },
+  "warpbotTools": {
+    "eyebrow": "構成",
+    "title": "WarpBot ツール",
+    "description": "このプラットフォームで WarpBot ができること、そしてその実行状況。件数と結果のみを扱い、引数や回答は保存も表示もしません。",
+    "refresh": "更新",
+    "tabsLabel": "WarpBot ツールの表示",
+    "tabs": {
+      "catalog": "カタログ",
+      "usage": "利用状況"
+    },
+    "source": {
+      "builtin": "組み込み",
+      "webSearch": "ウェブ検索",
+      "plugin": "プラグイン"
+    },
+    "health": {
+      "healthy": "正常",
+      "degraded": "低下",
+      "failing": "障害",
+      "notEnoughCalls": "呼び出し不足"
+    },
+    "catalog": {
+      "loading": "読み込み中…",
+      "usageUnavailable": "呼び出し件数はまだ利用できません。",
+      "pluginsNote": "プラグインのツールはプラグインごとに管理します。",
+      "pluginsLink": "プラグイン →",
+      "webSearch": {
+        "title": "ウェブ検索",
+        "subtitle": "OpenAI がホストするツール",
+        "flagLabel": "プラットフォームフラグ",
+        "flagNoAccess": "このフラグを見るには settings.read が必要です。",
+        "flagUnavailable": "プラットフォーム設定を読み込めませんでした。",
+        "flagHint": "すべてのワークスペースの既定値",
+        "flagDenied": "フラグで無効のワークスペース {count} 件",
+        "flagOverrides": "プランまたはワークスペースの上書き {count} 件",
+        "flagRollout": "{percent}% に展開",
+        "state": {
+          "on": "オン",
+          "off": "オフ",
+          "unknown": "不明"
+        },
+        "changeInSettings": "プラットフォーム設定で変更",
+        "openInSettings": "プラットフォーム設定で開く",
+        "ceilingLabel": "デプロイ設定",
+        "ceilingHint": "上限です。AI ワーカーのデプロイでオフなら、フラグに関係なくすべてでオフになります。ポータルからは読めません。",
+        "ceilingNotVisible": "ここでは表示不可",
+        "usageLabel": "呼び出し（過去 30 日）",
+        "usageLine": "{calls} 件の呼び出し · 成功率 {rate} · {workspaces} ワークスペース",
+        "usageNone": "過去 30 日間にウェブ検索の呼び出しはありません。"
+      },
+      "builtIn": {
+        "title": "組み込みツール",
+        "subtitle": "{count} 個のツール · AI ワーカーで定義、ここでは閲覧のみ",
+        "columns": {
+          "tool": "ツール",
+          "description": "機能",
+          "calls": "呼び出し（30 日）",
+          "success": "成功率"
+        },
+        "noCopy": "利用データにのみ存在し、説明はまだありません。",
+        "note": "これはウェブに同梱されたツールの説明です。各ワークスペースの一覧は AI ワーカーが提供し、そのワークスペース向けに絞り込まれます。{webSearch} は上に表示しています。成功率はツールが実際に実行した呼び出しのみで計算します。"
+      }
+    },
+    "usage": {
+      "periodLabel": "期間",
+      "periods": {
+        "today": "今日",
+        "7d": "7 日",
+        "30d": "30 日",
+        "180d": "180 日"
+      },
+      "comparison": {
+        "today": "今日これまで（UTC）· 直前の同じ長さと比較",
+        "7d": "過去 7 日 · その前の 7 日と比較",
+        "30d": "過去 30 日 · その前の 30 日と比較",
+        "180d": "過去 180 日 · その前の 180 日と比較"
+      },
+      "loading": "読み込み中…",
+      "recordingSince": "ツールの呼び出しは {date} から記録されています。それ以前の日は未記録のため空欄です。",
+      "recordingNothingYet": "ツールの呼び出しはまだ記録されていません。",
+      "privacyNote": "件数と結果のみを表示します。引数、回答、呼び出した人は保存も返却もされません。",
+      "unavailable": {
+        "notYetTitle": "まだ利用できません",
+        "notYetBody": "このバックエンドはまだツールの利用状況を提供していません。",
+        "title": "ツールの利用状況を読み込めませんでした",
+        "body": "アシスタントサービスが応答しませんでした。しばらくしてから再試行してください。",
+        "forbidden": "あなたのスタッフロールではツールの利用状況（plugins.read）を読めません。",
+        "tryAgain": "再試行"
+      },
+      "cards": {
+        "calls": "ツール呼び出し",
+        "successRate": "成功率",
+        "failed": "失敗",
+        "failedSub": "実行中のエラー",
+        "medianDuration": "所要時間の中央値",
+        "medianDurationSub": "ウェブ検索は計測対象外",
+        "needsSetup": "要セットアップ",
+        "needsSetupSub": "メンバーによる接続や権限の修正が必要",
+        "blocked": "ルールでブロック",
+        "blockedSub": "オーナーまたはメンバーのルールであり、障害ではありません",
+        "awaiting": "未実行",
+        "awaitingSub": "確認待ちまたは拒否（拒否 {declined} 件）",
+        "degraded": "低下中のツール",
+        "degradedSub": "呼び出された {count} 個のツール中",
+        "noPrevious": "前の期間は呼び出しなし",
+        "newSincePrevious": "今期間に新規",
+        "fromPrevious": "{value} から",
+        "ratePoints": "{arrow} {points} pt",
+        "ratePointsFlat": "±0 pt"
+      },
+      "charts": {
+        "calls": "呼び出し",
+        "perDay": "日別の呼び出し",
+        "perDayAria": "ソース別に積み上げた日別のツール呼び出し",
+        "empty": "この期間にツールの呼び出しはありません。",
+        "dayTotal": "{calls} 件の呼び出し",
+        "successRate": "成功率",
+        "successRateAria": "目標に対する日別の成功率",
+        "target": "目標 {percent}%",
+        "noCalls": "呼び出しなし",
+        "dayFailed": "失敗 {failed} 件",
+        "outcomes": "結果",
+        "outcomesAside": "この期間のすべての呼び出し",
+        "byTool": "ツール別の呼び出し",
+        "sourceFilter": "ソース",
+        "allSources": "すべて"
+      },
+      "outcomes": {
+        "ok": "成功",
+        "blocked": "ルールでブロック",
+        "needsSetup": "要セットアップ",
+        "confirmationRequired": "確認待ち",
+        "declined": "拒否",
+        "error": "失敗"
+      },
+      "failing": {
+        "title": "失敗の多いツール",
+        "aside": "失敗率、最低 {min} 件の呼び出し",
+        "none": "十分な呼び出しのあるツールで失敗したものはありません。",
+        "detail": "{ran} 回の実行中 {errors} 件のエラー"
+      },
+      "health": {
+        "title": "ツールの状態",
+        "aside": "正常 ≥ 95% · 低下 85–95% · 障害 < 85%（最低 {min} 件の呼び出し）",
+        "note": "ここでの成功率はツールが実際に実行した呼び出しのみで計算します。ルールでブロックと要セットアップは別に表示します。ルールが正しく働いた結果か、メンバーの作業であり、ツールの障害ではありません。",
+        "columns": {
+          "tool": "ツール",
+          "status": "状態",
+          "calls": "呼び出し",
+          "success": "成功率",
+          "stopped": "ブロック / セットアップ",
+          "median": "中央値",
+          "workspaces": "ワークスペース",
+          "lastCalled": "最終呼び出し"
+        }
+      },
+      "workspaces": {
+        "title": "上位のワークスペース",
+        "aside": "呼び出し数順",
+        "none": "この期間にツールを呼び出したワークスペースはありません。",
+        "columns": {
+          "workspace": "ワークスペース",
+          "calls": "呼び出し",
+          "failed": "失敗",
+          "failedShare": "失敗率"
+        }
+      }
+    }
   }
 }

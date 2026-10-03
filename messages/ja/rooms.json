@@ -110,10 +110,7 @@
       "people": "参加者"
     },
     "language": {
-      "heading": "ミーティング言語",
-      "blocked": "ブロック中",
-      "blockedReason": "{language}はこのワークスペースの言語ポリシーで許可されていません。",
-      "blockedFooter": "ブロックされている言語は、このワークスペースの言語ポリシーで許可されていません。ワークスペース管理者がワークスペース設定で変更できます。"
+      "heading": "ミーティング言語"
     },
     "options": {
       "dateAndTime": "日時",
@@ -258,8 +255,9 @@
     "empty": "ミーティングが見つかりません。ルーム名やコードを入力するか、上のクイックアクションをお試しください。"
   },
   "bridgeFarSide": {
-    "label": "相手の言語",
-    "ariaLabel": "相手は{language}を話しています。通話相手の言語を変更",
+    "name": "通話相手が話す言語",
+    "ariaLabel": "通話相手が話す言語: {language}。変更する",
+    "ariaLabelNotSet": "通話相手が話す言語: 未設定。選択する",
     "hint": "通話の相手側が話している言語",
     "connecting": "WarpTalk に接続しています…",
     "notSet": "選択",
@@ -275,5 +273,135 @@
     "subscriptionExpired": "ワークスペースのサブスクリプションの有効期限が切れました — 翻訳を一時停止しています。ワークスペースのオーナーに更新を依頼してください。",
     "suspended": "翻訳を停止しました：このワークスペースの AI サービスは停止中です。ワークスペースのオーナーに請求状況の確認を依頼してください。",
     "restored": "翻訳を再び利用できます — ワークスペースの請求が復旧しました。"
+  },
+  "languagePolicy": {
+    "narrowedTitle": "{dropped} はこの会議から除外されました",
+    "narrowedDescription": "ワークスペースで {dropped} が許可されなくなったため、この会議は {effective} のみで行われます。ワークスペース管理者に再度許可を依頼するか、会議の言語を編集してください。",
+    "startRefused": "この会議を開始できません：会議の言語（{meeting}）はワークスペースで許可されなくなりました。現在許可されているのは {allowed} です。会議の言語を編集するか、ワークスペース管理者に再度許可を依頼してください。",
+    "none": "なし"
+  },
+  "seriesBlockedNotice": {
+    "title": "「{title}」のスケジュール作成が停止しました",
+    "body": "このシリーズの言語がワークスペースで許可されなくなったため、新しい会議は作成されていません。会議の言語を編集するか、ワークスペース管理者に再度許可を依頼してください。",
+    "openFailed": "このシリーズを開けませんでした。しばらくしてからもう一度お試しください。"
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "WarpTalk に接続しています…",
+      "noHost": "WarpTalk はまだこの会議を実行していません。",
+      "incompatible": "WarpTalk が更新されました。ここで使うには再読み込みしてください。"
+    },
+    "carry": {
+      "asking": "WarpTalk でこの会議を開いています…",
+      "failed": "WarpTalk がこの会議を実行していないため、ここから言語や音声を変更できません。",
+      "incompatible": "WarpTalk が更新されました。これらの操作を使うには WarpTalk ウィンドウを再読み込みしてください。",
+      "show": "WarpTalk を表示"
+    },
+    "language": {
+      "connected": "言語を選択"
+    },
+    "listen": {
+      "label": "聞く内容",
+      "text": "テキスト",
+      "voice": "音声",
+      "textHint": "テキスト: 翻訳を読み、通話はそのまま聞きます。",
+      "voiceHint": "音声: 相手の翻訳音声を聞き、元の音声は小さく流れます。"
+    },
+    "devices": {
+      "hint": "WarpTalk ウィンドウでデバイス設定を開きます"
+    },
+    "languagePolicy": {
+      "loading": "ワークスペースの言語を読み込んでいます…",
+      "error": "ワークスペースの言語を読み込めませんでした。このミーティングの言語のみ表示しています。"
+    },
+    "startStep": {
+      "title": "この通話を翻訳",
+      "intro": "あなたの言語を選んでください。通話の他の参加者はその言語に翻訳されます。",
+      "start": "翻訳を開始",
+      "pickFirst": "先に言語を選択してください",
+      "farSideTitle": "通話の相手が話す言語",
+      "farSideHint": "Google Meet の参加者が話す言語です。あとから人のアイコンで変更できます。",
+      "farSideAlsoTitle": "通話で話されている他の言語",
+      "farSideAlsoHint": "Meet には{language}の吹き替えが流れます。これらの言語で話す人も文字起こしされ、あなたのために翻訳されます。",
+      "farSideAlsoFailed": "この言語を会議に追加できませんでした",
+      "waitingForHost": "翻訳は会議のホストまたはこの通話を収録している人が開始します。",
+      "continue": "続ける",
+      "started": "翻訳を開始しました。",
+      "startFailed": "翻訳を開始できませんでした。",
+      "notCarried": "翻訳を開始しましたが、WarpTalk でこの会議を開けませんでした。",
+      "notCarriedDescription": "あなたの音声と吹き替えが届くよう、WarpTalk ウィンドウで会議を開いてください。"
+    },
+    "takeover": {
+      "notice": "この通話の音声を収録していた人が WarpTalk を終了しました。",
+      "action": "このデバイスで音声を収録",
+      "done": "このデバイスが通話の音声を収録しています。",
+      "failed": "このデバイスで通話の音声を収録できませんでした。",
+      "failedDescription": "まだ誰かが収録している可能性があります。詳細は WarpTalk ウィンドウを確認してください。"
+    },
+    "audioMode": {
+      "label": "Meet での聞こえ方",
+      "settingsRow": "Meet での聞こえ方",
+      "voice": "翻訳音声",
+      "text": "自分の声",
+      "voiceHint": "WarpTalk が VB-CABLE 経由で翻訳したあなたの声が Meet に届きます。",
+      "textHint": "Meet には実際のマイクの声が届きます。文字起こしと翻訳はテキストで表示されます。",
+      "unknown": "WarpTalk に接続しています…",
+      "voiceNeedsCable": "翻訳音声には VB-CABLE が必要です。デバイス設定からインストールしてください。",
+      "textUnavailable": "このコンピューターでは自分の声モードを使用できません。",
+      "lockedHint": "翻訳を停止すると翻訳音声に戻せます。",
+      "headphones": "ヘッドホンを使用してください。スピーカーの通話音声をマイクが拾うことがあります。",
+      "nowText": "Meet にはあなた自身の声が届いています。",
+      "nowVoice": "Meet には翻訳音声が届いています。",
+      "locked": "翻訳中は翻訳音声に切り替えられません。",
+      "lockedDescription": "翻訳を停止してから切り替えてください。",
+      "failed": "Meet での聞こえ方を変更できませんでした。",
+      "failedDescription": "詳しくは WarpTalk のウィンドウを確認してください。"
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "Meet の参加者にあなたの声が届いていません。",
+        "body": "Meet のマイクが「CABLE Output」になっています。ここには翻訳音声しか流れませんが、WarpTalk は現在あなた自身の声を送っています。Meet でマイクボタンの横の矢印をクリックし、実際のマイクを選択してください。",
+        "action": "代わりに翻訳音声を送る"
+      },
+      "voiceOnReal": {
+        "title": "Meet の参加者には翻訳前の声が届いています。",
+        "body": "WarpTalk は翻訳音声を「CABLE Output」経由で送っていますが、Meet のマイクは実際のマイクになっています。Meet でマイクボタンの横の矢印をクリックし、「CABLE Output (VB-Audio Virtual Cable)」を選択してください。",
+        "action": "代わりに自分の声を送る"
+      }
+    },
+    "meetCaptions": {
+      "title": "Google Meet で字幕（CC）をオンにしてください。",
+      "body": "WarpTalk は Meet の字幕から話者名を読み取りますが、現在 Meet に字幕が表示されていません。Meet のツールバーで CC をクリックすると、相手側の発言に話者名が表示されます。",
+      "dismiss": "閉じる"
+    },
+    "meetLeft": {
+      "title": "Meet の通話から退出しました。WarpTalk のルームを終了しますか？",
+      "countdown": "{seconds} 秒後に自動で終了します。",
+      "endNow": "今すぐ終了",
+      "keepOpen": "開いたままにする",
+      "kept": "ルームは開いたままです。WarpTalk はこの通話を聞いていません。再開するには Google Meet に再参加してください。"
+    },
+    "micChip": {
+      "off": "WarpTalk のマイクはオフです",
+      "on": "WarpTalk のマイクはオンです",
+      "turnOn": "オンにする",
+      "turnOff": "オフにする",
+      "hint": "ここでは WarpTalk が Google Meet のミュートボタンを読み取れないため、マイクは手動で切り替えます。"
+    },
+    "voiceCloneMode": {
+      "label": "ボイスクローンモード",
+      "description": "同意を記録した Meet 側の参加者について、その人の発言の翻訳を本人の声を再現した音声で読み上げます。",
+      "noticeLabel": "Meet のチャットに貼るお知らせ",
+      "notice": "この通話は WarpTalk で翻訳しています。ご了承いただける場合、あなたの発言の翻訳を、あなた自身の声を再現した音声で読み上げます。このミーティング限りです。ご希望でない場合はお知らせください。",
+      "copy": "コピー",
+      "copied": "コピーしました",
+      "copyFailed": "お知らせをコピーできませんでした。テキストを選択して手動でコピーしてください。",
+      "peopleLabel": "Meet の通話に参加している人",
+      "empty": "Meet の字幕 (CC) がオンの状態で誰かが話すと、ここに名前が表示されます。",
+      "hint": "同意した人だけにチェックを入れてください。チェックを外すと、その人の声のコピーは削除されます。このモードをオフにしても、チェックは外れません。",
+      "statusFailed": "チェック済みの人を確認できませんでした。",
+      "retry": "再試行",
+      "saveFailed": "この選択を保存できませんでした。"
+    }
   }
 }

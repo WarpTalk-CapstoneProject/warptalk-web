@@ -90,6 +90,28 @@ for (const locale of ["en", "vi", "ja"]) {
   assert.ok(!("meetings" in nav.items) && !("eventOutbox" in nav.items), `${locale}: retired nav labels are gone`);
 }
 
+// WT-880: /admin/glossary-templates (client state only, persisted nothing) is deleted; the
+// import template's CRUD is the "Import template" tab of /admin/global-glossary.
+assert.ok(
+  !fs.existsSync(path.join(root, "src/app/(app)/admin/glossary-templates")),
+  "the /admin/glossary-templates route stays deleted",
+);
+assert.ok(!sidebar.includes('"/admin/glossary-templates"'), "the admin sidebar must not link to /admin/glossary-templates");
+for (const file of walk(path.join(root, "src"))) {
+  const rel = path.relative(root, file);
+  if (rel === path.join("src", "proxy.ts")) continue;
+  const source = stripComments(fs.readFileSync(file, "utf8"));
+  assert.ok(!/["'`]\/admin\/glossary-templates/.test(source), `${rel} still links to /admin/glossary-templates`);
+}
+assert.ok(
+  proxy.includes('new URL("/admin/global-glossary?tab=import-template", request.url)'),
+  "/admin/glossary-templates must forward to the Import template tab",
+);
+for (const locale of ["en", "vi", "ja"]) {
+  const nav = JSON.parse(read(`messages/${locale}/common.json`)).sidebar.adminNav;
+  assert.ok(!("glossaryTemplates" in nav.items), `${locale}: the retired Glossary templates label is gone`);
+}
+
 // Dark mode: the mark is a black-on-white PNG; without the inversion it vanishes on a dark sidebar.
 const brand = read("src/components/layout/warptalk-brand.tsx");
 assert.ok(brand.includes("dark:invert") && brand.includes("dark:mix-blend-screen"), "the WarpTalk mark reads in dark mode");

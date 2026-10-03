@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  CalendarX,
   Microphone,
   MicrophoneSlash,
   SpeakerHigh,
@@ -107,7 +108,13 @@ function JoinMeetingContent() {
   // answers 200 with an empty list for an unknown or half-typed code, and empty means
   // unrestricted — so a partially typed code shows the full set rather than an error or a
   // momentarily empty picker.
-  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(roomCode);
+  const { data: joinLanguagePolicy, isPlaceholderData: joinPolicyIsStale } =
+    useJoinLanguagePolicy(roomCode);
+  // WT-866: a link to a meeting that is already over (ended, cancelled, expired) opened this
+  // whole screen — camera, microphone, pickers — and only the Join press learned it was dead.
+  // The same lookup now says so up front. Placeholder data is the PREVIOUS code's answer
+  // (keepPreviousData), so it must not decide anything about the code being typed now.
+  const roomEnded = joinLanguagePolicy?.roomEnded === true && !joinPolicyIsStale;
   // WT-434 was honoured by the setup modal and ignored here: this screen preset a hardcoded
   // vi-VN / en-US pair, so the same person joining the same meeting got different languages
   // depending on whether they came through /join or through the modal. Both read the saved pair now.
@@ -336,6 +343,9 @@ function JoinMeetingContent() {
   }
 
   useEffect(() => {
+    // WT-866: nothing to preview for a meeting nobody can join; do not ask for the camera.
+    if (roomEnded) return;
+
     let isMounted = true;
 
     async function init() {
@@ -354,6 +364,7 @@ function JoinMeetingContent() {
     // Media helpers intentionally restart the preview when these controls change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    roomEnded,
     cameraEnabled,
     microphoneEnabled,
     noiseSuppression,
@@ -401,6 +412,9 @@ function JoinMeetingContent() {
             noiseSuppressionPreferenceVersion:
               NOISE_SUPPRESSION_PREFERENCE_VERSION,
             backgroundBlurEnabled,
+            // WT-631. The level meter above was reading from this device; without it the meeting
+            // captured from the OS default input instead, which can be a loopback cable.
+            selectedMicrophoneId,
           },
           navigate: (path) => router.push(path),
           closePreview: () => undefined,
@@ -459,7 +473,43 @@ function JoinMeetingContent() {
         </p>
       </motion.div>
 
-      {/* Main Container */}
+      {roomEnded ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="w-full max-w-[960px] bg-surface-1 border border-border rounded-[8px] shadow-linear p-8 flex flex-col items-center text-center gap-3"
+          data-testid="join-room-ended"
+        >
+          <CalendarX className="w-10 h-10 text-ink-muted" weight="light" />
+          <h2 className="text-[16px] font-semibold text-foreground">
+            This meeting is no longer available
+          </h2>
+          <p className="text-[14px] text-ink-muted max-w-[420px]">
+            The meeting for code{" "}
+            <span className="font-mono text-ink">{normalizedCode}</span> has
+            already ended, was cancelled, or has expired, so it can no longer be
+            joined.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setTypedCode("")}
+              className="h-[32px] px-4 text-[13px]"
+            >
+              Enter another code
+            </Button>
+            <Button
+              onClick={() =>
+                router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`)
+              }
+              className="h-[32px] px-4 text-[13px] bg-foreground text-white hover:opacity-90"
+            >
+              Back to Meetings
+            </Button>
+          </div>
+        </motion.div>
+      ) : (
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -740,6 +790,7 @@ function JoinMeetingContent() {
           </div>
         </div>
       </motion.div>
+      )}
     </div>
   );
 }

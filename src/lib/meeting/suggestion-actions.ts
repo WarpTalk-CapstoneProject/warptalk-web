@@ -20,6 +20,15 @@
  */
 
 export type SuggestionAction = {
+  /**
+   * The key the button's text is looked up under, in meetingTranscript.suggestion.actions.
+   *
+   * WT-922: the button used to print `label`, which is English whatever the reader's interface
+   * language is — so a Vietnamese reader got "Ask WarpBot this" under a Vietnamese suggestion.
+   * `label` stays as the English source text the tests and the catalog are written against; the
+   * component never renders it.
+   */
+  id: string;
   label: string;
   /** Built from the hint, and handed to the widget as a question. */
   prompt: (subject: string, detail: string) => string;
@@ -53,6 +62,7 @@ export const IMPERATIVE_OPENERS = [
 
 export const GENERIC_ACTIONS: SuggestionAction[] = [
   {
+    id: "askWarpBot",
     label: "Ask WarpBot",
     // Was "About our meeting: {subject}" — a topic label with no request in it.
     prompt: (subject, detail) =>
@@ -66,10 +76,12 @@ export const GENERIC_ACTIONS: SuggestionAction[] = [
 export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   term: [
     {
+      id: "researchTerm",
       label: "Research this term",
       prompt: (subject) => `Research this term from our meeting and explain it plainly: ${subject}`,
     },
     {
+      id: "findTermInDocuments",
       label: "Find it in our documents",
       prompt: (subject) =>
         `Search our workspace documents and glossary for this term and tell me how we use it: ${subject}`,
@@ -77,6 +89,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   ],
   clarification: [
     {
+      id: "askQuestion",
       label: "Ask WarpBot this",
       // THE REPORTED ONE. It read "This came up in our meeting and went unanswered: {subject}",
       // which asks for nothing, so WarpBot confirmed it was unanswered and stopped.
@@ -95,6 +108,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
         ),
     },
     {
+      id: "findWhoKnows",
       label: "Find who would know",
       prompt: (subject) =>
         `Who in this workspace has worked on this, based on our meetings and documents? ${subject}`,
@@ -102,6 +116,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   ],
   fact: [
     {
+      id: "checkInDocuments",
       label: "Check this in the documents",
       prompt: (subject, detail) =>
         withContext(
@@ -112,6 +127,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   ],
   correction: [
     {
+      id: "checkWhichIsRight",
       label: "Check which is right",
       prompt: (subject, detail) =>
         withContext(
@@ -122,6 +138,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   ],
   action: [
     {
+      id: "draftTask",
       label: "Draft this task",
       prompt: (subject, detail) =>
         withContext(
@@ -140,11 +157,12 @@ export function actionsFor(suggestion: {
   category: string;
   content: string;
   detail?: string | null;
-}): { label: string; prompt: string }[] {
+}): { id: string; label: string; prompt: string }[] {
   const subject = suggestion.content.trim();
   const detail = suggestion.detail?.trim() ?? "";
   const actions = CATEGORY_ACTIONS[suggestion.category] ?? GENERIC_ACTIONS;
   return actions.slice(0, 2).map((action) => ({
+    id: action.id,
     label: action.label,
     prompt: action.prompt(subject, detail),
   }));

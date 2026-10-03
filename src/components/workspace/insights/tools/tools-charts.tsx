@@ -1,144 +1,104 @@
 "use client";
 
 /**
- * The two chart panels of the Tools tab: tool calls by plugin (ranked bars with each plugin's
- * share) and outcomes per day (stacked columns with the day's success rate as a line on a %
- * axis). Both are counts of real audit rows in the period — see `lib/workspace/insights/tools-metrics`.
+ * The two chart panels of the Tools tab: calls per day (columns stacked by source — built-in, web
+ * search, plugin — with the day's success rate as a line on a % axis) and the outcomes split (one
+ * ranked bar per outcome with its share). Both draw the server's counts as they come — see
+ * `lib/workspace/insights/tools-metrics` — and never re-bucket or estimate.
  */
 
 import { useTranslations } from "next-intl";
 
 import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
-import { CHART_COLORS, ChartFigure, TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
+import { ChartFigure, TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
 import type { InsightsSourceState } from "@/components/workspace/insights/insights-types";
 import { ToolsChartBody, ToolsPanel } from "@/components/workspace/insights/tools/tools-chrome";
 import type { ToolsFormatters } from "@/components/workspace/insights/tools/tools-format";
-import { topPlugins, type ToolsMetrics } from "@/lib/workspace/insights/tools-metrics";
+import { toolSuccessRate } from "@/lib/workspace/insights/tool-insights";
+import { outcomeSplit, toolDaySeries, type ToolOutcomeKey, type ToolSourceKey } from "@/lib/workspace/insights/tools-metrics";
+import type { WorkspaceToolInsightsDto } from "@/types/assistant-tool-insights";
 
-/** Status colours, not identities: green ran, amber was refused by policy, red did not run. */
-const OUTCOME_COLORS = {
-  succeeded: "var(--success)",
-  blocked: "var(--warning)",
-  problem: "var(--destructive)",
-  rate: CHART_COLORS.primary,
-} as const;
+/** Identity colours for where a call ran; the table's source chips use the same ones. */
+export const TOOL_SOURCE_COLORS: Record<ToolSourceKey, string> = {
+  builtin: "var(--viz-1)",
+  webSearch: "var(--viz-2)",
+  plugin: "var(--viz-3)",
+  other: "var(--usage-service-other)",
+};
 
-const TOP_PLUGINS = 6;
+const RATE_COLOR = "var(--viz-4)";
 
-function callsFigure(metrics: ToolsMetrics, t: ReturnType<typeof useTranslations>): string {
-  return metrics.capped ? t("figure.callsAtLeast", { count: metrics.calls }) : t("figure.calls", { count: metrics.calls });
+/** Status colours, not identities: green ran, red broke, amber someone must fix, grey a rule or a choice. */
+const OUTCOME_COLORS: Record<ToolOutcomeKey, string> = {
+  ok: "var(--success)",
+  error: "var(--destructive)",
+  needsSetup: "var(--warning)",
+  blocked: "var(--usage-service-other)",
+  declined: "var(--viz-5)",
+  confirmationRequired: "var(--viz-1)",
+};
+
+export interface ToolsChartData {
+  insights: WorkspaceToolInsightsDto;
+  /** Exclusive end of the day axis when the period runs past today. */
+  axisEndDay: string | null;
+  /** The previous period's calls, or null when it is not a fair comparison. */
+  previousCalls: number | null;
 }
 
-export function ToolCallsByPluginPanel({
+export function ToolCallsPerDayPanel({
   state,
   format,
 }: {
-  state: InsightsSourceState<ToolsMetrics>;
-  format: ToolsFormatters;
-}) {
-  const t = useTranslations("workspaceInsightsTools");
-  return (
-    <ToolsPanel chart title={t("byPlugin.title")}>
-      <ToolsChartBody state={state} height={200} empty={t("byPlugin.empty")} isEmpty={(data) => data.calls === 0}>
-        {(data) => {
-          const top = topPlugins(data.byPlugin, TOP_PLUGINS);
-          const rows: BarListRow[] = top.map((row) => {
-            const label = row.key === null ? t("byPlugin.other") : row.label;
-            const key = row.key ?? "__other";
-            return {
-              key,
-              label,
-              segments: [
-                {
-                  key,
-                  label: t("byPlugin.callsSegment"),
-                  value: row.calls,
-                  ...(row.key === null ? { color: "var(--usage-service-other)" } : {}),
-                },
-              ],
-            };
-          });
-          const caption = data.byPlugin
-            .slice(0, 3)
-            .map((plugin) => `${plugin.label} (${format.count(plugin.calls)})`)
-            .join(" · ");
-          return (
-            <>
-              <ChartFigure value={callsFigure(data, t)} caption={data.capped ? t("figure.cappedCaption", { top: caption }) : caption} />
-              <BarList ariaLabel={t("byPlugin.title")} rows={rows} formatValue={format.count} showShare />
-            </>
-          );
-        }}
-      </ToolsChartBody>
-    </ToolsPanel>
-  );
-}
-
-export function ToolOutcomesPerDayPanel({
-  state,
-  format,
-}: {
-  state: InsightsSourceState<ToolsMetrics>;
+  state: InsightsSourceState<ToolsChartData>;
   format: ToolsFormatters;
 }) {
   const t = useTranslations("workspaceInsightsTools");
   const legend = [
-    { key: "succeeded", label: t("outcomes.succeeded"), color: OUTCOME_COLORS.succeeded, line: false },
-    { key: "blocked", label: t("outcomes.blocked"), color: OUTCOME_COLORS.blocked, line: false },
-    { key: "problem", label: t("outcomes.problem"), color: OUTCOME_COLORS.problem, line: false },
-    { key: "rate", label: t("outcomes.successRate"), color: OUTCOME_COLORS.rate, line: true },
+    { key: "builtin", label: t("sources.builtin"), color: TOOL_SOURCE_COLORS.builtin, line: false },
+    { key: "webSearch", label: t("sources.webSearch"), color: TOOL_SOURCE_COLORS.webSearch, line: false },
+    { key: "plugin", label: t("sources.plugin"), color: TOOL_SOURCE_COLORS.plugin, line: false },
+    { key: "rate", label: t("perDay.successRate"), color: RATE_COLOR, line: true },
   ];
   return (
-    <ToolsPanel chart title={t("outcomes.title")}>
+    <ToolsPanel chart title={t("perDay.title")} subtitle={t("perDay.utcNote")}>
       <ToolsChartBody
         state={state}
         height={200}
-        empty={t("outcomes.empty")}
-        isEmpty={(data) => data.calls === 0 || data.days.length === 0}
+        empty={t("perDay.empty")}
+        isEmpty={(data) => data.insights.totals.calls === 0 || data.insights.byDay.length === 0}
       >
-        {(data) => {
-          const { days } = data;
-          const caption = [
-            t("outcomes.captionBlocked", { count: data.blocked }),
-            t("outcomes.captionNeedsSetup", { count: data.needsSetup }),
-            t("outcomes.captionFailed", { count: data.failed }),
-            data.awaitingConfirmation > 0 ? t("outcomes.captionAwaiting", { count: data.awaitingConfirmation }) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ");
+        {({ insights, axisEndDay, previousCalls }) => {
+          const days = toolDaySeries(insights.byDay, axisEndDay);
           return (
             <>
               <ChartFigure
-                value={
-                  data.successRate === null
-                    ? "—"
-                    : t("outcomes.figure", { rate: format.percent(data.successRate) })
-                }
-                caption={caption}
+                value={t("perDay.figure", { count: insights.totals.calls })}
+                caption={previousCalls === null ? null : t("perDay.previous", { count: previousCalls })}
               />
               <TimeSeriesChart
                 variant="combo"
                 stacked
                 integer
                 height={200}
-                ariaLabel={t("outcomes.aria")}
+                ariaLabel={t("perDay.aria")}
                 labels={days.map((day) => format.dayLabel(day.key))}
                 titles={days.map((day) => format.dayTitle(day.key))}
                 formatValue={format.count}
                 formatAxisRight={format.percent}
-                describeGap={(index) => (days[index]?.future ? t("outcomes.stillToCome") : t("outcomes.noCalls"))}
+                describeGap={(index) => (days[index]?.future ? t("perDay.stillToCome") : t("perDay.noCalls"))}
                 tooltipFooter={(index) => {
                   const total = days[index]?.total;
-                  return total === null || total === undefined ? null : t("outcomes.dayTotal", { count: total });
+                  return total === null || total === undefined ? null : t("perDay.dayTotal", { count: total });
                 }}
                 series={[
-                  { key: "succeeded", label: t("outcomes.succeeded"), color: OUTCOME_COLORS.succeeded, kind: "bar", axis: "left", values: days.map((d) => d.succeeded) },
-                  { key: "blocked", label: t("outcomes.blocked"), color: OUTCOME_COLORS.blocked, kind: "bar", axis: "left", values: days.map((d) => d.blocked) },
-                  { key: "problem", label: t("outcomes.problem"), color: OUTCOME_COLORS.problem, kind: "bar", axis: "left", values: days.map((d) => d.problem) },
+                  { key: "builtin", label: t("sources.builtin"), color: TOOL_SOURCE_COLORS.builtin, kind: "bar", axis: "left", values: days.map((d) => d.builtin) },
+                  { key: "webSearch", label: t("sources.webSearch"), color: TOOL_SOURCE_COLORS.webSearch, kind: "bar", axis: "left", values: days.map((d) => d.webSearch) },
+                  { key: "plugin", label: t("sources.plugin"), color: TOOL_SOURCE_COLORS.plugin, kind: "bar", axis: "left", values: days.map((d) => d.plugin) },
                   {
                     key: "rate",
-                    label: t("outcomes.successRate"),
-                    color: OUTCOME_COLORS.rate,
+                    label: t("perDay.successRate"),
+                    color: RATE_COLOR,
                     kind: "line",
                     axis: "right",
                     values: days.map((d) => d.successRate),
@@ -158,6 +118,44 @@ export function ToolOutcomesPerDayPanel({
                   </span>
                 ))}
               </div>
+            </>
+          );
+        }}
+      </ToolsChartBody>
+    </ToolsPanel>
+  );
+}
+
+export function ToolOutcomesPanel({
+  state,
+  format,
+}: {
+  state: InsightsSourceState<ToolsChartData>;
+  format: ToolsFormatters;
+}) {
+  const t = useTranslations("workspaceInsightsTools");
+  return (
+    <ToolsPanel chart title={t("outcomes.title")}>
+      <ToolsChartBody state={state} height={200} empty={t("outcomes.empty")} isEmpty={(data) => data.insights.totals.calls === 0}>
+        {({ insights }) => {
+          const { totals } = insights;
+          const rate = toolSuccessRate(totals);
+          const rows: BarListRow[] = outcomeSplit(totals).map((row) => ({
+            key: row.key,
+            label: t(`outcomes.${row.key}`),
+            segments: [{ key: row.key, label: t("outcomes.callsSegment"), value: row.calls, color: OUTCOME_COLORS[row.key] }],
+          }));
+          return (
+            <>
+              <ChartFigure
+                value={rate === null ? "—" : t("outcomes.figure", { rate: format.percent(rate) })}
+                caption={
+                  totals.medianDurationMs === null
+                    ? t("outcomes.noMedian")
+                    : t("outcomes.medianCaption", { duration: format.duration(totals.medianDurationMs) })
+                }
+              />
+              <BarList ariaLabel={t("outcomes.aria")} rows={rows} formatValue={format.count} showShare />
             </>
           );
         }}

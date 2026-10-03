@@ -138,8 +138,8 @@ import { planLineCorrection, type PlannedCorrection } from "@/lib/transcript/mer
 import {
   AS_SPOKEN,
   assembleTranscriptText,
-  defaultTranscriptLanguage,
   indexTranslationsBySegment,
+  withSpokenSegmentText,
   resolveTranscriptLine,
   transcriptLanguageOptions,
   withOfferableLanguages,
@@ -153,6 +153,10 @@ import {
 } from "@/lib/transcript/speaker-color";
 import { recordFileName } from "@/lib/documents/record-file-name";
 import { buildTranscriptDocumentModel } from "@/lib/documents/transcript-document-model";
+import {
+  transcriptSpeakerDisplayName,
+  type SpeakerLabels,
+} from "@/lib/transcript/speaker-identity";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { transcriptService } from "@/services/transcript.service";
@@ -275,8 +279,8 @@ function FollowPlaybackChip({
 export function MeetingTranscriptArtifact({
   segments,
   translations,
-  preferredLanguage,
   onSeekToRecording,
+  canSeekAt,
   baseTime,
   roomId,
   currentUserId,
@@ -298,11 +302,16 @@ export function MeetingTranscriptArtifact({
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
   translations: TranscriptTranslationDto[];
-  /** The reader's own language, so the transcript opens on it when the meeting has it. */
-  preferredLanguage?: string;
   /** Move the recording to this line. Omitted when the two clocks cannot be reconciled, which is
    *  how the timestamp stays plain text instead of becoming a button that does nothing. */
   onSeekToRecording?: (atMs: number) => void;
+  /**
+   * WT-896: whether THIS moment is inside the recording. A meeting recorded from 22 minutes in
+   * still has 22 minutes of lines with no place in the file, and seekTargetSeconds refuses them —
+   * so their timestamps must stay plain text rather than be play buttons that do nothing.
+   * Omitted means every moment is seekable whenever `onSeekToRecording` is given.
+   */
+  canSeekAt?: (atMs: number) => boolean;
   baseTime?: string;
   roomId: string;
   currentUserId?: string;
@@ -350,6 +359,19 @@ export function MeetingTranscriptArtifact({
   saveTranscript?: boolean;
 }) {
   const t = useTranslations("meetingTranscript");
+  /**
+   * What a line with no name is called, in the reader's language — and, in a Google Meet bridge
+   * room, what a Meet-side line is called when the gateway could not tell which Meet person spoke.
+   * Handed to every speaker resolution below (rows, turns, downloads) so none of them falls back
+   * to English or to the stand-in's "External Meeting" seat. See speaker-identity.ts.
+   */
+  const speakerLabels = useMemo<SpeakerLabels>(
+    () => ({
+      farSideFallback: t("speaker.googleMeetParticipants"),
+      unknown: t("speaker.unknownSpeaker"),
+    }),
+    [t],
+  );
   /**
    * WT-716 — Clean by default, Verbatim one click away, and the choice is this reader's alone.
    *
@@ -409,8 +431,9 @@ export function MeetingTranscriptArtifact({
     return cleanView ? withAbsorbedSegmentIds(rows, cleanView) : rows;
   }, [cleanView, orderedSegments]);
   const translationIndex = useMemo(
-    () => indexTranslationsBySegment(translations),
-    [translations],
+    // WT-925: with each segment's own words in its own language — see withSpokenSegmentText.
+    () => withSpokenSegmentText(indexTranslationsBySegment(translations), segments),
+    [translations, segments],
   );
   const languageOptions = useMemo(
     () => transcriptLanguageOptions(grouped, translationIndex),
@@ -514,10 +537,10 @@ export function MeetingTranscriptArtifact({
   });
   const base = baseTime ? new Date(baseTime) : null;
 
-  // Null means "the reader has not chosen", which is not the same as choosing as-spoken — the
-  // default is derived, so it follows the transcript as it loads instead of being frozen by an
-  // effect that ran while the segments were still in flight.
-  const [chosenLanguage, setChosenLanguage] = useState<string | null>(null);
+  // WT-924: a finished meeting opens AS SPOKEN, always — every line as the person said it. It
+  // used to open on the reader's own language, or the best-covered one, whenever the meeting was
+  // multilingual; reading the record in one language is now something the reader picks.
+  const [displayLanguage, setDisplayLanguage] = useState<string>(AS_SPOKEN);
   /**
    * The rail beside this column, when there is one.
    *
@@ -541,9 +564,6 @@ export function MeetingTranscriptArtifact({
   /** Whether the download is being built, so the button can say so and refuse a second click. */
   const [buildingDocument, setBuildingDocument] = useState(false);
 
-  const displayLanguage =
-    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
-
   /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
      transcript id — the live tab has neither a saved transcript to work on nor an id to name it
      by, and it must keep marking the gap rather than pretending it can close it. */
@@ -560,7 +580,7 @@ export function MeetingTranscriptArtifact({
    * for any missing entries when the user has translation authority.
    */
   function chooseLanguage(code: string) {
-    setChosenLanguage(code);
+    setDisplayLanguage(code);
     const normalized = normalizeLanguageCode(code);
     if (code !== AS_SPOKEN && canTranslate && translatableCodes.has(normalized)) {
       autoRequestedLanguages.current.add(normalized);
@@ -645,8 +665,8 @@ export function MeetingTranscriptArtifact({
    * once, and a meeting stops being taller than the thing it is a record of.
    */
   const readingTurns = useMemo(
-    () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments)),
-    [blocks],
+    () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments, speakerLabels)),
+    [blocks, speakerLabels],
   );
 
   // Each window is drawn in exactly ONE session block. Passing the whole list to every block —
@@ -954,6 +974,10 @@ export function MeetingTranscriptArtifact({
     [onSeekToRecording, setFollowing],
   );
 
+  /** The click handler for one timestamp, or undefined when it cannot open the recording. */
+  const seekHandlerAt = (atMs: number): (() => void) | undefined =>
+    onSeekToRecording && (!canSeekAt || canSeekAt(atMs)) ? () => seekToMoment(atMs) : undefined;
+
   // J, K and `/` are handled by the provider — it is the only thing that can see a keypress aimed
   // at nothing in particular — and it needs this column to carry them out. Registered while
   // reading mode is on and withdrawn when it is not, so the keys go quiet in the layouts that have
@@ -993,13 +1017,14 @@ export function MeetingTranscriptArtifact({
         segment.speakerParticipantId,
         segment.speakerName,
         speakerDirectory,
+        speakerLabels,
       ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
       // The gate stays on `onSeekToRecording`, not on the wrapper: `seekToMoment` exists whether or
       // not a seek is possible, and gating on it would make every timestamp look clickable on a
       // meeting with no recording. See TranscriptLineTime.
-      onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
+      onSeek: seekHandlerAt(segment.startTimeMs),
       // Asked over every id the row answers to, not only its own. In Verbatim that is the same
       // answer as before (the page hands over ROW ids, and a row id is the first of its own list);
       // in Clean a citation resolved against the verbatim rows can name a segment this row
@@ -1296,7 +1321,7 @@ export function MeetingTranscriptArtifact({
    *  needs the recogniser's exact words switches to Verbatim first, which is the same rule the
    *  language picker has always followed. */
   function transcriptAsText() {
-    return assembleTranscriptText(blocks, translationIndex, displayLanguage);
+    return assembleTranscriptText(blocks, translationIndex, displayLanguage, speakerLabels);
   }
 
   function segmentTime(startMs: number) {
@@ -1339,6 +1364,7 @@ export function MeetingTranscriptArtifact({
       // passed in rather than built in the model because it is translated, and a catalog lookup
       // is a hook away.
       sessionDividerLabel: (block) => sessionDividerLabel(block.sessionNumber),
+      speakerLabels,
     });
   }
 
@@ -1735,21 +1761,18 @@ export function MeetingTranscriptArtifact({
                     ? // One dot per stretch of the meeting a person held, so the rail shows who had
                       // the floor and when — the thing neither of the other two layouts can show at
                       // a glance, because both of them draw one row per utterance.
-                      groupIntoSpeakerTurns(sub.segments).map((turn, index) => (
+                      groupIntoSpeakerTurns(sub.segments, speakerLabels).map((turn, index) => (
                         <TranscriptTimelineTurn
                           key={turn.key}
                           speaker={resolveTranscriptSpeaker(
                             turn.speakerId,
                             turn.speakerName,
                             speakerDirectory,
+                            speakerLabels,
                           )}
                           speakerName={turn.speakerName}
                           time={base ? segmentTime(turn.startTimeMs) : null}
-                          onSeek={
-                            onSeekToRecording
-                              ? () => seekToMoment(turn.startTimeMs)
-                              : undefined
-                          }
+                          onSeek={seekHandlerAt(turn.startTimeMs)}
                           // The rail starts AT the first dot rather than above it — a line hanging
                           // off the top of the transcript reads as content scrolled out of view.
                           isFirst={index === 0}
@@ -1760,7 +1783,7 @@ export function MeetingTranscriptArtifact({
                       ? // One block per TURN, not per utterance: the name, the face and the
                         // timestamp are printed once for a stretch of talking rather than once per
                         // STT chunk.
-                        groupIntoSpeakerTurns(sub.segments).map((turn) => (
+                        groupIntoSpeakerTurns(sub.segments, speakerLabels).map((turn) => (
                           <TranscriptDocumentTurn
                             key={turn.key}
                             turnKey={turn.key}
@@ -1770,17 +1793,14 @@ export function MeetingTranscriptArtifact({
                               turn.speakerId,
                               turn.speakerName,
                               speakerDirectory,
+                              speakerLabels,
                             )}
                             // No "You" here. A document names the people in it, and a record that
                             // reads differently depending on who opened it is not a record.
                             speakerName={turn.speakerName}
                             elapsed={formatCitationTime(turn.startTimeMs)}
                             clock={base ? segmentTime(turn.startTimeMs) : null}
-                            onSeek={
-                              onSeekToRecording
-                                ? () => seekToMoment(turn.startTimeMs)
-                                : undefined
-                            }
+                            onSeek={seekHandlerAt(turn.startTimeMs)}
                             marked={markedKeySet?.has(turn.key) ?? false}
                             reading={sync?.readingKey === turn.key}
                             // Only ever true for the block the recording is actually playing —
@@ -1804,7 +1824,11 @@ export function MeetingTranscriptArtifact({
                               speakerName={
                                 row.isSelf
                                   ? t("speaker.you")
-                                  : segment.speakerName || t("speaker.unknownSpeaker")
+                                  : transcriptSpeakerDisplayName(
+                                      segment.speakerParticipantId,
+                                      segment.speakerName,
+                                      speakerLabels,
+                                    )
                               }
                             />
                           );

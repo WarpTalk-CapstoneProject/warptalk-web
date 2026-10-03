@@ -57,6 +57,66 @@ endpoints answer `Conflict("…")` and friends as `text/plain`, which `getErrorM
 read — a 409 showed the caller's generic sentence and a 503 showed "Too many requests", the
 opposite of what the server said. Both pages report through it.
 
+### Offering the provider's other plugins after one connects (GMCAL1001)
+
+Connect asks the provider for the clicked plugin's scopes only (backend GMCAL1001), so a user who
+wants Drive, Calendar and Meet would sign in three times. After a plugin connects, the member page
+shows **"Connect your other Google plugins too?"** (`SiblingConnectPrompt` in `plugins-page.tsx`,
+copy under `pluginsPage.siblingPrompt`): each sibling's glyph, name and description, and
+**Connect all** / **Not now**. Opt-in only — nothing is connected until Connect all.
+
+- Siblings are `pluginSiblingsToOffer(plugin, catalog)` (`src/lib/assistant/plugin-connect-siblings.ts`,
+  node test `test:plugin-connect-siblings`): same `pluginConnectionGroupKey`, the member action is
+  `connect` (never Request/Add), not workspace-blocked or `platform_disabled`, not `api_key`, and not
+  effectively connected. None → no prompt.
+- It is offered on all three success paths: connected on the spot in `continueToProvider`, the
+  original tab settling on focus (`settleConsent`), and the tab the callback redirected
+  (`?status=connected`). It replaces the connect dialog rather than stacking on it.
+- **Connect all** installs any not-yet-installed sibling, then makes ONE connect call naming the
+  FIRST sibling with the rest in `alsoConnect` (`connectAllRequest`) — never the just-connected
+  plugin, which the server would reconnect. A `url` goes through `openProviderConsent` + the consent
+  notice as usual; otherwise the catalog is refetched and `connectedPluginKeys` names what connected.
+- Either answer is remembered per provider group in `sessionStorage`
+  (`siblingPromptDismissedKey`), wrapped in try/catch, so it is not offered again this session.
+- Not verified in a browser. After a Connect-all consent, only the first sibling is settled/announced
+  by the original tab; the others show up in the refetched catalog.
+
+### Workspace tool rules (wave 2: workspace tool policy)
+
+The Owner can set a rule for one tool of one plugin across the whole workspace, in the Manage
+dialog's **Tools** section (`WorkspaceToolPoliciesSection` in `workspace-plugins-page.tsx`). Three
+choices per tool, as a segmented control: **Member's choice** (no rule, `null`), **Ask every time**
+(`approval`) and **Blocked** (`blocked`). There is no workspace "allow": WarpBot follows the
+stricter of the member's own choice and the workspace rule (allow < approval < blocked), and the
+section says so in one line.
+
+- Reads `GET /assistant/workspaces/{id}/plugins/{key}/tool-policies` through
+  `useWorkspaceToolPolicies`; writes with `PUT` (`{ toolName, policy }`) through
+  `useSetWorkspaceToolPolicy`. Query key `WORKSPACE_PLUGIN_KEYS.toolPolicies(workspaceId, key)`.
+- Editable only when the response's `canManage` is true (the Owner). An Admin sees the same rows
+  disabled with "Only the workspace Owner can change these rules."
+- Each change is optimistic (`withWorkspaceToolRule` in `src/lib/assistant/tool-policy.ts`), is
+  rolled back on error with a toast carrying the server's own sentence (`pluginErrorMessage`), and
+  on success invalidates the member catalog, whose tools carry `workspacePolicy`.
+
+The member sees the rule where their own choices show:
+
+- **Plugin dialog** (`PermissionList` in `plugins-page.tsx`): a ruled tool carries a lock,
+  "Set by workspace Owner · Blocked / Ask every time", with a tooltip that they cannot loosen it.
+  A blocked tool is struck through with a prohibit mark. The per-tool Allow / Ask / Block editor
+  itself stays out of this dialog (#545).
+- **WarpBot plugin menu** (`global-chatbot.tsx`): "Always allow changes" leaves ruled write tools
+  out of both its reading and its update (`pluginWritesAlwaysAllowed`, `writeToolPolicyUpdate`).
+  When every write tool has a rule the box is disabled, shows a lock and "Set by workspace Owner",
+  and explains why in a tooltip (`workspaceWriteLock` = `all`); when only some have one it stays
+  usable with a lock and a tooltip (`some`).
+- `memberCanChooseToolPolicy(policy, rule)` is the one rule for any future per-tool member control:
+  under `blocked` only Blocked is open; under `approval` Allow is not.
+
+A call refused by a rule is audited as `workspace_tool_blocked`. Plugin activity reads it as
+**Blocked by workspace**, tone `blocked`, fixer `owner` (so the row links to this page), and the
+admin catalog's `describePluginToolOutcome` counts it among the refusals.
+
 ## Backend contract (warptalk-backend PR #436, fixed)
 
 The pages read exactly these names; renaming one here without the server is a silent breakage,
@@ -68,6 +128,8 @@ because every field is optional in the DTO and an absent one simply reads as "ol
 | workspace overview | `canManage` |
 | workspace plugin item | `authMode`, `addedByName` |
 | private plugin create / update body | `authMode` |
+| catalog tool (`GET /assistant/plugins?workspaceId=`) | `workspacePolicy` (backend #502) |
+| tool policies (`GET`/`PUT …/plugins/{key}/tool-policies`) | `pluginKey`, `pluginLabel`, `canManage`, `tools[].workspacePolicy`; body `{ toolName, policy }` (backend #502) |
 
 Three refusals are worded by the server and shown verbatim through `pluginErrorMessage`, so there
 is deliberately **no client-side copy** for them:
@@ -155,8 +217,32 @@ still carries the original English at it. That is the general repair pattern; se
 - [ ] Manual, needs a running backend: the Owner page in `vi` and `ja`; the Add-plugin menu, the
       With MCP dialog's auth-mode cards, and the Manage dialog's confirm sentence.
 - [ ] Manual: an Admin opening the page sees no actions and no sidebar badge.
+- [ ] Manual, needs backend #502: the Owner changes a tool's rule in Manage → Tools; an Admin sees
+      it read-only; a member's plugin dialog shows the lock and the chat's "Always allow changes"
+      locks when every write tool is ruled.
 - [ ] Manual: a 409 `workspace_plugin_list_changed` surfaces the server's own sentence, not the
       "Could not add {label}." fallback.
+
+## Plugin activity (`/{slug}/settings/plugin-activity`)
+
+A read-only record for Owner and Admin: one row per plugin tool call WarpBot made in this
+workspace — time, member, plugin, tool, outcome, the provider's resource id. Never the arguments.
+Filters by plugin and member use the audit endpoint's own `pluginKey` / `userId` parameters.
+
+It is a record, not a control panel. Each outcome carries `fixer` (`owner` | `member` | `platform`
+| `nobody`) from `describePluginActivityOutcome`:
+
+- `permission_denied` (the workspace does not allow the plugin, from `WorkspacePluginGuard`) and
+  `workspace_tool_blocked` (the Owner blocked that tool, "Blocked by workspace") link to the
+  workspace plugin page — the things an Owner fixes;
+- a member's connection, scopes, API key, tool switch (`tool_blocked`) and pending confirmation are
+  theirs, so those rows offer **Copy link for member** (`/settings/plugins`) instead;
+- `provider_configuration` is a platform admin's; provider outages and `tool_error` need nothing.
+
+Trends and counts live on Insights → Tools, linked from the toolbar. A dashboard that #608 put on
+top of this list (credits, "avg cost per meeting" over a constant 12 meetings, seeded charts) was
+removed on 2026-10-01 together with `workspace-telemetry-dashboard.tsx`,
+`workspace-currency-config-modal.tsx` and `lib/billing/workspace-telemetry.ts`.
 
 ## Notes for future maintainers
 
@@ -171,10 +257,15 @@ still carries the original English at it. That is the general repair pattern; se
 
 - `src/components/assistant/plugins/workspace-plugins-page.tsx`
 - `src/components/assistant/plugins/plugins-page.tsx`
-- `src/lib/assistant/plugin-availability.ts`, `src/lib/assistant/plugin-errors.ts`
+- `src/lib/assistant/plugin-availability.ts`, `src/lib/assistant/plugin-errors.ts`,
+  `src/lib/assistant/tool-policy.ts`, `src/lib/admin/plugin-catalog.ts`
+- `src/services/assistant.service.ts`, `src/lib/api/endpoints.ts`
 - `src/hooks/use-workspace-plugins.ts`
 - `src/components/layout/linear-sidebar.tsx`, `src/components/layout/global-chatbot.tsx`
 - `src/types/assistant.ts`
 - `src/i18n/request.ts`, `messages/{en,vi,ja}/workspacePlugins.json`,
   `messages/{en,vi,ja}/pluginsPage.json`
 - `scripts/check-plugin-marketplace-contract.mjs`
+- `src/app/(app)/[workspaceSlug]/settings/plugin-activity/page.tsx`, `src/lib/assistant/plugin-activity.ts`,
+  `messages/{en,vi,ja}/settingsPluginActivity.json`, `messages/{en,vi,ja}/workspaceInsights.json`,
+  `messages/{en,vi,ja}/common.json` (`chatbot.alwaysAllow*`)

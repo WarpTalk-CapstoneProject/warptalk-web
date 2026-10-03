@@ -1,6 +1,6 @@
 {
   "absence": {
-    "withheld": "Cuộc họp này có bản ghi, nhưng chưa được chia sẻ với bạn. Chỉ những người đã tham gia mới có thể đọc — hãy hỏi người tổ chức nếu bạn cần quyền truy cập.",
+    "withheld": "Cuộc họp này có bản ghi, nhưng chưa được chia sẻ với bạn. Người tổ chức quyết định ai được đọc — hãy hỏi họ nếu bạn cần quyền truy cập.",
     "unavailable": "Không thể tải bản ghi ngay lúc này. Hãy làm mới trang để thử lại.",
     "notYet": "Bản ghi sẽ xuất hiện ở đây khi cuộc họp được chuyển thành văn bản.",
     "notKept": "Cuộc họp này được đặt là không lưu bản ghi. Phụ đề và dịch vẫn hoạt động trực tiếp, nhưng không có gì được lưu lại, nên không có bản ghi, tóm tắt AI hay biên bản.",
@@ -81,7 +81,8 @@
   "speaker": {
     "you": "Bạn",
     "unknownSpeaker": "Người nói không xác định",
-    "unknownSpeakerLower": "người nói không xác định"
+    "unknownSpeakerLower": "người nói không xác định",
+    "googleMeetParticipants": "Người tham gia Google Meet"
   },
   "line": {
     "editAria": "Sửa dòng bản ghi",
@@ -123,5 +124,45 @@
     "originalTitle": "Xem lại bản ghi âm nguyên bản chưa lọc từ đệm. Chỉ thay đổi cách bạn xem.",
     "showCleanTitle": "Quay lại bản gọn đã lọc từ đệm. Chỉ thay đổi cách bạn xem.",
     "selfRepair": "Người nói đã tự sửa lời. Nguyên văn: \"{rawText}\""
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "Chưa trả lời",
+        "meaning": "Một câu hỏi đã được nêu nhưng chưa ai trả lời"
+      },
+      "term": {
+        "label": "Thuật ngữ",
+        "meaning": "Một thuật ngữ được dùng trong cuộc họp mà chưa được giải thích"
+      },
+      "action": {
+        "label": "Việc cần làm",
+        "meaning": "Một cam kết chưa có người phụ trách hoặc chưa có hạn chót"
+      },
+      "correction": {
+        "label": "Cần kiểm tra",
+        "meaning": "Điều này mâu thuẫn với một điều đã nói trước đó"
+      },
+      "fact": {
+        "label": "Tham chiếu",
+        "meaning": "Lấy từ một tài liệu đính kèm cuộc họp này"
+      },
+      "other": {
+        "label": "Gợi ý",
+        "meaning": "Được tự động nhận ra từ nội dung cuộc họp"
+      }
+    },
+    "actions": {
+      "askWarpBot": "Hỏi WarpBot",
+      "researchTerm": "Tra cứu thuật ngữ này",
+      "findTermInDocuments": "Tìm trong tài liệu",
+      "askQuestion": "Hỏi WarpBot câu này",
+      "findWhoKnows": "Tìm người có thể biết",
+      "checkInDocuments": "Đối chiếu với tài liệu",
+      "checkWhichIsRight": "Kiểm tra bên nào đúng",
+      "draftTask": "Soạn thành công việc"
+    },
+    "disclaimer": "Được tạo tự động — hãy kiểm tra trước khi dựa vào.",
+    "dismissAria": "Bỏ qua gợi ý"
   }
 }

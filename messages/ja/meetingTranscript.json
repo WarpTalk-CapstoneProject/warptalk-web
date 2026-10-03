@@ -1,6 +1,6 @@
 {
   "absence": {
-    "withheld": "この会議には文字起こしがありますが、あなたとは共有されていません。参加した人だけが読むことができます — アクセスが必要な場合はホストに相談してください。",
+    "withheld": "この会議には文字起こしがありますが、あなたとは共有されていません。閲覧できる人はホストが決めます — アクセスが必要な場合はホストに相談してください。",
     "unavailable": "文字起こしを読み込めませんでした。再読み込みしてもう一度お試しください。",
     "notYet": "会議が文字起こしされ次第、ここに保存されます。",
     "notKept": "この会議は文字起こしを保存しない設定でした。字幕と翻訳はライブで動作しましたが、何も保存されなかったため、文字起こし、AI要約、議事録はありません。",
@@ -81,7 +81,8 @@
   "speaker": {
     "you": "あなた",
     "unknownSpeaker": "不明な発言者",
-    "unknownSpeakerLower": "不明な発言者"
+    "unknownSpeakerLower": "不明な発言者",
+    "googleMeetParticipants": "Google Meet の参加者"
   },
   "line": {
     "editAria": "文字起こしの行を編集",
@@ -123,5 +124,45 @@
     "originalTitle": "フィラーや言い直しを含む元の文字起こしを表示します。あなたの表示だけが変わります。",
     "showCleanTitle": "整形された文字起こしに戻します。あなたの表示だけが変わります。",
     "selfRepair": "話者が言い直しました。実際の発言: 「{rawText}」"
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "未回答",
+        "meaning": "質問されたものの、まだ回答されていません"
+      },
+      "term": {
+        "label": "用語",
+        "meaning": "この会議で説明なしに使われた用語です"
+      },
+      "action": {
+        "label": "アクション",
+        "meaning": "担当者または期限が決まっていない約束です"
+      },
+      "correction": {
+        "label": "要確認",
+        "meaning": "以前の発言と矛盾しています"
+      },
+      "fact": {
+        "label": "参照",
+        "meaning": "この会議に添付された資料からの情報です"
+      },
+      "other": {
+        "label": "提案",
+        "meaning": "会話の内容から自動的に検出されました"
+      }
+    },
+    "actions": {
+      "askWarpBot": "WarpBot に質問",
+      "researchTerm": "この用語を調べる",
+      "findTermInDocuments": "資料から探す",
+      "askQuestion": "WarpBot にこの質問をする",
+      "findWhoKnows": "詳しい人を探す",
+      "checkInDocuments": "資料と照合する",
+      "checkWhichIsRight": "どちらが正しいか確認",
+      "draftTask": "タスクとして作成"
+    },
+    "disclaimer": "自動生成されています。参考にする前に内容をご確認ください。",
+    "dismissAria": "提案を閉じる"
   }
 }

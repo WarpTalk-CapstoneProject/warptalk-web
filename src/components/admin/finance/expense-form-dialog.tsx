@@ -73,7 +73,7 @@ function ExpenseForm({
   const [vendor, setVendor] = useState(expense?.vendor ?? "");
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? selectable[0]?.id ?? "");
   const [amount, setAmount] = useState(expense ? String(expense.amount) : "");
-  const [currency, setCurrency] = useState<ExpenseCurrency>(expense?.currency ?? "VND");
+  const [currency, setCurrency] = useState<ExpenseCurrency>(expense?.currency ?? "USD");
   const [status, setStatus] = useState<ExpenseStatus>(expense?.status ?? "paid");
   const [paymentMethod, setPaymentMethod] = useState(expense?.paymentMethod ?? "bank_transfer");
   const [paidBy, setPaidBy] = useState(expense?.paidBy ?? "");

@@ -291,6 +291,7 @@
       "rate_card_upserted": "料金表を公開",
       "rate_card_deactivated": "料金表を廃止",
       "rate_card_provider_cost_set": "プロバイダー原価を設定",
+      "rate_card_credit_price_set": "会議のクレジット単価を変更",
       "pricing_config_updated": "価格設定を変更",
       "billing_policy_updated": "請求ポリシーを変更",
       "subscription_contract_created": "契約を作成",
@@ -360,7 +361,9 @@
       "setting_reset": "プラットフォーム設定をリセット",
       "setting_reverted": "プラットフォーム設定を元に戻す",
       "setting_imported": "プラットフォーム設定をインポート",
-      "settings_exported": "プラットフォーム設定をエクスポート"
+      "settings_exported": "プラットフォーム設定をエクスポート",
+      "glossary_template_updated": "用語集インポート用テンプレートを保存",
+      "glossary_template_reset": "用語集インポート用テンプレートを既定に戻す"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -393,7 +396,8 @@
       "credit_pack": "クレジットパック",
       "addon": "アドオン",
       "coupon": "クーポン",
-      "platform_setting": "プラットフォーム設定"
+      "platform_setting": "プラットフォーム設定",
+      "glossary_import_template": "用語集インポート用テンプレート"
     },
     "sources": {
       "workspace_service": "ワークスペース",

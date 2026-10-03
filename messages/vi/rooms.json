@@ -110,10 +110,7 @@
       "people": "Người tham gia"
     },
     "language": {
-      "heading": "Ngôn ngữ cuộc họp",
-      "blocked": "Bị chặn",
-      "blockedReason": "{language} không được phép theo chính sách ngôn ngữ của không gian làm việc này.",
-      "blockedFooter": "Các ngôn ngữ bị chặn không được phép theo chính sách ngôn ngữ của không gian làm việc này. Quản trị viên có thể thay đổi điều này trong cài đặt không gian làm việc."
+      "heading": "Ngôn ngữ cuộc họp"
     },
     "options": {
       "dateAndTime": "Ngày & Giờ",
@@ -258,8 +255,9 @@
     "empty": "Không tìm thấy cuộc họp nào. Hãy thử tên phòng, mã, hoặc một trong các thao tác nhanh ở trên."
   },
   "bridgeFarSide": {
-    "label": "Bên kia nói",
-    "ariaLabel": "Bên kia nói {language}. Đổi ngôn ngữ của phía bên kia cuộc gọi",
+    "name": "Ngôn ngữ phía bên kia cuộc gọi nói",
+    "ariaLabel": "Ngôn ngữ phía bên kia cuộc gọi nói: {language}. Đổi ngôn ngữ",
+    "ariaLabelNotSet": "Ngôn ngữ phía bên kia cuộc gọi nói: chưa chọn. Chọn ngôn ngữ",
     "hint": "Ngôn ngữ phía bên kia cuộc gọi đang nói",
     "connecting": "Đang kết nối tới WarpTalk…",
     "notSet": "Chọn",
@@ -275,5 +273,135 @@
     "subscriptionExpired": "Gói đăng ký của workspace đã hết hạn — đã tạm dừng dịch. Hãy nhờ chủ workspace gia hạn.",
     "suspended": "Đã dừng dịch: dịch vụ AI của workspace đang bị tạm ngưng. Hãy nhờ chủ workspace kiểm tra thanh toán.",
     "restored": "Đã có thể dịch trở lại — thanh toán của workspace đã được khôi phục."
+  },
+  "languagePolicy": {
+    "narrowedTitle": "Đã bỏ {dropped} khỏi cuộc họp này",
+    "narrowedDescription": "Workspace của bạn không còn cho phép {dropped}, nên cuộc họp này chỉ chạy bằng {effective}. Hãy nhờ admin workspace cho phép lại, hoặc sửa ngôn ngữ của cuộc họp.",
+    "startRefused": "Không thể bắt đầu cuộc họp: các ngôn ngữ của cuộc họp ({meeting}) không còn được workspace cho phép; hiện workspace chỉ cho phép {allowed}. Hãy sửa ngôn ngữ của cuộc họp, hoặc nhờ admin workspace cho phép lại.",
+    "none": "không ngôn ngữ nào"
+  },
+  "seriesBlockedNotice": {
+    "title": "\"{title}\" đã ngừng lên lịch",
+    "body": "Chuỗi họp này không còn tạo cuộc họp mới: ngôn ngữ của nó không còn được workspace cho phép. Hãy sửa ngôn ngữ của cuộc họp, hoặc nhờ admin workspace cho phép lại.",
+    "openFailed": "Không mở được chuỗi họp này. Hãy thử lại sau giây lát."
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "Đang kết nối tới WarpTalk…",
+      "noHost": "WarpTalk chưa chạy cuộc họp này.",
+      "incompatible": "WarpTalk vừa được cập nhật. Hãy tải lại để dùng ở đây."
+    },
+    "carry": {
+      "asking": "Đang mở cuộc họp này trong WarpTalk…",
+      "failed": "WarpTalk chưa chạy cuộc họp này, nên chưa đổi được ngôn ngữ và giọng nói từ đây.",
+      "incompatible": "WarpTalk vừa được cập nhật. Hãy tải lại cửa sổ WarpTalk để dùng các nút này.",
+      "show": "Mở WarpTalk"
+    },
+    "language": {
+      "connected": "Chọn ngôn ngữ của bạn"
+    },
+    "listen": {
+      "label": "Bạn nghe gì",
+      "text": "Chữ",
+      "voice": "Giọng",
+      "textHint": "Chữ: bạn đọc bản dịch và nghe cuộc gọi như bình thường.",
+      "voiceHint": "Giọng: bạn nghe họ được dịch, giọng gốc nhỏ hơn bên dưới."
+    },
+    "devices": {
+      "hint": "Mở phần thiết lập thiết bị trong cửa sổ WarpTalk"
+    },
+    "languagePolicy": {
+      "loading": "Đang tải các ngôn ngữ của workspace…",
+      "error": "Không tải được các ngôn ngữ của workspace. Chỉ hiển thị ngôn ngữ của cuộc họp này."
+    },
+    "startStep": {
+      "title": "Dịch cuộc gọi này",
+      "intro": "Chọn ngôn ngữ của bạn. Mọi người khác trong cuộc gọi được dịch sang ngôn ngữ đó cho bạn.",
+      "start": "Bắt đầu dịch",
+      "pickFirst": "Hãy chọn ngôn ngữ của bạn trước",
+      "farSideTitle": "Người khác trong cuộc gọi nói",
+      "farSideHint": "Ngôn ngữ của những người trong Google Meet. Bạn có thể đổi lại sau ở biểu tượng người.",
+      "farSideAlsoTitle": "Cũng có người nói",
+      "farSideAlsoHint": "Meet nghe bản dub bằng {language}. Người nói các ngôn ngữ này vẫn được chép lời và dịch cho bạn.",
+      "farSideAlsoFailed": "Không thêm được ngôn ngữ này vào cuộc họp",
+      "waitingForHost": "Chủ phòng hoặc người đang thu âm cuộc gọi này sẽ bắt đầu dịch.",
+      "continue": "Tiếp tục",
+      "started": "Đã bắt đầu dịch.",
+      "startFailed": "Không bắt đầu dịch được.",
+      "notCarried": "Đã bắt đầu dịch, nhưng WarpTalk không mở được cuộc họp này.",
+      "notCarriedDescription": "Hãy mở cuộc họp trong cửa sổ WarpTalk để giọng nói của bạn và bản lồng tiếng được truyền đi."
+    },
+    "takeover": {
+      "notice": "Người đang thu âm cuộc gọi này đã rời WarpTalk.",
+      "action": "Thu âm trên thiết bị này",
+      "done": "Thiết bị này hiện thu âm cuộc gọi.",
+      "failed": "Không thu âm cuộc gọi được trên thiết bị này.",
+      "failedDescription": "Có thể vẫn có người đang thu âm. Xem chi tiết trong cửa sổ WarpTalk."
+    },
+    "audioMode": {
+      "label": "Meet nghe bạn thế nào",
+      "settingsRow": "Meet nghe bạn",
+      "voice": "Giọng đã dịch",
+      "text": "Giọng thật của bạn",
+      "voiceHint": "Meet nghe bản dịch giọng của bạn do WarpTalk phát qua VB-CABLE.",
+      "textHint": "Meet nghe micro thật của bạn. Bạn vẫn có bản ghi và bản dịch dạng chữ.",
+      "unknown": "Đang kết nối với WarpTalk…",
+      "voiceNeedsCable": "Giọng đã dịch cần VB-CABLE. Cài đặt trong Cài đặt thiết bị.",
+      "textUnavailable": "Máy này không dùng được chế độ giọng thật.",
+      "lockedHint": "Bạn có thể chuyển lại giọng đã dịch sau khi dừng dịch.",
+      "headphones": "Hãy dùng tai nghe: loa phát cuộc gọi, và micro của bạn có thể thu lại tiếng đó.",
+      "nowText": "Meet giờ nghe giọng thật của bạn.",
+      "nowVoice": "Meet giờ nghe giọng đã dịch của bạn.",
+      "locked": "Không thể chuyển sang giọng đã dịch khi đang dịch.",
+      "lockedDescription": "Hãy dừng dịch trước rồi chuyển lại.",
+      "failed": "Không đổi được cách Meet nghe bạn.",
+      "failedDescription": "Xem chi tiết trong cửa sổ WarpTalk."
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "Người trong cuộc gọi Meet không nghe thấy bạn.",
+        "body": "Micro của Meet đang là “CABLE Output”, nơi chỉ có giọng đã dịch của bạn, trong khi WarpTalk đang gửi giọng thật. Trong Meet, bấm mũi tên cạnh nút micro rồi chọn micro thật của bạn.",
+        "action": "Gửi giọng đã dịch thay vào"
+      },
+      "voiceOnReal": {
+        "title": "Người trong cuộc gọi Meet đang nghe bạn chưa qua dịch.",
+        "body": "WarpTalk đang gửi giọng đã dịch của bạn qua “CABLE Output”, nhưng micro của Meet lại là micro thật. Trong Meet, bấm mũi tên cạnh nút micro rồi chọn “CABLE Output (VB-Audio Virtual Cable)”.",
+        "action": "Gửi giọng thật thay vào"
+      }
+    },
+    "meetCaptions": {
+      "title": "Hãy bật phụ đề (CC) trong Google Meet.",
+      "body": "WarpTalk lấy tên người nói từ phụ đề của Meet, mà lúc này Meet chưa hiện phụ đề. Bấm CC trên thanh công cụ của Meet để các câu của phía bên kia hiện đúng tên người nói.",
+      "dismiss": "Đóng"
+    },
+    "meetLeft": {
+      "title": "Bạn đã rời cuộc gọi Meet. Kết thúc phòng WarpTalk?",
+      "countdown": "Tự kết thúc sau {seconds} giây.",
+      "endNow": "Kết thúc ngay",
+      "keepOpen": "Giữ phòng mở",
+      "kept": "Phòng vẫn đang mở. WarpTalk không nghe cuộc gọi này; vào lại Google Meet để tiếp tục."
+    },
+    "micChip": {
+      "off": "Mic WarpTalk đang tắt",
+      "on": "Mic WarpTalk đang bật",
+      "turnOn": "Bật",
+      "turnOff": "Tắt",
+      "hint": "WarpTalk không đọc được nút tắt tiếng của Google Meet ở đây, nên mic được bật tắt bằng tay."
+    },
+    "voiceCloneMode": {
+      "label": "Chế độ sao chép giọng",
+      "description": "Đọc bản dịch của một người bên Meet bằng bản sao giọng của chính họ, sau khi bạn đã ghi nhận là họ đồng ý.",
+      "noticeLabel": "Thông báo để dán vào khung chat của Meet",
+      "notice": "WarpTalk đang dịch cuộc gọi này. Nếu bạn đồng ý, WarpTalk sẽ đọc bản dịch lời bạn nói bằng một bản sao giọng của chính bạn, chỉ trong cuộc họp này. Nếu bạn không muốn, cứ nói với tôi nhé.",
+      "copy": "Sao chép",
+      "copied": "Đã sao chép",
+      "copyFailed": "Chưa sao chép được thông báo. Hãy bôi chọn đoạn văn bản rồi tự sao chép.",
+      "peopleLabel": "Người trong cuộc gọi Meet",
+      "empty": "Tên sẽ hiện ở đây khi có người nói và phụ đề (CC) của Meet đang bật.",
+      "hint": "Chỉ đánh dấu những người đã nói đồng ý. Bỏ dấu ở một tên sẽ xoá bản sao giọng của người đó. Tắt chế độ này không bỏ dấu của ai cả.",
+      "statusFailed": "Chưa kiểm tra được những ai đã được đánh dấu.",
+      "retry": "Thử lại",
+      "saveFailed": "Chưa lưu được lựa chọn này."
+    }
   }
 }

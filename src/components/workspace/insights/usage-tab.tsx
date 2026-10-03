@@ -4,9 +4,10 @@
  * Insights → Usage (WT-878): the workspace's Usage surface, inside the Insights page.
  *
  * NOTHING HERE IS A SECOND USAGE PAGE
- *   The surface is `UsageOverview`, the same component `/settings/billing/usage` renders — its
- *   member filter, refresh and CSV export included — fed by `useWorkspaceUsageOverview`, which
- *   loads exactly what that page loads under the same query keys. What this tab adds is only what
+ *   The surface is `UsageOverview`, the component the stand-alone `/settings/billing/usage` page
+ *   rendered — its member filter, refresh and CSV export included — fed by
+ *   `useWorkspaceUsageOverview`. That page was retired on 2026-10-03 and its address forwards here
+ *   (`?tab=usage`, proxy.ts), so this tab is the workspace's only Usage surface. What it adds is only what
  *   the Insights frame needs around it:
  *
  *   - A caption, because the page's period bar is hidden on this tab: usage is counted per billing

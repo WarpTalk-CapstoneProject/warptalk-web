@@ -120,6 +120,14 @@ export function useTranscriptSegments(transcriptId?: string) {
         return data;
       }),
     enabled: !!transcriptId,
+    // Saved speaker names change AFTER the meeting with no event to say so: in a Google Meet bridge
+    // room a relabel job rewrites the Meet-side lines' names from Google's own transcript once the
+    // call ends. Re-reading on mount and on focus (once the shared staleTime has passed) is what
+    // lets the record pick that up without a hard reload. Spelled out rather than inherited from
+    // the client defaults so that turning those off elsewhere cannot silently freeze the names.
+    // No polling: a record is read, not watched.
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 

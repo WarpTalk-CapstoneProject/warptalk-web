@@ -148,7 +148,7 @@
       "newUsers": "{count} new in 6 months"
     },
     "revenueTitle": "Revenue by month",
-    "revenueNote": "Paid payments in VND; a Stripe checkout and its first invoice count once. The latest month is month to date.",
+    "revenueNote": "Paid payments in USD (a VND payment at its day's Stripe rate); a Stripe checkout and its first invoice count once. The latest month is month to date.",
     "activeTitle": "Active accounts and workspaces",
     "activeNote": "Per month: accounts that signed in, workspaces that used credits. The latest month is month to date.",
     "usersTitle": "User and workspace growth",

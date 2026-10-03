@@ -25,7 +25,7 @@
  *
  * PHASE 2 (WT-525): THE OVERLAY IS A WIDGET NOW
  *
- *   The page no longer renders the WT-577 control strip (bridge-overlay-controls.tsx). It renders
+ *   The page no longer renders the WT-577 control strip. It renders
  *   `WidgetShell` inside `BridgeWidgetProvider` (components/rooms/bridge/widget/), and the controls
  *   the strip carried moved into the widget's slots: Start/Stop and Pause transcript into the
  *   dock's session slot, End into the header, the voice into the settings slot. Assertion 2 used
@@ -33,9 +33,8 @@
  *   structure that replaced it, by the same rule — the slot must be rendered by something a user
  *   reaches, and each control must still fire its mutation.
  *
- *   The old strip's file is still in the repo (another session owns it), so the checks written
- *   against it stay, but only while the file exists: a check that fails because a dead file was
- *   deleted would be guarding nothing.
+ *   The old strip's file has since been deleted, and the checks that were written against it went
+ *   with it: a check on a file nothing renders guards nothing.
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -182,12 +181,10 @@ const WIDGET_DIR = "src/components/rooms/bridge/widget";
 const SHELL = `${WIDGET_DIR}/widget-shell.tsx`;
 const DOCK = `${WIDGET_DIR}/dock-session-controls.tsx`;
 const END = `${WIDGET_DIR}/end-session.tsx`;
-const CONTROLS = "src/components/rooms/bridge/bridge-overlay-controls.tsx";
 const overlayPage = read(OVERLAY_PAGE);
 const shell = read(SHELL);
 const dock = read(DOCK);
 const endSession = read(END);
-const controls = read(CONTROLS);
 
 /** Every .ts/.tsx in the widget folder, for the checks that are about the widget as a whole. */
 const widgetFiles = existsSync(join(root, WIDGET_DIR))
@@ -226,8 +223,7 @@ if (!shell) {
   const code = stripComments(shell);
   for (const [slot, what] of [
     ["DockSessionControls", "Start/Stop translation and Pause transcript"],
-    ["EndSessionButton", "End, the only exit from a bridge room"],
-    ["EndedView", "the screen that says the Google Meet call is still going"],
+    ["EndedView", "the screen that says the room has ended and opens its record"],
     // The far side's language is the whole translation in a bridge room. Without this slot the
     // stand-in keeps whatever language the room was created with, for the entire call.
     ["DockFarSideLanguagePill", "\"They speak\", the only way to say what the other side of the call speaks"],
@@ -278,40 +274,6 @@ if (!dock) {
 }
 
 /**
- * 2b. The old strip, while it still exists.
- *
- * REMOVED: the requirement that it use `useSetVoiceCloneConsent`. The widget has no clone switch,
- * by design: whether somebody is cloned follows their account's "Enable Voice Cloning" setting
- * plus their consent, not a per-window toggle. Requiring the switch here would pin a control the
- * product has decided against to a file that is no longer rendered — and a later rewrite of that
- * file that dropped it, correctly, would fail for it.
- *
- * The voice picker checks stay, on this file, until the widget's settings slot (t4) carries its
- * own. Moving them to the settings slot now would fail the build on a stub that has not landed.
- */
-if (controls) {
-  for (const [hook, what] of [
-    ["useResumeTranslationRoom", "Start Translation (/resume is the endpoint that opens a session)"],
-    ["useStopTranslation", "Stop Translation"],
-    ["useSetDubVoice", "the voice picker"],
-  ]) {
-    if (!new RegExp(`\\b${hook}\\b`).test(controls)) {
-      failures.push(`${CONTROLS} no longer uses ${hook} — ${what} is one of its controls.`);
-    }
-  }
-
-  // The dub voice lives in AuthService, which knows nothing about rooms. The AI pipeline learns it
-  // from an AUDIO_ROUTES_UPDATED payload, so without the refresh the change is correct everywhere
-  // except the meeting the user is standing in — which is the only place this window is used.
-  if (!/\buseRefreshDubVoice\b/.test(controls)) {
-    failures.push(
-      `${CONTROLS} sets the dub voice without calling useRefreshDubVoice. The setting would be saved `
-        + `and the meeting would keep speaking in the old voice until the user rejoined.`,
-    );
-  }
-}
-
-/**
  * 3. The device setup wizard has a caller in the product.
  *
  * WT-578 exactly: it existed, it worked, and the only route to it was a dev preview page.
@@ -343,18 +305,34 @@ if (!read(WIZARD)) {
  *
  * Opening it once when a device is missing is not enough. Devices are taken away mid-call by
  * reboots and by other apps grabbing the driver, and a user who dismissed the dialog has no second
- * chance unless something on the widget offers one.
+ * chance unless something offers one.
+ *
+ * W4a: that something is the popup's "Device settings" row now. The main window's own bridge widget
+ * (ExternalBridgeWidget) is gone — the popup is the only bridge UI — so the row sends `open-setup`
+ * over the relay and the meeting session opens the wizard in its own window and brings that window
+ * up (it sits behind Google Meet; a dialog opened there unannounced is a dialog nobody sees).
  */
-const WIDGET = "src/components/rooms/live/external-bridge-widget.tsx";
-const widget = read(WIDGET);
-if (!widget) {
-  failures.push(`${WIDGET} is missing; it is the whole WarpTalk UI during an external-bridge call.`);
-} else if (!/\bonOpenDeviceSetup\b/.test(widget)) {
+const SESSION_FILE = "src/components/rooms/live/persistent-meeting-session.tsx";
+const sessionCode = stripComments(read(SESSION_FILE) ?? "");
+if (read("src/components/rooms/live/external-bridge-widget.tsx") !== null) {
   failures.push(
-    `${WIDGET} has no onOpenDeviceSetup. The wizard would then be reachable only at the moment the `
-      + `device check first fails — and a device that drops mid-meeting, which is the common case, `
-      + `would leave the user with a widget reporting "not ready" and nothing to press.`,
+    "src/components/rooms/live/external-bridge-widget.tsx exists again. The popup over Meet is the only "
+      + "bridge widget (WT-868); the main window runs a bridge meeting headless.",
   );
+}
+if (/<ExternalBridgeWidget\b/.test(sessionCode)) {
+  failures.push(`${SESSION_FILE} renders <ExternalBridgeWidget>. The popup is the only bridge widget (WT-868).`);
+}
+if (!/onOpenSetup:\s*\(\)\s*=>\s*\{[^}]*setBridgeSetupOpen\(true\)[^}]*showDesktopMainWindow\(\)/.test(sessionCode)) {
+  failures.push(
+    `${SESSION_FILE} does not answer the popup's open-setup with the wizard AND the main window brought up `
+      + `(onOpenSetup: setBridgeSetupOpen(true) + showDesktopMainWindow()). Without it a device that `
+      + `drops mid-meeting leaves the user with nothing to press.`,
+  );
+}
+if (!widgetFiles.concat(`${WIDGET_DIR}/settings/use-bridge-widget-relay-client.ts`)
+  .some((file) => /["']open-setup["']/.test(stripComments(read(file) ?? "")))) {
+  failures.push(`Nothing under ${WIDGET_DIR} sends open-setup: the popup has no way back into the wizard.`);
 }
 
 /**
@@ -398,9 +376,7 @@ for (const [label, source] of [
  */
 for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
-  [CONTROLS, controls],
   [WIZARD, read(WIZARD)],
-  [WIDGET, widget],
   ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;
@@ -426,8 +402,7 @@ for (const [label, source] of [
  * by its unit test; what a test of the helper cannot see is a popup that stops going through it.
  *
  * Phase 2: the Start a user can actually press is the widget dock's, so that is the file this is
- * REQUIRED of. The old strip is held to the same rule while it exists — it is still a Start button,
- * and an unrendered file is one import away from being rendered again.
+ * REQUIRED of.
  */
 function checkStartGoesThroughActivation(label, source) {
   const code = withoutImports(stripComments(source));
@@ -463,7 +438,6 @@ function checkStartGoesThroughActivation(label, source) {
 }
 
 if (dock) checkStartGoesThroughActivation(DOCK, dock);
-if (controls) checkStartGoesThroughActivation(CONTROLS, controls);
 
 const LAYOUT = "src/app/(app)/layout.tsx";
 const layout = read(LAYOUT);
@@ -481,52 +455,51 @@ if (!layout) {
 }
 
 /**
- * 8. End ends BOTH halves, in the order "End meeting for all" does (path A).
+ * 8. The popup does NOT end the meeting (PO, 2026-10-01).
  *
- * End in the widget is the only exit from a bridge room, so what it calls is the whole of how such
- * a room is closed. Two calls, and each one alone leaves something running:
- *   - useEndMeetingForAll deletes the LiveKit room and publishes `__MEETING_END__`, the sentinel
- *     the AI worker writes the summary on. Without it: no summary, and a provider room left open.
- *   - useEndTranslationRoom marks the room ENDED and starts finalization. Without it the room stays
- *     IN_PROGRESS — billed, and listed as live — with nobody in it.
- * The order is MeetingExitControl's then handleExit's: the meeting first, the room second.
+ * WAS: "End ends both halves, in the order End meeting for all does". The product decision since:
+ * a bridge room follows its Google Meet call, and the popup over Meet carries translation controls
+ * only (Start/Stop translation, Pause/Resume transcript). An End there ended WarpTalk for a call
+ * that was still going, and was one click from the controls people press all meeting. So the check
+ * is now the opposite one: no End control, no end mutation and no end intent anywhere in the
+ * widget.
  *
- * And it must end in `markEnded()`, or the ended screen — the one that says the Google Meet call
- * is still going — is never shown, and the user is left looking at a dock for a session that no
- * longer exists.
+ * WT-913 (PO, 2026-10-02) made "follows" concrete: the desktop reads Meet's buttons, and when the
+ * host leaves the call the MAIN WINDOW ends the room after a 30 s countdown. The popup shows that
+ * countdown and may answer it (`answer-meet-left`: End now / Keep open) — an answer to a question
+ * that exists only after Meet was left, not an End control, and the ending itself still never
+ * happens in the widget. The checks below hold exactly that. EndedView stays — it is how the popup
+ * reports a room that ended elsewhere — and its way on is "Open meeting record", not an exit.
+ *
+ * Every file under the widget folder, nested ones included: a removed button is most likely to come
+ * back as a "small" menu item in a sub-folder.
  */
-if (!endSession) {
-  failures.push(`${END} is missing; the widget shell renders it as the only exit from a bridge room.`);
-} else {
-  const code = withoutImports(stripComments(endSession));
-  const calls = [];
-  for (const [hook, what] of [
-    ["useEndMeetingForAll", "deletes the LiveKit room and triggers the summary"],
-    ["useEndTranslationRoom", "marks the room ENDED and starts finalization"],
-  ]) {
-    const name = boundName(code, hook);
-    const at = name ? code.search(new RegExp(`\\b${name}\\.mutate(?:Async)?\\(`)) : -1;
-    if (at === -1) {
-      failures.push(
-        `${END} does not call ${hook}'s mutation. That call ${what}; End without it leaves that `
-          + `half of the meeting running.`,
-      );
-    }
-    calls.push(at);
-  }
-  if (calls[0] !== -1 && calls[1] !== -1 && calls[0] > calls[1]) {
+if (endSession) {
+  failures.push(
+    `${END} exists again. The popup has no End (PO, 2026-10-01): a bridge room ends when its Google `
+      + `Meet conference ends.`,
+  );
+}
+if (shell && /<EndSessionButton\b/.test(withoutImports(stripComments(shell)))) {
+  failures.push(`${SHELL} renders <EndSessionButton>. The popup has no End (PO, 2026-10-01).`);
+}
+for (const file of allSources.filter((source) => source.startsWith(`${WIDGET_DIR}/`))) {
+  const code = withoutImports(stripComments(read(file) ?? ""));
+  if (/\buseEndMeetingForAll\b|\buseEndTranslationRoom\b|\bEndSessionButton\b/.test(code)) {
     failures.push(
-      `${END} ends the translation room before the meeting. Path A ("End meeting for all") ends the `
-        + `LiveKit meeting first and the room second; reversed, a failed second call leaves an ENDED `
-        + `room whose provider room is still open.`,
+      `${file} ends the meeting (useEndMeetingForAll / useEndTranslationRoom / EndSessionButton). `
+        + `The popup has no End (PO, 2026-10-01); the room ends with its Google Meet conference.`,
     );
   }
-  if (!/\bmarkEnded\(/.test(code)) {
-    failures.push(
-      `${END} never calls markEnded(). The shell would never show the ended screen, and the user `
-        + `would be left with Start and Pause buttons for a session that no longer exists.`,
-    );
+  if (/type:\s*["']end(?:-[a-z-]+)?["']/.test(code)) {
+    failures.push(`${file} sends an end intent over the relay. There is no End intent, on purpose.`);
   }
+}
+if (!/\bopenRoomRecord\(/.test(withoutImports(stripComments(read(`${WIDGET_DIR}/ended-view.tsx`) ?? "")))) {
+  failures.push(
+    `${WIDGET_DIR}/ended-view.tsx no longer asks the main window to open the meeting record `
+      + `(relay.openRoomRecord). That is the ended screen's one way on, where the user is signed in.`,
+  );
 }
 
 /**
@@ -534,7 +507,8 @@ if (!endSession) {
  *
  * Leave marks the host LEFT and nothing else. In a bridge room the stand-in seat never
  * disconnects, so the room would stay open — translating, billing, holding its LiveKit room —
- * with nobody who can see it, and nothing on screen would say so. End is the exit, on purpose.
+ * with nobody who can see it, and nothing on screen would say so. The room ends with its Google
+ * Meet conference (see 8).
  *
  * Read on code with comments stripped, since the reason is written down in the files themselves.
  * `\bleave` matches the copy ("Leave", "Leave meeting") and a leave hook or hub method, and not
@@ -546,7 +520,7 @@ for (const file of widgetFiles) {
     failures.push(
       `${file} carries a Leave control. A bridge room has no Leave: the stand-in seat keeps the room `
         + `open after the host leaves, so leaving orphans a room that is still translating and `
-        + `billing. End (end-session.tsx) is the only exit.`,
+        + `billing. Nor is there an End: the room ends with its Google Meet conference.`,
     );
   }
 }
@@ -802,8 +776,8 @@ if (failures.length > 0) {
 
 console.log(
   "PASS every desktop bridge helper has a caller, the overlay renders the widget and its session "
-    + "controls, Start activates the room in the main window, End ends both the meeting and the room "
-    + "with no Leave beside it, the setup wizard is reachable from a real room, and the loopback "
+    + "controls, Start activates the room in the main window, the popup has neither End nor Leave "
+    + "and its ended screen opens the meeting record, the setup wizard is reachable from a real room, and the loopback "
     + "consent is asked on the widget - with the main window's modal left as the fallback the "
     + "surface decision picks, one channel name, and both ends parsing what arrives",
 );

@@ -45,7 +45,6 @@
       "description": "Into <glossaryName></glossaryName>. A row near the top must name the columns; <term>Term</term> and <translation>Translation</translation> are required. Field, Definition, Note, Part of speech and Priority are used when present.",
       "expectedPairSame": "This glossary is {source} → {target}, so the second column is what each term means rather than a translation.",
       "expectedPairDifferent": "This glossary is {source} → {target}. The second column should be {target}.",
-      "downloadSample": "Download a sample file",
       "chooseFile": "Choose an .xlsx or .csv file",
       "chooseDifferentFile": "Choose a different file",
       "excelOrCsv": "Excel or comma-separated",
@@ -61,7 +60,11 @@
       "field": "Field",
       "cancel": "Cancel",
       "importing": "Importing…",
-      "importCount": "{count, plural, one {Import # term} other {Import # terms}}"
+      "importCount": "{count, plural, one {Import # term} other {Import # terms}}",
+      "downloadTemplate": "Download template for {source} → {target} (.xlsx)",
+      "viewTemplate": "View template",
+      "sampleSkipped": "The template's sample row was skipped.",
+      "context": "Context"
     }
   },
   "toasts": {
@@ -84,7 +87,8 @@
   },
   "tabs": {
     "custom": "Custom Glossary",
-    "global": "Global Glossary"
+    "global": "Global Glossary",
+    "importTemplate": "Import template"
   },
   "grouping": {
     "label": "Group by",
@@ -125,5 +129,52 @@
     "useThisInLanguage": "Use this in {language}",
     "removeTerm": "Remove term {index}",
     "addTerm": "Add term"
+  },
+  "importTemplate": {
+    "title": "Import template",
+    "description": "One file shape for every glossary. Pick the language pair you are importing; the Source and Target columns follow those languages. Fill in one term per row below the header.",
+    "sourceLanguage": "Source language",
+    "targetLanguage": "Target language",
+    "groups": {
+      "source": "Source",
+      "target": "Target",
+      "general": "General"
+    },
+    "band": "{group} · {language}",
+    "sampleNote": "The grey row is a sample. It shows the format and is skipped when the file is imported.",
+    "downloadXlsx": "Download .xlsx",
+    "downloadCsv": "Download .csv",
+    "downloadFailed": "Could not build the file. Try the .csv instead.",
+    "fallbackNotice": "Showing the built-in template: the saved one could not be loaded.",
+    "columnsTitle": "Columns",
+    "columnHeader": "Column",
+    "groupHeader": "Group",
+    "acceptsHeader": "Also accepted as",
+    "required": "Required",
+    "columnsNote": "Headers are matched without case and without the language in brackets, so “Translation (Japanese)” and “translation” are the same column. Files made with the old Term / Translation header still import."
+  },
+  "pairs": {
+    "filterLabel": "Filter glossaries by language pair",
+    "all": "All pairs ({count})",
+    "option": "{source} → {target} ({count})"
+  },
+  "pairEditor": {
+    "label": "Language pair",
+    "source": "Source language",
+    "target": "Target language",
+    "changed": "Language pair changed to {source} → {target}.",
+    "changeFailed": "Could not change the language pair.",
+    "confirm": "Existing translations stay as they are. Change to {source} → {target}?",
+    "confirmButton": "Change",
+    "cancel": "Cancel"
+  },
+  "warpbot": {
+    "loading": "Loading into WarpBot knowledgebase…",
+    "loadingProgress": "{done} of {total} terms loaded",
+    "ready": "Ready in WarpBot knowledgebase",
+    "readyDescription": "WarpBot can now use the terms in \"{name}\".",
+    "failed": "Couldn't load into WarpBot knowledgebase",
+    "failedDetail": "{count, plural, one {# term was not loaded} other {# terms were not loaded}}. Edit or re-import to try again.",
+    "unconfirmedDetail": "{count, plural, one {WarpBot has not confirmed # term} other {WarpBot has not confirmed # terms}}. Import again to retry."
   }
 }
