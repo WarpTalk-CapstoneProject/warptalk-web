@@ -350,6 +350,17 @@
       "documentDetail": "ドキュメント",
       "documents": "ドキュメント",
       "history": "履歴",
+      "insights": "インサイト",
+      "insightsUsage": "インサイト · 使用量",
+      "insightsTools": "インサイト · ツール",
+      "billing": "請求",
+      "workspacePlugins": "プラグイン",
+      "workspaceSettings": "ワークスペース設定",
+      "security": "セキュリティ",
+      "memberRoles": "メンバーの役割",
+      "features": "機能",
+      "invoices": "請求書",
+      "pluginActivity": "プラグインアクティビティ",
       "fallback": "ページ"
     }
   },

@@ -223,6 +223,15 @@ still carries the original English at it. That is the general repair pattern; se
 - [ ] Manual: a 409 `workspace_plugin_list_changed` surfaces the server's own sentence, not the
       "Could not add {label}." fallback.
 
+## WarpBot starters (2026-10-03)
+
+`WorkspacePluginsPage` registers the list it shows as WarpBot page context `workspace_plugins`
+(`lib/workspace/plugins-assistant-snapshot.ts`) for an Owner/Admin once the list has loaded, so an
+empty WarpBot conversation offers three starters (what the workspace has, requests waiting, what
+members use). Counts and plugin labels only: no requester, no server URL, no per-member connection,
+and not the per-tool rules (those load with a plugin's Manage dialog). It is a page context, not a
+tool. See `workspace-insights.md` ("WarpBot answers from the page") for the shared rules.
+
 ## Plugin activity (`/{slug}/settings/plugin-activity`)
 
 A read-only record for Owner and Admin: one row per plugin tool call WarpBot made in this
@@ -269,3 +278,12 @@ removed on 2026-10-01 together with `workspace-telemetry-dashboard.tsx`,
 - `src/app/(app)/[workspaceSlug]/settings/plugin-activity/page.tsx`, `src/lib/assistant/plugin-activity.ts`,
   `messages/{en,vi,ja}/settingsPluginActivity.json`, `messages/{en,vi,ja}/workspaceInsights.json`,
   `messages/{en,vi,ja}/common.json` (`chatbot.alwaysAllow*`)
+
+## WarpBot starters on Plugin activity (2026-10-03)
+
+`settings/plugin-activity/page.tsx` registers WarpBot page context `workspace_plugin_activity`
+(`pluginActivityAssistantSnapshot`) for an Owner/Admin once the log has loaded: the calls on
+screen counted by outcome and by plugin, the dates they span, each distinct problem with who can
+fix it, and how many the Owner can fix. Never who made a call, and never the provider resource a
+call touched. It describes the page on screen (25 newest, or the filtered page), and says so when
+older calls exist. It is a page context, not a tool. See `workspace-insights.md` ("WarpBot answers from the page") for the shared rules; the builders and their tests are `lib/workspace/settings-assistant-snapshots.ts` and `lib/workspace/__tests__/settings-assistant-snapshots.test.ts`.

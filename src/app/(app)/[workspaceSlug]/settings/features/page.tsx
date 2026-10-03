@@ -15,9 +15,13 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useMemo } from "react";
 import { ArrowRight, Info, Spinner, Warning } from "@phosphor-icons/react";
 
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceEntitlements } from "@/hooks/use-workspace";
+import { WORKSPACE_FEATURES_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
+import { featuresAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 import {
   buildEntitlementSections,
   type EntitlementRow,
@@ -114,6 +118,28 @@ export default function WorkspaceFeaturesPage() {
   const billingHref = `/${workspaceSlug}/settings/billing`;
 
   const entitlementsQuery = useWorkspaceEntitlements(activeWorkspaceId || "");
+
+  // WarpBot answers this page's starters from the same entitlement snapshot
+  // (settings-assistant-snapshots.ts), labelled in English whatever the page's language. The page
+  // is open to every member, so this is too: it is what the reader already sees.
+  const entitlementsData = entitlementsQuery.data;
+  const assistantSnapshot = useMemo(
+    () =>
+      entitlementsData
+        ? featuresAssistantSnapshot({
+            entitlements: entitlementsData,
+            rows: entitlementsData.isKnown
+              ? buildEntitlementSections(entitlementsData.entitlements).flatMap((section) => section.rows)
+              : [],
+          })
+        : null,
+    [entitlementsData],
+  );
+  useRegisterAssistantContext(
+    assistantSnapshot && activeWorkspaceId
+      ? { pageType: WORKSPACE_FEATURES_PAGE_TYPE, workspaceId: activeWorkspaceId, snapshot: assistantSnapshot }
+      : null,
+  );
 
   if (!activeWorkspaceId) return null;
 

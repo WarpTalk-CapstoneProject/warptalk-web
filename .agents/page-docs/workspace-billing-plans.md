@@ -33,6 +33,15 @@ and the Auto-renew row:
 - `/{slug}/payment/plans` keeps its cancel-reason picker; `PUT /auto-renew` takes no reason, so the
   choice is only logged to the browser console.
 
+## WarpBot starters (2026-10-03)
+
+The Billing page registers its figures with WarpBot as page context `workspace_billing`
+(`lib/workspace/billing-assistant-snapshot.ts`), so an Owner/Admin sees three starters in an empty
+WarpBot conversation (plan and renewal, overages, payment or renewal trouble). It is a page context,
+not a tool; nothing is registered for a member, while the page is loading or after a failed read.
+No card detail or provider failure text is sent. See `workspace-insights.md` ("WarpBot answers from
+the page") for the rules shared with the Insights tabs.
+
 ## Credit meter wording
 
 `settings/billing/components/credit-meter.tsx` takes its wording decisions from the pure helpers in
@@ -43,3 +52,12 @@ and the Auto-renew row:
 - `paceProjectionMessage(daysToEmpty, daysLeft)`: under one day the pace sentence uses
   `meter.paceRunsOutWithinDay` / `meter.paceRunsOutWithinDayAtEnd` ("runs out within a day"),
   never "in about 0 days"; otherwise `paceRunsOut` / `paceRunsOutAtEnd` with ICU plurals.
+
+## WarpBot starters on Invoices (2026-10-03)
+
+`settings/billing/invoices/page.tsx` registers WarpBot page context `workspace_invoices`
+(`invoicesAssistantSnapshot`) for an Owner/Admin once the list has loaded: the server's invoice
+total, and for the page on screen each invoice's number, amount, issue date and state, plus paid
+and unpaid sums by the page's own rule (only a PAID invoice counts as paid; void is owed by
+nobody). When there are more invoices than the page shows, the snapshot says its sums cover that
+page only. The payment-attempt history below the table is not sent. It is a page context, not a tool. See `workspace-insights.md` ("WarpBot answers from the page") for the shared rules; the builders and their tests are `lib/workspace/settings-assistant-snapshots.ts` and `lib/workspace/__tests__/settings-assistant-snapshots.test.ts`.

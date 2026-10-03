@@ -11,3 +11,23 @@ Workspace-backed consumers currently verified: external-collaboration/domain enf
 Owner/Admin controls now use partial workspace settings PATCH requests. Switches, selects, target-language changes, and DLP keyword changes commit immediately. Numeric controls commit on Enter or blur after integer/range validation (`maxActiveRooms` 1–50; `artifactRetentionDays` 0–3650). Requests are serialized in memory so rapid edits cannot complete out of order. The page header reports saved, saving, or failed state and warns before unloading while a request is pending.
 
 Verified-domain add/remove continues to use the dedicated verified-domain endpoints because those operations create and revoke domain verification records; their pending/error state is included in the page save badge.
+
+## WarpBot starters on the Settings tabs (2026-10-03)
+
+Three Settings pages register what they show as WarpBot page context for an Owner/Admin, so an
+empty WarpBot conversation opened there offers three starters each:
+
+| Page | pageType | Builder | What is sent |
+|---|---|---|---|
+| Workspace settings (`settings/page.tsx`) | `workspace_settings` | `workspaceSettingsAssistantSnapshot` | Default language, timezone, allowed meeting languages, voice cloning, meetings at once (stored, the plan's ceiling and the one in force), retention days, minutes template and classification, profanity filter, translation tone. |
+| Security (`settings/security/page.tsx`) | `workspace_security` | `securityAssistantSnapshot` | External collaboration, verified-domain rule and the domain list, invitation expiry, whether members may add any plugin, external AI models, PII redaction, the keyword filter and HOW MANY keywords it holds. |
+| Features (`settings/features/page.tsx`) | `workspace_features` | `featuresAssistantSnapshot` | Plan slug, whether a subscription is live, features included / not included, limits. Labelled in English whatever the page's language. |
+
+Rules: the SAVED settings (`settingsQuery.data`), never the form's draft; the blocked keywords
+themselves never leave the page; a domain list that was not read has no key; a cold entitlement
+snapshot says "not available yet" instead of listing defaults. Features is open to every member, so
+its context is too. It is a page context, not a tool. See `workspace-insights.md` ("WarpBot answers from the page") for the shared rules; the builders and their tests are `lib/workspace/settings-assistant-snapshots.ts` and `lib/workspace/__tests__/settings-assistant-snapshots.test.ts`.
+
+Testing checklist: Owner/admin on each page with WarpBot empty → three starters and a context pill
+named after the page; change a setting and wait for the save → the next answer uses the new value;
+a member on Workspace settings or Security → no starters.

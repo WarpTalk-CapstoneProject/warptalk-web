@@ -51,6 +51,9 @@ import {
 } from "@/lib/workspace/language-policy-settings";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 import { getErrorMessage } from "@/lib/api/errors";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { WORKSPACE_SETTINGS_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
+import { workspaceSettingsAssistantSnapshot } from "@/lib/workspace/settings-assistant-snapshots";
 
 function getSettingsSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
@@ -338,6 +341,23 @@ export default function WorkspaceSettingsPage() {
       lastQueuedValuesRef.current = {};
     }
   }, [activeWorkspaceId, reset, settingsQuery.data]);
+
+  // WarpBot answers this page's starters from the SAVED settings (settings-assistant-snapshots.ts),
+  // never the form's draft, and only for the roles the page is for.
+  const assistantRole = (workspaceQuery.data?.role || role || "").toLowerCase();
+  const savedSettings = settingsQuery.data;
+  const assistantSnapshot = useMemo(
+    () =>
+      savedSettings && (assistantRole === "owner" || assistantRole === "admin")
+        ? workspaceSettingsAssistantSnapshot(savedSettings)
+        : null,
+    [savedSettings, assistantRole],
+  );
+  useRegisterAssistantContext(
+    assistantSnapshot && activeWorkspaceId
+      ? { pageType: WORKSPACE_SETTINGS_PAGE_TYPE, workspaceId: activeWorkspaceId, snapshot: assistantSnapshot }
+      : null,
+  );
 
   if (!activeWorkspaceId) return null;
 

@@ -53,7 +53,7 @@ import { composerReadiness } from "@/lib/assistant/composer-readiness";
 import {
   assistantScopeFor,
   PLATFORM_SCOPE_LABEL,
-  PLATFORM_SUGGESTED_PROMPTS,
+  suggestedPromptsFor,
 } from "@/lib/assistant/assistant-scope";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
@@ -350,6 +350,17 @@ function buildPageContextLabels(
     document_detail: t("pageContextLabels.documentDetail"),
     documents: t("pageContextLabels.documents"),
     history: t("pageContextLabels.history"),
+    workspace_insights: t("pageContextLabels.insights"),
+    workspace_insights_usage: t("pageContextLabels.insightsUsage"),
+    workspace_insights_tools: t("pageContextLabels.insightsTools"),
+    workspace_billing: t("pageContextLabels.billing"),
+    workspace_plugins: t("pageContextLabels.workspacePlugins"),
+    workspace_settings: t("pageContextLabels.workspaceSettings"),
+    workspace_security: t("pageContextLabels.security"),
+    workspace_member_roles: t("pageContextLabels.memberRoles"),
+    workspace_features: t("pageContextLabels.features"),
+    workspace_invoices: t("pageContextLabels.invoices"),
+    workspace_plugin_activity: t("pageContextLabels.pluginActivity"),
   };
 }
 
@@ -1109,6 +1120,12 @@ export function GlobalChatbot() {
       ? null
       : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
+  // Insights starters follow the page context they are answered from: switch the context off and
+  // they go with it.
+  const suggestedPrompts = suggestedPromptsFor({
+    scope: assistantScope,
+    pageType: effectivePageContext?.pageType,
+  });
 
   const slashCommands = useMemo(() => buildSlashCommands(t), [t]);
   const pageContextLabels = useMemo(() => buildPageContextLabels(t), [t]);
@@ -2109,12 +2126,12 @@ export function GlobalChatbot() {
                 onScroll={handleMessagesScroll}
                 className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
-                {isPlatformScope && messages.length === 0 && !isAiTyping ? (
+                {suggestedPrompts.length > 0 && messages.length === 0 && !isAiTyping ? (
                   <div
-                    data-testid="warpbot-platform-suggestions"
+                    data-testid={isPlatformScope ? "warpbot-platform-suggestions" : "warpbot-insights-suggestions"}
                     className="mt-auto flex flex-col items-start gap-1.5 px-2 pb-2"
                   >
-                    {PLATFORM_SUGGESTED_PROMPTS.map((prompt) => (
+                    {suggestedPrompts.map((prompt) => (
                       <button
                         key={prompt}
                         type="button"

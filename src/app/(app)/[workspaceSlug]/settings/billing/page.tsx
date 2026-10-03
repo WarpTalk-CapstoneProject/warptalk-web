@@ -62,12 +62,15 @@ import {
 } from "@/components/ui/card";
 import { ExtraCreditsNeedPlan } from "@/components/billing/extra-credits-need-plan";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { WORKSPACE_BILLING_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
 import { canBuyExtraCredits } from "@/lib/billing/extra-credits";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
+import { billingAssistantSnapshot } from "@/lib/workspace/billing-assistant-snapshot";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
@@ -85,7 +88,7 @@ import { CreditLevelPill, CreditMeter, creditLook } from "./components/credit-me
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
-import { AutoRenewRow, PaymentFailedBanner } from "./components/auto-renew-section";
+import { AutoRenewRow, PaymentFailedBanner, useRecurringBilling } from "./components/auto-renew-section";
 import { CatalogSection, useHasCatalogExtras } from "./components/catalog-section";
 
 /**
@@ -258,6 +261,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   const {
     data: balance,
+    dataUpdatedAt: balanceReadAt,
     isLoading: isBalanceLoading,
     error: balanceError,
   } = useQuery({
@@ -333,6 +337,48 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const isCoreLoading = isBalanceLoading || isSubscriptionLoading;
   const hasNoSubscription = coreErrors.some(isNoSubscriptionError);
   const hardError = coreErrors.find((error) => error && !isNoSubscriptionError(error));
+
+  // WarpBot answers this page's starters from what it shows (billing-assistant-snapshot.ts). The
+  // renewal query is the one the renewal row and the payment banner already share, so this adds no
+  // request. Nothing is registered for a member, while the page is still reading, or after a failed
+  // read: a plan or an overage setting that was not read must not be told to WarpBot as "none".
+  const { data: recurring } = useRecurringBilling(workspaceId);
+  const assistantSnapshot = useMemo(
+    () =>
+      storeMatchesUrl && (role === "owner" || role === "admin") && !isCoreLoading && !hardError
+        ? billingAssistantSnapshot({
+            balance: hasNoSubscription ? null : balance,
+            subscription: hasNoSubscription ? null : subscription,
+            plan: activePlan,
+            interval: currentInterval,
+            overage,
+            frozen,
+            recurring,
+            canBuyExtraCredits: canBuyCredits,
+            // When the balance was read: the projection is about that moment, and render stays pure.
+            nowMs: balanceReadAt,
+          })
+        : null,
+    [
+      storeMatchesUrl,
+      role,
+      isCoreLoading,
+      hardError,
+      hasNoSubscription,
+      balance,
+      subscription,
+      activePlan,
+      currentInterval,
+      overage,
+      frozen,
+      recurring,
+      canBuyCredits,
+      balanceReadAt,
+    ],
+  );
+  useRegisterAssistantContext(
+    assistantSnapshot ? { pageType: WORKSPACE_BILLING_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot } : null,
+  );
 
   const retryBillingQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["billing"] });

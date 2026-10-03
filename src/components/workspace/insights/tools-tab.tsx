@@ -29,7 +29,9 @@ import { toolsFormatters } from "@/components/workspace/insights/tools/tools-for
 import { ToolsSummaryLine } from "@/components/workspace/insights/tools/tools-summary-line";
 import { ToolsTable, type ToolsTableData } from "@/components/workspace/insights/tools/tools-table";
 import { useAssistantPlugins } from "@/hooks/use-assistant";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useWorkspaceToolInsights } from "@/hooks/use-workspace-tool-insights";
+import { WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE } from "@/lib/assistant/assistant-scope";
 import {
   TOOL_INSIGHTS_MAX_DAYS,
   comparablePreviousCalls,
@@ -37,6 +39,7 @@ import {
   recordingSinceNotice,
 } from "@/lib/workspace/insights/tool-insights";
 import { toolTableRows } from "@/lib/workspace/insights/tools-metrics";
+import { toolsAssistantSnapshot } from "@/lib/workspace/insights/tools-assistant-snapshot";
 
 function Notice({ children }: { children: string }) {
   return (
@@ -76,6 +79,29 @@ export function ToolsTab({ workspaceId, workspaceSlug, period, timeZone, updated
       totalCalls: data.totals.calls,
     }));
   }, [insights, catalog, webSearchLabel]);
+
+  // WarpBot answers this tab's starters from the same counts (tools-assistant-snapshot.ts). Not
+  // registered while the read is loading or failed ("no calls" must mean no calls), nor while it is
+  // re-reading behind the previous period's figures.
+  const assistantSnapshot = useMemo(
+    () =>
+      insights.status === "ready" && !insights.refreshing
+        ? toolsAssistantSnapshot({
+            range,
+            insights: insights.data,
+            labels: {
+              webSearch: webSearchLabel,
+              pluginLabel: (key) => catalog?.find((plugin) => plugin.key === key)?.label,
+              pluginToolLabel: (key, tool) =>
+                catalog?.find((plugin) => plugin.key === key)?.tools?.find((candidate) => candidate.name === tool)?.label,
+            },
+          })
+        : null,
+    [insights, range, catalog, webSearchLabel],
+  );
+  useRegisterAssistantContext(
+    assistantSnapshot ? { pageType: WORKSPACE_INSIGHTS_TOOLS_PAGE_TYPE, workspaceId, snapshot: assistantSnapshot } : null,
+  );
 
   const since = insights.status === "ready" ? recordingSinceNotice(range.from, insights.data.recordingSince) : null;
   const nowMs = updatedAt > 0 ? updatedAt : period.to.getTime();
