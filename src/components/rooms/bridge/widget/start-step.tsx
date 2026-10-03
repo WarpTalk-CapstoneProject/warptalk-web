@@ -36,10 +36,14 @@ import { useTranslations } from "next-intl";
 import { CheckCircle, Play, SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
+import { useAddRoomLanguage } from "@/hooks/use-translationRooms";
+import { getErrorMessage } from "@/lib/api/errors";
 import { getLanguageCode, getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
+import { farSideAlsoSpoken } from "@/lib/meeting/bridge-far-side-language";
 import { cn } from "@/lib/utils";
 
 import { BridgeAudioModeChoice, BridgeMeetMicNotice } from "./audio-mode-choice";
@@ -54,8 +58,9 @@ import { useBridgeWidget } from "./widget-context";
 export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
   const t = useTranslations("rooms.bridgeWidget");
   const tPicker = useTranslations("meetingControlBar");
-  const { room, canControl, roomId, audioMode, canSwitchAudioMode, modeSupport, translationStarted, relay } =
+  const { room, canControl, isHost, roomId, audioMode, canSwitchAudioMode, modeSupport, translationStarted, relay } =
     useBridgeWidget();
+  const addRoomLanguage = useAddRoomLanguage(roomId);
   const { enabled, shownLanguage, options, pick } = useBridgeLanguagePick();
   const farSide = useFarSideLanguagePick();
   const starter = useStartBridgeTranslation();
@@ -86,6 +91,24 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
     defaultedRef.current = roomId;
     relay.setAudioMode("text");
   }, [roomId, canSwitchAudioMode, translationStarted, audioMode, modeSupport, relay]);
+
+  // WT-909 wave 2: more than one language on the Meet side. Added to the meeting's own languages
+  // through the host's add-language door (workspace list + plan quota still bound it); the backend
+  // then stops pinning the far side's STT. Only the host may add a meeting language.
+  const alsoSpoken = farSideAlsoSpoken({
+    hostLanguage: ownLanguage,
+    farSideLanguage: farSide.farSideLanguage,
+    sourceLanguage: room?.sourceLanguage,
+    targetLanguages: room?.targetLanguages,
+  });
+  const alsoOptions = farSideOptions.filter((language) => language !== farSide.farSideLanguage);
+  function addAlsoSpoken(language: string) {
+    if (addRoomLanguage.isPending || alsoSpoken.includes(language)) return;
+    addRoomLanguage.mutate(language, {
+      onError: (error: unknown) =>
+        toast.error(t("startStep.farSideAlsoFailed"), { description: getErrorMessage(error, "") || undefined }),
+    });
+  }
 
   const canStart = canControl && Boolean(room) && Boolean(shownLanguage) && !farSide.pending && !starter.pending;
 
@@ -153,6 +176,48 @@ export function BridgeStartStep({ onContinue }: { onContinue: () => void }) {
                 </button>
               );
             })}
+
+            {isHost && farSideChosen && alsoOptions.length > 0 ? (
+              <div data-slot="bridge-start-step-far-side-also" className="mt-1.5 px-2.5 pb-1">
+                <p className="text-[12px] font-semibold text-ink">{t("startStep.farSideAlsoTitle")}</p>
+                <p className="pb-1.5 text-[11px] leading-snug text-ink-muted">
+                  {t("startStep.farSideAlsoHint", {
+                    language: getLanguageName(farSide.farSideLanguage ?? ""),
+                  })}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {alsoOptions.map((language) => {
+                    const added = alsoSpoken.includes(language);
+                    const adding = addRoomLanguage.isPending && addRoomLanguage.variables === language;
+                    return (
+                      <button
+                        key={language}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={added}
+                        // A meeting's languages only grow: once added there is nothing to undo here.
+                        disabled={added || addRoomLanguage.isPending}
+                        onClick={() => addAlsoSpoken(language)}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] transition-colors",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          added
+                            ? "border-primary/40 bg-primary/10 text-ink"
+                            : "border-border text-ink-muted hover:bg-surface-2 hover:text-ink",
+                        )}
+                      >
+                        {adding ? (
+                          <SpinnerGap className="h-3 w-3 animate-spin" />
+                        ) : added ? (
+                          <CheckCircle className="h-3 w-3" weight="fill" />
+                        ) : null}
+                        {getLanguageName(language)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
