@@ -160,7 +160,13 @@
       "findWhoKnows": "Find who would know",
       "checkInDocuments": "Check this in the documents",
       "checkWhichIsRight": "Check which is right",
-      "draftTask": "Draft this task"
+      "draftTask": "Draft this task",
+      "researchTopic": "Research this",
+      "planExecution": "Plan how to do it",
+      "draftGlossaryEntry": "Draft a glossary entry",
+      "verifyOnline": "Verify it on the web",
+      "researchHowTo": "Research how to do it",
+      "findRelatedWork": "Find related work"
     },
     "disclaimer": "Generated automatically — check before relying on it.",
     "dismissAria": "Dismiss suggestion"

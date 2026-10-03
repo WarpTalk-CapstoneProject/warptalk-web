@@ -255,6 +255,7 @@
     "replyStopped": "停止しました",
     "askWarpBot": "WarpBotに質問",
     "newChat": "新しいチャット",
+    "closeChat": "閉じる",
     "chatHistory": "チャット履歴",
     "activePageContext": "有効なページコンテキスト",
     "removePageContext": "ページコンテキストを削除",

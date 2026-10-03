@@ -889,8 +889,22 @@ export function GlobalChatbot() {
     updateSteps(() => []);
     setIsSlow(false);
     setIsMinimized(false);
+    // The ask card is its own state, not a message: without this it survived New chat and
+    // sat alone in an empty thread, which read as the button doing nothing.
+    setPendingQuestions(null);
     clearPluginCards();
     shouldAutoScrollRef.current = true;
+  };
+
+  /**
+   * The header's X. It used to BE the New chat button (a Plus turned 45°), so it looked like
+   * close and did something else — and with an ask card open it appeared to do nothing at all.
+   * Close now closes: the thread is put away and the panel shuts, without a minimized chip.
+   */
+  const closeConversation = () => {
+    startNewConversation();
+    setIsMinimized(false);
+    setIsOpen(false);
   };
 
   /**
@@ -913,6 +927,7 @@ export function GlobalChatbot() {
     try {
       const detail = await conversationLoader.mutateAsync(id);
       clearResponseTimeout();
+      setPendingQuestions(null);
       setMessages(
         detail.messages
           .filter(
@@ -2209,12 +2224,22 @@ export function GlobalChatbot() {
                     )}
                   </button>
                   <button
+                    type="button"
                     aria-label={t("newChat")}
                     title={t("newChat")}
                     onClick={startNewConversation}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
-                    <Plus size={16} className="rotate-45" />
+                    <Plus size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("closeChat")}
+                    title={t("closeChat")}
+                    onClick={closeConversation}
+                    className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
+                  >
+                    <X size={14} />
                   </button>
                 </div>
               </div>
