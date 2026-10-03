@@ -163,6 +163,7 @@ import {
 import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { useBridgeMeetFollow } from "@/hooks/use-bridge-meet-follow";
+import { useSupervisedPublish } from "@/hooks/use-supervised-publish";
 import { meetLeaveOutcome, meetLeavePrompt } from "@/lib/meeting/bridge-meet-follow";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
 import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
@@ -221,12 +222,15 @@ import {
   shouldKeepBridgeRecordingRetry,
   shouldPublishMeetWindow,
   shouldRepublishMeetWindow,
+  shouldSuperviseMeetWindow,
   type BridgeAutoRecordingInput,
   type BridgeRecordChoice,
   type BridgeRecordingRetry,
 } from "@/lib/meeting/bridge-recording";
 import { hydrateFromJoin, readJoinHostState } from "@/lib/meeting/join-host-state";
 import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
+import { meetAudioLocalVoiceOn, shouldPublishMeetAudio } from "@/lib/meeting/meet-audio-track";
+import { BridgeMeetAudioPublisher, type MeetAudioControl } from "./bridge-meet-audio-publisher";
 import {
   MEET_WINDOW_CAPTURE_CONSTRAINTS,
   MEET_WINDOW_PUBLISH_OPTIONS,
@@ -543,6 +547,11 @@ export function PersistentMeetingSession({
    * still WANTED is derived beside the recording effect, not stored here.
    */
   const [bridgeInboundOpenRoomId, setBridgeInboundOpenRoomId] = useState<string | null>(null);
+  /**
+   * The inbound leg's capture of Meet's playback while it is up, for the recording's `meet-audio`
+   * mix (BridgeMeetAudioPublisher). Borrowed: the leg owns and stops it.
+   */
+  const [bridgeInboundTrack, setBridgeInboundTrack] = useState<MediaStreamTrack | null>(null);
   /**
    * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
    * the published track, because an open, published leg carrying digital silence looks exactly
@@ -1540,6 +1549,7 @@ export function PersistentMeetingSession({
             // this: the replacement is already on its way, and the recording's picture must not
             // blink off across it.
             setBridgeInboundOpenRoomId(null);
+            setBridgeInboundTrack((current) => (current === handles.track ? null : current));
             stopProbe?.();
             stopProbe = null;
             setInboundHealth("unknown");
@@ -1618,6 +1628,7 @@ export function PersistentMeetingSession({
         const release = async () => {
           released = true;
           handles.track.removeEventListener("ended", onTrackEnded);
+          setBridgeInboundTrack((current) => (current === handles.track ? null : current));
           stopProbe?.();
           stopProbe = null;
           setInboundHealth("unknown");
@@ -1640,6 +1651,8 @@ export function PersistentMeetingSession({
         // WT-910: capture has started. This is the moment a bridge recording starts (not Start
         // Translation) — see the recording effect further down.
         setBridgeInboundOpenRoomId(roomId);
+        // The recording's `meet-audio` hears the far side through this same track.
+        setBridgeInboundTrack(handles.track);
         farSideMonitorRef.current = monitor;
         if (monitor) setFarSideMonitorRunning(true);
       } catch (error) {
@@ -3305,6 +3318,8 @@ export function PersistentMeetingSession({
   }, [roomId]);
   /** Published by <BridgeMeetWindowPublisher>, which is inside <LiveKitRoom> and can reach the Room. */
   const meetWindowControlRef = useRef<MeetWindowControl | null>(null);
+  /** Published by <BridgeMeetAudioPublisher>: the call's sound for the recording. */
+  const meetAudioControlRef = useRef<MeetAudioControl | null>(null);
   const startRecordingRef = useRef(setRecordingMutation.mutateAsync);
   useEffect(() => {
     startRecordingRef.current = setRecordingMutation.mutateAsync;
@@ -3366,11 +3381,22 @@ export function PersistentMeetingSession({
         // Best effort — an older desktop build, a Meet window that cannot be found, a refused
         // publish — and never a reason not to record: the recording is then audio-only.
         // B18: off the Meet tab it starts audio-only; the picture follows when Meet is back.
-        const video = !mayCaptureMeetWindowAtStart(meetOnTabRef.current)
-          ? "Google Meet is not on its tab"
-          : ((await meetWindowControlRef.current?.publishMeetWindow(roomId)) ?? "no-publisher");
+        // 2b. In parallel, the call's sound, so the file's first second already has it
+        // (meet-audio-track.ts). Best effort like the picture: without it the template mixes
+        // WarpTalk's own tracks. Settled, never thrown: neither may stop the recording.
+        const [videoResult, audioResult] = await Promise.allSettled([
+          !mayCaptureMeetWindowAtStart(meetOnTabRef.current)
+            ? Promise.resolve("Google Meet is not on its tab")
+            : (meetWindowControlRef.current?.publishMeetWindow(roomId) ?? Promise.resolve("no-publisher")),
+          meetAudioControlRef.current?.publishMeetAudio() ?? Promise.resolve("no-publisher"),
+        ]);
+        const video = videoResult.status === "fulfilled" ? videoResult.value : String(videoResult.reason);
+        const audio = audioResult.status === "fulfilled" ? audioResult.value : String(audioResult.reason);
         if (video !== "published") {
           console.warn(`[bridge] Recording without the Meet window: ${video}.`);
+        }
+        if (audio !== "published") {
+          console.warn(`[bridge] Recording without the Meet call audio: ${audio}.`);
         }
         // 3. The same endpoint the native button calls.
         const state = await startRecordingRef.current("start");
@@ -3460,7 +3486,33 @@ export function PersistentMeetingSession({
     starting: bridgeRecordingStarting,
     meetOnTab,
   });
-  // B18: Meet is back on its tab mid-recording: arm the desktop capture again and publish it.
+  // The call's sound (meet-audio) for the same recording. Not tied to the Meet tab: the call keeps
+  // sounding in PiP or behind another tab.
+  const meetAudioWanted = shouldPublishMeetAudio({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+  });
+  // This user's voice in it follows MEET's mute button, not WarpTalk's microphone (which the
+  // bridge starts off, mute-on-entry and the half-duplex gate also hold down).
+  const meetAudioLocalVoice = meetAudioLocalVoiceOn({
+    believed: meetFollow.state.believed,
+    meetMuted: meetFollow.state.meetMuted,
+    warptalkMicrophoneEnabled: microphoneEnabled,
+  });
+  // The Meet window stays up for as long as the recording wants it, whatever took it down: the
+  // capture ending, a dropped connection, a re-arm the desktop refused once, an older desktop with
+  // no tab sensor (shouldSuperviseMeetWindow). The supervisor is the ONLY re-publisher: B18's "Meet
+  // is back on its tab" (shouldRepublishMeetWindow) no longer has an effect of its own racing it on
+  // publishMeetWindow; it kicks the supervisor into an immediate attempt instead.
+  const meetWindowSupervised = shouldSuperviseMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
   const meetWindowRepublish = shouldRepublishMeetWindow({
     isBridgeRoom,
     inboundOpen: bridgeInboundOpen,
@@ -3468,12 +3520,12 @@ export function PersistentMeetingSession({
     starting: bridgeRecordingStarting,
     meetOnTab,
   });
-  useEffect(() => {
-    if (!meetWindowRepublish) return;
-    void meetWindowControlRef.current?.publishMeetWindow(roomId).then((video) => {
-      if (video !== "published") console.warn(`[bridge] Meet window not published again: ${video}.`);
-    });
-  }, [meetWindowRepublish, roomId]);
+  useSupervisedPublish({
+    enabled: meetWindowSupervised,
+    kick: meetWindowRepublish,
+    publish: () => meetWindowControlRef.current?.publishMeetWindow(roomId) ?? null,
+    label: "Meet window",
+  });
 
   // The popup's REC chip, and its Stop. Every bridge participant's main window publishes the state
   // (a member is being recorded too and has to see it); only host and capturer are offered Stop,
@@ -4902,6 +4954,16 @@ export function PersistentMeetingSession({
         {isBridgeRoom ? (
           <BridgeMeetWindowPublisher controlRef={meetWindowControlRef} wanted={meetWindowWanted} />
         ) : null}
+        {/* The Google Meet call's sound, published for a bridge recording. Bridge rooms only. */}
+        {isBridgeRoom ? (
+          <BridgeMeetAudioPublisher
+            controlRef={meetAudioControlRef}
+            wanted={meetAudioWanted}
+            farSideTrack={bridgeInboundTrack}
+            localVoiceOn={meetAudioLocalVoice}
+            selectedMicrophoneId={deviceRoomOptions?.audioCaptureDefaults?.deviceId.exact ?? ""}
+          />
+        ) : null}
 
         <FilteredRoomAudio
           targetLanguageNormalized={targetLanguageNormalized}
@@ -5719,72 +5781,76 @@ function BridgeMeetWindowPublisher({
 
   useEffect(() => {
     const localParticipant = room.localParticipant;
-    let publishing = false;
+    /** The attempt in flight, shared by every caller (start chain, supervisor): single flight. */
+    let publishing: Promise<string> | null = null;
+
+    const publishOnce = async (roomId: string): Promise<string> => {
+      if (currentRef.current) return "published";
+      if (room.state !== ConnectionState.Connected) return "the meeting is not connected";
+      const armed = await armMeetWindowCapture(roomId);
+      if (!armed) return describeMeetWindowCaptureFailure("no-desktop-method");
+      if (!armed.ok) return describeMeetWindowCaptureFailure(armed);
+
+      let track: MediaStreamTrack | undefined;
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: MEET_WINDOW_CAPTURE_CONSTRAINTS,
+          audio: false,
+        });
+        track = stream.getVideoTracks()[0];
+      } catch {
+        track = undefined;
+      }
+      if (!track) return describeMeetWindowCaptureFailure("capture-failed");
+      const source = track;
+      // A meeting UI: text and faces, kept sharp rather than smooth.
+      source.contentHint = "detail";
+      // Never a quiet track: a static Meet window would otherwise send the recorder nothing to
+      // decode, and the whole recording came out black. See meet-window-track.ts.
+      const steady = await steadyFrameTrack(source);
+      const captured = steady.track;
+
+      try {
+        await localParticipant.publishTrack(captured, {
+          name: MEET_WINDOW_TRACK_NAME,
+          source: Track.Source.ScreenShare,
+          ...MEET_WINDOW_PUBLISH_OPTIONS,
+        });
+      } catch {
+        steady.stop();
+        return describeMeetWindowCaptureFailure("publish-failed");
+      }
+
+      const drop = () => {
+        if (currentRef.current?.track !== captured) return;
+        currentRef.current = null;
+        source.removeEventListener("ended", drop);
+        void localParticipant.unpublishTrack(captured, false).catch(() => {}).finally(() => steady.stop());
+      };
+      currentRef.current = { track: captured, drop };
+      // The Meet window was closed, or the desktop ended the capture. Heard on the SOURCE: the
+      // wrapper published in its place never fires `ended` on its own.
+      source.addEventListener("ended", drop);
+
+      // Read AFTER the awaits, not before: the parent turns `wanted` on in the same commit that
+      // calls this, so it is still false on entry. If it is false now, whatever wanted the
+      // picture went away while the window was being opened.
+      if (!wantedRef.current) {
+        drop();
+        return "the recording no longer needs it";
+      }
+      return "published";
+    };
 
     controlRef.current = {
       unpublishMeetWindow: () => currentRef.current?.drop(),
-      publishMeetWindow: async (roomId) => {
-        if (currentRef.current) return "published";
-        if (publishing) return "a capture of the Meet window is already being opened";
-        if (room.state !== ConnectionState.Connected) return "the meeting is not connected";
-        publishing = true;
-        try {
-          const armed = await armMeetWindowCapture(roomId);
-          if (!armed) return describeMeetWindowCaptureFailure("no-desktop-method");
-          if (!armed.ok) return describeMeetWindowCaptureFailure(armed);
-
-          let track: MediaStreamTrack | undefined;
-          try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-              video: MEET_WINDOW_CAPTURE_CONSTRAINTS,
-              audio: false,
-            });
-            track = stream.getVideoTracks()[0];
-          } catch {
-            track = undefined;
-          }
-          if (!track) return describeMeetWindowCaptureFailure("capture-failed");
-          const source = track;
-          // A meeting UI: text and faces, kept sharp rather than smooth.
-          source.contentHint = "detail";
-          // Never a quiet track: a static Meet window would otherwise send the recorder nothing to
-          // decode, and the whole recording came out black. See meet-window-track.ts.
-          const steady = await steadyFrameTrack(source);
-          const captured = steady.track;
-
-          try {
-            await localParticipant.publishTrack(captured, {
-              name: MEET_WINDOW_TRACK_NAME,
-              source: Track.Source.ScreenShare,
-              ...MEET_WINDOW_PUBLISH_OPTIONS,
-            });
-          } catch {
-            steady.stop();
-            return describeMeetWindowCaptureFailure("publish-failed");
-          }
-
-          const drop = () => {
-            if (currentRef.current?.track !== captured) return;
-            currentRef.current = null;
-            source.removeEventListener("ended", drop);
-            void localParticipant.unpublishTrack(captured, false).catch(() => {}).finally(() => steady.stop());
-          };
-          currentRef.current = { track: captured, drop };
-          // The Meet window was closed, or the desktop ended the capture. Heard on the SOURCE: the
-          // wrapper published in its place never fires `ended` on its own.
-          source.addEventListener("ended", drop);
-
-          // Read AFTER the awaits, not before: the parent turns `wanted` on in the same commit that
-          // calls this, so it is still false on entry. If it is false now, whatever wanted the
-          // picture went away while the window was being opened.
-          if (!wantedRef.current) {
-            drop();
-            return "the recording no longer needs it";
-          }
-          return "published";
-        } finally {
-          publishing = false;
+      publishMeetWindow: (roomId) => {
+        if (!publishing) {
+          publishing = publishOnce(roomId).finally(() => {
+            publishing = null;
+          });
         }
+        return publishing;
       },
     };
 

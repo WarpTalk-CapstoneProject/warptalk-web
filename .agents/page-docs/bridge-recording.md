@@ -66,7 +66,15 @@ Native meetings are unchanged: recording is never started for you there.
 ### Egress — `src/app/egress/composite/page.tsx`
 
 When a `meet-window` video track is present it fills the frame; everyone's audio is still mixed.
-Without it the layout is the usual grid.
+
+A bridge room never falls back to the grid (production recording 03 Oct: 0–3.4 s and 0:34–3:14
+were "External Meeting" + host "Camera is off" tiles). `isBridgeRecording` latches the room as a
+bridge room when the stand-in identity (`BRIDGE_STAND_IN_IDENTITY`) is in the room or a
+`meet-window` track is published, before `startRecording`. The stage (`meetWindowStage`) is then
+the live window, else a held Meet frame, else the slate. The held frame is a snapshot (one per
+second) taken at least `MEET_WINDOW_HOLD_LOOKBACK_MS` (4 s) before the loss (`pickHeldMeetFrame`):
+the last seconds before B18 takes the window down may already show another tab. Console:
+`MEET_WINDOW_LOST holding=frame|previous-frame|slate`. A native meeting keeps the grid.
 
 ## Order of events
 
@@ -133,15 +141,24 @@ document again, the window is armed and published again. Audio is recorded the w
 
 - Signal: the desktop's `MeetCallState` (`onMeetCallState`, WT-911), read on web by
   `useBridgeMeetFollow`, which now also returns the raw `call` for this room.
-- `meetWindowTabReading` returns `"on-tab"` only for `phase === "in-call"` with `via === "tab"` and
-  a matching `meetCode` (when both codes are known). `pip`, `unknown`, `lobby`, `left`, another
-  call, or no reading yet all give `"off-tab"` (fails closed). Without the sensor
+- `meetWindowTabReading` returns `"on-tab"` for `phase === "in-call"` or `"unknown"` with
+  `via === "tab"` and a matching `meetCode` (when both codes are known). `unknown` on the tab is the
+  desktop finding the active tab at meet.google.com/<code> but not reading its buttons
+  (empty-tree, listing-truncated, controls-unrecognised): the window shows Meet, so it stays up
+  (03 Oct fix). `pip`, `unknown` with no surface (tab switch, failed probe), `lobby`, `left`,
+  another call, or no reading yet all give `"off-tab"` (fails closed). Without the sensor
   (`hasMeetCallSensor()` false) it gives `null`, which keeps the pre-B18 rule.
 - `meetWindowOnTab`: leaving counts at once. Coming back counts only after the reading held for
   `MEET_TAB_RETURN_HOLD_MS` (1 s), so tab flapping does not reopen the capture each time.
 - `shouldPublishMeetWindow({ ..., meetOnTab })`: `false` takes the video down.
 - `shouldRepublishMeetWindow`: back on the tab, recording on, not starting, sensor present. The
   session then calls `publishMeetWindow(roomId)` again (arm + `getDisplayMedia` + publish).
+- `shouldSuperviseMeetWindow` (03 Oct fix): while a recording runs, nothing is starting it and the
+  picture is wanted (sensor or not), the session asks `publishMeetWindow` every
+  `MEET_WINDOW_SUPERVISE_INTERVAL_MS` (3 s; free when the track is up) and, after a failure, with
+  `meetWindowRecoveryDelayMs` back-off (2, 4, 8, 15 s). It brings the window back after the capture
+  ended, a LiveKit disconnect, a publisher remount or a refused re-arm, none of which re-published
+  before.
 - `mayCaptureMeetWindowAtStart`: a recording that starts while Meet is off its tab starts
   audio-only, and the picture follows when Meet is back.
 - Desktop (#51): an arm is refused with `meet-not-on-tab` while the last sighting is the PiP window
@@ -162,5 +179,9 @@ Tests: `src/lib/meeting/__tests__/bridge-recording-meet-tab.test.ts` (in `npm ru
 - B18 is unverified at runtime: PiP, tab switch and return have not been run on a real desktop.
 - A reload of the main window mid-meeting loses the record choice and the REC chip while the
   server-side recording continues.
-- A LiveKit reconnect drops the `meet-window` track and does not publish it again.
+- A LiveKit disconnect drops the `meet-window` track; the supervisor publishes it again once the
+  room is connected (03 Oct fix).
+- The capture is the whole Chrome window (tab strip, address bar, bookmarks). Not cropped yet.
+- After the last person leaves, the file runs on until LiveKit closes the empty room (departure
+  timeout, ~20 s): nothing stops the egress when a bridge call ends.
 - Not verified that the bridge room's join token allows publishing a screen-share track.
