@@ -343,6 +343,8 @@ export const API = {
 
     bridgeToken: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/bridge-token`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
+    /** The browser's account of its own LiveKit connection; logged by meeting-service, nothing more. */
+    clientEvents: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/client-events`,
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSendFile: (roomId: string) => `/meetings/rooms/${roomId}/chat/files`,
