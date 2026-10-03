@@ -72,7 +72,7 @@ import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { BillingInterval } from "@/lib/billing/plan-pricing";
+import { selectablePlans, type BillingInterval } from "@/lib/billing/plan-pricing";
 import type { FrozenCreditsDto, PlanDto, SubscriptionDto } from "@/types/billing";
 
 import {
@@ -305,10 +305,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   // Cheapest first. The grid's "Everything in X, plus" line and its covered-by-current-plan
   // reasoning both depend on the ladder being in price order, not in arrival order.
-  const activePlans = useMemo(() => {
-    const list = (plans ?? []).filter((plan) => plan.isActive);
-    return [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.price - b.price);
-  }, [plans]);
+  // The same ladder Admin → Plans → Preview shows; see selectablePlans.
+  const activePlans = useMemo(() => selectablePlans(plans ?? []), [plans]);
 
   const activePlan = activePlans.find((plan) => plan.id === subscription?.planId) ?? null;
   const currentInterval = subscriptionInterval(subscription);

@@ -79,11 +79,20 @@ export function checkoutCurrency(plan?: PlanDto | null): string {
   return (plan?.currency ?? "usd").toLowerCase();
 }
 
-/** The plans a buyer may choose from, in the order the platform wants them shown. */
-export function selectablePlans(plans: PlanDto[]): PlanDto[] {
-  return plans
-    .filter((plan) => plan.isActive !== false)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+/**
+ * The plans a buyer may choose from, in the order the platform wants them shown.
+ *
+ * Price breaks a sortOrder tie, which is what the Billing page's plan grid always did with its own
+ * copy of this filter. One function now, because Admin → Plans → Preview has to show exactly the
+ * ladder a buyer sees, and two copies of "which plans, in what order" is how they stop agreeing.
+ */
+export function selectablePlans(plans: readonly PlanDto[]): PlanDto[] {
+  return plans.filter((plan) => plan.isActive !== false).sort(comparePlans);
+}
+
+/** The ladder's order: sortOrder, then price. Exported for a preview that also shows hidden plans. */
+export function comparePlans(a: PlanDto, b: PlanDto): number {
+  return a.sortOrder - b.sortOrder || a.price - b.price;
 }
 
 /**

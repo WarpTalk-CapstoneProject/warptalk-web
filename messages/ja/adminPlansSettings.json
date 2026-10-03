@@ -72,8 +72,18 @@
     "editConfiguration": "設定を編集",
     "refresh": "更新",
     "filterLabel": "価格ビュー",
+    "preview": {
+      "note": "購入者が 設定 → 請求 で見る画面と同じコンポーネントです。鉛筆でプランを調整、＋でプランを追加します。ここでは「選択」「アップグレード」は動作しません。",
+      "includeHidden": "非表示のプランも表示 ({count})",
+      "hidden": "非表示",
+      "adjust": "{name} を調整",
+      "addPlan": "プランを追加",
+      "error": "プランを読み込めませんでした。",
+      "retry": "再試行"
+    },
     "tabs": {
       "plans": "プラン",
+      "preview": "プレビュー",
       "rateCards": "料金カード",
       "configuration": "設定"
     },

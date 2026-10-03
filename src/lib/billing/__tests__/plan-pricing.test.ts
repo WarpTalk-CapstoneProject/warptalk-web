@@ -86,6 +86,18 @@ test("only active plans are selectable, in the platform's order", () => {
   );
 });
 
+test("price breaks a sortOrder tie, as the Billing page's plan grid always did", () => {
+  const plans = [
+    plan({ slug: "dear", sortOrder: 1, price: 50 }),
+    plan({ slug: "cheap", sortOrder: 1, price: 10 }),
+  ];
+
+  assert.deepEqual(
+    selectablePlans(plans).map((p) => p.slug),
+    ["cheap", "dear"],
+  );
+});
+
 test("the yearly tab's saving is derived from the multiplier, and it is 21%", () => {
   // /workspace/payment/plans (the Stripe cancel URL) said "Save 20%" while charging 79%.
   assert.equal(yearlySavingPercent(), 21);
