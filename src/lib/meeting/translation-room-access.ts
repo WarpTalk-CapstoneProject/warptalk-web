@@ -31,6 +31,78 @@ export function canJoinTranslationRoom(
 }
 
 /**
+ * WT-715: a room's setup (meeting languages, room notes, the title and its edit dialog, the repeat
+ * rule) may only change before the meeting starts. The backend's
+ * `PUT /translation-rooms/{id}/settings` refuses anything else with ErrorSettingsLocked, so offering
+ * those controls on a live or finished room only produced a save the server turned down.
+ *
+ * `open` (WT-612) is included: the backend keeps the settings window open until the meeting
+ * actually starts, and an OPEN room has no session, transcript or artifacts to contradict.
+ *
+ * A positive allowlist on purpose: a status this build does not know is not editable.
+ */
+const SETUP_EDITABLE_ROOM_STATUSES: ReadonlySet<string> = new Set([
+  "scheduled",
+  "waiting",
+  "open",
+]);
+
+/**
+ * WT-715: the statuses the backend's End action accepts (EndableStatuses: IN_PROGRESS, PAUSED,
+ * WAITING, OPEN). An allowlist, not "not over yet": a SCHEDULED room cannot be ended.
+ */
+const ENDABLE_ROOM_STATUSES: ReadonlySet<string> = new Set([
+  "waiting",
+  "open",
+  "in_progress",
+  "paused",
+]);
+
+/** The least a room has to carry for the host rules below. */
+export type RoomHostFacts = {
+  status: TranslationRoomStatus | string;
+  hostId?: string | null;
+  /** The server's own answer for this viewer (the effective host, after any transfer). */
+  isHost?: boolean | null;
+};
+
+type RoomViewer = { id?: string | null } | null | undefined;
+
+function normalizedRoomStatus(status: string | null | undefined): string {
+  return (status ?? "").toLowerCase();
+}
+
+/**
+ * WT-715: one host rule for the room detail page.
+ *
+ * The page had two. `isHost` accepted the server's `room.isHost`, while `canEditRoom` compared
+ * only `room.hostId` with the viewer, so someone the server marks as host (the room was handed to
+ * them) got the notes editor but no edit pencil and no "Stop repeating". Either signal makes the
+ * viewer the host here, which is what the page's broader rule already said.
+ */
+export function isRoomHost(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  if (room.isHost) return true;
+  const viewerId = viewer?.id;
+  return Boolean(viewerId) && room.hostId === viewerId;
+}
+
+/** WT-715: the host, on a room that has not started: the only case the settings endpoint accepts. */
+export function canEditRoomSetup(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  return (
+    isRoomHost(room, viewer) &&
+    SETUP_EDITABLE_ROOM_STATUSES.has(normalizedRoomStatus(room.status))
+  );
+}
+
+/** WT-715: the host, on a room in a status the backend's End action accepts. */
+export function canEndRoom(room: RoomHostFacts, viewer: RoomViewer): boolean {
+  return (
+    isRoomHost(room, viewer) &&
+    ENDABLE_ROOM_STATUSES.has(normalizedRoomStatus(room.status))
+  );
+}
+
+/**
  * Whether entering this room means entering the lobby rather than the live call (WT-232).
  *
  * A room only carries live audio once the host starts it. Before that the room detail page
@@ -78,7 +150,14 @@ export type RoomEntryMode =
   /** Not started, approval-gated, and this viewer is not the host: the lobby is where they wait. */
   | "lobby"
   /** Live: straight through device setup into the call. */
-  | "join";
+  | "join"
+  /**
+   * WT-904: an external meeting (Google Meet) opened by someone who is not its host. The call is
+   * on Meet; WarpTalk's side of it has two seats, the host and the Meet stand-in, so sending this
+   * person through device setup ended in "Room full" or a wizard for audio cables they do not
+   * need. The button opens the Meet link instead.
+   */
+  | "external_meeting";
 
 export interface RoomEntryIntent {
   mode: RoomEntryMode;
@@ -88,6 +167,14 @@ export interface RoomEntryIntent {
   helpText: string | null;
   /** False only for a room nobody can enter, which is what disables the control. */
   isActionable: boolean;
+  /** `external_meeting` only: the Meet link the button opens. */
+  href?: string;
+}
+
+/** Only an https link is ever opened — the value comes from the database, not from a constant. */
+function safeExternalMeetingUrl(value?: string | null): string | null {
+  const url = value?.trim();
+  return url && /^https:\/\//i.test(url) ? url : null;
 }
 
 /**
@@ -108,6 +195,10 @@ export function resolveRoomEntryIntent(input: {
    * gets, because the server now accepts it from them.
    */
   requiresApproval?: boolean;
+  /** WT-904: the room is an EXTERNAL_BRIDGE (isExternalBridge on translationRoomType). */
+  isExternalBridge?: boolean;
+  /** WT-904: the room's `externalMeetingUrl` — where an external meeting actually happens. */
+  externalMeetingUrl?: string | null;
 }): RoomEntryIntent {
   if (!canJoinTranslationRoom(input.status)) {
     return {
@@ -127,6 +218,21 @@ export function resolveRoomEntryIntent(input: {
       label: "Return to meeting",
       helpText: "You are currently in this meeting. Click to return.",
       isActionable: true,
+    };
+  }
+
+  // WT-904: before the lobby. An external meeting does not wait for anyone on WarpTalk — the call
+  // is on Meet whether or not the host has opened WarpTalk's side of it.
+  const meetUrl = input.isExternalBridge && !input.isHost
+    ? safeExternalMeetingUrl(input.externalMeetingUrl)
+    : null;
+  if (meetUrl) {
+    return {
+      mode: "external_meeting",
+      label: "Join on Google Meet",
+      helpText: "This meeting takes place on Google Meet. WarpTalk translates it from the host's side.",
+      isActionable: true,
+      href: meetUrl,
     };
   }
 

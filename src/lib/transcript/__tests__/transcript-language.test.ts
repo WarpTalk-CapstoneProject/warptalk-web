@@ -4,12 +4,12 @@ import test from "node:test";
 import {
   AS_SPOKEN,
   assembleTranscriptText,
-  defaultTranscriptLanguage,
   indexTranslationsBySegment,
   resolveTranscriptLine,
   transcriptLanguageOptions,
   translationsForLine,
   withOfferableLanguages,
+  withSpokenSegmentText,
   type SegmentTranslationIndex,
 } from "../transcript-language.ts";
 import { normalizeLanguageCode } from "../../language/languages.ts";
@@ -111,36 +111,6 @@ test("a translation into the language the line was already spoken in is not cove
 
   assert.equal(option.translatedCount, 0);
   assert.equal(option.readableCount, 1);
-});
-
-test("a meeting held in one language opens as spoken", () => {
-  // Unifying an already-unified transcript changes nothing, and a language chip implies a
-  // choice was made about a question nobody asked.
-  const options = transcriptLanguageOptions([line("s1", "Hello", "en")], {});
-
-  assert.equal(defaultTranscriptLanguage(options, "vi"), AS_SPOKEN);
-});
-
-test("the reader's own language wins when the meeting has it", () => {
-  const index = indexTranslationsBySegment([
-    translation("s1", "vi", "Xin chao"),
-    translation("s1", "ja", "Konnichiwa"),
-  ]);
-  const options = transcriptLanguageOptions([line("s1", "Hello", "en"), line("s2", "Hi", "en")], index);
-
-  assert.equal(defaultTranscriptLanguage(options, "vi-VN"), "vi");
-});
-
-test("without a language of their own the reader gets the widest coverage", () => {
-  const index = indexTranslationsBySegment([
-    translation("s1", "vi", "Xin chao"),
-    translation("s2", "vi", "Vang"),
-    translation("s1", "ja", "Konnichiwa"),
-  ]);
-  const options = transcriptLanguageOptions([line("s1", "Hello", "en"), line("s2", "Yes", "en")], index);
-
-  assert.equal(defaultTranscriptLanguage(options, "ko"), "en");
-  assert.equal(options[0].code, "en");
 });
 
 test("as-spoken leaves every line in the language it was said in", () => {
@@ -338,63 +308,6 @@ test("a language already covered is not offered twice", () => {
   assert.deepEqual(offered.map((option) => option.code), ["en"]);
 });
 
-test("the picker's list does not change what the transcript opens on", () => {
-  // defaultTranscriptLanguage reads the record, not the offers: a meeting held in one
-  // language opens as-spoken, and a list of things it COULD be translated into is not evidence
-  // that it was multilingual.
-  const options = transcriptLanguageOptions([line("s1", "Xin chao", "vi")], {});
-
-  assert.equal(defaultTranscriptLanguage(options, "en"), AS_SPOKEN);
-  assert.equal(withOfferableLanguages(options, ["en", "ja"], 1).length, 3);
-});
-
-
-test("a language the transcript holds but the meeting cannot generate is never the default", () => {
-  // WT-705: Spanish text exists and stays readable, but a meeting whose generatable set is
-  // VI/EN does not open on it — even though it is the most-covered language.
-  const index = indexTranslationsBySegment([
-    translation("s1", "es", "Hola"),
-    translation("s2", "es", "Gracias"),
-  ]);
-  const options = transcriptLanguageOptions(
-    [line("s1", "Xin chao", "vi"), line("s2", "Hello", "en")],
-    index,
-  );
-  assert.deepEqual(options.map((option) => option.code), ["es", "en", "vi"]);
-
-  assert.equal(defaultTranscriptLanguage(options, undefined, ["vi", "en"]), "en");
-  assert.equal(defaultTranscriptLanguage(options, "es", ["vi", "en"]), "en");
-  assert.equal(defaultTranscriptLanguage(options, "vi", ["vi", "en"]), "vi");
-  // Still in the list: reading what exists is never re-filtered.
-  assert.ok(options.some((option) => option.code === "es"));
-});
-
-test("a preferred language outside the generatable set falls back to the first allowed one", () => {
-  const index = indexTranslationsBySegment([translation("s1", "ja", "Konnichiwa")]);
-  const options = transcriptLanguageOptions(
-    [line("s1", "Hello", "en"), line("s2", "Xin chao", "vi")],
-    index,
-  );
-
-  // en and vi tie on coverage, so the list orders them alphabetically: en is the first allowed.
-  assert.deepEqual(options.map((option) => option.code), ["en", "vi", "ja"]);
-  assert.equal(defaultTranscriptLanguage(options, "ja", ["vi", "en-US"]), "en");
-  // Inside the set, the reader's own language still wins.
-  assert.equal(defaultTranscriptLanguage(options, "vi", ["en", "vi"]), "vi");
-});
-
-test("an empty generatable set opens as spoken", () => {
-  // The room has not loaded yet, or nothing may be generated: nothing is auto-selected.
-  const options = transcriptLanguageOptions(
-    [line("s1", "Xin chao", "vi"), line("s2", "Hello", "en")],
-    {},
-  );
-
-  assert.equal(defaultTranscriptLanguage(options, "en", []), AS_SPOKEN);
-  // Without the argument the old behaviour stands.
-  assert.equal(defaultTranscriptLanguage(options, "en"), "en");
-});
-
 test("a half-translated merged line is readable in that language and not complete in it", () => {
   // The picker used to count this line as readable and say "the whole meeting" over a transcript
   // that then marked it incomplete — two true statements that read as a contradiction.
@@ -413,6 +326,64 @@ test("a half-translated merged line is readable in that language and not complet
     line("merged", "Xin chao. Cam on.", "vi", ["s1", "s2"]),
     index,
     "en",
+  );
+  assert.equal(resolved.isPartial, true);
+});
+
+test("a sentence that switched language mid-way is complete in the language it switched to", () => {
+  // WT-925, from production: a Clean-view sentence spoken in Vietnamese whose second chunk was
+  // English. The English chunk has no translation into English and never will — its own words
+  // are the answer, exactly as the server counts it (spokenInTarget).
+  const segments = [
+    { id: "s4", originalText: "Thay chua anh tra loi sai", originalLanguage: "vi" },
+    { id: "s5", originalText: "That's good.", originalLanguage: "en" },
+  ];
+  const index = withSpokenSegmentText(
+    indexTranslationsBySegment([translation("s4", "en", "See, you answered wrong")]),
+    segments,
+  );
+  const sentence = line("s4", "Thay chua anh tra loi sai. That's good.", "vi", ["s4", "s5"]);
+
+  const resolved = resolveTranscriptLine(sentence, index, "en");
+  assert.equal(resolved.isPartial, false);
+  assert.equal(resolved.text, "See, you answered wrong That's good.");
+
+  const english = transcriptLanguageOptions([sentence], index).find((option) => option.code === "en");
+  assert.equal(english?.completeCount, 1);
+});
+
+test("spoken words never replace a real translation, and a line in its own language is untouched", () => {
+  const index = withSpokenSegmentText(
+    indexTranslationsBySegment([translation("s1", "vi", "Xin chao")]),
+    [
+      // A segment labelled Vietnamese that already carries a Vietnamese "translation" keeps it.
+      { id: "s1", originalText: "Xin chao ban", originalLanguage: "vi" },
+      { id: "s2", originalText: "   ", originalLanguage: "en" },
+    ],
+  );
+
+  assert.equal(index.s1.vi, "Xin chao");
+  // Blank rows are not text in any language.
+  assert.equal(index.s2, undefined);
+
+  const resolved = resolveTranscriptLine(line("s1", "Xin chao ban", "vi"), index, "vi");
+  assert.equal(resolved.isTranslated, false);
+  assert.equal(resolved.text, "Xin chao ban");
+});
+
+test("a sentence that switched language is still partial in a third language it lacks", () => {
+  const index = withSpokenSegmentText(
+    indexTranslationsBySegment([translation("s4", "ja", "Machigatta")]),
+    [
+      { id: "s4", originalText: "Tra loi sai", originalLanguage: "vi" },
+      { id: "s5", originalText: "That's good.", originalLanguage: "en" },
+    ],
+  );
+
+  const resolved = resolveTranscriptLine(
+    line("s4", "Tra loi sai. That's good.", "vi", ["s4", "s5"]),
+    index,
+    "ja",
   );
   assert.equal(resolved.isPartial, true);
 });

@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 
@@ -26,6 +28,15 @@ import { useActiveMeetingStore } from "@/stores/active-meeting-store";
  * The status rule is `canJoinTranslationRoom`, not a fresh list of statuses written here: the
  * same set already decides whether the room page offers a Join button, and a second copy would
  * eventually disagree with the first about `expired` or `timeout`.
+ *
+ * WT-868 — AND for External Meetings.
+ *
+ * A Google Meet call is translated beside Meet, from the desktop app's popup; it is never an
+ * in-app meeting. Every link that still lands here for such a room (the room page's Join, a
+ * "meeting started" notification, search, the legacy `/room/{id}` address, a bookmark) is sent
+ * to the room's page instead, and on the desktop the popup is asked for. The meeting session for
+ * the room is not opened from here: the popup's own Start asks this window for it
+ * (onBridgeRoomActivated in the app layout), as does the automatic Meet room.
  */
 export default function LiveMeetingPage() {
   const { id: roomId, workspaceSlug } = useParams<{ id: string; workspaceSlug: string }>();
@@ -41,6 +52,16 @@ export default function LiveMeetingPage() {
     // state rather than by guessing here.
     if (!room) {
       if (isError) router.replace(`/${workspaceSlug}/rooms/${roomId}`);
+      return;
+    }
+
+    if (isExternalBridge(room.translationRoomType)) {
+      // replace for the same reason as below: Back must not find /live again. No closeMeeting():
+      // a bridge session already running in this window (the auto Meet room) is the popup's, and
+      // leaving it alone is what keeps the call translating.
+      router.replace(`/${workspaceSlug}/rooms/${roomId}`);
+      // Resolves false on the web, where there is no popup to open.
+      void openDesktopTranscriptWindow(roomId);
       return;
     }
 

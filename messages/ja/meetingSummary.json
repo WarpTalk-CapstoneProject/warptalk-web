@@ -41,6 +41,7 @@
   },
   "rendering": {
     "writing": "このバージョンを作成しています…",
+    "previousHint": "以下は前のバージョンです。新しいバージョンが完成すると置き換わります。",
     "ownVersion": "これはあなた専用のバージョンです。ホストが公開した要約は変更されていません。"
   },
   "copyText": {
@@ -63,6 +64,14 @@
     "heading": "発言時間の割合",
     "percentAriaLabel": "発言時間の{percent}%",
     "footnote": "文字起こしから算出しているため、会議への参加時間ではなく実際に発言していた時間を示します。"
+  },
+  "templates": {
+    "general": { "label": "一般会議", "description": "概要、決定事項、アクション、未解決事項。" },
+    "traceable": { "label": "トレーサブル要約", "description": "各文に出典の時点が付いています。" },
+    "standup": { "label": "スタンドアップ", "description": "メンバーごとの進捗・予定・ブロッカー。" },
+    "interview": { "label": "候補者面接", "description": "経歴、回答、強み、懸念、次のステップ。" },
+    "demo": { "label": "プロダクトデモ", "description": "見せた内容、反応、異議、フォローアップ。" },
+    "technical": { "label": "技術ディスカッション", "description": "課題、検討した選択肢、決定内容と理由。" }
   },
   "absence": {
     "generating": "WarpTalkのAIアシスタントが文字起こしを解析しています。通常は1分もかかりません。",

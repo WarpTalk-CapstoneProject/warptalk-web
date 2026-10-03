@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import type { ExpenseBudgetInput } from "@/types/admin-expenses";
 
 /**
- * Budgets per category per month (VND), as a grid: categories down, months across, each cell the
+ * Budgets per category per month (USD), as a grid: categories down, months across, each cell the
  * budget with what was spent beneath it. Typed cells turn amber until saved; a month over budget
  * turns red, from 80% it warns.
  */
@@ -37,13 +37,13 @@ export function ExpenseBudgets({ range, canManage }: { range: { from: string; to
   const active = (categories.data ?? []).filter((category) => category.isActive);
   const budgetOf = useMemo(() => {
     const map = new Map<string, number>();
-    for (const budget of budgets.data ?? []) map.set(`${budget.categoryId}|${budget.month}`, budget.amountVnd);
+    for (const budget of budgets.data ?? []) map.set(`${budget.categoryId}|${budget.month}`, budget.amountUsd);
     return map;
   }, [budgets.data]);
   const actualOf = useMemo(() => {
     const map = new Map<string, number>();
     for (const month of report.data?.months ?? []) {
-      for (const cell of month.categories) map.set(`${cell.categoryId}|${month.month}`, cell.amountVnd);
+      for (const cell of month.categories) map.set(`${cell.categoryId}|${month.month}`, cell.amountUsd);
     }
     return map;
   }, [report.data]);
@@ -55,14 +55,14 @@ export function ExpenseBudgets({ range, canManage }: { range: { from: string; to
     for (const key of dirty) {
       const [categoryId, month] = key.split("|");
       const text = draft[key].replace(/[,\s]/g, "");
-      if (text === "") items.push({ categoryId, month, amountVnd: null });
+      if (text === "") items.push({ categoryId, month, amountUsd: null });
       else {
         const value = Number(text);
         if (!Number.isFinite(value) || value < 0) {
           toast.error(t("invalid", { month }));
           return;
         }
-        items.push({ categoryId, month, amountVnd: Math.round(value) });
+        items.push({ categoryId, month, amountUsd: Math.round(value * 100) / 100 });
       }
     }
     try {
@@ -108,8 +108,8 @@ export function ExpenseBudgets({ range, canManage }: { range: { from: string; to
                 category: alert.categoryName,
                 month: alert.month,
                 percent: alert.percent,
-                actual: formatAmount(alert.actualVnd),
-                budget: formatAmount(alert.budgetVnd),
+                actual: formatAmount(alert.actualUsd),
+                budget: formatAmount(alert.budgetUsd),
               })}
             </p>
           ))}

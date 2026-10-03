@@ -155,7 +155,7 @@ Translating them exposed a pre-existing design issue: `create-room-dialog.tsx`'s
 - `src/app/layout.tsx`, `next.config.ts`, `package.json`
 - `src/app/page.tsx`, `src/lib/utils.ts`
 - `src/app/(auth)/{login,register,forgot-password,reset-password,verify-email}/page.tsx`, `src/components/auth/cinematic-auth-shell.tsx`
-- `src/app/terms/page.tsx`, `src/app/privacy/page.tsx`, `src/components/legal/legal-placeholder.tsx`
+- `src/app/terms/page.tsx`, `src/app/privacy/page.tsx`, `src/components/legal/legal-document.tsx` (was `legal-placeholder.tsx` until WT-835/836 — see `legal-pages.md`)
 - `src/components/layout/linear-sidebar.tsx`
 - `scripts/check-english-ui.mjs` (doc comment only — logic unchanged)
 - **Plugin marketplace**: `src/components/assistant/plugins/{workspace-plugins-page,plugins-page}.tsx`; `src/lib/assistant/plugin-availability.ts`; `messages/{en,vi,ja}/workspacePlugins.json` (new namespace) and `messages/{en,vi,ja}/pluginsPage.json`; `src/i18n/request.ts`; `scripts/check-plugin-marketplace-contract.mjs`. Page doc: `.agents/page-docs/workspace-plugins.md`.
@@ -186,7 +186,7 @@ This is not cosmetic fine-tuning — it fixes a real defect found during browser
 - `<title>`/`<meta description>` metadata (`export const metadata` in page files) is still static English — `generateMetadata` per-locale is a follow-up if SEO/tab-title localization is wanted. Confirmed in-browser: `/terms` renders fully translated body copy while its tab title stays "Terms of use | WarpTalk".
 - Locale preference is a browser cookie, not tied to the user's account — clearing cookies or switching browsers resets it to `en`/`Accept-Language`.
 - **A validation error already on screen keeps its old-locale text until validation re-runs.** react-hook-form stores the *resolved string* in `formState.errors`, so switching locale while an error is visible leaves the previous language's message in place; it corrects itself on the next submit/validate. Verified as recoverable, not stuck. Only worth fixing (by storing keys and resolving at render) if it turns out to bother real users.
-- Long-form legal content (terms/privacy) still only has the same short English-authored placeholder summary translated into vi/ja — actual legal copy, whenever written, needs its own translation pass.
+- Long-form legal content (terms/privacy) is now written in all three locales (WT-835/836) — see `legal-pages.md`. `sections.*.body` are arrays read with `t.raw`, so paragraph counts must match across locales.
 
 ## Testing Checklist
 

@@ -18,6 +18,29 @@
   "new": "Mới",
   "gridView": "Xem dạng lưới",
   "listView": "Xem dạng danh sách",
+  "listOptions": {
+    "fileType": "Loại tệp",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "Bảng tính",
+      "text": "Văn bản & Markdown",
+      "image": "Hình ảnh",
+      "other": "Khác"
+    },
+    "mineOnly": "Do tôi tải lên",
+    "clearFilters": "Xóa bộ lọc",
+    "layout": "Bố cục",
+    "orderBy": "Sắp xếp theo",
+    "sort": {
+      "modified": "Sửa đổi gần nhất",
+      "name": "Tên",
+      "size": "Kích thước"
+    },
+    "ascending": "Tăng dần",
+    "descending": "Giảm dần",
+    "resetDisplay": "Khôi phục mặc định"
+  },
   "empty": {
     "title": "Không tìm thấy tài liệu",
     "descriptionCanUpload": "Dùng nút Mới ở trên để tải lên một tài liệu tham khảo.",
@@ -36,11 +59,12 @@
     "rejected": "Bị từ chối",
     "private": "Riêng tư",
     "pendingApproval": "Chờ duyệt",
+    "revisionPending": "Bản sửa chờ duyệt",
     "administrative": "Hành chính",
-    "aiReady": "AI sẵn sàng",
-    "aiFailed": "AI thất bại",
-    "aiIngestionFailed": "Nạp AI thất bại",
-    "processingAi": "Đang xử lý AI...",
+    "aiReady": "Đã sẵn sàng trong knowledgebase của WarpBot",
+    "aiFailed": "Không nạp được vào knowledgebase của WarpBot",
+    "aiIngestionFailed": "Không nạp được vào knowledgebase của WarpBot",
+    "processingAi": "Đang nạp vào knowledgebase của WarpBot…",
     "aiContext": "Ngữ cảnh AI"
   },
   "actions": {
@@ -132,6 +156,14 @@
     "reject": "Từ chối",
     "rejectTitle": "Từ chối tài liệu",
     "download": "Tải xuống",
+    "pendingRevision": {
+      "title": "Một bản đã sửa đang chờ duyệt",
+      "body": "{fileName}, tải lên lúc {date}. Mọi người vẫn đọc bản đã duyệt cho đến khi người duyệt chấp thuận bản này.",
+      "note": "Ghi chú của người tải lên: {note}",
+      "previewLabel": "Chọn tệp để xem trước",
+      "showApproved": "Bản đã duyệt",
+      "showPending": "Bản đã sửa"
+    },
     "toasts": {
       "downloadSaved": "Đã lưu file thành công!",
       "downloadStarted": "Đang tải file xuống...",
@@ -141,10 +173,71 @@
       "approveActionFailed": "Thao tác thất bại.",
       "revisionSubmitted": "Đã gửi phiên bản đã sửa để chờ duyệt.",
       "revisionFailed": "Không thể tải lên phiên bản đã sửa.",
+      "revisionApproved": "Đã duyệt bản sửa. Bản này giờ là tài liệu chính thức.",
+      "revisionRejected": "Đã từ chối và xóa bản sửa. Người đọc vẫn dùng bản đã duyệt.",
       "visibilityChangeFailed": "Không thể thay đổi quyền xem tài liệu này.",
       "aiIndexingEnabled": "Đã bật lập chỉ mục AI. Tài liệu sẽ được lập chỉ mục lại.",
       "aiIndexingDisabled": "Đã tắt lập chỉ mục AI. Các bản sao AI hiện có của tài liệu này đang được xóa.",
-      "aiIndexingFailed": "Không thể thay đổi cài đặt lập chỉ mục AI."
+      "aiIndexingFailed": "Không thể thay đổi cài đặt lập chỉ mục AI.",
+      "rescanStarted": "Đã bắt đầu quét lại. Bản đã che sẽ hiện ở đây khi sẵn sàng.",
+      "rescanFailed": "Không bắt đầu quét lại được."
+    },
+    "masking": {
+      "versionLabel": "Chọn bản để xem",
+      "original": "Bản gốc",
+      "masked": "Bản đã che",
+      "download": "Tải xuống",
+      "downloadMasked": "Tải bản đã che",
+      "rescan": "Quét lại",
+      "restricted": "Có dữ liệu cá nhân",
+      "memberBanner": {
+        "title": "Đã che dữ liệu cá nhân",
+        "body": "Họ tên, số giấy tờ, số điện thoại và email trong tài liệu này đã được thay thế. Đây là bản bạn được xem."
+      },
+      "ownerBanner": {
+        "title": "Có dữ liệu cá nhân",
+        "body": "Thành viên chỉ xem được bản đã che của tài liệu này. Chuyển sang Bản đã che để xem đúng thứ họ thấy."
+      },
+      "viewingMasked": "Bạn đang xem bản đã che mà thành viên nhìn thấy.",
+      "pdfLayout": "Bản PDF đã che được dựng lại từ nội dung chữ nên không giữ bố cục gốc.",
+      "none": {
+        "title": "Chưa có bản để xem",
+        "body": "Tài liệu này có dữ liệu cá nhân và bản đã che chưa sẵn sàng. Hãy nhờ owner hoặc admin của workspace quét lại."
+      },
+      "status": {
+        "pending": {
+          "title": "Đang tạo bản đã che",
+          "detail": "Bản quét bảo mật đang chạy lại. Trang này sẽ tự cập nhật khi xong."
+        },
+        "notGenerated": {
+          "title": "Chưa có bản đã che",
+          "detail": "Tài liệu này bị hạn chế từ trước khi có tính năng bản đã che. Quét lại để thành viên đọc được."
+        },
+        "noPiiFound": {
+          "title": "Không tìm thấy dữ liệu cá nhân",
+          "detail": "Lần quét gần nhất không thấy gì cần che nên không có bản đã che. Thành viên không mở được tài liệu khi nó còn bị hạn chế."
+        },
+        "dlpBlocked": {
+          "title": "Bị chặn vì từ khoá cấm",
+          "detail": "Tài liệu chứa từ khoá nằm trong danh sách cấm của workspace. Che dữ liệu cá nhân không giúp chia sẻ được, nên thành viên không mở được."
+        },
+        "unsupportedFormat": {
+          "title": "Định dạng này không che được",
+          "detail": "Ảnh và các tệp không có chữ chỉnh sửa được thì không có bản đã che. Thành viên không mở được tài liệu này."
+        },
+        "unsupportedContent": {
+          "title": "Không che an toàn được tệp này",
+          "detail": "Tệp có những phần không viết lại được, như macro hoặc pivot cache. Thành viên không mở được tài liệu này."
+        },
+        "converterUnavailable": {
+          "title": "Bộ chuyển đổi PDF không hoạt động",
+          "detail": "Không dựng được bản PDF đã che. Hãy quét lại khi bộ chuyển đổi hoạt động trở lại."
+        },
+        "failed": {
+          "title": "Không tạo được bản đã che",
+          "detail": "Chưa có gì được chia sẻ cho thành viên, vì bản có thể còn sót dữ liệu cá nhân sẽ không bao giờ được lưu. Hãy quét lại."
+        }
+      }
     }
   }
 }

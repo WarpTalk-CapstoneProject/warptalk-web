@@ -128,9 +128,30 @@
       "nextMonth": "翌月",
       "currentMonthTitle": "現在の月です",
       "export": "エクスポート",
+      "exportReport": "レポート（Word または PDF）…",
+      "exportCsv": "生データ (.csv)",
       "from": "開始日",
       "to": "終了日（当日を含む）",
-      "showRange": "この期間を表示"
+      "showRange": "この期間を表示",
+      "exportDialog": {
+        "title": "レポートを出力",
+        "description": "表示中の期間を整えたレポートにします。数値はすべてダッシュボードと同じ実データで、USD 建てです。",
+        "format": "形式",
+        "formatDocx": "Word (.docx)",
+        "formatPdf": "PDF (.pdf)",
+        "formatPdfHint": "同じ Word ファイルから変換するため、両者は常に一致します。",
+        "classification": "機密区分",
+        "confidential": "社外秘",
+        "internal": "社内限り",
+        "classificationHint": "タイトルの下、ページヘッダー、フッターに印字されます。",
+        "contents": "内容",
+        "includeDaily": "日別の表",
+        "openPeriod": "この期間はまだ終了していません。レポートの1ページ目にその旨が記載されます。",
+        "submit": "出力",
+        "cancel": "キャンセル",
+        "pdfUnavailable": "この環境では PDF への変換を利用できません。Word のレポートを出力してください。",
+        "failed": "レポートを出力できませんでした。もう一度お試しください。"
+      }
     },
     "delta": {
       "noFigure": "前期のデータなし",
@@ -156,7 +177,7 @@
     },
     "mrr": {
       "note": "月次経常収益（MRR）",
-      "cannotTotal": "VNDで合計できません"
+      "cannotTotal": "USDで合計できません"
     },
     "churn": {
       "breakdown": "月初 {atMonthStart} 件中 {cancelled} 件解約",
@@ -165,7 +186,7 @@
     "outstanding": {
       "invoiceCount": "{count, plural, other {請求書 #件}}",
       "pastDueCount": "{count, plural, other {うち延滞 #件}}",
-      "cannotTotal": "金額はVNDで合計できません",
+      "cannotTotal": "金額はUSDで合計できません",
       "amountNotTotalled": "金額を合計できません",
       "amountNotTotalledWithNote": "金額を合計できません（{note}）",
       "amountOutstanding": "未収 {value}"

@@ -154,6 +154,17 @@ export function proxy(request: NextRequest) {
   }
 
   /**
+   * The stand-alone Usage page was taken out on the owner's call (2026-10-03): Insights → Usage
+   * renders the very same `UsageOverview`, member filter, refresh and CSV export included, so the
+   * workspace had two doors to one surface. A bookmark lands on the tab, not on a 404. The tab
+   * follows the billing cycle, so whatever query the old page carried has nothing to say to it.
+   */
+  const retiredUsage = /^\/([^/]+)\/settings\/billing\/usage\/?$/.exec(pathname);
+  if (retiredUsage && isUsableWorkspaceSlug(retiredUsage[1])) {
+    return NextResponse.redirect(new URL(`/${retiredUsage[1]}/insights?tab=usage`, request.url));
+  }
+
+  /**
    * Two workspace pages taken out of the product on the owner's call (2026-09-23), forwarded for
    * the same reason as the two above: a bookmark lands somewhere real, not on a 404.
    *
@@ -182,6 +193,15 @@ export function proxy(request: NextRequest) {
    */
   if (/^\/admin\/(?:meetings|outbox)(?:\/.*)?$/.test(pathname)) {
     return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
+  /**
+   * WT-880: the stand-alone /admin/glossary-templates page (which persisted nothing) is deleted,
+   * and under option B (PO 2026-10-02) the template is a fixed default in code with no admin
+   * editor anywhere. Old bookmarks land on the Global glossary.
+   */
+  if (/^\/admin\/glossary-templates(?:\/.*)?$/.test(pathname)) {
+    return NextResponse.redirect(new URL("/admin/global-glossary", request.url));
   }
 
   // A dead cookie must not survive the response that noticed it was dead, or the next page

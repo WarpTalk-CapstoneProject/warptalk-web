@@ -3,7 +3,8 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import gsap from "gsap";
@@ -37,7 +38,11 @@ import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { adminPageLabelKey } from "@/lib/admin/admin-page-title";
-import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
+import {
+  isLiveMeetingPath,
+  isWorkspaceActivationPath,
+  roomDetailPath,
+} from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { useOnboardingStore } from "@/stores/onboarding-store";
@@ -56,7 +61,8 @@ import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
 import { useBridgeAutoRoom } from "@/hooks/use-bridge-auto-room";
-import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
+import { onBridgeRoomActivated, showDesktopMainWindow } from "@/lib/desktop/bridge";
+import { useBridgeEndedRelayHost } from "@/hooks/use-bridge-ended-relay-host";
 import { extractMeetCodeFromUrl, type TriggerMeeting } from "@/lib/meeting/bridge-trigger";
 import {
   preferRememberedWorkspace,
@@ -190,6 +196,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
+  const queryClient = useQueryClient();
+  /**
+   * The session is gone, so the room list the bridge trigger reads is stale until proven fresh.
+   *
+   * That list (`useTranslationRooms`, 60 s staleTime, no interval) was refreshed only by an End
+   * this client pressed and by a claim. A room that ended any other way - the TranslationRoomEnded
+   * broadcast, the WT-899 status poll, the stale-session retire - kept its old row with no
+   * `endedAt`, and so kept the bridge trigger pointed at it for the one-hour tail: the next Meet
+   * call could not become an offer (prod, 2026-10-03). Every one of those exits, and Leave, funnels
+   * through this callback, which is why the refresh lives here rather than once per path.
+   */
+  const handleMeetingClosed = useCallback(() => {
+    closeMeeting();
+    void queryClient.invalidateQueries({ queryKey: ["translationRooms"] });
+  }, [closeMeeting, queryClient]);
   const openTour = useOnboardingStore((state) => state.openTour);
   const tourSeenAtByUser = useOnboardingStore((state) => state.tourSeenAtByUser);
   const [mounted, setMounted] = useState(false);
@@ -337,6 +358,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     activeBridgeRoomQuery.data && isExternalBridge(activeBridgeRoomQuery.data.translationRoomType)
       ? activeBridgeRoomQuery.data.id
       : null;
+  // W4a: the meeting this window runs is an external bridge, which draws no UI here (WT-868).
+  const activeMeetingIsBridge = activeBridgeRoomId !== null;
   const activeBridgeSessionsQuery = useTranslationRoomSessions(
     activeBridgeRoomId ?? "",
     activeBridgeRoomId !== null,
@@ -355,32 +378,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   });
 
   /**
-   * Flow 2: a Google Meet call with no room behind it gets one straight away - reused when this
-   * workspace already has a bridge room for the same call - and this window carries it, which is
-   * what opens the transcript popup. There is no separate "Translate this call?" window any more;
-   * the language is chosen in the popup's dock. See use-bridge-auto-room.ts.
+   * Flow 2: a Google Meet call with no room behind it is CLAIMED straight away (W4b): the server
+   * finds this call's room in the workspace or makes it, seats this user, and says whether this
+   * desktop captures the far side — and this window carries it, which is what opens the transcript
+   * popup. The language is chosen in the popup. See use-bridge-auto-room.ts.
    *
-   * Created HERE rather than in a popup because this window holds the validated workspace. The old
+   * Claimed HERE rather than in a popup because this window holds the validated workspace. The old
    * offer window read the persisted workspace id on its own and once sent a room to a workspace
    * that had been deleted, which the server refused with a bare 403.
    */
-  const canCreateMeetings = useWorkspaceStore((state) => state.canCreateMeetings);
-  const bridgeAutoRoomCandidates = useMemo(
-    () =>
-      (workspaceRoomsQuery.data?.rooms ?? []).map((room) => ({
-        id: room.id,
-        translationRoomType: room.translationRoomType,
-        externalMeetingUrl: room.externalMeetingUrl,
-        joinable: canJoinTranslationRoom(room.status),
-      })),
-    [workspaceRoomsQuery.data],
-  );
   useBridgeAutoRoom({
     triggerState: bridgeTrigger.state,
     meetCode: meetSensor?.meetCode,
-    rooms: bridgeAutoRoomCandidates,
     workspaceId: activeWorkspaceId,
-    canCreateMeetings,
   });
 
   /**
@@ -395,10 +405,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
    * nobody opened in this window is carried here like any other rather than translating nothing.
    */
   const openMeeting = useActiveMeetingStore((state) => state.openMeeting);
+  /**
+   * W4b: the popup now asks to be carried on its own when nobody answers it (a room the trigger or
+   * the tray opened, not this window). That must never throw the user out of a NATIVE meeting they
+   * are in here: a bridge room replaces a bridge room (one popup, one Meet call), never a
+   * non-bridge meeting. The popup then offers "Show WarpTalk" instead.
+   */
+  const activeMeetingIsNativeRef = useRef(false);
   useEffect(() => {
-    const stop = onBridgeRoomActivated((roomId) => openMeeting(roomId));
+    activeMeetingIsNativeRef.current =
+      Boolean(activeMeetingRoomId) &&
+      activeBridgeRoomQuery.isSuccess &&
+      !isExternalBridge(activeBridgeRoomQuery.data?.translationRoomType);
+  }, [activeMeetingRoomId, activeBridgeRoomQuery.isSuccess, activeBridgeRoomQuery.data]);
+  useEffect(() => {
+    const stop = onBridgeRoomActivated((roomId) => {
+      const current = useActiveMeetingStore.getState().activeRoomId;
+      if (current && current !== roomId && activeMeetingIsNativeRef.current) return;
+      openMeeting(roomId);
+    });
     return stop ?? undefined;
   }, [openMeeting]);
+
+  /**
+   * W4a: after a bridge meeting ENDS, the shell keeps answering its popup.
+   *
+   * The session that ran the room unmounts as the room ends (and says host-gone as it goes), but the
+   * popup over Google Meet is still on screen, showing EndedView, whose "Open meeting record" asks
+   * the main window over the relay — the one window signed in to WarpTalk. So the session hands the
+   * room over (`onBridgeMeetingEnded`) and the shell answers on it from then on: the room's
+   * record here, and this window brought to the front. Never for the room this window is running —
+   * that one has its own host in the session.
+   */
+  const [endedBridgeRoomId, setEndedBridgeRoomId] = useState<string | null>(null);
+  useBridgeEndedRelayHost({
+    roomId: endedBridgeRoomId && endedBridgeRoomId !== activeMeetingRoomId ? endedBridgeRoomId : null,
+    onOpenRoomRecord: (endedRoomId) => {
+      router.push(roomDetailPath(activeWorkspaceSlug || "workspace", endedRoomId));
+      void showDesktopMainWindow();
+    },
+  });
 
   // Starts the token's refresh timer for a session that was already in place on load.
   //
@@ -675,6 +721,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
                       }
                     }
+                  } else if (feature === "insights") {
+                    // WT-878: the workspace Insights page, named as the main nav names it.
+                    parts.push({ label: t("sidebar.nav.insights") });
+                  } else if (feature === "tools") {
+                    parts.push({ label: t("sidebar.nav.tools") });
                   } else if (feature === "billing") {
                     parts.push({ label: t("sidebar.settingsNav.billing") });
                   } else if (feature === "payment") {
@@ -789,13 +840,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               // tears down the LiveKit connection this whole arrangement exists to preserve.
               // The dock owns the floating position now — it used to be pinned to the
               // bottom-right, which is exactly where the chat launcher and the toasts live.
-              <MiniMeetingDock floating={meetingWidgetFloating}>
+              // W4a: an external bridge draws nothing here — the popup over Google Meet is its only
+              // UI — so its dock is headless: the same element, hidden, the session still mounted.
+              <MiniMeetingDock floating={meetingWidgetFloating} headless={activeMeetingIsBridge}>
                 <PersistentMeetingSession
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
                   compact={meetingWidgetFloating}
                   meetSensor={meetSensor}
-                  onMeetingClosed={closeMeeting}
+                  onMeetingClosed={handleMeetingClosed}
+                  onBridgeMeetingEnded={setEndedBridgeRoomId}
                 />
               </MiniMeetingDock>
             ) : null}

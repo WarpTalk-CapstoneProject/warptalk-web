@@ -18,6 +18,29 @@
   "new": "新規",
   "gridView": "グリッド表示",
   "listView": "リスト表示",
+  "listOptions": {
+    "fileType": "ファイルの種類",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "スプレッドシート",
+      "text": "テキスト・Markdown",
+      "image": "画像",
+      "other": "その他"
+    },
+    "mineOnly": "自分がアップロード",
+    "clearFilters": "フィルターをクリア",
+    "layout": "レイアウト",
+    "orderBy": "並び替え",
+    "sort": {
+      "modified": "最終更新",
+      "name": "名前",
+      "size": "サイズ"
+    },
+    "ascending": "昇順",
+    "descending": "降順",
+    "resetDisplay": "既定に戻す"
+  },
   "empty": {
     "title": "ドキュメントが見つかりません",
     "descriptionCanUpload": "上の「新規」から参照ドキュメントをアップロードしてください。",
@@ -36,11 +59,12 @@
     "rejected": "却下",
     "private": "非公開",
     "pendingApproval": "承認待ち",
+    "revisionPending": "修正版を確認待ち",
     "administrative": "管理用",
-    "aiReady": "AI利用可能",
-    "aiFailed": "AI失敗",
-    "aiIngestionFailed": "AI取り込み失敗",
-    "processingAi": "AI処理中...",
+    "aiReady": "WarpBot ナレッジベースで利用可能",
+    "aiFailed": "WarpBot ナレッジベースに読み込めませんでした",
+    "aiIngestionFailed": "WarpBot ナレッジベースに読み込めませんでした",
+    "processingAi": "WarpBot ナレッジベースに読み込み中…",
     "aiContext": "AIコンテキスト"
   },
   "actions": {
@@ -132,6 +156,14 @@
     "reject": "却下",
     "rejectTitle": "ドキュメントを却下",
     "download": "ダウンロード",
+    "pendingRevision": {
+      "title": "修正版が確認待ちです",
+      "body": "{fileName}（{date} にアップロード）。確認者が承認するまで、全員が承認済みのファイルを閲覧します。",
+      "note": "アップロード者からのメモ: {note}",
+      "previewLabel": "プレビューするファイル",
+      "showApproved": "承認済みファイル",
+      "showPending": "修正版"
+    },
     "toasts": {
       "downloadSaved": "ファイルを保存しました!",
       "downloadStarted": "ファイルをダウンロード中...",
@@ -141,10 +173,71 @@
       "approveActionFailed": "操作に失敗しました。",
       "revisionSubmitted": "修正版を承認待ちとして送信しました。",
       "revisionFailed": "修正版のアップロードに失敗しました。",
+      "revisionApproved": "修正版を承認しました。これが現在のドキュメントです。",
+      "revisionRejected": "修正版を却下して削除しました。閲覧者には承認済みのファイルが表示されます。",
       "visibilityChangeFailed": "このドキュメントの公開範囲を変更できませんでした。",
       "aiIndexingEnabled": "AIインデックスを有効にしました。ドキュメントは再インデックスされます。",
       "aiIndexingDisabled": "AIインデックスを無効にしました。既存のAI用コピーは削除中です。",
-      "aiIndexingFailed": "AIインデックス設定を変更できませんでした。"
+      "aiIndexingFailed": "AIインデックス設定を変更できませんでした。",
+      "rescanStarted": "再スキャンを開始しました。マスク済みコピーの準備ができるとここに表示されます。",
+      "rescanFailed": "再スキャンを開始できませんでした。"
+    },
+    "masking": {
+      "versionLabel": "表示するバージョン",
+      "original": "オリジナル",
+      "masked": "マスク済み",
+      "download": "ダウンロード",
+      "downloadMasked": "マスク済みをダウンロード",
+      "rescan": "再スキャン",
+      "restricted": "個人情報を含む",
+      "memberBanner": {
+        "title": "個人情報は非表示です",
+        "body": "この文書の氏名、身分証番号、電話番号、メールアドレスは置き換えられています。これがあなたが閲覧できるバージョンです。"
+      },
+      "ownerBanner": {
+        "title": "個人情報を含む",
+        "body": "メンバーにはこの文書のマスク済みコピーが表示されます。「マスク済み」に切り替えると、メンバーと同じ表示を確認できます。"
+      },
+      "viewingMasked": "メンバーに表示されるマスク済みコピーを表示しています。",
+      "pdfLayout": "マスク済みPDFは文書のテキストから作り直すため、元のレイアウトは保持されません。",
+      "none": {
+        "title": "閲覧できるバージョンがまだありません",
+        "body": "この文書には個人情報が含まれ、マスク済みコピーがまだ用意されていません。ワークスペースのオーナーまたは管理者に再スキャンを依頼してください。"
+      },
+      "status": {
+        "pending": {
+          "title": "マスク済みコピーを作成中",
+          "detail": "セキュリティスキャンを再実行しています。完了するとこのページが更新されます。"
+        },
+        "notGenerated": {
+          "title": "マスク済みコピーはまだありません",
+          "detail": "この文書はマスク済みコピー機能より前に制限されました。メンバーが閲覧できるよう再スキャンしてください。"
+        },
+        "noPiiFound": {
+          "title": "個人情報は見つかりませんでした",
+          "detail": "前回のスキャンで隠す対象が見つからなかったため、マスク済みコピーはありません。制限中はメンバーはこの文書を開けません。"
+        },
+        "dlpBlocked": {
+          "title": "禁止キーワードによりブロック",
+          "detail": "この文書にはワークスペースの禁止キーワードが含まれています。個人情報を隠しても共有できないため、メンバーは開けません。"
+        },
+        "unsupportedFormat": {
+          "title": "この形式はマスクできません",
+          "detail": "画像など編集可能なテキストのないファイルにはマスク済みコピーがありません。メンバーはこの文書を開けません。"
+        },
+        "unsupportedContent": {
+          "title": "このファイルは安全にマスクできません",
+          "detail": "マクロやピボットキャッシュなど、書き換えられない部分が含まれています。メンバーはこの文書を開けません。"
+        },
+        "converterUnavailable": {
+          "title": "PDFコンバーターを利用できません",
+          "detail": "マスク済みPDFを作成できませんでした。コンバーターが復旧したら再スキャンしてください。"
+        },
+        "failed": {
+          "title": "マスク済みコピーを作成できませんでした",
+          "detail": "個人情報が残っている可能性のあるコピーは保存されないため、メンバーには何も共有されていません。再スキャンしてください。"
+        }
+      }
     }
   }
 }

@@ -33,9 +33,30 @@ export function BridgeOutboundAudio({
   outputDeviceId: string;
   onError?: (message: string) => void;
 }) {
-  const [element, setElement] = useState<HTMLAudioElement | null>(null);
+  useTrackOnDevice(
+    trackRef.publication?.track?.mediaStreamTrack ?? null,
+    outputDeviceId,
+    onError,
+    "The translated audio could not be sent to your meeting's microphone.",
+  );
+  // Nothing to render: the audio lives on a detached element owned by the hook, precisely so it
+  // does not inherit the page's default sink.
+  return null;
+}
 
-  const mediaTrack = trackRef.publication?.track?.mediaStreamTrack ?? null;
+/**
+ * Plays `mediaTrack` into `outputDeviceId` for as long as the caller is mounted and both stay the
+ * same. Shared by both things the bridge device can carry — the host's dub (above) and the host's
+ * own microphone (bridge-outbound-mic.tsx) — so the in-flight-setSinkId and teardown rules below
+ * cannot drift apart between them.
+ */
+export function useTrackOnDevice(
+  mediaTrack: MediaStreamTrack | null,
+  outputDeviceId: string,
+  onError: ((message: string) => void) | undefined,
+  fallbackMessage: string,
+) {
+  const [element, setElement] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!mediaTrack) return;
@@ -58,11 +79,7 @@ export function BridgeOutboundAudio({
         setElement(audio);
       } catch (error) {
         if (cancelled) return;
-        onError?.(
-          error instanceof Error
-            ? error.message
-            : "The translated audio could not be sent to your meeting's microphone.",
-        );
+        onError?.(error instanceof Error ? error.message : fallbackMessage);
       }
     })();
 
@@ -78,8 +95,5 @@ export function BridgeOutboundAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaTrack, outputDeviceId]);
 
-  // Nothing to render: the audio lives on a detached element owned by the effect, precisely so it
-  // does not inherit the page's default sink.
-  void element;
-  return null;
+  return element;
 }

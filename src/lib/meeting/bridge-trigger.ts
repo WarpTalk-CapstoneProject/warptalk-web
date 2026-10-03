@@ -142,22 +142,108 @@ export function isWithinTriggerWindow(meeting: TriggerMeeting, nowMs: number): b
  * room with no end time fell out of its window at start + DEFAULT_MEETING_TAIL_MS in the middle of
  * the call, and the popup carrying Stop translation was closed - or, with Meet still on screen,
  * navigated to the offer for the very call it was translating.
+ *
+ * THE SIGHTING NARROWS THE CLOCK (prod incident 2026-10-03)
+ *   Picking by clock alone let a room that was never ended - its session torn down under it while
+ *   the backend hung - hold the selection for the whole one-hour tail. A selected meeting can only
+ *   ever be `upcoming` or `ready`, never `offer`, so the next Meet call the user opened was never
+ *   claimed: one call re-opened the popup for the OLD room, the one after it got no popup at all.
+ *   The clock says what COULD be in play; a Meet code on screen says what IS. So, after the window:
+ *     - a room whose code matches the sighting is the answer, whatever else the clock allows;
+ *     - otherwise a room whose KNOWN code differs is a different call and drops out. A room with no
+ *       code stays, for the same reason `codeConflict` lets a missing code through: Meet drops the
+ *       code from the title once the event has a name, and absence proves nothing either way.
+ *   If that leaves nothing, the reducer is handed no meeting, and a visible Meet window is exactly
+ *   the `offer` that claims a room for it.
+ *
+ * THE PREFERRED ROOM
+ *   `preferredRoomId` is the room a Meet window was last seen for (the hook's latch). It decides
+ *   between survivors so that a sighting with no code to compare - picture-in-picture, a hidden tab
+ *   - keeps the call the user is actually in instead of letting the clock jump to whichever room
+ *   starts nearest, e.g. a scheduled meeting in its 5-minute lead or an older room still in its tail.
+ *   It never outranks the code filter: it only picks among rooms the sighting has not ruled out.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT SOLVE (PO 2026-10-03: tech debt)
+ *   A user in Meet A, not translating, who opens a second Meet tab B. The selection follows the
+ *   sighting, so the trigger moves to B (or offers B) and back to A when A's tab is in front again;
+ *   there is no notion of "the bridge room this window is already carrying". Only the translating
+ *   room is pinned, which is the case where moving would actually take controls away.
+ *
+ * With no observed code and no preferred room this is exactly the old rule: nearest start wins.
  */
 export function selectTriggerMeeting(
   meetings: readonly TriggerMeeting[],
   nowMs: number,
   translatingRoomId: string | null = null,
+  observedMeetCode?: string | null,
+  preferredRoomId?: string | null,
 ): TriggerMeeting | null {
   if (translatingRoomId) {
     const translating = meetings.find((meeting) => meeting.roomId === translatingRoomId);
     if (translating) return translating;
   }
 
-  const eligible = meetings.filter((meeting) => isWithinTriggerWindow(meeting, nowMs));
+  let eligible = meetings.filter((meeting) => isWithinTriggerWindow(meeting, nowMs));
+
+  if (observedMeetCode) {
+    const matching = eligible.filter((meeting) => meeting.meetCode === observedMeetCode);
+    eligible = matching.length > 0 ? matching : eligible.filter((meeting) => !meeting.meetCode);
+  }
+
   if (eligible.length === 0) return null;
+
+  if (preferredRoomId) {
+    const preferred = eligible.find((meeting) => meeting.roomId === preferredRoomId);
+    if (preferred) return preferred;
+  }
+
   return eligible.reduce((best, meeting) =>
     Math.abs(meeting.startsAtMs - nowMs) < Math.abs(best.startsAtMs - nowMs) ? meeting : best,
   );
+}
+
+export interface SightingLatchInput {
+  meetings: readonly TriggerMeeting[];
+  nowMs: number;
+  translatingRoomId: string | null;
+  /** The code the NEW sighting carried, if any - not the one the last render saw. */
+  observedMeetCode?: string | null;
+  /** The room the latch holds now, so a code-less sighting keeps it rather than jumping. */
+  preferredRoomId?: string | null;
+}
+
+/**
+ * The room a visible Meet window counts as a sighting of, or null when it is nobody's.
+ *
+ * WHY THIS EXISTS (prod incident 2026-10-03)
+ *   The hook used to latch "whichever room the last render selected" on ANY visible sighting,
+ *   without looking at the code the sighting carried. The last render's selection was made with the
+ *   previous call's code, so opening a new Meet tab latched the old, never-ended room to `ready` -
+ *   the popup came back for a call the user had left. The latch is the one piece of state the
+ *   trigger keeps, so it must be written from the same rule the selection uses, with the sighting
+ *   that is actually on screen.
+ *
+ * Null means "do not touch the latch", not "clear it": a sighting that matches no room is an offer,
+ * and the claim that follows brings its own room in on the next sighting.
+ *
+ * The code check after the selection is not redundant: a translating room wins the selection
+ * whatever the code says (see `selectTriggerMeeting`), and a window showing some OTHER call must
+ * not be recorded as a sighting of it. The translation is pinned by `translatingRoomId`, not by
+ * the latch, so it loses nothing.
+ */
+export function sightingLatchRoomId(input: SightingLatchInput): string | null {
+  const selected = selectTriggerMeeting(
+    input.meetings,
+    input.nowMs,
+    input.translatingRoomId,
+    input.observedMeetCode,
+    input.preferredRoomId,
+  );
+  if (!selected) return null;
+  if (input.observedMeetCode && selected.meetCode && selected.meetCode !== input.observedMeetCode) {
+    return null;
+  }
+  return selected.roomId;
 }
 
 /**

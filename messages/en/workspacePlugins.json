@@ -131,6 +131,24 @@
       "revoked": "Disconnected"
     }
   },
+  "tools": {
+    "title": "Tools",
+    "explainer": "WarpBot follows the stricter of each member's own choice and the workspace's choice.",
+    "readOnly": "Only the workspace Owner can change these rules.",
+    "loading": "Loading tools…",
+    "loadError": "Couldn't load this plugin's tools.",
+    "retry": "Retry",
+    "empty": "This plugin has no tools yet. An MCP plugin lists its tools after a member first connects it.",
+    "read": "Read",
+    "write": "Write",
+    "controlAria": "WarpBot rule for {label}",
+    "option": {
+      "memberChoice": "Member's choice",
+      "approval": "Ask every time",
+      "blocked": "Blocked"
+    },
+    "saveFailed": "Couldn't save the rule for {label}."
+  },
   "disabledByPlatform": {
     "title": "Turned off by WarpTalk",
     "note": "Not available in this workspace right now",

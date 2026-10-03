@@ -16,8 +16,12 @@
  *
  * THE SHAPE
  *   Overages first, because it is a standing condition that changes what every number below it
- *   means. Then the two balances. Then the current plan with one control — Manage subscription —
- *   that owns every state change short of a purchase. Then the ladder.
+ *   means. Then the two balances: credits remaining carries the meter (WT-878), and the plan cell
+ *   carries the two buttons — Buy credits and Manage subscription, the latter owning every state
+ *   change short of a purchase — so there is no separate "current plan" row. Then auto-renew as
+ *   one line. Then the work zone: the plan ladder on the left, the Extras panel (credit packs and
+ *   add-ons) on the right, both in the first screen instead of under a scroll. Below 1000px the
+ *   zone is one pane at a time behind a two-way switch.
  *
  * THE FRAME: ONE RULED SURFACE, NOT A STACK OF CARDS
  *   Those four blocks used to be separate rounded boxes with gaps between them, and the ladder a
@@ -46,7 +50,7 @@ import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AdminBillingPage from "@/app/(internal)/billing/page";
 import {
@@ -58,27 +62,31 @@ import {
 } from "@/components/ui/card";
 import { ExtraCreditsNeedPlan } from "@/components/billing/extra-credits-need-plan";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
+import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { canBuyExtraCredits } from "@/lib/billing/extra-credits";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { cn } from "@/lib/utils";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { FrozenCreditsDto, PlanDto } from "@/types/billing";
+import { selectablePlans, type BillingInterval } from "@/lib/billing/plan-pricing";
+import type { FrozenCreditsDto, PlanDto, SubscriptionDto } from "@/types/billing";
 
 import {
   BannerRow,
   BillingButton,
-  GridRow,
   Pill,
   StatCell,
 } from "./components/billing-primitives";
+import { CreditLevelPill, CreditMeter, creditLook } from "./components/credit-meter";
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
 import { AutoRenewRow, PaymentFailedBanner } from "./components/auto-renew-section";
-import { CatalogSection } from "./components/catalog-section";
+import { CatalogSection, useHasCatalogExtras } from "./components/catalog-section";
 
 /**
  * The billing API answers "this workspace has no plan" with an explicit error code rather than an
@@ -86,6 +94,9 @@ import { CatalogSection } from "./components/catalog-section";
  * legitimate account state, not a broken request, and the two must not collapse into one UI.
  */
 const NO_SUBSCRIPTION_CODE = "BILLING_SUBSCRIPTION_NOT_FOUND";
+
+/** The Usage page's cadence: frequent enough to follow a meeting, rare enough for the gateway. */
+const POLL_INTERVAL_MS = 30_000;
 
 interface BillingErrorBody {
   error?: string;
@@ -102,6 +113,30 @@ function isNoSubscriptionError(error: unknown): boolean {
 }
 
 type BillingT = ReturnType<typeof useTranslations>;
+
+/**
+ * How the current subscription is billed, or null when nothing says.
+ *
+ * Read in order of how directly the source answers: an explicit `billingCycle` on the
+ * subscription (the type does not declare one yet, so it is read defensively), then the length of
+ * the period it is actually paying for — a year-long period IS a yearly subscription whatever the
+ * plan's own cycle says, because a monthly-priced plan can be bought yearly. The plan's own
+ * cycle is deliberately NOT consulted: it describes how the plan is priced, not how it was bought.
+ */
+function subscriptionInterval(subscription: SubscriptionDto | null | undefined): BillingInterval | null {
+  if (!subscription) return null;
+  const declared = (subscription as { billingCycle?: string | null }).billingCycle?.toLowerCase();
+  if (declared === "yearly" || declared === "year" || declared === "annual") return "yearly";
+  if (declared === "monthly" || declared === "month") return "monthly";
+
+  const start = Date.parse(subscription.currentPeriodStart);
+  const end = Date.parse(subscription.currentPeriodEnd);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const days = Math.round((end - start) / 86_400_000);
+  if (days >= 360 && days <= 370) return "yearly";
+  if (days >= 28 && days <= 31) return "monthly";
+  return null;
+}
 
 function getBillingErrorMessage(error: unknown, t: BillingT): string {
   if (isAxiosError<BillingErrorBody>(error)) {
@@ -132,13 +167,32 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const { isAuthenticated, accessToken } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const workspaceSlug =
-    useWorkspaceStore((state) => state.activeWorkspaceSlug) || slug || "";
-  const workspaceId = activeWorkspaceId || "";
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+
+  /**
+   * WT-878 — the workspace is the one in the URL, and the store only supplies its id.
+   *
+   * This used to take the id from the store and the slug from wherever it could find one. For
+   * the moment between a workspace switch writing the store and the URL catching up (or the other
+   * way round), every query and mutation below targeted the workspace the page was NOT showing —
+   * Cancel renewal on the wrong workspace, a top-up credited elsewhere. The layout re-selects the
+   * workspace for the URL slug; until the store says it has, the id here is empty (no query is
+   * enabled on an empty id) and the page shows a spinner instead of rendering any control.
+   */
+  const urlSlug = normalizeWorkspaceSlug(slug);
+  const storeMatchesUrl =
+    !!urlSlug && !!activeWorkspaceId && activeWorkspaceSlug === urlSlug;
+  const workspaceId = storeMatchesUrl ? (activeWorkspaceId ?? "") : "";
+  const workspaceSlug = urlSlug ?? slug ?? "";
   const role = useWorkspaceRole();
 
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  // Below 1000px the plan ladder and the Extras panel take turns instead of sitting side by side.
+  const [zoneTab, setZoneTab] = useState<"plans" | "extras">("plans");
+  const hasExtras = useHasCatalogExtras(workspaceId);
+  // Null until somebody picks; then it follows the subscription's own cycle, else monthly.
+  const [pickedInterval, setPickedInterval] = useState<BillingInterval | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -173,6 +227,34 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       connection.stop();
     };
   }, [queryClient, accessToken, isAuthenticated, workspaceId]);
+
+  /**
+   * WT-878 — freshness, the way Usage does it.
+   *
+   * The notification hub above only fires if the backend publishes `billing.credits_updated`,
+   * which today nothing does, so the balance sat still until a reload. The billing hub
+   * (`useBillingRealtime`) carries subscription, plan, payment and overage events and refreshes
+   * everything; a 30s poll, only while the tab is visible, follows the numbers spending moves.
+   *
+   * The poll is narrower than Usage's on purpose: this page also mounts the recurring-billing
+   * query, which reads the card from Stripe, and re-asking Stripe every half minute for a card
+   * that does not change with spending is load for nothing.
+   */
+  const refreshAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["billing"] });
+  }, [queryClient]);
+  useBillingRealtime(refreshAll);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      for (const key of ["balance", "subscription", "overage", "frozen"]) {
+        queryClient.invalidateQueries({ queryKey: ["billing", key, workspaceId] });
+      }
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [queryClient, workspaceId]);
 
   const {
     data: balance,
@@ -223,25 +305,25 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   // Cheapest first. The grid's "Everything in X, plus" line and its covered-by-current-plan
   // reasoning both depend on the ladder being in price order, not in arrival order.
-  const activePlans = useMemo(() => {
-    const list = (plans ?? []).filter((plan) => plan.isActive);
-    return [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.price - b.price);
-  }, [plans]);
+  // The same ladder Admin → Plans → Preview shows; see selectablePlans.
+  const activePlans = useMemo(() => selectablePlans(plans ?? []), [plans]);
 
   const activePlan = activePlans.find((plan) => plan.id === subscription?.planId) ?? null;
+  const currentInterval = subscriptionInterval(subscription);
+  const interval: BillingInterval = pickedInterval ?? currentInterval ?? "monthly";
 
   // backend#467: the server refuses a top-up or pack without a live plan (409), so every way to
   // buy one is hidden in exactly that case. The same rule as the server's, not hasPaidEntitlement.
   const canBuyCredits = canBuyExtraCredits(subscription);
 
   const currentCredits = balance?.currentCredits ?? 0;
-  const totalCredits = balance?.totalCredits ?? 0;
-  // The server's own number, not `total - current`. They agree today, but only one of them stays
+  // The server's own number, not `totalCredits - currentCredits`. They agree today, but only one of them stays
   // right if a top-up mid-cycle raises the total.
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
 
-  const usageRatioPercent = totalCredits > 0 ? (creditsUsed / totalCredits) * 100 : 0;
-  const remainingRatioPercent = 100 - usageRatioPercent;
+  // WT-878: one rule for the number's tint, the meter and the label — the thresholds the layout's
+  // low-credit banner already uses (this used to be a private "<= 15% left").
+  const { level: creditLevel, look: creditLevelLook } = creditLook(balance);
 
   const renewsDate = balance?.currentPeriodEnd
     ? format(new Date(balance.currentPeriodEnd), "MMM d, yyyy")
@@ -260,10 +342,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // There is no in-place "change plan" call to make: WT-381 established that the change-plan route
   // never existed, and that a payment for a different plan IS the change.
   const goToCheckout = (plan: PlanDto) => {
-    window.location.assign(`/${workspaceSlug}/payment/plans?plan=${plan.slug}`);
+    // `billingCycle` is the parameter lib/billing/plan-pricing's readBillingInterval reads.
+    window.location.assign(
+      `/${workspaceSlug}/payment/plans?plan=${plan.slug}&billingCycle=${interval}`,
+    );
   };
 
-  if (!role) {
+  // A store that has not caught up with the URL is not an answer about this workspace.
+  if (!role || !storeMatchesUrl) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -356,11 +442,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           label={t("stats.creditsRemaining.label")}
           className="sm:border-r"
           value={formatAmount(currentCredits)}
-          tone={totalCredits > 0 && remainingRatioPercent <= 15 ? "warn" : "default"}
+          badge={<CreditLevelPill level={creditLevel} />}
+          valueTone={creditLevelLook.valueTone}
+          meter={
+            balance ? (
+              <CreditMeter balance={balance} overage={overage} overagesOn={overagesOn} />
+            ) : undefined
+          }
           lines={[
-            totalCredits > 0
-              ? t("stats.creditsRemaining.granted", { total: formatAmount(totalCredits) })
-              : t("stats.creditsRemaining.noAllowance"),
             t("stats.creditsRemaining.spent", { used: formatAmount(creditsUsed) }),
             t("stats.creditsRemaining.cycleEnds", { date: renewsDate }),
           ]}
@@ -375,6 +464,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   price: formatMoney(subscription.price, activePlan?.currency),
                 })
               : t("stats.currentPlan.noBalance"),
+            currentInterval
+              ? t(
+                  currentInterval === "yearly"
+                    ? "stats.currentPlan.billedYearly"
+                    : "stats.currentPlan.billedMonthly",
+                )
+              : null,
             activePlan
               ? t("stats.currentPlan.limits", {
                   participants: activePlan.maxParticipants,
@@ -384,43 +480,31 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             subscription?.cancelAtPeriodEnd
               ? t("stats.currentPlan.cancelled", { date: renewsDate })
               : t("stats.currentPlan.renews", { date: renewsDate }),
-          ]}
+          ].filter((line): line is string => line !== null)}
+          actions={
+            <>
+              {/* backend#467: extra credits are sold only on top of a live plan. */}
+              {canBuyCredits ? (
+                <BillingButton
+                  tone="outline"
+                  className="w-auto px-3.5"
+                  onClick={() => setIsTopUpOpen(true)}
+                >
+                  <Wallet className="h-3.5 w-3.5" />
+                  {t("buyCredits")}
+                </BillingButton>
+              ) : null}
+              <BillingButton
+                tone="outline"
+                className="w-auto px-3.5"
+                onClick={() => setIsManageOpen(true)}
+              >
+                {t("manageSubscription")}
+              </BillingButton>
+            </>
+          }
         />
       </div>
-
-      <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[12px] text-ink-muted">{t("currentPlanRow.label")}</p>
-          <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
-            {subscription?.planName ?? t("stats.currentPlan.noPlan")}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <span className="hidden text-[12px] text-ink-muted sm:inline">
-            {subscription?.cancelAtPeriodEnd
-              ? t("currentPlanRow.endsOn", { date: renewsDate })
-              : t("currentPlanRow.renewsOn", { date: renewsDate })}
-          </span>
-          {/* backend#467: extra credits are sold only on top of a live plan. */}
-          {canBuyCredits ? (
-            <BillingButton
-              tone="outline"
-              className="w-auto px-3"
-              onClick={() => setIsTopUpOpen(true)}
-            >
-              <Wallet className="h-3.5 w-3.5" />
-              {t("buyCredits")}
-            </BillingButton>
-          ) : null}
-          <BillingButton
-            tone="outline"
-            className="w-auto px-3"
-            onClick={() => setIsManageOpen(true)}
-          >
-            {t("manageSubscription")}
-          </BillingButton>
-        </div>
-      </GridRow>
 
       {/* backend#466: auto-renew = the saved card is charged each cycle (Stripe). */}
       <AutoRenewRow workspaceId={workspaceId} plansHref={`/${workspaceSlug}/payment/plans`} />
@@ -431,15 +515,67 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         </div>
       )}
 
-      {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
-      <CatalogSection workspaceId={workspaceId} />
-
-      {activePlans.length > 0 ? (
-        <PlanGrid
-          plans={activePlans}
-          currentPlanId={subscription?.planId ?? null}
-          onSelect={goToCheckout}
-        />
+      {/* The work zone: plans on the left, what else can be bought on the right. The switch only
+          exists below 1000px, where the two can no longer sit side by side. */}
+      {activePlans.length > 0 || hasExtras ? (
+        <div className="min-w-0">
+          {activePlans.length > 0 && hasExtras ? (
+            <div className="border-b border-hairline px-4 py-2.5 min-[1000px]:hidden sm:px-6">
+              <div
+                role="group"
+                aria-label={t("zone.ariaLabel")}
+                className="inline-flex overflow-hidden rounded-[8px] border border-hairline bg-surface-1"
+              >
+                {(["plans", "extras"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={zoneTab === value}
+                    onClick={() => setZoneTab(value)}
+                    className={cn(
+                      "h-7 cursor-pointer border-r border-hairline px-3 text-[12px] font-medium outline-none last:border-r-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary motion-safe:transition-colors motion-safe:duration-150",
+                      zoneTab === value
+                        ? "bg-surface-3 text-ink"
+                        : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                    )}
+                  >
+                    {t(`zone.${value}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              "grid min-w-0",
+              activePlans.length > 0 && hasExtras && "min-[1000px]:grid-cols-[minmax(0,1fr)_340px]",
+            )}
+          >
+            {activePlans.length > 0 ? (
+              <div className={cn("min-w-0", hasExtras && zoneTab === "extras" && "max-[999px]:hidden")}>
+                <PlanGrid
+                  plans={activePlans}
+                  currentPlanId={subscription?.planId ?? null}
+                  onSelect={goToCheckout}
+                  interval={interval}
+                  onIntervalChange={setPickedInterval}
+                />
+              </div>
+            ) : null}
+            {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
+            {hasExtras ? (
+              <aside
+                className={cn(
+                  "min-w-0 border-hairline",
+                  activePlans.length > 0 && "min-[1000px]:border-l",
+                  activePlans.length > 0 && zoneTab === "plans" && "max-[999px]:hidden",
+                )}
+              >
+                <CatalogSection workspaceId={workspaceId} variant="panel" />
+              </aside>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
       <ManageSubscriptionModal

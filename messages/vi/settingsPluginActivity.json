@@ -33,16 +33,35 @@
   "next": "Sau",
   "outcome": {
     "succeeded": "Thành công",
-    "blocked": "Đã chặn",
-    "blockedHint": "Bị chặn bởi chính sách hoặc bị từ chối xác nhận. Kiểm tra cài đặt Plugins để xem quyền.",
+    "blocked": "Bị chặn",
+    "blockedHint": "Workspace này chưa cho phép plugin này. Thêm plugin ở trang plugin của workspace.",
+    "workspaceToolBlocked": "Workspace đã chặn",
+    "workspaceToolBlockedHint": "Owner của workspace đã chặn công cụ này với WarpBot. Chỉ Owner mới cho phép lại được, ở trang plugin của workspace.",
+    "turnedOff": "Thành viên đã tắt",
+    "turnedOffHint": "Thành viên đã tắt công cụ này cho WarpBot. Chỉ họ mới bật lại được.",
+    "declined": "Đã từ chối",
+    "declinedHint": "Thành viên đã huỷ ở màn hình cấp quyền của nhà cung cấp.",
     "awaitingConfirmation": "Đang chờ xác nhận",
-    "awaitingConfirmationHint": "Hành động yêu cầu người dùng xác nhận trong WarpBot.",
+    "awaitingConfirmationHint": "WarpBot đã hỏi thành viên xác nhận thao tác này trong chat.",
     "needsSetup": "Cần thiết lập",
-    "needsSetupHint": "Chưa kết nối hoặc thiếu cấu hình. Kết nối lại tại Cài đặt > Plugins.",
+    "needsSetupHint": "Kết nối của thành viên còn thiếu hoặc chưa đủ quyền. Họ sửa ở My connections.",
     "providerError": "Lỗi nhà cung cấp",
-    "providerErrorHint": "Nhà cung cấp trả về lỗi. Kiểm tra trạng thái dịch vụ hoặc hạn ngạch API.",
+    "providerErrorHint": "Nhà cung cấp không phản hồi hoặc giới hạn yêu cầu. Không cần sửa gì; thử lại sau.",
+    "providerConfigurationHint": "Cấu hình của WarpTalk cho nhà cung cấp này bị sai. Quản trị viên nền tảng phải sửa.",
+    "toolError": "Lỗi công cụ",
+    "toolErrorHint": "Công cụ đã chạy và từ chối yêu cầu. Hỏi WarpBot theo cách khác có thể được.",
     "failed": "Thất bại"
   },
+  "fixer": {
+    "owner": "Bạn sửa được",
+    "member": "Thành viên tự sửa",
+    "platform": "Quản trị viên nền tảng sửa",
+    "nobody": "Không cần làm gì"
+  },
   "formerMember": "Cựu thành viên",
-  "managePlugins": "Quản lý plugin"
+  "managePlugins": "Quản lý plugin",
+  "copyMemberLink": "Sao chép link cho thành viên",
+  "linkCopied": "Đã sao chép link",
+  "copyFailed": "Không sao chép được link",
+  "trendsInInsights": "Xu hướng ở Insights"
 }

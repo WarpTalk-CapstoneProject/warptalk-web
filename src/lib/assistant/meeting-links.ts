@@ -13,6 +13,11 @@
  *   Google Meet link must be on meet.google.com, a room link must be this app's own /rooms/{id},
  *   and a Calendar link must be on Google's calendar host.
  *
+ * A GOOGLE MEET MEETING NEED NOT BE ON A CALENDAR
+ *   Google Meet is created through the Meet API, not as a Calendar event. Without Google Calendar
+ *   connected the marker carries the link and the code only: no start, no end, no calendarUrl. The
+ *   card then shows no time and no "Open in Calendar"; it is still a complete, joinable meeting.
+ *
  * TWO KINDS, NEVER CONFUSED
  *   A Google Meet meeting is hosted by Google; a WarpTalk room is hosted here. A room of type
  *   EXTERNAL_BRIDGE is the WarpTalk side that translates a Google Meet meeting.

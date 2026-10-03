@@ -118,7 +118,7 @@ export function ExpenseImport({ onDone }: { onDone: () => void }) {
                 {t("invalidRows", { count: preview.invalidCount })}
               </span>
             ) : null}
-            <span className="text-ink-muted">{t("totalVnd", { total: formatMoney(Math.round(preview.totalVnd), "VND") })}</span>
+            <span className="text-ink-muted">{t("totalUsd", { total: formatMoney(preview.totalUsd, "USD") })}</span>
             {preview.unknownColumns.length > 0 ? (
               <span className="text-warning">{t("unknownColumns", { columns: preview.unknownColumns.join(", ") })}</span>
             ) : null}

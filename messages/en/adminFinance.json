@@ -98,7 +98,7 @@
     "record": "Record expense",
     "emptyTitle": "No expenses in this period",
     "emptyDescription": "Record one, or import a CSV.",
-    "unconverted": "{count, plural, one {# USD expense has} other {# USD expenses have}} no rate for its date and is left out of the VND totals."
+    "unconverted": "{count, plural, one {# VND expense has} other {# VND expenses have}} no rate for its date and is left out of the USD totals."
   },
   "tiles": {
     "total": "Total",
@@ -111,9 +111,9 @@
     "invalid": "A budget for {month} is not a valid amount.",
     "saved": "{count, plural, one {# budget saved} other {# budgets saved}}",
     "saveFailed": "The budgets could not be saved.",
-    "alertOver": "{category} is over budget in {month}: {actual} of {budget} VND ({percent}%).",
-    "alertNear": "{category} has used {percent}% of its {month} budget: {actual} of {budget} VND.",
-    "hint": "Monthly budgets in VND. Under each cell: spent so far and the share of the budget.",
+    "alertOver": "{category} is over budget in {month}: {actual} of {budget} USD ({percent}%).",
+    "alertNear": "{category} has used {percent}% of its {month} budget: {actual} of {budget} USD.",
+    "hint": "Monthly budgets in USD. Under each cell: spent so far and the share of the budget.",
     "unsaved": "{count, plural, one {# unsaved cell} other {# unsaved cells}}",
     "discard": "Discard",
     "save": "Save budgets",
@@ -199,7 +199,7 @@
     "validating": "Validating…",
     "validRows": "{count, plural, one {# row ready} other {# rows ready}}",
     "invalidRows": "{count, plural, one {# row with errors} other {# rows with errors}}",
-    "totalVnd": "{total} in total",
+    "totalUsd": "{total} in total",
     "unknownColumns": "Ignored columns: {columns}",
     "cancel": "Cancel",
     "importAll": "Import {count, plural, one {# expense} other {# expenses}}",

@@ -30,6 +30,11 @@ export const ASSISTANT_KEYS = {
    * one key would show a member the refusal from the workspace they left.
    */
   plugins: (workspaceId?: string | null) => [...PLUGINS_QUERY_ROOT, workspaceId ?? null] as const,
+  /**
+   * Under the plugins root on purpose: every connect/disconnect/policy write already invalidates
+   * that root, and each of them changes which plugin tools this response lists.
+   */
+  warpBotTools: (workspaceId: string) => [...PLUGINS_QUERY_ROOT, "warpbot-tools", workspaceId] as const,
 };
 
 export function useAssistantConversations(workspaceId: string | null) {
@@ -147,6 +152,19 @@ export function useAssistantPlugins(workspaceId?: string | null) {
   });
 }
 
+/** /{slug}/tools — GET /assistant/tools for the active workspace. */
+export function useWarpBotTools(workspaceId?: string | null) {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.warpBotTools(workspaceId ?? ""),
+    queryFn: async () => {
+      const { data } = await assistantService.getWarpBotTools(workspaceId!);
+      return data;
+    },
+    enabled: !!workspaceId,
+    staleTime: 60 * 1000,
+  });
+}
+
 /**
  * The workspace's plugin activity log (Owner/Admin). Pass `enabled: false` until the caller's role
  * is known to be Owner or Admin — a Member's request is a guaranteed 403.
@@ -193,12 +211,15 @@ export function usePluginConnectUrl() {
       pluginKey,
       client,
       workspaceId,
+      alsoConnect,
     }: {
       pluginKey: string;
       client?: string;
       workspaceId?: string | null;
+      /** GMCAL1001: same-provider siblings to connect in the same call. */
+      alsoConnect?: readonly string[];
     }) => {
-      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId);
+      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId, alsoConnect);
       return data;
     },
     // Either the plugin was just connected on the server (`connected: true`), or the catalog is

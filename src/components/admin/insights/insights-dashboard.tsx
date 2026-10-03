@@ -19,9 +19,11 @@ import {
   DownloadSimple,
   Info,
 } from "@phosphor-icons/react/dist/ssr";
+import axios from "axios";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
 import {
@@ -60,9 +62,9 @@ import {
   providerColors,
   providerCostSeries,
   providerLabel,
-  type CostCurrency,
 } from "@/lib/admin/insights-pnl";
 import {
+  browserTimeZone,
   monthKeyLabel,
   seriesAxis,
   type InsightsPeriod,
@@ -72,6 +74,10 @@ import { usageServiceOf } from "@/lib/billing/usage-labels";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatMoney } from "@/lib/format/currency";
 import { downloadBlob } from "@/lib/ui/download-blob";
+import { ExportReportDialog, type ReportExportOptions } from "@/components/admin/insights/export-report-dialog";
+import { adminInsightsService } from "@/services/admin-insights.service";
+import { buildInsightsReport, insightsReportFileName } from "@/lib/admin/insights-report";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { AdminMeetingCountsDto } from "@/types/admin-meeting";
 import type { WorkspaceOutboxDeadLetterDto } from "@/types/admin-outbox";
@@ -101,6 +107,8 @@ export interface PeriodChoice {
 
 export interface InsightsDashboardProps {
   period: ResolvedInsightsPeriod;
+  /** The IANA zone the period's days were cut in (the `tz` the queries carried). Absent = the browser's. */
+  timeZone?: string;
   onChoosePeriod: (choice: PeriodChoice) => void;
   /** Epoch ms of the newest successful read across every source; 0 before the first. */
   updatedAt: number;
@@ -179,11 +187,13 @@ function monthButtonLabel(month: string): string {
 function PeriodBar({
   period,
   onChoosePeriod,
-  onExport,
+  onExportReport,
+  onExportCsv,
 }: {
   period: ResolvedInsightsPeriod;
   onChoosePeriod: (choice: PeriodChoice) => void;
-  onExport: () => void;
+  onExportReport: () => void;
+  onExportCsv: () => void;
 }) {
   const t = useTranslations("adminOps.insights");
   const [customOpen, setCustomOpen] = useState(period.period === "custom");
@@ -231,14 +241,18 @@ function PeriodBar({
           </button>
         </div>
         <span className="text-[13px] text-ink-muted">{period.caption}</span>
-        <button
-          type="button"
-          onClick={onExport}
-          className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
-        >
-          <DownloadSimple size={14} />
-          {t("periodBar.export")}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
+          >
+            <DownloadSimple size={14} />
+            {t("periodBar.export")}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onExportReport}>{t("periodBar.exportReport")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onExportCsv}>{t("periodBar.exportCsv")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {customOpen ? (
@@ -582,8 +596,9 @@ function dayKeyTitle(key: string): string {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(year, month - 1, day));
 }
 
-const moneyVnd = (value: number) => formatMoney(value, "VND");
-const moneyAxis = (value: number) => compactMoney(value, "VND");
+/** Every figure on this page is USD, the accounting currency (VND payments arrive converted). */
+const money = (value: number) => formatMoney(value, "USD");
+const moneyAxis = (value: number) => compactMoney(value, "USD");
 
 function subscriptionSegments(t: ReturnType<typeof useTranslations>) {
   return [
@@ -666,7 +681,7 @@ const instantText = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
 /**
- * Where the USD→VND rate every figure below converts with came from, and when. Amber, with the
+ * Where the USD→VND rate the VND payments below were converted with came from, and when. Amber, with the
  * server's own warning, whenever Stripe has not answered for a day — the rate is then the last known
  * one, and the admin is told, not left to assume.
  */
@@ -698,7 +713,6 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
   const pnl = dataOf(state);
   const meetings = dataOf(props.meetings);
   const { period } = props;
-  const [currency, setCurrency] = useState<CostCurrency>("VND");
   const cards = pnlCards(pnl, meetings);
   const loading = state.status === "loading";
 
@@ -763,7 +777,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         { key: "revenue", label: "Revenue", values: days.map((d) => d.row?.revenue ?? null) },
                         { key: "aiCost", label: "AI provider cost", values: days.map((d) => d.row?.aiCost ?? null) },
                       ]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
                       tooltipFooter={(index) => {
@@ -772,7 +786,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         const hourCost = perHourByKey.get(row.key);
                         return [
                           `Margin ${percentText(row.marginPercent)}`,
-                          hourCost != null ? `${moneyVnd(hourCost)} per meeting-hour` : null,
+                          hourCost != null ? `${money(hourCost)} per meeting-hour` : null,
                           row.fxRate ? `${new Intl.NumberFormat("en-US").format(row.fxRate)} VND/USD` : null,
                         ].filter(Boolean).join(" · ");
                       }}
@@ -804,7 +818,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         { key: "revenue", label: "Revenue", values: months.map((m) => m.revenue) },
                         { key: "aiCost", label: "AI provider cost", values: months.map((m) => m.aiCost) },
                       ]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       tooltipFooter={(index) => {
                         const row = months[index];
@@ -828,34 +842,20 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
               {(data) => {
                 const days = seriesAxis(data.days.map((row) => ({ ...row, date: row.key })), period.axisEndDay);
                 const rows = days.map((d) => d.row).filter((row): row is NonNullable<typeof row> => row !== null);
-                const series = providerCostSeries(rows, currency);
+                const series = providerCostSeries(rows);
                 const colors = providerColors(series.map((s) => s.key));
                 const pad = days.length - rows.length;
-                const format = currency === "USD" ? moneyUsd : moneyVnd;
                 return (
                   <>
                     <div className="mb-1 flex items-start justify-between gap-3">
                       <ChartFigure
-                        value={currency === "USD" ? moneyUsd(data.aiCostUsd) : formatInsightValue(findPnlMetric(data, "aiProviderCost")?.value, "money")}
+                        value={moneyUsd(data.aiCostUsd)}
                         caption="AI provider cost, by provider"
                       />
-                      <div role="group" aria-label="Currency" className="inline-flex overflow-hidden rounded-md border border-hairline">
-                        {(["VND", "USD"] as const).map((code) => (
-                          <button
-                            key={code}
-                            type="button"
-                            aria-pressed={currency === code}
-                            onClick={() => setCurrency(code)}
-                            className="px-2.5 py-1 text-[11px] font-medium text-ink-muted aria-pressed:bg-surface-3 aria-pressed:text-ink"
-                          >
-                            {code}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                     <TimeSeriesChart
                       variant="line"
-                      ariaLabel={`AI provider cost per day in ${currency}, by provider`}
+                      ariaLabel="AI provider cost per day in USD, by provider"
                       height={200}
                       labels={days.map((d) => d.label)}
                       titles={days.map((d) => dayKeyTitle(d.key))}
@@ -865,9 +865,9 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                         color: colors[s.key],
                         values: [...s.values, ...Array<number | null>(pad).fill(null)],
                       }))}
-                      formatValue={format}
-                      formatAxis={currency === "USD" ? usdAxis : moneyAxis}
-                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No USD→VND rate")}
+                      formatValue={moneyUsd}
+                      formatAxis={usdAxis}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No cost recorded")}
                     />
                   </>
                 );
@@ -895,7 +895,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                       rows={data.providers.map((provider) => ({
                         key: provider.provider,
                         label: providerLabel(provider.provider),
-                        valueText: `${formatCount(provider.credits)} · ${moneyUsd(provider.costUsd)}${provider.costVnd === null ? "" : ` · ${moneyVnd(provider.costVnd)}`}`,
+                        valueText: `${formatCount(provider.credits)} · ${moneyUsd(provider.costUsd)}`,
                         segments: provider.services.map((service) => ({
                           key: `${provider.provider}-${service.chargeType}`,
                           label: `${service.service} (${service.chargeType})`,
@@ -1067,7 +1067,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       (state) => state.status === "loading",
     ) && attention.items.length === 0;
 
-  const handleExport = () => {
+  const handleExportCsv = () => {
     const csv = insightsCsv({
       billing,
       users: dataOf(props.users),
@@ -1079,6 +1079,42 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       () => new Blob(["﻿", csv], { type: "text/csv;charset=utf-8" }),
       `warptalk-insights-${period.customFrom}-to-${period.customTo}.csv`,
     ).catch(() => undefined);
+  };
+
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+
+  const handleExportReport = (options: ReportExportOptions) => {
+    // The picker must open inside the click, so the (async) build happens inside the loader.
+    void downloadBlob(async () => {
+      const [{ buildInsightsReportDocx }] = await Promise.all([import("@/lib/admin/insights-report-docx")]);
+      const report = buildInsightsReport(
+        {
+          billing,
+          snapshot,
+          users: dataOf(props.users),
+          workspaces: dataOf(props.workspaces),
+          meetings: meetingsInsights,
+          pnl: props.pnl ? dataOf(props.pnl) : undefined,
+        },
+        period,
+        new Date(),
+        {
+          timeZone: props.timeZone ?? browserTimeZone(),
+          classification: options.classification,
+          includeDaily: options.includeDaily,
+        },
+      );
+      const docx = await buildInsightsReportDocx(report);
+      // The PDF is this very file, converted: one layout, so the two can never disagree.
+      return options.format === "pdf" ? adminInsightsService.convertReportToPdf(docx) : docx;
+    }, insightsReportFileName(period, options.format)).catch((error: unknown) => {
+      // 503: the deployment has no converter. The Word report still works, and the toast says so.
+      toast.error(
+        axios.isAxiosError(error) && error.response?.status === 503
+          ? t("periodBar.exportDialog.pdfUnavailable")
+          : t("periodBar.exportDialog.failed"),
+      );
+    });
   };
 
   const liveState: SourceState<AdminMeetingCountsDto> =
@@ -1212,7 +1248,14 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         key={`${period.period}:${period.customFrom}:${period.customTo}`}
         period={period}
         onChoosePeriod={props.onChoosePeriod}
-        onExport={handleExport}
+        onExportReport={() => setReportDialogOpen(true)}
+        onExportCsv={handleExportCsv}
+      />
+      <ExportReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        periodOpen={!period.closed}
+        onExport={handleExportReport}
       />
 
       {/* Period cards follow the period bar; the rows under them are "right now". */}
@@ -1255,7 +1298,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                       height={180}
                       labels={months.map((row) => monthKeyLabel(row.month))}
                       series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: months.map((row) => row.revenue) }]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                     />
                   </>
@@ -1291,7 +1334,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                       labels={days.map((day) => day.label)}
                       titles={days.map((day) => dayKeyTitle(day.key))}
                       series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: days.map((day) => day.row?.revenue ?? null) }]}
-                      formatValue={moneyVnd}
+                      formatValue={money}
                       formatAxis={moneyAxis}
                       describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
                     />

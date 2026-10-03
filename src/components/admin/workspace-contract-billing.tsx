@@ -10,7 +10,7 @@
  * the one thing this tab was built to avoid.
  *
  * Every money write goes through a review step that spells the amount WITH its currency. The
- * contract price is VND by name; an invoice is in whatever currency its row states.
+ * contract price is USD by name; an invoice is in whatever currency its row states.
  *
  * `POST /payments` is not offered — see admin-contract-billing.service.ts for why it would record
  * the wrong amount against nothing.
@@ -237,7 +237,7 @@ function ContractSection({
 }
 
 const EFFECTIVE_KEY: Partial<Record<keyof ContractTermsValues, keyof AdminContractSubscriptionDto>> = {
-  contractPriceVnd: "effectiveContractPriceVnd",
+  contractPriceUsd: "effectiveContractPrice",
   creditsPerCycleOverride: "effectiveCreditsPerCycle",
   overageCapCreditsOverride: "effectiveOverageCapCredits",
   overagePricePerCreditOverride: "effectiveOveragePricePerCredit",
@@ -265,7 +265,13 @@ function TermRow({
       label={label}
       value={
         typeof effective === "number" ? (
-          formatContractTerm(termKey, effective)
+          // Without a negotiated price a cycle costs the PLAN's price, in the plan's own currency —
+          // which may be VND. Labelling it with the contract price's USD would relabel the number.
+          termKey === "contractPriceUsd" ? (
+            spellMoney({ amount: effective, currency: subscription.effectiveContractCurrency ?? "USD" })
+          ) : (
+            formatContractTerm(termKey, effective)
+          )
         ) : (
           <span className="text-ink-subtle">—</span>
         )
@@ -330,7 +336,7 @@ function ContractTermsDialog({
 
 const EMPTY_TERMS: ContractTermsValues = {
   creditsPerCycleOverride: null,
-  contractPriceVnd: null,
+  contractPriceUsd: null,
   overageCapCreditsOverride: null,
   overagePricePerCreditOverride: null,
   invoiceTermsDaysOverride: null,
@@ -373,12 +379,6 @@ function ContractTermsForm({
     const parsed = parseContractTermsDraft(draft);
     if (!parsed.ok) {
       setError(parsed.error);
-      return;
-    }
-    // A blank price is stored as the PLAN's price in a column the server reads as VND. On a plan
-    // priced in anything else that would relabel the number, so the price must be typed.
-    if (mode === "create" && plan && plan.currency.toUpperCase() !== "VND" && parsed.terms.contractPriceVnd == null) {
-      setError(t("errorPlanCurrency", { planName: plan.name, currency: plan.currency.toUpperCase() }));
       return;
     }
     if (mode === "edit" && describeContractTermsChanges(before, parsed.terms).length === 0) {
@@ -424,8 +424,8 @@ function ContractTermsForm({
               <p className="mt-0.5 text-ink-muted">
                 {t("pricePerCycle")}{" "}
                 <span className="font-semibold text-ink">
-                  {review.contractPriceVnd != null
-                    ? spellMoney({ amount: review.contractPriceVnd, currency: "VND" })
+                  {review.contractPriceUsd != null
+                    ? spellMoney({ amount: review.contractPriceUsd, currency: "USD" })
                     : `${spellMoney({ amount: plan.price, currency: plan.currency })} ${t("planPriceNote")}`}
                 </span>
               </p>
@@ -453,7 +453,7 @@ function ContractTermsForm({
                   <span
                     className={cn(
                       "text-ink",
-                      (change.key === "contractPriceVnd" || change.key === "overagePricePerCreditOverride") &&
+                      (change.key === "contractPriceUsd" || change.key === "overagePricePerCreditOverride") &&
                         "font-semibold",
                     )}
                   >

@@ -1,0 +1,141 @@
+{
+  "panel": {
+    "loading": "Đang tải biên bản…",
+    "withheldTitle": "Vẫn là bản nháp",
+    "withheldBody": "Biên bản này đã được soạn nhưng chưa ai ký. Bản nháp chỉ ở với những người có quyền xử lý; bạn sẽ đọc được ở đây khi người tổ chức hoặc thư ký ký.",
+    "emptyTitle": "Chưa có biên bản",
+    "emptyBody": "Biên bản được soạn từ hồ sơ của chính cuộc họp — người tham dự, người vắng mặt và thời gian mở/kết thúc lấy thẳng từ dữ liệu phòng, phần nội dung lấy từ bản tóm tắt. Bạn soát và ký; hệ thống không ký thay bạn.",
+    "draftAction": "Soạn biên bản",
+    "onlyChairCanDraft": "Chỉ chủ tọa cuộc họp mới được soạn biên bản.",
+    "draftedAt": "Soạn lúc {moment}",
+    "statusDraft": "Nháp",
+    "statusInReview": "Thư ký đã ký",
+    "statusApproved": "Đã duyệt",
+    "documentStatusDraft": "Nháp — chưa ký và chưa duyệt",
+    "documentStatusInReview": "Thư ký đã ký — chưa được chủ tọa duyệt",
+    "documentStatusApproved": "Đã duyệt",
+    "revision": "Bản sửa {n}"
+  },
+  "toolbar": {
+    "readingPlaceholder": "Như đã lập",
+    "readingGroups": {
+      "drawnUpIn": "Đã lập bằng",
+      "writtenOnRequest": "Soạn theo yêu cầu"
+    },
+    "readingAriaLabel": "Ngôn ngữ đọc biên bản",
+    "readingTitle": "Đọc biên bản này bằng ngôn ngữ khác",
+    "bilingualFile": "Tệp kèm bản gốc bên cạnh",
+    "print": "In",
+    "downloadWord": "Tải Word",
+    "downloadPdf": "Tải PDF",
+    "share": "Chia sẻ"
+  },
+  "editing": {
+    "saveChanges": "Lưu thay đổi",
+    "saving": "Đang lưu…",
+    "discard": "Hủy bỏ",
+    "unsavedHint": "Có thay đổi chưa lưu. Mốc thời gian vẫn gắn với dòng của nó.",
+    "clickToEditHint": "Nhấp vào dòng có đường nét đứt trong tài liệu bên dưới để chỉnh sửa."
+  },
+  "roles": {
+    "secretaryLabel": "Thư ký",
+    "notAssigned": "Chưa phân công",
+    "signAsSecretary": "Ký với tư cách thư ký",
+    "approveAsChair": "Duyệt với tư cách chủ tọa",
+    "draftAddendum": "Soạn phụ lục"
+  },
+  "shareDialog": {
+    "title": "Chia sẻ biên bản này",
+    "description": "Một liên kết mở tài liệu này — chỉ biên bản và không gì khác. Nó không cho quyền xem bản chép, bản ghi hình hay bản thân cuộc họp.",
+    "modeRestrictedTitle": "Chỉ những người bạn thêm",
+    "modeRestrictedDetail": "Họ phải đăng nhập, chỉ có địa chỉ thôi thì không đủ.",
+    "modePublicTitle": "Bất kỳ ai có liên kết",
+    "modePublicDetail": "Không cần tài khoản. Bất kỳ ai được gửi địa chỉ đều có thể đọc và giữ tài liệu.",
+    "publicWarning": "Tài liệu này công khai với bất kỳ ai có địa chỉ. Thu hồi sẽ chặn lượt đọc sau này, nhưng không lấy lại được bản sao ai đó đã tải — việc chia sẻ là do bạn quyết định.",
+    "draftWarning": "Biên bản này vẫn là bản nháp nên liên kết chưa mở được cho ai — bản nháp là phiên bản đầu tiên của máy và chưa ai ký. Hãy ký tài liệu và cùng một địa chỉ đó sẽ hoạt động; bạn không cần chia sẻ lại.",
+    "linkRevoked": "Đã thu hồi liên kết",
+    "linkRevokedHint": "Địa chỉ đã gửi không còn mở được gì nữa. Chọn một chế độ ở trên để cấp địa chỉ mới — địa chỉ cũ vẫn không hoạt động.",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép",
+    "copyFallback": "Hãy sao chép địa chỉ từ ô bên trên.",
+    "letReadersDownload": "Cho phép người đọc tải tệp",
+    "letReadersDownloadHint": "Tắt sẽ ẩn nút. Nó không ngăn ai đó sao chép những gì họ đọc được.",
+    "emailPlaceholder": "name@company.com",
+    "add": "Thêm",
+    "nobodyAdded": "Chưa thêm ai. Những người đã tham dự cuộc họp vốn đã đọc được tài liệu này.",
+    "removeAria": "Gỡ {email}",
+    "revokeLink": "Thu hồi liên kết",
+    "loading": "Đang tải…",
+    "modeChangeFailed": "Không thể đổi người được mở tài liệu này.",
+    "addFailed": "Không thể thêm địa chỉ đó.",
+    "revokeFailed": "Không thể thu hồi liên kết."
+  },
+  "toasts": {
+    "draftFailed": "Không thể soạn biên bản. Cuộc họp đã kết thúc chưa?",
+    "saveFailed": "Không thể lưu biên bản.",
+    "saveSuccess": "Đã lưu biên bản.",
+    "signSuccess": "Đã ký biên bản.",
+    "signFailed": "Không thể ký biên bản.",
+    "approveSuccess": "Đã duyệt biên bản.",
+    "approveFailed": "Không thể duyệt biên bản.",
+    "addendumSuccess": "Đã mở phụ lục.",
+    "addendumFailed": "Không thể mở phụ lục.",
+    "secretaryAssigned": "Đã phân công thư ký.",
+    "secretaryRemoved": "Đã gỡ thư ký.",
+    "secretaryAssignFailed": "Không thể phân công thư ký.",
+    "downloadFailed": "Không thể tải biên bản.",
+    "pdfUnavailable": "Chức năng chuyển PDF không khả dụng ở đây. Vẫn tải được tệp Word.",
+    "translationFailed": "Không thể đọc biên bản này bằng ngôn ngữ đó.",
+    "translationNotArrived": "Bản đọc đó chưa có. Hãy thử lại.",
+    "translationUnavailableFallback": "Bản đọc này không có sẵn bằng ngôn ngữ đó.",
+    "assigned": "Đã phân công thư ký.",
+    "removed": "Đã gỡ thư ký."
+  },
+  "assignedWork": {
+    "heading": "Công việc được giao",
+    "notPartOfRecord": "Không thuộc biên bản — theo dõi bên dưới để việc cần làm vẫn hiển thị mà không làm đổi tài liệu đã ký.",
+    "empty": "Không ghi nhận phân công nào.",
+    "columns": {
+      "task": "Nhiệm vụ",
+      "owner": "Người phụ trách",
+      "due": "Hạn",
+      "status": "Trạng thái"
+    }
+  },
+  "document": {
+    "heading": "Biên bản cuộc họp",
+    "noLabel": "Số: {no}",
+    "fields": {
+      "opened": "Khai mạc",
+      "closed": "Bế mạc",
+      "scheduledFor": "Lịch hẹn",
+      "location": "Địa điểm",
+      "attendees": "Người tham dự",
+      "absentees": "Người vắng mặt"
+    },
+    "quorumMet": "Đủ túc số — {rule}",
+    "quorumNotMet": "Không đủ túc số — {rule}",
+    "agenda": "Chương trình họp.",
+    "noBodyCarried": "Không có nội dung nào được thông qua.",
+    "motion": "Biểu quyết. Đề xuất bởi {mover} / Hỗ trợ bởi {seconder} — {outcome}",
+    "present": "Có mặt",
+    "absent": "Vắng mặt",
+    "secretarySign": "Thư ký (Ký và ghi rõ họ tên)",
+    "chairSign": "Chủ tọa (Ký và ghi rõ họ tên)",
+    "provenanceDrafted": "Soạn bởi {engine} lúc {at}",
+    "provenanceSigned": "Ký bởi {name} lúc {at}; {n} lần sửa",
+    "provenanceApproved": "Duyệt bởi {name} lúc {at}",
+    "retentionNotice": "Cuộc họp này đã được chép lại. Lưu đến {date}.",
+    "guestNotice": "Một người tham dự với tư cách khách — không phải thành viên workspace.",
+    "policyRows": {
+      "documentId": "Mã tài liệu",
+      "versionStatus": "Phiên bản / Trạng thái",
+      "classification": "Phân loại",
+      "recordOwner": "Người giữ biên bản",
+      "circulation": "Phạm vi lưu hành",
+      "retention": "Thời hạn lưu",
+      "language": "Ngôn ngữ"
+    },
+    "untranslatedNotice": "Phần này chưa được dịch sang {language}."
+  }
+}

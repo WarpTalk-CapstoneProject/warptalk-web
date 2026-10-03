@@ -20,6 +20,24 @@
  *      existed yet. The host already hears the far side through Meet itself; this replayed it a
  *      second time, offset by the round trip through LiveKit.
  *
+ * WHAT MEET HEARS FROM THE HOST: THE NATIVE LISTENER'S RULE, APPLIED TO THE FAR SIDE
+ *
+ *   The far side is a listener like any other, it just sits in Meet. So the virtual microphone
+ *   carries exactly what a native WarpTalk listener in the far side's language would hear of the
+ *   host (`outboundRawMic` / `outboundIdentity`):
+ *
+ *     - no translation running (before Start, after Stop): the host's own voice, raw;
+ *     - the host's dub in the far side's language is on the wire: the dub, and the raw voice fully
+ *       off — there is no "original underneath" level in a native room either;
+ *     - that dub existed earlier in this session but its bot is between sentences or reconnecting
+ *       after the 60s idle reap: silence, not the raw voice (WT-874, same reasoning);
+ *     - no dub has existed yet (the utterance that summons the bot), or the host speaks the far
+ *       side's language, or either language is unknown: raw — fail open, as for any speaker.
+ *
+ *   It used to carry the dub and nothing else, so Meet's microphone was dead before Start, between
+ *   sentences, and for the whole meeting when the languages matched. From Meet that is
+ *   indistinguishable from a broken virtual cable, and it was reported as exactly that.
+ *
  * WHY THE OUTBOUND DUB IS NOT FOUND THROUGH resolveInterpreterTracks
  *
  *   That resolver answers "what does THIS LISTENER hear", so it only accepts tracks in the
@@ -61,6 +79,19 @@ export type RoomAudioRoutingInput = {
    * is momentarily absent — see the mismatched-language rule in routeRoomAudio.
    */
   previouslyDubbedSpeakerIds?: ReadonlySet<string>;
+  /**
+   * The host's outbound dub has been on the wire at least once in the current outbound scope
+   * (see outboundDubHistoryScope). Keeps Meet's microphone silent, not raw, while the host's
+   * interpreter bot is between sentences or reconnecting — the outbound twin of
+   * previouslyDubbedSpeakerIds.
+   */
+  previouslyDubbedOutbound?: boolean;
+  /**
+   * identity -> the `warptalk.voice` attribute each interpreter bot sets (tts_worker
+   * VOICE_KIND_ATTRIBUTE): "cloned" | "profile" | "default" | "preference". Absent for a bot from
+   * a pipeline that predates the attribute, which keeps the old rule.
+   */
+  dubVoiceKindByIdentity?: Readonly<Record<string, string>>;
 };
 
 export type RoomAudioRouting = {
@@ -70,6 +101,17 @@ export type RoomAudioRouting = {
   outboundIdentity: string | null;
   /** Speakers whose dub, in this listener's voice, is on the wire right now. */
   dubbedSpeakerIds: ReadonlySet<string>;
+  /**
+   * Bridge rooms only: the host's OWN microphone track, not a remote one, goes into the bridge
+   * device. Never true together with a non-null outboundIdentity — exactly one of the two plays
+   * into Meet at a time.
+   */
+  outboundRawMic: boolean;
+  /**
+   * Speakers whose own microphone is played UNDER their dub, at ORIGINAL_UNDER_DUB_VOLUME, rather
+   * than at full volume. Only ever speakers dubbed in their own voice, in a meeting room.
+   */
+  duckedSpeakerIds: ReadonlySet<string>;
 };
 
 /** A speaker's interpreter track in ANY language: the language it is in, and whether it is the default voice. */
@@ -124,6 +166,17 @@ export function findOutboundDubIdentity({
   );
 }
 
+/** The participant attribute each interpreter bot sets — tts_worker VOICE_KIND_ATTRIBUTE. */
+export const DUB_VOICE_ATTRIBUTE = "warptalk.voice";
+
+/** How loud a speaker's original voice plays beneath their cloned dub: present, not competing. */
+export const ORIGINAL_UNDER_DUB_VOLUME = 0.3;
+
+/** A dub in the speaker's OWN voice — cloned from them, or a voice they picked for themselves. */
+export function isOwnVoiceKind(kind: string | null | undefined): boolean {
+  return kind === "cloned" || kind === "profile";
+}
+
 export function routeRoomAudio({
   identities,
   targetLanguageNormalized,
@@ -135,8 +188,11 @@ export function routeRoomAudio({
   bridgeOutboundReady = false,
   bridgeStandInIdentity,
   previouslyDubbedSpeakerIds,
+  previouslyDubbedOutbound = false,
+  dubVoiceKindByIdentity,
 }: RoomAudioRoutingInput): RoomAudioRouting {
   const standIn = bridgeStandInIdentity || null;
+  const farSideLanguage = standIn ? speakerLanguageByUserId[standIn] || null : null;
 
   // The whole-room voice decision: see interpreter-track.ts for why it cannot be a predicate over
   // one identity.
@@ -167,13 +223,49 @@ export function routeRoomAudio({
       ? findOutboundDubIdentity({
           identities,
           localUserId,
-          farSideLanguage: standIn ? speakerLanguageByUserId[standIn] : null,
+          farSideLanguage,
           listenerLanguage: targetLanguageNormalized,
         })
       : null;
 
+  // THE SPEAKER DECIDES (reported: Kỳ turned voice clone on and Tuấn heard the clone only once
+  // Tuấn turned HIS switch on too). In a meeting room a dub is played only when it is in the
+  // speaker's own voice, whatever the listener has set, and the speaker's original stays audible
+  // beneath it, quieter. A speaker without a voice of their own is heard as they actually sound.
+  //
+  // Only where the pipeline reports voice kinds at all: until the AI side is deployed no bot
+  // carries the attribute, and the rule below is the one that has always run. Bridge rooms keep
+  // their own rules — the far side's dub is the only way the host understands them, and it is
+  // never in the far side's own voice.
+  const isBridgeRoom = Boolean(standIn) || bridgeOutboundReady;
+  const kindOf = (identity: string): string | undefined => dubVoiceKindByIdentity?.[identity] || undefined;
+  const speakerOwnedVoice =
+    !isBridgeRoom && identities.some((identity) => identity.startsWith(AI_INTERPRETER_PREFIX) && kindOf(identity));
+  // REVISED BY THE OWNER, 4 Oct 2026, after that release: the LISTENER decides. With their switch
+  // (`voiceEnabled`) on, every speaker is dubbed — in their own voice if they chose one (cloned or
+  // picked), otherwise in a stand-in voice, because a speaker who did not consent is never cloned.
+  // Off, everyone is heard as they actually sound. What stayed from the release: the original
+  // plays under a dub at ORIGINAL_UNDER_DUB_VOLUME instead of being muted. The voice kind no longer
+  // decides playback; its presence only says the pipeline is new enough for this rule.
+  const ownVoiceDubbed = new Set<string>();
+  if (speakerOwnedVoice && translationActive && voiceEnabled) {
+    for (const identity of identities) {
+      const dubbed = dubbedSpeakerId(identity);
+      if (dubbed && dubbed !== localUserId) ownVoiceDubbed.add(dubbed);
+    }
+  }
+
   const isWanted = (identity: string): boolean => {
     if (identity === outboundIdentity) return true;
+
+    if (speakerOwnedVoice) {
+      if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
+        const dubbed = dubbedSpeakerId(identity);
+        return voiceEnabled && translationActive && dubbed !== null && dubbed !== localUserId;
+      }
+      // Every person stays audible; duckedSpeakerIds says which play quieter under their dub.
+      return true;
+    }
 
     // The far side, raw. The host is sitting in the Meet call and already hears it there; playing
     // it here as well is the same voice twice, one round trip apart. Never subscribed, under any
@@ -215,9 +307,79 @@ export function routeRoomAudio({
 
   return {
     wanted: new Set(identities.filter(isWanted)),
+    duckedSpeakerIds: ownVoiceDubbed,
     outboundIdentity,
     dubbedSpeakerIds,
+    outboundRawMic: bridgeOutboundReady
+      ? decideOutboundRawMic({
+          outboundIdentity,
+          translationActive,
+          hostLanguage: localUserId ? speakerLanguageByUserId[localUserId] || null : null,
+          farSideLanguage,
+          previouslyDubbedOutbound,
+        })
+      : false,
   };
+}
+
+/**
+ * Whether Meet hears the host's own voice, given that a bridge device exists. The mismatched-
+ * language rule of isWanted above, with the host as the speaker and the far side as the listener.
+ *
+ * Deliberately NOT behind translationActive the way the dub is: with no pipeline running this is
+ * an ordinary call, and in an ordinary call everyone hears everyone as they sound. And not behind
+ * voiceEnabled either — that is what the host hears, never what the far side is sent.
+ */
+function decideOutboundRawMic({
+  outboundIdentity,
+  translationActive,
+  hostLanguage,
+  farSideLanguage,
+  previouslyDubbedOutbound,
+}: {
+  outboundIdentity: string | null;
+  translationActive: boolean;
+  hostLanguage: string | null;
+  farSideLanguage: string | null;
+  previouslyDubbedOutbound: boolean;
+}): boolean {
+  // The dub is on the wire: it is what the far side hears, and the original is fully off. Two
+  // voices into one microphone would be the doubled sentence WT-874 removed for native listeners.
+  if (outboundIdentity) return false;
+  if (!translationActive) return true;
+  // Same language, or one we cannot tell: there is nothing to translate into, or no way to know,
+  // so fail open — the same as an unclassified speaker in a native room. Checked before the
+  // history so a host who switches to the far side's language is heard again at once.
+  if (!hostLanguage || !farSideLanguage || hostLanguage === farSideLanguage) return true;
+  // The bot is between sentences or reconnecting after its idle reap: the pipeline is known to
+  // work for this pair, so the gap is a bot coming back, not a missing translation. Silence, or
+  // the next sentence is heard in the original and then again as the dub.
+  if (previouslyDubbedOutbound) return false;
+  // The first sentence, before the interpreter bot has ever published: the original is a worse
+  // listen than the dub and a far better one than dead air, and it self-corrects the moment the
+  // bot appears.
+  return true;
+}
+
+/**
+ * The scope an outbound-dub history is valid for: the far side's language, while translation runs
+ * and a bridge device exists. Empty means "no history applies" — Stop and Start again, or the far
+ * side's language changing, starts over, so the first sentence fails open again.
+ *
+ * Not keyed on voiceEnabled, unlike dubbedHistoryScope: the host turning their own dubs off does
+ * not change what the far side is sent.
+ */
+export function outboundDubHistoryScope({
+  translationActive,
+  bridgeOutboundReady = false,
+  speakerLanguageByUserId,
+  bridgeStandInIdentity,
+}: Pick<
+  RoomAudioRoutingInput,
+  "translationActive" | "bridgeOutboundReady" | "speakerLanguageByUserId" | "bridgeStandInIdentity"
+>): string {
+  const farSideLanguage = bridgeStandInIdentity ? speakerLanguageByUserId[bridgeStandInIdentity] : null;
+  return translationActive && bridgeOutboundReady && farSideLanguage ? farSideLanguage : "";
 }
 
 /** Which speakers a listener has been hearing dubbed, and under which listening scope. */

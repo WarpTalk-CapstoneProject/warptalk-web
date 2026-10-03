@@ -156,14 +156,18 @@ export const ADMIN_ROUTE_PERMISSIONS: readonly { href: string; permission: Admin
   { href: "/admin/email-templates", permission: ADMIN_PERMISSIONS.contentEmailTemplates },
   { href: "/admin/settings", permission: ADMIN_PERMISSIONS.settingsRead },
   { href: "/admin/plugins", permission: ADMIN_PERMISSIONS.pluginsRead },
+  // Built-in tools, web search and plugin calls together; the usage endpoint asks for the same code.
+  { href: "/admin/warpbot-tools", permission: ADMIN_PERMISSIONS.pluginsRead },
   { href: "/admin/global-glossary", permission: ADMIN_PERMISSIONS.glossaryRead },
-  { href: "/admin/glossary-templates", permission: ADMIN_PERMISSIONS.glossaryRead },
   { href: "/admin/staff", permission: ADMIN_PERMISSIONS.staffRead },
   { href: "/admin/roles", permission: ADMIN_PERMISSIONS.staffRead },
   // G12 internal management. The inbox shows each person only the sources their role can read.
   { href: "/admin/inbox", permission: ADMIN_PERMISSIONS.inboxRead },
   { href: "/admin/finance", permission: ADMIN_PERMISSIONS.financeRead },
   { href: "/admin/finance/expenses", permission: ADMIN_PERMISSIONS.financeRead },
+  // Every staff member's own account. Last on purpose: this list also picks a staff member's
+  // landing page (the first entry they may view), and that should be a platform page.
+  { href: "/admin/account", permission: null },
 ];
 
 function routeEntryFor(pathname: string) {

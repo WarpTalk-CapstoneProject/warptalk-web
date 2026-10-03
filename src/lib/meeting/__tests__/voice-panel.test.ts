@@ -18,53 +18,34 @@ function plan(overrides: Partial<VoicePanelInput>) {
   return planVoicePanel({ mode: "meeting", ...ALL_HANDLERS, ...overrides });
 }
 
-test("meeting, voice on: the switch, then Your voice, then Stand-in voice with its caveat", () => {
+// Owner, 4 Oct 2026: a listener hears cloned voices only with their own switch on. The switch is
+// back, at the top beside Flash mode, and Your voice no longer hides behind it when it is off.
+test("meeting, voice on: the listener switch, then Your voice, and no stand-in list", () => {
   const result = plan({ voiceEnabled: true });
 
-  assert.equal(result.voiceSwitch?.label, "Voice");
-  assert.equal(result.voiceSwitch?.detail, "On — translations are spoken to you.");
-  assert.equal(result.voiceSwitch?.ariaLabel, "Hear translated voice");
+  assert.equal(result.voiceSwitch?.label, "Hear translated voice");
+  assert.match(result.voiceSwitch?.detail ?? "", /^On/);
   assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
-  assert.deepEqual(result.listenVoice, {
-    heading: {
-      title: "Stand-in voice",
-      note: "Only applies to people who have not chosen a voice of their own.",
-    },
-    automaticDetail: "Assigned, not matched to your voice",
-    pickWithdrawsConsent: true,
-  });
+  assert.equal(result.listenVoice, null);
   assert.equal(result.dividerAfterSwitch, true);
-  assert.equal(result.summaryReadsVoiceEnabled, true);
 });
 
-test("meeting, voice off: only the switch, exactly as the control bar has always rendered it", () => {
+test("meeting, voice off: Your voice is still offered, and the switch says what you hear", () => {
   const result = plan({ voiceEnabled: false });
 
-  assert.equal(result.voiceSwitch?.detail, "Off — you read translations instead of hearing them.");
-  assert.equal(result.yourVoice, null);
-  assert.equal(result.listenVoice, null);
-  assert.equal(result.dividerAfterSwitch, false);
+  assert.equal(result.voiceSwitch?.detail, "Off — you hear everyone's original voice.");
+  assert.deepEqual(result.yourVoice, { heading: "Your voice", note: null });
 });
 
-test("meeting: an unset voiceEnabled counts as on, as the bar's `!== false` always has", () => {
-  const result = plan({ voiceEnabled: undefined });
-
-  assert.ok(result.yourVoice);
-  assert.ok(result.listenVoice);
+test("meeting: choosing no voice of your own means listeners get a stand-in voice", () => {
+  assert.deepEqual(plan({}).automaticOption, { label: "Off", detail: "Listeners hear a stand-in voice" });
 });
 
 test("meeting: no handler, no control", () => {
-  const result = plan({
-    voiceEnabled: true,
-    canToggleVoice: false,
-    canPickDubVoice: false,
-    canConsentClone: false,
-  });
+  const result = plan({ canToggleVoice: false, canPickDubVoice: false, canConsentClone: false });
 
   assert.equal(result.voiceSwitch, null);
   assert.equal(result.yourVoice, null);
-  // The listen list is still offered, without the heading that only ever sat under Your voice.
-  assert.equal(result.listenVoice?.heading, null);
 });
 
 test("bridge: never a Voice switch — hearing them is the dock's button", () => {
@@ -103,10 +84,6 @@ test("bridge: no label says stand-in — there it is the far side's seat, not a 
 test("bridge: the closing sentence describes how you sound, never transcript-only", () => {
   // There is no switch on this surface for that sentence to be reporting.
   assert.equal(plan({ mode: "bridge", voiceEnabled: false }).summaryReadsVoiceEnabled, false);
-});
-
-test("meeting keeps its rule: a listen pick withdraws clone consent, as it always has", () => {
-  assert.equal(plan({ voiceEnabled: true }).listenVoice?.pickWithdrawsConsent, true);
 });
 
 test("bridge: choosing how you hear them never withdraws the clone Meet hears", () => {

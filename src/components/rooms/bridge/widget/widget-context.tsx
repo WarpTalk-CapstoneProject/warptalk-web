@@ -9,6 +9,9 @@
  *   widget carries only what WarpTalk adds: the transcript, WarpBot, starting and stopping
  *   translation, pausing the transcript, the reader's language and the voice settings.
  *
+ *   It does NOT end the meeting (PO, 2026-10-01). A bridge room ends when the Google Meet
+ *   conference ends; the popup has no End and only reports that the room has ended.
+ *
  * THE RULE THAT KEEPS PARALLEL WORK APART
  *   `WidgetShell` renders a fixed set of slot components and passes them NO props. Every slot
  *   reads what it needs from `useBridgeWidget()`. That is what lets each slot's owner change
@@ -17,8 +20,7 @@
  *     slot                     file                       owner
  *     TranscriptPane           transcript-pane.tsx        t2
  *     DockSessionControls      dock-session-controls.tsx  t3   Start/Stop, Pause transcript
- *     EndSessionButton         end-session.tsx            t3   header actions
- *     EndedView                ended-view.tsx             t3   replaces tabs + dock
+ *     EndedView                ended-view.tsx             t3   replaces tabs + dock once ENDED
  *     DockLanguagePill         dock-language-pill.tsx     t4
  *     SettingsFlyout           settings-flyout.tsx        t4   right end of the dock
  *     WarpBotPane              warpbot-pane.tsx           t5
@@ -35,18 +37,39 @@
  *   `useState` of the meeting live in the main window. Everything here is therefore a server
  *   fact — sessions, pause windows, the saved transcript, the participant row — read over REST,
  *   plus this window's own hub connection.
+ *
+ * WT-901: THE MAIN WINDOW'S MIRROR COMES FIRST
+ *   When a main window is running this room and its relay snapshot carries a field, that field is
+ *   the answer (`translationStarted`, the transcript pause, `isHost`) — it changes the moment the
+ *   meeting does, where the REST poll is 5–10s behind. Without a main window, or against one too
+ *   old to send the field, the REST-derived answer stands exactly as before. `relay` is that
+ *   connection, for slots that send intents (Stop, Pause, Rejoin, Device settings).
  */
 
 import { createContext, useContext, type ReactNode } from "react";
 import type { HubConnection } from "@microsoft/signalr";
 
+import type { BridgeWidgetMeetingConnection } from "@/lib/meeting/bridge-widget-relay";
+import type { BridgeRole } from "@/lib/meeting/bridge-capturer";
+import type { BridgeAudioMode, BridgeModeSupport } from "@/lib/meeting/bridge-audio-mode";
+import type { BridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
+import type { MeetMicState } from "@/lib/desktop/bridge";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptCleanSentenceDto } from "@/types/transcript";
 
+import type { BridgeWidgetRelayClient } from "./settings/use-bridge-widget-relay-client";
 import { useBridgeWidgetState } from "./use-bridge-widget-state";
 
 export type BridgeWidgetConnectionState = "connecting" | "live" | "reconnecting" | "failed";
+
+/**
+ * W4b: whether this popup asked the main window to carry its room because nobody answered.
+ * `asking` while it waits for the answer; `failed` once there is no main window to ask (a browser
+ * tab, an old desktop build), the shell refused (a native meeting is running there), or it never
+ * answered. Always `idle` while a main window is connected.
+ */
+export type BridgeWidgetCarryState = "idle" | "asking" | "failed";
 
 /**
  * What the header says about translation.
@@ -62,14 +85,21 @@ export type BridgeWidgetState = {
   /** `useTranslationRoom(roomId)`. Undefined until it answers, and if it fails. */
   room: TranslationRoomDto | undefined;
   /**
-   * `user.id === room.hostId || room.isHost === true` — the same two halves as
-   * bridge-overlay-controls.tsx. `isHost` alone is optional on the DTO, and a host whose payload
-   * omitted it would be locked out of their own meeting. False while the room is loading.
+   * Whether this user is the room's ACTUAL host — the one /resume, /stop-translation and the pause
+   * endpoints accept. The main window's `isRoomHost` when it sends one (it follows a live host
+   * transfer); otherwise `user.id === room.hostId || room.isHost === true`, the same two halves as
+   * every other host check in the app. Never the workspace owner/admin widening `isHost` has in the
+   * meeting: the server refuses them. False while the room is loading.
    */
   isHost: boolean;
 
-  /** True while any session from `useTranslationRoomSessions(roomId)` is ACTIVE. */
+  /**
+   * True while translation runs: the main window's mirror when it sends one, else while any
+   * session from `useTranslationRoomSessions(roomId)` is ACTIVE.
+   */
   translationStarted: boolean;
+  /** True when `translationStarted` comes from the main window rather than the poll. */
+  translationMirrored: boolean;
   /**
    * The same sessions query, read for the header: `ready` when no session has ever existed,
    * `translating` while one is ACTIVE, `stopped` when sessions exist and none is ACTIVE.
@@ -93,6 +123,8 @@ export type BridgeWidgetState = {
    * panel shows no pause notice at all in that state, and a Pause button should not guess.
    */
   transcriptPauseKnown: boolean;
+  /** True when the pause comes from the main window rather than the pause-window poll. */
+  transcriptPauseMirrored: boolean;
 
   /**
    * The transcript, oldest first, in the live wire shape. A segment revised by recognition
@@ -138,6 +170,81 @@ export type BridgeWidgetState = {
    */
   hub: HubConnection | null;
 
+  /** The relay to the main window (lib/meeting/bridge-widget-relay). See the WT-901 note above. */
+  relay: BridgeWidgetRelayClient;
+  /** True while a main window is running this room and has answered the relay. */
+  relayConnected: boolean;
+  /** W4b: see BridgeWidgetCarryState. */
+  carry: BridgeWidgetCarryState;
+
+  /**
+   * W4b: this desktop's role in the shared bridge room (lib/meeting/bridge-capturer): the main
+   * window's snapshot when it says, else the room record's `bridgeCapturerUserId`, else the legacy
+   * rule (the host captures).
+   */
+  bridgeRole: BridgeRole;
+  /**
+   * PO, 2026-10-01: Start/Stop translation, Pause/Resume transcript and "They speak" are for the
+   * room host OR the capturer (`canControlBridge`). Members see none of them.
+   */
+  canControl: boolean;
+  /** A member whose main window says the capturer is away: offer "Capture audio on this device". */
+  canOfferTakeover: boolean;
+  /**
+   * Translation has never run in this room (sessions answered, none). The popup opens on the
+   * language step with one Start for exactly this.
+   */
+  neverStarted: boolean;
+  /**
+   * Text-only bridge (PO, 2026-10-01): how Meet hears THIS user — "voice" (VB-CABLE carries their
+   * dub) or "text" (their real mic, no dub). The main window's snapshot when it says, else this
+   * user's participant row (`isBridgeTextOnly`), else null (not known yet).
+   */
+  audioMode: BridgeAudioMode | null;
+  /**
+   * Whether `relay.setAudioMode` reaches a main window that understands it (its snapshot carries
+   * `audioMode`). Any participant may switch their own mode — no host check.
+   */
+  canSwitchAudioMode: boolean;
+  /** What this machine can run (lib/meeting/bridge-audio-mode), or null off the desktop. */
+  modeSupport: BridgeModeSupport | null;
+  /**
+   * Which microphone the Meet browser records from, as the desktop reads it (desktop #45), or null
+   * where it cannot tell (no detector, not Windows). Drives the Meet-mic mismatch notice.
+   */
+  meetMic: MeetMicState["state"] | null;
+  /**
+   * Where the Meet browser PLAYS, from the same desktop reading, or null where it does not say (an
+   * older desktop). "cable": Meet's speaker is CABLE Input, so the user hears nothing of the call.
+   */
+  meetSpeaker: MeetMicState["speaker"] | null;
+  /**
+   * The bridge's device names, from the same desktop status reading as `modeSupport`
+   * (`bridgeDeviceLabelsFor`): the desktop's `endpointLabels`, else the fallback tables.
+   */
+  deviceLabels: BridgeDeviceLabels;
+
+  /** The main window's meeting connection (LiveKit), or null when no main window says. */
+  meetingConnection: BridgeWidgetMeetingConnection | null;
+  /** The meeting's own error from the main window, worded for a person, or null. */
+  meetingError: string | null;
+  /** The idle reaper let go of the meeting in the main window; "Rejoin meeting" brings it back. */
+  idleReaped: boolean;
+  /**
+   * Another login of this account took the meeting over and the main window stopped connecting
+   * (web #646); "Use this device" takes it back. False without a main window that says so.
+   */
+  sessionDisplaced: boolean;
+  /**
+   * The capturer's main window says Google Meet's captions (CC) look off, so the far side's
+   * speaker names cannot be read. False without a main window that says so.
+   */
+  meetCaptionsOff: boolean;
+  /** Translation was stopped because the workspace cannot pay for it (WT-699). */
+  creditsSuspended: boolean;
+  /** The reason billing gave, for `translationSuspendedNotice`. */
+  creditsSuspendedReason: string | null;
+
   /**
    * The language this user reads and hears, or null while it is not yet known.
    *
@@ -171,12 +278,10 @@ export type BridgeWidgetState = {
   setFarSideLanguage: (code: string) => void;
 
   /**
-   * True once this window has ended the session (t3's End flow calls `markEnded`). The shell then
-   * swaps the tabs and dock for `EndedView`. Local to this window: a room ended from the main
-   * window does not set it, because this window receives no room-group broadcasts.
+   * True once the room record says ENDED. The shell then swaps the tabs and dock for `EndedView`.
+   * The popup never ends the room itself; see use-bridge-widget-state.ts for how it notices.
    */
   ended: boolean;
-  markEnded: () => void;
 };
 
 export const BridgeWidgetContext = createContext<BridgeWidgetState | null>(null);

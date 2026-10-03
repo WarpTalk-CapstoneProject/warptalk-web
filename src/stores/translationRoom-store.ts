@@ -3,6 +3,22 @@ import { create } from "zustand";
 // node test runner, which does not resolve the "@/" alias for a real (non-type) import.
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
+import {
+  clearLiveLine,
+  expireLiveLine,
+  upsertLiveLine,
+  type LiveLine,
+  type LiveLines,
+} from "../lib/transcript/live-text.ts";
+import {
+  applyLateFarSpeakerName,
+  holdLateFarSpeakerName,
+  lateFarSpeakerNameFor,
+  revisedFarSideSpeakerName,
+  takeLateFarSpeakerName,
+  type FarSpeakerLateName,
+  type HeldLateName,
+} from "../lib/transcript/speaker-identity.ts";
 import type {
   AiSuggestionDto,
   ChatMentionDto,
@@ -50,6 +66,17 @@ interface TranslationRoomStoreState {
   transcriptPaused: boolean;
   /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
   withheldWhilePaused: number;
+  /**
+   * Live text, one line per speaker: the words of a turn still being spoken. Cleared by that
+   * speaker's final line. Captions always show it; the transcript panel shows it only while the
+   * transcript is running. See lib/transcript/live-text.ts.
+   */
+  liveLines: LiveLines;
+  /**
+   * Late far-speaker names that arrived before their line (the gateway's two consumer loops are not
+   * ordered), applied when the line lands. Bounded in age and count — see holdLateFarSpeakerName.
+   */
+  heldLateSpeakerNames: readonly HeldLateName[];
   /**
    * WT-716 tier 2: merged clean sentences received live (TranscriptCleanSentenceReceived), highest
    * revision per id. Kept as sentences, not folded into the segments: a sentence REPLACES the
@@ -177,6 +204,10 @@ interface TranslationRoomStoreState {
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
+  upsertLiveLine: (line: Omit<LiveLine, "receivedAt">, now: number) => void;
+  expireLiveLine: (speakerId: string, receivedAt: number) => void;
+  /** TranscriptSegmentSpeakerNamed — see applyLateFarSpeakerName for the whole rule. */
+  nameTranscriptSegmentSpeaker: (late: FarSpeakerLateName) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   upsertCleanSentence: (sentence: TranscriptCleanSentenceEventDto) => void;
   setTranscriptPaused: (paused: boolean) => void;
@@ -270,6 +301,8 @@ const initialState = {
   transcriptSegments: [],
   transcriptPaused: false,
   withheldWhilePaused: 0,
+  liveLines: {} as LiveLines,
+  heldLateSpeakerNames: [] as readonly HeldLateName[],
   cleanSentences: [] as TranscriptCleanSentenceEventDto[],
   suggestions: {},
   chatMessages: [],
@@ -338,23 +371,70 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       ),
     })),
 
-  addTranscriptSegment: (segment) =>
+  addTranscriptSegment: (incoming) =>
     set((s) => {
+      // A late name that outran this line is applied as the line arrives, by the same rule as an
+      // event that finds it (lateFarSpeakerNameFor): a line that came named keeps its own name.
+      const taken = takeLateFarSpeakerName(s.heldLateSpeakerNames, incoming.segmentId, Date.now());
+      const heldName = taken.name ? lateFarSpeakerNameFor(incoming, taken.name) : null;
+      const segment = heldName ? { ...incoming, speakerName: heldName } : incoming;
+      const held = taken.held === s.heldLateSpeakerNames ? {} : { heldLateSpeakerNames: taken.held };
       const captionSegments = mergeTranscriptSegment(s.captionSegments, segment);
+      // The speaker's final line replaces their live text, in both lanes.
+      const liveLines = clearLiveLine(s.liveLines, segment.speakerId);
       // A revision of a line the transcript already holds keeps updating it, paused or not: the
       // line was said while recording, and only its wording is changing.
       const alreadyRecorded = s.transcriptSegments.some((existing) => existing.segmentId === segment.segmentId);
       if (s.transcriptPaused && !alreadyRecorded) {
         const alreadyCaptioned = s.captionSegments.some((existing) => existing.segmentId === segment.segmentId);
         return {
+          ...held,
           captionSegments,
+          liveLines,
           withheldWhilePaused: s.withheldWhilePaused + (alreadyCaptioned ? 0 : 1),
         };
       }
       return {
+        ...held,
         captionSegments,
+        liveLines,
         transcriptSegments: mergeTranscriptSegment(s.transcriptSegments, segment),
       };
+    }),
+
+  upsertLiveLine: (line, now) =>
+    set((s) => {
+      const liveLines = upsertLiveLine(s.liveLines, line, now);
+      return liveLines === s.liveLines ? {} : { liveLines };
+    }),
+
+  expireLiveLine: (speakerId, receivedAt) =>
+    set((s) => {
+      const liveLines = expireLiveLine(s.liveLines, speakerId, receivedAt);
+      return liveLines === s.liveLines ? {} : { liveLines };
+    }),
+
+  // The late far-speaker name renames a line in BOTH lanes, paused or not: it adds nothing to
+  // either, it only says who spoke a line the lane already holds — the caption runs group by the
+  // same speaker key the panel does. `{}` when there is nothing to name, which is also every
+  // repeat of the event, so a redelivery re-renders nothing.
+  //
+  // Neither lane holding the id at all is a different case from holding a line it may not rename:
+  // the event may have outrun its line, so the name is held briefly (heldLateSpeakerNames) and
+  // addTranscriptSegment applies it. A line that IS here and keeps its name is simply left alone.
+  nameTranscriptSegmentSpeaker: (late) =>
+    set((s) => {
+      const captionSegments = applyLateFarSpeakerName(s.captionSegments, late);
+      const transcriptSegments = applyLateFarSpeakerName(s.transcriptSegments, late);
+      if (captionSegments !== s.captionSegments || transcriptSegments !== s.transcriptSegments) {
+        return { captionSegments, transcriptSegments };
+      }
+      const id = (late?.segmentId ?? "").trim().toLowerCase();
+      const holds = (lines: TranscriptSegmentDto[]) =>
+        lines.some((line) => line.segmentId.trim().toLowerCase() === id);
+      if (!id || holds(s.captionSegments) || holds(s.transcriptSegments)) return {};
+      const heldLateSpeakerNames = holdLateFarSpeakerName(s.heldLateSpeakerNames, late, Date.now());
+      return heldLateSpeakerNames === s.heldLateSpeakerNames ? {} : { heldLateSpeakerNames };
     }),
 
   /**
@@ -748,6 +828,10 @@ function mergeTranscriptSegment(
         existing.segmentId === segment.segmentId
           ? {
               ...segment,
+              // A revision may not take a named Meet person back to "Google Meet participants" —
+              // a copy of the original broadcast would otherwise undo a late name. See
+              // revisedFarSideSpeakerName.
+              speakerName: revisedFarSideSpeakerName(existing, segment),
               // Translations already filed against this bubble survive a later STT revision
               // of the same segment. TranscriptSegmentReceived always carries them as null
               // (AiResultConsumerService builds it that way), so spreading `segment` over an
@@ -762,7 +846,51 @@ function mergeTranscriptSegment(
             }
           : existing,
       )
-    : [...current, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }];
+    : insertByStartTime(current, { ...segment, receivedAt: segment.receivedAt ?? Date.now() });
+}
+
+/**
+ * How far back on the meeting clock a NEW line may be inserted rather than appended.
+ *
+ * Late lines are real and bounded: a translation held for its predecessor (10 s), a message
+ * retried by the stale reclaim (about a minute). A line much further back than that is not late,
+ * it is on a different clock — the STT worker lost the room's anchor and started counting from
+ * zero again — and inserting it by start time would bury it above minutes of conversation.
+ */
+export const LATE_LINE_WINDOW_MS = 120_000;
+
+/**
+ * Puts a NEW live line where it was spoken: after every line that started at the same time or
+ * earlier, before the first one that started later. Arrival order is not speech order — two
+ * speakers' lines are transcribed in parallel, and a retried line comes back late — and the
+ * owner's rule is that a later sentence never shows above an earlier one.
+ *
+ * `startTimeMs` is on the room's anchor clock (stt_worker `_elapsed_ms`, WT-421), not a per-track
+ * offset; the per-track reset that `dedupeTranscriptSegments` once defended against is gone.
+ * Ties keep arrival order. Exported for tests.
+ */
+export function insertByStartTime(
+  current: TranscriptSegmentDto[],
+  segment: TranscriptSegmentDto,
+): TranscriptSegmentDto[] {
+  const start = segment.startTimeMs;
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const existing of current) {
+    if (existing.startTimeMs > latest) latest = existing.startTimeMs;
+  }
+  if (!Number.isFinite(start) || current.length === 0 || start >= latest || latest - start > LATE_LINE_WINDOW_MS) {
+    return [...current, segment];
+  }
+  // Scan from the end: a late line is almost always within the last few.
+  let index = current.length;
+  while (index > 0 && current[index - 1].startTimeMs > start) index -= 1;
+  return [...current.slice(0, index), segment, ...current.slice(index)];
+}
+
+/** The sentence index a translation carries in its own id, `{source}-{lang}-c{n}`; null if none. */
+function sentenceIndexOf(translation: TranslationTextDto): number | null {
+  const match = /-c(\d+)$/.exec(translation.segmentId ?? "");
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -810,20 +938,21 @@ function mergeTranslationText(
 
   if (existingIndex === -1) {
     if (!createIfMissing) return current;
-    return [
-      ...current,
-      {
-        segmentId: joinKey,
-        speakerId: translation.speakerId,
-        speakerName: "Speaker",
-        originalText: translation.originalText,
-        originalLanguage: translation.sourceLang,
-        translations: { [language]: translation.translatedText },
-        confidence: 1,
-        startTimeMs: translation.startTimeMs ?? 0,
-        endTimeMs: translation.endTimeMs ?? 0,
-      },
-    ];
+    const sentence = sentenceIndexOf(translation);
+    return insertByStartTime(current, {
+      segmentId: joinKey,
+      speakerId: translation.speakerId,
+      speakerName: "Speaker",
+      originalText: translation.originalText,
+      originalLanguage: translation.sourceLang,
+      translations: { [language]: translation.translatedText },
+      ...(sentence === null
+        ? {}
+        : { translationSentences: { [language]: placeSentence([], sentence, translation.translatedText) } }),
+      confidence: 1,
+      startTimeMs: translation.startTimeMs ?? 0,
+      endTimeMs: translation.endTimeMs ?? 0,
+    });
   }
 
   const segment = current[existingIndex];
@@ -834,11 +963,28 @@ function mergeTranslationText(
   // segment's first one). Now scoped to the language being written: sentence 2 of the
   // Vietnamese translation must never be appended to the English one, which is what a
   // single shared slot made possible whenever two languages interleaved.
+  //
+  // `chunkIndex` on the wire is the STT AUDIO chunk counter, not the sentence number, so it says
+  // "append" for every sentence after a track's first chunk and "replace" for every sentence of
+  // that first chunk — the second sentence of somebody's first utterance overwrote the first. The
+  // sentence number is the `-c{n}` suffix of the translation's own id; when it is present each
+  // sentence has its own slot, so a late or repeated one cannot land after a later sentence or on
+  // top of itself. The chunkIndex rule stays only for messages without the suffix.
   const previous = existingTranslations[language];
-  const text =
-    chunkIndex > 0 && previous
-      ? `${previous} ${translation.translatedText}`.trim()
-      : translation.translatedText;
+  const sentence = sentenceIndexOf(translation);
+  const existingSentences = segment.translationSentences?.[language];
+  let text: string;
+  let translationSentences = segment.translationSentences;
+  if (sentence !== null) {
+    const sentences = placeSentence(existingSentences ?? [], sentence, translation.translatedText);
+    translationSentences = { ...(segment.translationSentences ?? {}), [language]: sentences };
+    text = sentences.filter((part) => part).join(" ").trim();
+  } else {
+    text =
+      chunkIndex > 0 && previous
+        ? `${previous} ${translation.translatedText}`.trim()
+        : translation.translatedText;
+  }
 
   const next = current.slice();
   next[existingIndex] = {
@@ -846,9 +992,17 @@ function mergeTranslationText(
     originalText: segment.originalText || translation.originalText,
     originalLanguage: segment.originalLanguage || translation.sourceLang,
     translations: { ...existingTranslations, [language]: text },
+    ...(translationSentences ? { translationSentences } : {}),
     startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
     endTimeMs: translation.endTimeMs || segment.endTimeMs,
   };
+  return next;
+}
+
+function placeSentence(sentences: string[], index: number, text: string): string[] {
+  const next = sentences.slice();
+  while (next.length < index) next.push("");
+  next[index] = text;
   return next;
 }
 

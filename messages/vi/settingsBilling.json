@@ -21,7 +21,7 @@
   "stats": {
     "creditsRemaining": {
       "label": "Credit còn lại",
-      "granted": "{total} được cấp trong chu kỳ này.",
+      "granted": "{total} khả dụng trong chu kỳ này.",
       "noAllowance": "Không có hạn mức trong chu kỳ này.",
       "spent": "Đã dùng {used} kể từ đầu chu kỳ.",
       "cycleEnds": "Chu kỳ kết thúc {date}."
@@ -30,10 +30,12 @@
       "label": "Gói hiện tại",
       "noPlan": "Chưa có gói đang hoạt động",
       "pricePerCycle": "{price} mỗi chu kỳ.",
+      "billedMonthly": "Thanh toán hằng tháng.",
+      "billedYearly": "Thanh toán hằng năm.",
       "noBalance": "Cuộc họp được tính vào số dư credit.",
       "limits": "{participants} người tham gia · {languages} ngôn ngữ mỗi cuộc họp.",
       "limitsUnavailable": "Không có thông tin giới hạn gói.",
-      "cancelled": "Đã hủy — việc dịch dừng vào {date}. Đăng ký lại từ Quản lý gói đăng ký.",
+      "cancelled": "Đã tắt tự động gia hạn — việc dịch dừng vào {date}. Bật lại từ Quản lý gói đăng ký.",
       "renews": "Gia hạn {date}."
     }
   },
@@ -64,7 +66,19 @@
     "creditsPerCycle": "{credits} credit/chu kỳ",
     "limits": "{participants} người tham gia · {languages} ngôn ngữ",
     "everythingInPlus": "Tất cả tính năng của {name}, cùng với",
-    "moreCreditsAndLimits": "Thêm credit và giới hạn cao hơn"
+    "moreCreditsAndLimits": "Thêm credit và giới hạn cao hơn",
+    "title": "Gói cước",
+    "description": "Các gói do WarpTalk phát hành. Mở một gói để xem nó bao gồm những gì.",
+    "yourPlan": "Gói của bạn",
+    "seeMore": "Xem thêm",
+    "coreTranslation": "Dịch trực tiếp cơ bản",
+    "billedYearly": "Thanh toán hằng năm: {total}",
+    "interval": {
+      "ariaLabel": "Kỳ thanh toán",
+      "monthly": "Hằng tháng",
+      "yearly": "Hằng năm · Tiết kiệm {percent}%"
+    },
+    "plusVat": "+ {percent}% VAT · {total} khi thanh toán"
   },
   "planPanel": {
     "currentPlan": "Gói hiện tại",
@@ -92,20 +106,20 @@
     "cappedThisCycle": "Giới hạn ở {cap} trong chu kỳ này",
     "nextCreditRefresh": "Lần làm mới credit tiếp theo",
     "nextBillingDate": "Ngày thanh toán tiếp theo",
-    "cancelledNoRenew": "Đã hủy — gói này sẽ không gia hạn",
+    "cancelledNoRenew": "Đã tắt tự động gia hạn — gói này sẽ không gia hạn",
     "nextPaymentAmount": "Số tiền thanh toán tiếp theo",
     "enableOverages": "Bật vượt hạn mức",
     "recommended": "Khuyến nghị",
     "modifyPlan": "Chỉnh sửa gói",
     "changePlan": "Đổi gói",
-    "reactivating": "Đang kích hoạt lại…",
-    "resubscribe": "Đăng ký lại",
-    "cancelling": "Đang hủy…",
-    "confirmCancel": "Xác nhận hủy",
-    "cancelPlan": "Hủy gói",
+    "reactivating": "Đang bật lại…",
+    "resubscribe": "Bật lại tự động gia hạn",
+    "cancelling": "Đang tắt…",
+    "confirmCancel": "Xác nhận ngừng gia hạn",
+    "cancelPlan": "Ngừng gia hạn",
     "managePayments": "Quản lý thanh toán",
     "invoices": "Hóa đơn",
-    "cancelledNotice": "Việc dịch dừng cho không gian làm việc này vào {date}. Hãy đăng ký lại trước thời điểm đó để tiếp tục sử dụng — chu kỳ hiện tại đã được thanh toán nên sẽ không mất thêm phí.",
+    "cancelledNotice": "Tự động gia hạn đã tắt, nên việc dịch sẽ dừng cho không gian làm việc này vào {date}. Hãy bật lại trước thời điểm đó để gói tiếp tục — không bị tính phí cho đến khi chu kỳ tiếp theo bắt đầu.",
     "billingCycle": {
       "yearly": "Hàng năm",
       "semiannual": "Nửa năm",
@@ -167,5 +181,35 @@
     "failedTitle": "Thanh toán thất bại — hãy cập nhật thẻ",
     "failedBadge": "Thanh toán thất bại",
     "failedDescription": "Chúng tôi không thể trừ tiền thẻ của bạn để gia hạn gói. Gói của bạn vẫn hoạt động đến ngày {date} trong khi chúng tôi thử lại. Hãy cập nhật thẻ để giữ gói."
+  },
+  "meter": {
+    "level": {
+      "ok": "Đúng tiến độ",
+      "warn": "Sắp cạn",
+      "critical": "Gần hết",
+      "full": "Đã dùng hết hạn mức",
+      "unknown": "Không có hạn mức"
+    },
+    "ariaLabel": "Credit đã dùng trong chu kỳ này",
+    "ariaValueText": "Đã dùng {percent}% credit của chu kỳ này, {level}",
+    "paceTitle": "Phần chu kỳ đã trôi qua",
+    "usedPercent": "Đã dùng {percent}%",
+    "leftAmount": "còn {left}",
+    "granted": "{total} khả dụng trong chu kỳ này",
+    "noneGranted": "Chu kỳ này không có credit.",
+    "paceDay": "Ngày {day} trên {total} của chu kỳ (đã qua {percent}%).",
+    "paceLasts": "Với tốc độ này, hạn mức đủ dùng đến hết chu kỳ.",
+    "paceRunsOut": "Với tốc độ này, credit sẽ hết sau khoảng {days, plural, other {# ngày}}, trước khi chu kỳ kết thúc {early, plural, other {# ngày}}.",
+    "paceRunsOutAtEnd": "Với tốc độ này, credit sẽ hết sau khoảng {days, plural, other {# ngày}}, đúng lúc chu kỳ kết thúc.",
+    "paceRunsOutWithinDay": "Với tốc độ này, credit sẽ hết trong vòng một ngày, trước khi chu kỳ kết thúc {early, plural, other {# ngày}}.",
+    "paceRunsOutWithinDayAtEnd": "Với tốc độ này, credit sẽ hết trong vòng một ngày, đúng lúc chu kỳ kết thúc.",
+    "overageRunning": "Đang dùng vượt hạn mức: {credits} credit vượt quá hạn mức.",
+    "overageRunningNoAmount": "Đang dùng vượt hạn mức.",
+    "allowanceUsedStopped": "Hạn mức đã dùng hết. Cuộc họp sẽ dừng cho đến khi bạn thêm credit hoặc chu kỳ gia hạn."
+  },
+  "zone": {
+    "ariaLabel": "Mục",
+    "plans": "Gói cước",
+    "extras": "Gói credit và tiện ích"
   }
 }

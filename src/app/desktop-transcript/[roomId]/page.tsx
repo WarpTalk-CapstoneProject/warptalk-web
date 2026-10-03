@@ -16,8 +16,8 @@
  *   carries only WarpTalk's own controls, because Google Meet owns the call. The contract, and who
  *   owns which slot, is written at the top of widget-context.tsx.
  *
- *   The WT-577 control strip (bridge-overlay-controls.tsx) is no longer rendered here; Start/Stop
- *   and Pause move into the dock's session slot and the voice controls into its settings slot.
+ *   The WT-577 control strip is gone; Start/Stop and Pause live in the dock's session slot and
+ *   the voice controls in its settings slot.
  *
  * WHAT WT-577 FIXED, AND WHERE IT LIVES NOW
  *   THEME. `bg-[#0b0b0c] text-white` once overrode the theme the root layout applies, so a

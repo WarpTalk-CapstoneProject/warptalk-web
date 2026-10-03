@@ -254,6 +254,18 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "warpbotTools",
+    kind: "page",
+    href: "/admin/warpbot-tools",
+    labelKey: "warpbotTools",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "warpbot", "tools", "tool calls", "web search", "assistant", "usage", "success rate", "tool health",
+      "công cụ", "trợ lý", "tìm kiếm web", "lượt gọi",
+      "ツール", "アシスタント", "ウェブ検索", "呼び出し",
+    ],
+  },
+  {
     id: "globalGlossary",
     kind: "page",
     href: "/admin/global-glossary",
@@ -263,18 +275,6 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
       "global glossary", "glossary", "term", "terms", "terminology", "dictionary", "translation memory",
       "thuật ngữ", "từ điển", "bảng thuật ngữ", "từ vựng",
       "用語集", "用語", "辞書",
-    ],
-  },
-  {
-    id: "glossaryTemplates",
-    kind: "page",
-    href: "/admin/glossary-templates",
-    labelKey: "glossaryTemplates",
-    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
-    keywords: [
-      "glossary templates", "template", "templates", "preset", "catalog", "sample", "terminology",
-      "mẫu thuật ngữ", "bộ mẫu", "danh mục mẫu",
-      "用語集テンプレート", "テンプレート",
     ],
   },
   {

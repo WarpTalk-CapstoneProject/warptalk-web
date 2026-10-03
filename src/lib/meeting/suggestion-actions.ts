@@ -20,6 +20,15 @@
  */
 
 export type SuggestionAction = {
+  /**
+   * The key the button's text is looked up under, in meetingTranscript.suggestion.actions.
+   *
+   * WT-922: the button used to print `label`, which is English whatever the reader's interface
+   * language is — so a Vietnamese reader got "Ask WarpBot this" under a Vietnamese suggestion.
+   * `label` stays as the English source text the tests and the catalog are written against; the
+   * component never renders it.
+   */
+  id: string;
   label: string;
   /** Built from the hint, and handed to the widget as a question. */
   prompt: (subject: string, detail: string) => string;
@@ -39,6 +48,7 @@ function withContext(body: string, detail: string): string {
 export const IMPERATIVE_OPENERS = [
   "Answer",
   "Check",
+  "Plan",
   "Draft",
   "Explain",
   "Find",
@@ -51,8 +61,36 @@ export const IMPERATIVE_OPENERS = [
   "Who",
 ] as const;
 
+/**
+ * Shared by several categories. Research reaches past the meeting on purpose: the transcript is
+ * where the point came up, not where it gets answered.
+ */
+const RESEARCH_TOPIC: SuggestionAction = {
+  id: "researchTopic",
+  label: "Research this",
+  prompt: (subject, detail) =>
+    withContext(
+      `Research this point from our meeting — search the web as well as our workspace documents — `
+        + `and give me a short brief: what it is, what matters for us, and your sources: ${subject}`,
+      detail,
+    ),
+};
+
+const PLAN_EXECUTION: SuggestionAction = {
+  id: "planExecution",
+  label: "Plan how to do it",
+  prompt: (subject, detail) =>
+    withContext(
+      `Plan how to carry this out: break it into concrete steps, with who should own each, what `
+        + `each depends on, the risks, and a realistic timeline. Ask me only for what you cannot `
+        + `work out from the meeting: ${subject}`,
+      detail,
+    ),
+};
+
 export const GENERIC_ACTIONS: SuggestionAction[] = [
   {
+    id: "askWarpBot",
     label: "Ask WarpBot",
     // Was "About our meeting: {subject}" — a topic label with no request in it.
     prompt: (subject, detail) =>
@@ -61,22 +99,37 @@ export const GENERIC_ACTIONS: SuggestionAction[] = [
         detail,
       ),
   },
+  RESEARCH_TOPIC,
 ];
 
 export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   term: [
     {
+      id: "researchTerm",
       label: "Research this term",
       prompt: (subject) => `Research this term from our meeting and explain it plainly: ${subject}`,
     },
     {
+      id: "findTermInDocuments",
       label: "Find it in our documents",
       prompt: (subject) =>
         `Search our workspace documents and glossary for this term and tell me how we use it: ${subject}`,
     },
+    {
+      id: "draftGlossaryEntry",
+      label: "Draft a glossary entry",
+      prompt: (subject, detail) =>
+        withContext(
+          `Draft a glossary entry for this term from our meeting — the term, a one-line definition `
+            + `and how it should be translated — and ask me which glossary to add it to before `
+            + `saving anything: ${subject}`,
+          detail,
+        ),
+    },
   ],
   clarification: [
     {
+      id: "askQuestion",
       label: "Ask WarpBot this",
       // THE REPORTED ONE. It read "This came up in our meeting and went unanswered: {subject}",
       // which asks for nothing, so WarpBot confirmed it was unanswered and stopped.
@@ -94,7 +147,9 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
           detail,
         ),
     },
+    RESEARCH_TOPIC,
     {
+      id: "findWhoKnows",
       label: "Find who would know",
       prompt: (subject) =>
         `Who in this workspace has worked on this, based on our meetings and documents? ${subject}`,
@@ -102,6 +157,7 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
   ],
   fact: [
     {
+      id: "checkInDocuments",
       label: "Check this in the documents",
       prompt: (subject, detail) =>
         withContext(
@@ -109,9 +165,20 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
           detail,
         ),
     },
+    {
+      id: "verifyOnline",
+      label: "Verify it on the web",
+      prompt: (subject, detail) =>
+        withContext(
+          `Check this claim from our meeting against current sources on the web, say whether it `
+            + `holds, and cite what you found: ${subject}`,
+          detail,
+        ),
+    },
   ],
   correction: [
     {
+      id: "checkWhichIsRight",
       label: "Check which is right",
       prompt: (subject, detail) =>
         withContext(
@@ -119,9 +186,11 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
           detail,
         ),
     },
+    RESEARCH_TOPIC,
   ],
   action: [
     {
+      id: "draftTask",
       label: "Draft this task",
       prompt: (subject, detail) =>
         withContext(
@@ -129,23 +198,69 @@ export const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
           detail,
         ),
     },
+    PLAN_EXECUTION,
+    {
+      id: "researchHowTo",
+      label: "Research how to do it",
+      prompt: (subject, detail) =>
+        withContext(
+          `Research what doing this well takes — approaches, tools, prerequisites and common `
+            + `pitfalls — using the web and our workspace documents, and cite your sources: ${subject}`,
+          detail,
+        ),
+    },
+    {
+      id: "findRelatedWork",
+      label: "Find related work",
+      prompt: (subject) =>
+        `Find what our earlier meetings and workspace documents already say about this, and who was involved: ${subject}`,
+    },
   ],
 };
 
 /**
- * The actions offered for one suggestion. Two at most: this card sits inside a transcript bubble
- * in a side panel, and a row of choices there competes with the conversation it comments on.
+ * The language WarpBot is told to answer in, from the reader's interface locale.
+ *
+ * Without it the model had only the suggestion to go on, and the suggestion is in the language
+ * of the TRANSCRIPT — so a reader on an English interface pressed an English button and got a
+ * Vietnamese ask card back. The reader's own language is the one they asked in.
  */
-export function actionsFor(suggestion: {
-  category: string;
-  content: string;
-  detail?: string | null;
-}): { label: string; prompt: string }[] {
+const REPLY_LANGUAGES: Record<string, string> = {
+  en: "English",
+  vi: "Vietnamese",
+  ja: "Japanese",
+};
+
+export function replyLanguageFor(locale: string | null | undefined): string {
+  const base = (locale ?? "").trim().toLowerCase().split(/[-_]/)[0] ?? "";
+  return REPLY_LANGUAGES[base] ?? "English";
+}
+
+/**
+ * The most a card offers. Each category has a primary step and then the broader ones —
+ * research, a plan — that turn a noticed point into work; four still fits on two short rows.
+ */
+export const MAX_ACTIONS = 4;
+
+/** The actions offered for one suggestion, each prompt ending in the language to reply in. */
+export function actionsFor(
+  suggestion: {
+    category: string;
+    content: string;
+    detail?: string | null;
+  },
+  locale?: string | null,
+): { id: string; label: string; prompt: string }[] {
   const subject = suggestion.content.trim();
   const detail = suggestion.detail?.trim() ?? "";
+  const language = replyLanguageFor(locale);
   const actions = CATEGORY_ACTIONS[suggestion.category] ?? GENERIC_ACTIONS;
-  return actions.slice(0, 2).map((action) => ({
+  return actions.slice(0, MAX_ACTIONS).map((action) => ({
+    id: action.id,
     label: action.label,
-    prompt: action.prompt(subject, detail),
+    prompt:
+      `${action.prompt(subject, detail)}\n\n`
+      + `Reply in ${language}, including any questions you ask me — even where the meeting quote above is in another language.`,
   }));
 }
+

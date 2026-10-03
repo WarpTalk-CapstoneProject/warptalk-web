@@ -306,3 +306,55 @@ export function parsePageParam(raw: string | null | undefined): number {
   const parsed = Number.parseInt(raw ?? "1", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
+
+/**
+ * WT-930 — how long after a meeting ends the desktop app shows "finalizing" instead of the record.
+ *
+ * Covers the finalizer's worst case (an 8s settle window, then up to 120s for the summary, then
+ * the save) with room to spare. Past it, an absent transcript artifact is not "on its way": the
+ * record page shows what it has and its own empty states take over.
+ */
+export const RECORD_FINALIZING_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Whether a just-ended meeting's record is still being written.
+ *
+ * WHY THE DESKTOP APP ASKS
+ *   Pressing End in the desktop app brings the main window up on the room's page while the
+ *   finalizer is still writing the transcript and summary. That page then rendered the full record
+ *   — reading layout, recording player, summary rail — against data that was half there, and the
+ *   report was a white window at exactly that moment. Until the record exists, the page shows a
+ *   loading state and nothing else.
+ *
+ * WHY THE TRANSCRIPT ARTIFACT IS THE SIGNAL
+ *   ArtifactsFinalizer saves the transcript and the summary in ONE transaction, and always writes
+ *   the transcript (a meeting that keeps no record still gets one, without a summary). So
+ *   "transcript_export is listed" means the finalizer has finished. Artifacts are listed by type
+ *   for every viewer, with only their content withheld from those without access, so a participant
+ *   who cannot open the files still sees the loading state clear. The recording is not waited for:
+ *   egress uploads it on its own schedule, and the page already says when it is not ready.
+ *
+ * `record` undefined is "still loading", null is "not in the history list yet". Both read as
+ * finalizing while the meeting is fresh.
+ */
+export function isRecordFinalizing(
+  input: {
+    status?: string | null;
+    endedAt?: string | null;
+    record?: { artifacts: Array<{ type: string }> } | null;
+  },
+  nowMs: number = Date.now(),
+): boolean {
+  if (input.status?.toLowerCase() !== "ended") return false;
+
+  const endedMs = input.endedAt ? Date.parse(input.endedAt) : Number.NaN;
+  // Without an end time there is no window to be inside: show the record rather than guess.
+  if (!Number.isFinite(endedMs)) return false;
+  // A client clock behind the server's reads a fresh end as being in the future; that is fresh.
+  if (nowMs - endedMs > RECORD_FINALIZING_WINDOW_MS) return false;
+  // ...but only by up to one window. A clock hours behind would otherwise hold the wait screen
+  // (and its 4 s history polling) for hours when the transcript never comes; show the record.
+  if (endedMs - nowMs > RECORD_FINALIZING_WINDOW_MS) return false;
+
+  return !(input.record?.artifacts ?? []).some((artifact) => artifact.type === "transcript_export");
+}

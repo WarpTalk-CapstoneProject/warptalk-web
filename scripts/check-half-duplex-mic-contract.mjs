@@ -95,6 +95,65 @@ check(
     "the microphone at all.",
 );
 
+// ---- Barge-in -------------------------------------------------------------------------------
+// The gate used to hold the microphone shut for the WHOLE dub, so a listener's reply during one was
+// never sent — never transcribed, translated or dubbed. Testers heard it as "the clone voice skips
+// segments". These keep the barge-in that fixes it from quietly turning back into either failure:
+// a deaf gate, or an open one.
+
+const detectorSource = readFileSync("src/lib/meeting/barge-in.ts", "utf8");
+
+check(
+  "a listener talking over a dub can open the gate",
+  /new BargeInDetector\(\)/.test(source) && /periodRef\.current && !detector\.open/.test(source),
+  "Without the barge-in this is strict half duplex again: everything said while a dub plays is " +
+    "dropped on this machine, where no server log can ever show it.",
+);
+
+check(
+  "the barge-in listens on a clone of the microphone, not the gated track",
+  /source\.clone\(\)/.test(source) && /copy\.enabled = true/.test(source),
+  "The gate disables the original track, and a disabled track reads as silence — measuring it " +
+    "would make the listener inaudible to the very check that is meant to hear them. A clone " +
+    "copies `enabled`, so it has to be switched on explicitly.",
+);
+
+check(
+  "the barge-in compares against the dub actually being played",
+  /syncDubProbes/.test(source) && /referenceRms: combineRms\(/.test(source),
+  "Echo is the dub, attenuated. A level threshold on the microphone alone cannot tell a listener " +
+    "from their own speakers; the dub's level is what makes the comparison mean anything.",
+);
+
+check(
+  "an uncalibrated or deaf barge-in keeps the gate shut",
+  /coupling === null \? Number\.POSITIVE_INFINITY/.test(detectorSource) &&
+    /const speech = referenceFresh && /.test(detectorSource),
+  "Every uncertain state must fall back to the old gate, never to an open microphone: before the " +
+    "echo path is measured, or while the dub's own audio reads as silence, the echo itself would " +
+    "clear a bare speech floor and be transcribed as the listener.",
+);
+
+check(
+  "the barge-in decides nothing for a user who has muted themselves",
+  /const tick = \(\) => \{[\s\S]*?if \(!room\.localParticipant\.isMicrophoneEnabled\) return;/.test(source),
+  "Their mute outranks every automatic decision here.",
+);
+
+check(
+  "the barge-in is measured on a timer, not on animation frames",
+  /setInterval\(tick, BARGE_IN_TICK_MS\)/.test(source) && !/requestAnimationFrame/.test(source),
+  "requestAnimationFrame stops in a background tab, and a meeting tab is often in the background — " +
+    "the barge-in would silently stop working exactly when the user is looking at something else.",
+);
+
+check(
+  "the measuring machinery is torn down with the gate",
+  /stopTicker\(\);[\s\S]*audioContext\.close\(\)/.test(source) && /micProbe\.copy\.stop\(\)/.test(source),
+  "A leaked clone keeps the microphone's capture alive after the meeting, and a leaked timer keeps " +
+    "measuring a room the user has left.",
+);
+
 if (failures.length > 0) {
   console.error(`\nHalf-duplex mic contract failed:\n\n  ${failures.join("\n\n  ")}\n`);
   process.exit(1);

@@ -129,62 +129,64 @@ export function AutoRenewRow({
 
   if (isLoading || isError || !data) return null;
 
+  // One line on a wide screen, wrapping to two on a phone: the switch, what it does in words, the
+  // card it would charge, and the one button that changes the card. Everything the taller
+  // version said is still said — only the headline and the status pill were folded into the
+  // sentence, because the switch already states on/off and the sentence says what "on" means.
   return (
-    <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-[14px] font-semibold text-ink">{t("title")}</h3>
-          <Pill tone={data.autoRenew ? "accent" : "muted"}>{data.autoRenew ? t("on") : t("off")}</Pill>
-        </div>
-        <p className="text-[12px] leading-relaxed text-ink-muted">
-          <RenewalLine data={data} />
-        </p>
-        {data.card ? (
-          <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
-            <CreditCard className="h-3.5 w-3.5 shrink-0" />
-            <span>
-              {t("card", {
-                brand: (data.card.brand ?? t("cardGeneric")).toUpperCase(),
-                last4: data.card.last4,
-              })}
-              {data.card.expMonth && data.card.expYear
-                ? ` · ${t("cardExpires", {
-                    month: String(data.card.expMonth).padStart(2, "0"),
-                    year: String(data.card.expYear).slice(-2),
-                  })}`
-                : null}
-            </span>
-          </p>
-        ) : data.stripeUnavailable ? (
-          <p className="text-[12px] text-ink-subtle">{t("cardUnavailable")}</p>
-        ) : null}
-        {data.autoRenewRequiresCheckout && !data.autoRenew ? (
-          <p className="text-[12px] text-ink-subtle">
-            {t("oneOffHint")}{" "}
-            <Link href={plansHref} className="font-medium text-ink underline underline-offset-2">
-              {t("choosePlan")}
-            </Link>
-          </p>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        {data.canManagePaymentMethod ? (
-          <BillingButton
-            tone="outline"
-            className="w-auto px-3"
-            disabled={portal.isPending}
-            onClick={() => portal.mutate()}
-          >
-            {t("manageCard")}
-          </BillingButton>
-        ) : null}
+    <GridRow className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
         <Switch
+          className="mt-0.5"
           aria-label={t("title")}
           checked={data.autoRenew}
           disabled={toggle.isPending || (!data.autoRenew && data.autoRenewRequiresCheckout)}
           onCheckedChange={(checked) => toggle.mutate(checked)}
         />
+        <div className="min-w-0 space-y-0.5 text-[12px] leading-relaxed text-ink-muted">
+          <p>
+            <span className="text-[13px] font-medium text-ink">{t("title")}</span>{" "}
+            <span>{data.autoRenew ? t("on") : t("off")}.</span> <RenewalLine data={data} />
+          </p>
+          {data.card ? (
+            <p className="flex items-center gap-1.5">
+              <CreditCard className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                {t("card", {
+                  brand: (data.card.brand ?? t("cardGeneric")).toUpperCase(),
+                  last4: data.card.last4,
+                })}
+                {data.card.expMonth && data.card.expYear
+                  ? ` · ${t("cardExpires", {
+                      month: String(data.card.expMonth).padStart(2, "0"),
+                      year: String(data.card.expYear).slice(-2),
+                    })}`
+                  : null}
+              </span>
+            </p>
+          ) : data.stripeUnavailable ? (
+            <p className="text-ink-subtle">{t("cardUnavailable")}</p>
+          ) : null}
+          {data.autoRenewRequiresCheckout && !data.autoRenew ? (
+            <p className="text-ink-subtle">
+              {t("oneOffHint")}{" "}
+              <Link href={plansHref} className="font-medium text-ink underline underline-offset-2">
+                {t("choosePlan")}
+              </Link>
+            </p>
+          ) : null}
+        </div>
       </div>
+      {data.canManagePaymentMethod ? (
+        <BillingButton
+          tone="outline"
+          className="h-7 w-auto shrink-0 self-start px-3 sm:self-center"
+          disabled={portal.isPending}
+          onClick={() => portal.mutate()}
+        >
+          {t("manageCard")}
+        </BillingButton>
+      ) : null}
     </GridRow>
   );
 }

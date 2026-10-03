@@ -35,6 +35,19 @@ describe("WarpBot composer — reading the @ being typed (WT-887)", () => {
     assert.equal(parseMentionTrigger("@artifact:")?.namespace, "artifact");
   });
 
+  test("plurals are the same namespace — @documents: used to search for the text 'documents:'", () => {
+    assert.deepEqual(parseMentionTrigger("@documents:"), {
+      start: 0,
+      namespace: "document",
+      query: "",
+    });
+    assert.equal(parseMentionTrigger("@docs:spec")?.namespace, "document");
+    assert.equal(parseMentionTrigger("@Transcripts:q3")?.namespace, "transcript");
+    assert.equal(parseMentionTrigger("@summaries:")?.namespace, "summary");
+    assert.equal(parseMentionTrigger("@meetings:")?.namespace, "meeting");
+    assert.equal(parseMentionTrigger("@artifacts:")?.namespace, "artifact");
+  });
+
   test("an unknown word before a colon is just part of a plain query", () => {
     assert.deepEqual(parseMentionTrigger("@minutes:x"), {
       start: 0,
@@ -81,6 +94,8 @@ describe("WarpBot composer — namespace hints under a plain @", () => {
     assert.deepEqual(namespaceHints("document"), { namespaces: ["document"], exact: true });
     assert.deepEqual(namespaceHints("doc"), { namespaces: ["document"], exact: true });
     assert.deepEqual(namespaceHints("Room"), { namespaces: ["meeting"], exact: true });
+    assert.deepEqual(namespaceHints("documents"), { namespaces: ["document"], exact: true });
+    assert.deepEqual(namespaceHints("transcripts"), { namespaces: ["transcript"], exact: true });
   });
 
   test("the start of a keyword is offered, but does not lead", () => {

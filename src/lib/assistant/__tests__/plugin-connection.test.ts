@@ -212,6 +212,29 @@ describe("WT-646 — a workspace's plugin policy, in words a member can act on",
       }),
     );
     assert.ok(block?.remedy?.includes("workspace owner"), block?.remedy ?? "");
+    assert.equal(block?.ownerCanAdd, false);
+  });
+
+  test("the Owner is not told to ask the workspace owner: they get to add it from the dialog", () => {
+    // Prod, 3 Oct 2026: the Owner opened an installed Notion row and read "Ask your workspace
+    // owner to add it" with Continue disabled. The server had sent canAdd: true all along.
+    const block = pluginWorkspaceBlock(
+      plugin({
+        canAdd: true,
+        installationStatus: "installed",
+        workspacePolicyBlockReason:
+          "This plugin has not been added to this workspace. Ask your workspace owner to add it.",
+      }),
+    );
+    assert.equal(block?.ownerCanAdd, true);
+    assert.ok(!/ask your workspace owner/i.test(`${block?.reason} ${block?.remedy}`), JSON.stringify(block));
+  });
+
+  test("canAdd does not turn a different refusal into an Add button", () => {
+    const block = pluginWorkspaceBlock(
+      plugin({ canAdd: true, workspacePolicyBlockReason: "Turned off for this workspace by WarpTalk." }),
+    );
+    assert.equal(block?.ownerCanAdd, false);
   });
 
   test("the retired all-or-nothing sentence gets no remedy any more", () => {

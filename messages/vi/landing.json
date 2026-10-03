@@ -5,7 +5,9 @@
     "pricing": "Bảng giá",
     "contact": "Liên hệ",
     "download": "Tải xuống",
-    "getStarted": "Bắt đầu ngay"
+    "getStarted": "Bắt đầu ngay",
+    "openMenu": "Mở menu",
+    "closeMenu": "Đóng menu"
   },
   "badges": {
     "realtimeTranslation": "Dịch thời gian thực",
@@ -19,17 +21,44 @@
     "createAccount": "Tạo tài khoản"
   },
   "featureSteps": {
-    "signalDrift": { "kicker": "Dấu vết tín hiệu", "title": "Mỗi giọng nói đều để lại một dấu vết." },
-    "languageCrossing": { "kicker": "Vượt qua ngôn ngữ", "title": "Ý nghĩa được truyền tải trọn vẹn." },
-    "thePause": { "kicker": "Khoảnh khắc chuyển giao", "title": "Cuộc trò chuyện vẫn tiếp diễn trong lúc tín hiệu đổi dạng." },
-    "memoryBloom": { "kicker": "Ký ức lưu giữ", "title": "Căn phòng ghi nhớ tất cả." }
+    "signalDrift": {
+      "kicker": "Dấu vết tín hiệu",
+      "title": "Mỗi giọng nói đều để lại một dấu vết."
+    },
+    "languageCrossing": {
+      "kicker": "Vượt qua ngôn ngữ",
+      "title": "Ý nghĩa được truyền tải trọn vẹn."
+    },
+    "thePause": {
+      "kicker": "Khoảnh khắc chuyển giao",
+      "title": "Cuộc trò chuyện vẫn tiếp diễn trong lúc tín hiệu đổi dạng."
+    },
+    "memoryBloom": {
+      "kicker": "Ký ức lưu giữ",
+      "title": "Căn phòng ghi nhớ tất cả."
+    }
   },
   "signals": {
-    "capture": { "meta": "Thu âm / Nhận dạng giọng nói / Âm thanh", "label": "Thu âm" },
-    "understand": { "meta": "Thấu hiểu / Ngữ cảnh / Ghi nhớ", "label": "Thấu hiểu" },
-    "translate": { "meta": "Dịch thuật / AI / Ngôn ngữ", "label": "Dịch thuật" },
-    "speak": { "meta": "Phát giọng nói / TTS / Giọng nói", "label": "Phát âm" },
-    "remember": { "meta": "Ghi nhớ / Bản ghi / Trợ lý", "label": "Ghi nhớ" }
+    "capture": {
+      "meta": "Thu âm / Nhận dạng giọng nói / Âm thanh",
+      "label": "Thu âm"
+    },
+    "understand": {
+      "meta": "Thấu hiểu / Ngữ cảnh / Ghi nhớ",
+      "label": "Thấu hiểu"
+    },
+    "translate": {
+      "meta": "Dịch thuật / AI / Ngôn ngữ",
+      "label": "Dịch thuật"
+    },
+    "speak": {
+      "meta": "Phát giọng nói / TTS / Giọng nói",
+      "label": "Phát âm"
+    },
+    "remember": {
+      "meta": "Ghi nhớ / Bản ghi / Trợ lý",
+      "label": "Ghi nhớ"
+    }
   },
   "voiceHeading": "Giọng nói trở lại chân thực.",
   "understandHeading": "Khi cả phòng cùng thấu hiểu.",
@@ -49,7 +78,8 @@
     "featureCredits": "{count} tín dụng mỗi chu kỳ",
     "featureParticipants": "Tối đa {count} người tham gia mỗi cuộc họp",
     "featureLanguages": "Tối đa {count} ngôn ngữ cùng lúc",
-    "featureDefaultSupport": "Hỗ trợ qua email tiêu chuẩn"
+    "featureDefaultSupport": "Hỗ trợ qua email tiêu chuẩn",
+    "plusVat": "+ {percent}% VAT · {total} khi thanh toán"
   },
   "footer": {
     "stayInTouch": "Kết nối với chúng tôi!",

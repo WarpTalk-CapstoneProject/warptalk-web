@@ -55,6 +55,9 @@ import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { isDesktopApp, openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
+import { isRecordFinalizing } from "@/lib/meeting/room-history-mapping";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -78,8 +81,8 @@ import {
 } from "@/components/user/user-chip";
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { useEndedRoomRecord } from "@/hooks/use-room-history";
-import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
+import { useEndedRoomRecord, useFinalizingDeadline } from "@/hooks/use-room-history";
+import { findSegmentAtMs, formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   isRetryableRenderingError,
   normalizeRenderingLanguage,
@@ -111,10 +114,10 @@ import {
 } from "@/lib/meeting/moment-link";
 import {
   canAlignToRecording,
+  recordingLeadInMs,
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
-import { buildRecordingMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -146,9 +149,14 @@ import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hook
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
+  canEditRoomSetup,
+  canEndRoom,
+  isRoomHost,
   resolveRoomEntryIntent,
   type RoomEntryIntent,
 } from "@/lib/meeting/translation-room-access";
+import { isExternalBridge, isExternalBridgeStandIn } from "@/lib/meeting/meeting-types";
+import { GoogleMeetMark } from "@/components/meeting/google-meet-mark";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -347,6 +355,13 @@ export default function RoomInformationPage() {
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
+  // WT-904: an external meeting's Google Meet stand-in ("External Meeting") is a connection that
+  // carries everyone on the far side, not a person. It is listed apart, never as a participant.
+  const bridgeStandIn =
+    apiParticipants.find((participant) => isExternalBridgeStandIn(participant.userId)) ?? null;
+  const peopleParticipants = bridgeStandIn
+    ? apiParticipants.filter((participant) => participant !== bridgeStandIn)
+    : apiParticipants;
   const apiInvitations = invitationsQuery.data ?? [];
   const { data: workspaces } = useWorkspaces();
   const validWorkspaceId =
@@ -356,7 +371,10 @@ export default function RoomInformationPage() {
       : workspaces?.items?.[0]?.id;
   // The AI summary and retained files for this meeting. Keyed on the room's own
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
-  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
+  // B4: the room's own status and end time let the record poll while it is finalizing, even
+  // before the just-ended room is in the list; the deadline re-renders when the window closes.
+  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId, room);
+  useFinalizingDeadline(room);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
@@ -595,17 +613,34 @@ export default function RoomInformationPage() {
   const transcriptEntryCount = transcriptRows.length;
 
   /**
-   * Where each transcript turn falls on the RECORDING's own file-second axis, one mark per turn.
+   * WT-896 — whether one moment is inside the recording, by the same arithmetic requestSeek uses.
    *
-   * Built from the exact same `transcriptRows` the transcript renders its timestamps from, and the
-   * exact same `seekSources` `requestSeek` measures against — so a mark on the scrubber and the
-   * transcript line it points at can never disagree about where a turn starts. See
-   * recording-marks.ts for why a turn that cannot be placed is dropped rather than clamped.
+   * The meeting-wide gate above (`canSeekToRecording`) only asks whether the two clocks can be
+   * reconciled at all. A meeting recorded from 22 minutes in passes it, and every line from those
+   * first 22 minutes then drew a play button whose click seekTargetSeconds refused in silence —
+   * the report was "play does nothing on the old lines". Those timestamps now stay plain text.
    */
-  const recordingMarks = useMemo(
-    () => buildRecordingMarks(transcriptRows, seekSources),
-    [transcriptRows, seekSources],
+  const canSeekAt = useCallback(
+    (atMs: number) => seekTargetSeconds(seekSources, atMs) !== null,
+    [seekSources],
   );
+  /**
+   * The line above the transcript that says why some timestamps are not clickable. Undefined when
+   * every line is in the recording (or nothing can be seeked, which seekUnavailableReason covers);
+   * a number when the recording started late; null when it is partial for another reason — it
+   * stopped before the meeting did, which is only known once the file's length has loaded.
+   */
+  const recordingCoverageGapMs = useMemo(() => {
+    if (!canSeekToRecording) return undefined;
+    if (!transcriptRows.some((row) => !canSeekAt(row.startTimeMs))) return undefined;
+    return recordingLeadInMs(seekSources);
+  }, [canSeekToRecording, transcriptRows, canSeekAt, seekSources]);
+  const seekCoverageNote =
+    recordingCoverageGapMs === undefined
+      ? null
+      : recordingCoverageGapMs === null
+        ? t("record.seekCoverage.partial")
+        : t("record.seekCoverage.lateStart", { time: formatCitationTime(recordingCoverageGapMs) });
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -908,7 +943,32 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
-  const isHost = room.hostId === user?.id || Boolean(room.isHost);
+
+  // WT-930: the desktop app lands here the moment End is pressed, with the main window brought up
+  // over Meet, while the finalizer is still writing the transcript and summary. Rendering the full
+  // record against half-written data is the moment the window went white in the report. Until the
+  // record exists this page is a loading state and nothing else. `useEndedRoomRecord` polls every
+  // few seconds while this holds (also while the room is not in the list yet), and
+  // `useFinalizingDeadline` re-renders when the window closes, so it always clears on its own.
+  // See isRecordFinalizing for why the transcript artifact is the signal.
+  if (
+    isDesktopApp()
+    && isRecordFinalizing({ status: room.status, endedAt: room.endedAt, record: endedRecordQuery.data })
+  ) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <LumidotSpinner />
+          <p className="text-[13px] font-medium text-ink">{t("record.finalizing.title")}</p>
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+            {t("record.finalizing.body")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  // WT-715: one host rule, shared with the setup and End gates below.
+  const isHost = isRoomHost(room, user);
   const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
@@ -922,10 +982,24 @@ export default function RoomInformationPage() {
     // WT-341: a meeting that does not require the host's approval can be opened by anyone
     // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
     requiresApproval: room.settings?.requiresApproval,
+    // WT-904: a non-host's way into an external meeting is the Meet link, not WarpTalk's room.
+    isExternalBridge: isExternalBridge(room.translationRoomType),
+    externalMeetingUrl: room.externalMeetingUrl,
   });
 
   async function handleRoomEntry() {
     if (!room) return;
+    // WT-868: an External Meeting is never joined in the app. It runs beside Google Meet in the
+    // desktop popup, whose own Start makes the room active in this window — so neither the host's
+    // Start nor a Join goes through device setup or /live here. On the web there is no popup.
+    if (
+      isExternalBridge(room.translationRoomType) &&
+      (entryIntent.mode === "host_start" || entryIntent.mode === "join")
+    ) {
+      const opened = await openDesktopTranscriptWindow(room.id);
+      if (!opened) toast.info(t("bridgeDesktopOnly"));
+      return;
+    }
     switch (entryIntent.mode) {
       case "unavailable":
         return;
@@ -948,14 +1022,19 @@ export default function RoomInformationPage() {
       case "join":
         useUIStore.getState().setSetupRoomId(roomId);
         useUIStore.getState().setSetupRoomModalOpen(true);
+        return;
+      case "external_meeting":
+        if (entryIntent.href) window.open(entryIntent.href, "_blank", "noopener,noreferrer");
+        return;
     }
   }
 
   // Only the host, and only while the room still has settings worth changing — once it is
   // live or ended, editing it would rewrite a meeting already in progress or already over.
-  const canEditRoom =
-    room.hostId === user?.id &&
-    (room.status === "scheduled" || room.status === "waiting");
+  // WT-715: the same rule gates every setup control on this page (title, repeat rule, meeting
+  // languages, room notes), and it is the rule the settings endpoint enforces — including `open`.
+  const canEditRoom = canEditRoomSetup(room, user);
+  const roomNotes = room.description ?? "";
 
   const openRoomEditor = () => {
     useUIStore.getState().setEditRoomId(room.id);
@@ -964,7 +1043,7 @@ export default function RoomInformationPage() {
 
   const participants = buildUserList(
     room,
-    apiParticipants,
+    peopleParticipants,
     apiInvitations,
     membersArray,
     user,
@@ -1069,7 +1148,7 @@ export default function RoomInformationPage() {
                   ) : null}
                   <MeetingPropertiesPills
                     room={room}
-                    apiParticipants={apiParticipants}
+                    apiParticipants={peopleParticipants}
                     occupancyLabel={occupancy.label}
                     occupancyNoun={
                       isFinishedStatus(room.status)
@@ -1140,11 +1219,13 @@ export default function RoomInformationPage() {
                         was written. `!isEnded && status !== "cancelled"` left an EXPIRED or
                         FAILED room still offering it — and an expired room is precisely one that
                         never ran, so there is nothing there to end. The server would refuse the
-                        request; the menu entry was the lie. */}
+                        request; the menu entry was the lie.
+                        WT-715: narrowed further to the backend's own allowlist (waiting, open,
+                        in_progress, paused) — a SCHEDULED room cannot be ended either. */}
                     <RoomActionsMenu
                       room={room}
                       isHost={isHost}
-                      canEnd={isHost && !isFinishedStatus(room.status)}
+                      canEnd={canEndRoom(room, user)}
                       endPending={endRoomMutation.isPending}
                       onCopy={handleCopy}
                       onEnd={async () => {
@@ -1172,17 +1253,23 @@ export default function RoomInformationPage() {
                   timestamp on hover — so this row's last unique fact survives it. */}
             </div>
 
-            <RoomNotesEditor
-              key={room.id}
-              initialContent={room.description ?? ""}
-              canEdit={isHost}
-              onSave={(html) =>
-                updateRoomSettings.mutateAsync({
-                  id: room.id,
-                  data: { description: html },
-                })
-              }
-            />
+            {/* WT-715: notes are room setup, so they lock with the rest of it once the meeting
+                starts (the settings endpoint refuses them after that). A locked room with no
+                notes shows no section at all: an empty box inviting "Add agenda..." that can
+                never be typed into is a control that lies. */}
+            {canEditRoom || roomNotes.trim() ? (
+              <RoomNotesEditor
+                key={room.id}
+                initialContent={roomNotes}
+                canEdit={canEditRoom}
+                onSave={(html) =>
+                  updateRoomSettings.mutateAsync({
+                    id: room.id,
+                    data: { description: html },
+                  })
+                }
+              />
+            ) : null}
 
             {recordSectionShown ? (
               <MeetingRecordSection
@@ -1206,9 +1293,8 @@ export default function RoomInformationPage() {
                 // is the wire it comes back up. See the note on `seekSources` above.
                 onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
-                marks={recordingMarks}
-                onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
+                seekCoverageNote={seekCoverageNote}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
@@ -1217,11 +1303,11 @@ export default function RoomInformationPage() {
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
                     translations={transcriptTranslations}
-                    preferredLanguage={user?.preferredLanguage}
                     // WT-655: the count gate joined the alignment gate. Two playable recordings
                     // means every offset is measured against the wrong file half the time, and the
                     // notice above the transcript now says why the timestamps went quiet.
                     onSeekToRecording={canSeekToRecording ? requestSeek : undefined}
+                    canSeekAt={canSeekAt}
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -1299,6 +1385,12 @@ export default function RoomInformationPage() {
               <p className="mb-2 text-[12px] text-muted-foreground">
                 {t("people.participantsCount", { label: occupancy.label })}
               </p>
+              {bridgeStandIn ? (
+                <div className="mb-2 flex items-start gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[12px] leading-snug text-muted-foreground">
+                  <GoogleMeetMark size={14} className="mt-px" />
+                  <span>{t("people.bridgeConnection")}</span>
+                </div>
+              ) : null}
 
               {rosterGroups.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">
@@ -1426,6 +1518,7 @@ function MeetingRecordSection({
   onDurationSeconds,
   onJumpToMoment,
   seekUnavailableReason,
+  seekCoverageNote,
   recordingUnavailableReason,
   recordingFailure,
   speakerDirectory,
@@ -1434,8 +1527,6 @@ function MeetingRecordSection({
   onTabChange,
   expanded,
   onToggleExpanded,
-  marks,
-  onMarkClick,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
@@ -1499,6 +1590,8 @@ function MeetingRecordSection({
    * gets a plain reading page, not a notice about a feature it never had.
    */
   seekUnavailableReason?: "unalignable" | "multiple" | null;
+  /** WT-896: why SOME timestamps do not open the recording (it covers part of the meeting). */
+  seekCoverageNote?: string | null;
   /** Passed straight to the player. The union is meeting-record-panels'. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
   /** rec-loss: a recording that produced no file — derived on the page beside the reason above. */
@@ -1516,8 +1609,6 @@ function MeetingRecordSection({
   onToggleExpanded?: () => void;
   /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
   generatableLanguages?: readonly string[] | null;
-  marks?: readonly RecordingMark[];
-  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingRoomPage");
   const { busyArtifactId, downloadArtifact } =
@@ -2003,6 +2094,10 @@ function MeetingRecordSection({
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
           {seekUnavailableMessages[seekUnavailableReason]}
         </div>
+      ) : activeTab === "recap" && seekCoverageNote ? (
+        <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+          {seekCoverageNote}
+        </div>
       ) : null}
       {/* rec-loss: beside the seek line and styled like it — both are "about the recording, above
           what you are reading". role="status" so a screen reader announces it when the poll turns
@@ -2065,8 +2160,6 @@ function MeetingRecordSection({
             onSelectRendering={endedRecord ? selectRendering : undefined}
             generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
-            marks={marks}
-            onMarkClick={onMarkClick}
           />
         ) : (
           transcript

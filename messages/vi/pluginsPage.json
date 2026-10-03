@@ -24,6 +24,7 @@
     "filterNote": "Bộ lọc này chỉ áp dụng cho các plugin WarpTalk cung cấp hiện tại. Nó không tìm kiếm trong một kho plugin rộng hơn.",
     "clearFilter": "Xóa bộ lọc"
   },
+  "addToWorkspace": "Thêm vào workspace",
   "actionLabels": {
     "connect": "Kết nối",
     "manage": "Quản lý",
@@ -80,6 +81,10 @@
     "couldNotFinishRemoving": "Không thể hoàn tất xóa {label}."
   },
   "permissionList": {
+    "workspaceLock": "Do Owner của workspace đặt",
+    "workspaceLockHint": "WarpBot làm theo lựa chọn chặt hơn giữa lựa chọn của bạn và của workspace. Bạn không nới lỏng được quy tắc này.",
+    "workspaceApproval": "Luôn hỏi",
+    "workspaceBlocked": "Bị chặn",
     "empty": "Plugin này sẽ công bố các quyền của nó khi bạn kết nối. Màn hình chấp thuận của nhà cung cấp liệt kê chính xác những gì nó yêu cầu trước khi bạn phê duyệt.",
     "heading": "Cấp quyền cho phép plugin này"
   },
@@ -120,5 +125,15 @@
     "optional": "Không bắt buộc",
     "reasonPlaceholder": "vd. Dùng {label} với các mục hành động cuộc họp",
     "sendRequest": "Gửi yêu cầu"
+  },
+  "siblingPrompt": {
+    "title": "Kết nối luôn các plugin {provider} khác của bạn?",
+    "titleNoProvider": "Kết nối luôn các plugin liên quan?",
+    "body": "{label} đã được kết nối. Các plugin này dùng chung phiên đăng nhập, bạn có thể kết nối chúng ngay bây giờ.",
+    "connectAll": "Kết nối tất cả",
+    "notNow": "Để sau",
+    "closeAria": "Đóng",
+    "connected": "Đã kết nối {labels}",
+    "couldNotConnect": "Không thể kết nối {labels}."
   }
 }

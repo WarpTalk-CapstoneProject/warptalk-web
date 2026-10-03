@@ -5,10 +5,11 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { ListBullets } from "@phosphor-icons/react/dist/ssr";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { identityFor } from "@/lib/meeting/participant-identity";
+import { transcriptIdentityFor } from "@/lib/meeting/participant-identity";
 import {
   captionTextForReader,
   groupTranscriptSegments,
+  isCaptionPending,
   mergeTranslations,
 } from "@/lib/transcript/transcript-display";
 import {
@@ -18,6 +19,11 @@ import {
 import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
 import { liveCaptionLines } from "@/lib/transcript/live-caption-lines";
+import { orderedLiveLines } from "@/lib/transcript/live-text";
+import {
+  localizeFarSideSpeakerName,
+  transcriptSpeakerKey,
+} from "@/lib/transcript/speaker-identity";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar } from "./participant-avatar";
 
@@ -95,6 +101,9 @@ export function LiveSubtitleOverlay({
   // paused, and this list is the one a pause never withholds from. See captionSegments.
   const segments = useTranslationRoomStore((state) => state.captionSegments);
   const cleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
+  // Live text: the words of a turn still being spoken. Captions keep running while the transcript
+  // is paused, so this lane shows it regardless. See lib/transcript/live-text.ts.
+  const liveLines = useTranslationRoomStore((state) => state.liveLines);
   const identities = useMeetingIdentities();
   const reduceMotion = useReducedMotion() ?? false;
 
@@ -135,13 +144,32 @@ export function LiveSubtitleOverlay({
     // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
     // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
     // rendering two lines and a gap.
-    return shown
+    const finals = shown
       .map((utterance) => ({
         utterance,
-        caption: captionTextForReader(utterance, readerLanguage, translationActive),
+        caption: captionTextForReader(utterance, readerLanguage),
+        pending: isCaptionPending(utterance, readerLanguage, translationActive),
       }))
       .filter((line): line is CaptionLineData => Boolean(line.caption));
-  }, [segments, cleanSentences, viewMode, readerLanguage, translationActive]);
+    // The newest live line goes last, as the line being spoken right now. Only one: the lane has
+    // three slots, and two half-sentences in flight read as noise.
+    const live = orderedLiveLines(liveLines).at(-1);
+    if (!live) return finals;
+    return [
+      ...finals,
+      {
+        utterance: {
+          segmentId: `live-${live.speakerId}-${live.itemId}`,
+          speakerId: live.speakerId,
+          speakerName: live.speakerName,
+          originalLanguage: live.language,
+          originalText: live.text,
+        } as GroupedTranscriptSegment,
+        caption: live.text,
+        pending: true,
+      },
+    ];
+  }, [segments, cleanSentences, liveLines, viewMode, readerLanguage, translationActive]);
 
   const lines = useMemo(
     () =>
@@ -211,6 +239,7 @@ export function LiveSubtitleOverlay({
               key={line.utterance.segmentId}
               line={line.utterance}
               caption={line.caption}
+              pending={line.pending}
               identities={identities}
               showSpeaker={showSpeaker}
               // The previous line steps back rather than disappears: still readable if you
@@ -226,16 +255,26 @@ export function LiveSubtitleOverlay({
   );
 }
 
-type CaptionLineData = { utterance: GroupedTranscriptSegment; caption: string };
+type CaptionLineData = {
+  utterance: GroupedTranscriptSegment;
+  caption: string;
+  /** Drawn muted: live text, or the original standing in for a translation still on its way. */
+  pending: boolean;
+};
 
-function speakerOfLine(line: CaptionLineData): string | null | undefined {
-  return line.utterance.speakerId ?? line.utterance.speakerName;
+/**
+ * Who opens a speaker run. transcriptSpeakerKey rather than the bare id: everybody on the Google
+ * Meet side shares the stand-in's id, and "Lan" answering "Minh" is a change of speaker.
+ */
+function speakerOfLine(line: CaptionLineData): string {
+  return transcriptSpeakerKey(line.utterance);
 }
 
 const CaptionLine = memo(
   function CaptionLine({
     line,
     caption,
+    pending,
     identities,
     showSpeaker,
     dimmed,
@@ -243,6 +282,7 @@ const CaptionLine = memo(
     reduceMotion,
   }: {
     line: GroupedTranscriptSegment;
+    pending: boolean;
     /** Already resolved for this reader by captionTextForReader — never the raw original. */
     caption: string;
     identities: ReturnType<typeof useMeetingIdentities>;
@@ -256,8 +296,13 @@ const CaptionLine = memo(
     // `speakerName` was already resolved on arrival by resolveTranscriptSpeakerName, which guards
     // against a roster that hands back a UUID as somebody's display name. Preferring it here keeps
     // that guard; the identity map supplies the face and the language, which it alone knows.
-    const person = identityFor(identities, line.speakerId, line.speakerName);
-    const name = line.speakerName?.trim() || person.name;
+    const t = useTranslations("meetingTranscript");
+    const person = transcriptIdentityFor(identities, line.speakerId, line.speakerName);
+    const name = localizeFarSideSpeakerName(
+      line.speakerId,
+      line.speakerName?.trim() || person.name,
+      t("speaker.googleMeetParticipants"),
+    );
 
     return (
       <motion.p
@@ -278,7 +323,7 @@ const CaptionLine = memo(
         ) : null}
         {/* Plain text, not <AnimatedWords>: the words the eye is on must not still be fading in.
             AnimatedWords stays in the transcript panel, where the reader sets the pace. */}
-        <span>{caption}</span>
+        <span className={pending ? "text-ink-muted" : undefined}>{caption}</span>
       </motion.p>
     );
   },
@@ -289,6 +334,7 @@ const CaptionLine = memo(
     previous.line.speakerId === next.line.speakerId &&
     previous.line.speakerName === next.line.speakerName &&
     previous.caption === next.caption &&
+    previous.pending === next.pending &&
     previous.showSpeaker === next.showSpeaker &&
     previous.dimmed === next.dimmed &&
     previous.reduceMotion === next.reduceMotion &&

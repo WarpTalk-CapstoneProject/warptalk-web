@@ -391,11 +391,24 @@ export function RealtimeNotificationProvider({
         const eventType = (payload?.eventType || payload?.event_type || "").toLowerCase();
         const aiEligible = Boolean(payload?.aiEligible);
 
-        // Only show Document Ready toast when vector ingestion is genuinely completed in Qdrant VectorDB
+        // PO 2026-10-02 — the completion notice for "Loading into WarpBot knowledgebase…". Raised
+        // only from the server's own lifecycle event: "completed" is the embedding worker's
+        // `indexed` result (vectors genuinely in Qdrant), "failed" is its `failed` result or the
+        // guardrail's. The toast id keeps it to one notice per document — the event is broadcast
+        // to both the workspace group and the uploader's user group.
+        const documentKey = payload?.documentId || payload?.id || title;
         if (ingestionStatus === "completed" || eventType === "completed" || aiEligible) {
-          toast.success("Document Ready", {
-            description: `"${title}" has finished processing and is ready to view.`,
+          toast.success("Ready in WarpBot knowledgebase", {
+            id: `document-warpbot-${documentKey}`,
+            description: `WarpBot can now use "${title}".`,
             icon: <FileText className="h-4 w-4 text-emerald-500" />,
+          });
+        } else if (eventType === "documentfailed" || eventType === "failed") {
+          // By event, not by `ingestionStatus === "failed"`: a later rename of a document that
+          // failed earlier carries the same status and must not announce the failure again.
+          toast.error("Couldn't load into WarpBot knowledgebase", {
+            id: `document-warpbot-${documentKey}`,
+            description: `"${title}" could not be loaded. Open the document to see why.`,
           });
         }
       },

@@ -155,8 +155,27 @@ assert.match(
 );
 assert.match(
   lifecycle,
-  /return hasToken && canConnectRoom && !idleReaped;/,
-  "the connect rule itself must stay all three conditions",
+  /return hasToken && canConnectRoom && !idleReaped && !displaced;/,
+  "the connect rule itself must keep all of its conditions",
+);
+// --- Same account on two devices: the evicted session stops instead of evicting back -------
+// LiveKit allows one connection per identity and the hub one connection per (room, user). The
+// evicted tab used to reconnect on its next render and evict the other one, forever, while the
+// stage said "Could not reach the media server" (prod, 1 Oct 2026). See session-displacement.ts.
+assert.match(
+  meetingSession,
+  /idleReaped: meetingIsIdleReaped,\s*\n?\s*displaced: sessionDisplaced,/,
+  "a displaced session must not be allowed to connect LiveKit again until it takes over",
+);
+assert.match(
+  meetingSession,
+  /onDisconnected=\{\(reason\) => \{\s*\n?\s*if \(isDuplicateIdentityDisconnect\(reason\)\) markSessionDisplaced\(\);/,
+  "LiveKit's DUPLICATE_IDENTITY eviction must mark the session displaced",
+);
+assert.match(
+  meetingSession,
+  /connection\.on\("ForceDisconnected"[\s\S]{0,600}?isDisplacedHubReason\(reason\)[\s\S]{0,200}?markSessionDisplaced\(\)[\s\S]{0,40}?return;/,
+  "the hub's 'joined from another device' kick must displace the session, not close the meeting",
 );
 // The LiveKit disconnect alone is not the finish line: an abandoned tab that keeps polling
 // still burns the gateway's 100-req/min/IP budget, whose rejections are bodyless 503s that
@@ -222,7 +241,9 @@ assert.match(
 }
 assert.match(
   meetingSession,
-  /const wanted =\s*isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
+  // W4b: `bridgeAudioOwner` is isBridgeRoom && (this desktop is the bridge capturer) — the host of a
+  // legacy room, or whoever holds the capturer lease of a claimed one.
+  /const wanted =\s*(?:isBridgeRoom && isHost|bridgeAudioOwner) && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
   "an idle reap must also release the stand-in's second LiveKit connection and its capture",
 );
 // WT-828: the far side is transcribed from the moment the meeting opens. Start Translation controls
@@ -236,16 +257,25 @@ assert.match(
     /translation/i,
     "the far side's capture must not wait for Start Translation — the transcript does not",
   );
+  // WT-913: ...and only while the user has not LEFT the Google Meet call. Once they have, what the
+  // browser plays is not the meeting, so this desktop stops listening (its lease lapses and a
+  // member still in the call can take the capture over); rejoining brings it back. `leftCall` is
+  // only ever true after the desktop read the "You left" page — never on "unknown", never on an
+  // older desktop — so nothing that could not be read can stop the far side being heard.
   assert.match(
     meetingSession,
-    /const bridgeListening = Boolean\(room\) && transcriptOpen;/,
-    "the bridge listens exactly while the transcript is open, and never before the room has loaded",
+    /const bridgeListening = Boolean\(room\) && transcriptOpen && !meetFollow\.leftCall;/,
+    "the bridge listens exactly while the transcript is open and the user is still in the Meet call, "
+      + "and never before the room has loaded",
   );
 }
+// W4a: the main window draws no bridge widget any more (WT-868) — the popup over Meet is the only
+// one — so the reaped bridge's Rejoin is the popup's, over the relay: the session must tell it the
+// reaper let go (`idleReaped`) and act on its `rejoin` the way the compact view's Rejoin does.
 assert.match(
   meetingSession,
-  /<ExternalBridgeWidget[\s\S]{0,1200}?idleDisconnected=\{meetingIsIdleReaped\}[\s\S]{0,200}?onRejoin=/,
-  "a reaped bridge must be able to rejoin from its own widget — the compact overlay is never rendered for it",
+  /useBridgeWidgetRelayHost\(\{[\s\S]*?idleReaped: meetingIsIdleReaped,[\s\S]*?onRejoin: \(\) => \{\s*markMeetingInteraction\(\);\s*setIdleDisconnected\(false\);/,
+  "a reaped bridge must be able to rejoin from the popup — the compact overlay is never rendered for it",
 );
 
 // --- WT-303: localParticipant is the only source of truth for mic/camera ------------------
@@ -296,8 +326,9 @@ assert.match(
 );
 assert.match(
   meetingSession,
-  /const meetingRoomIsGone = isRestoredMeetingStale\(\{[\s\S]*?roomLoadFailed: roomQuery\.isError,[\s\S]*?canConnectRoom: canConnectMeeting,/,
-  "a restored room id that no longer resolves must retire the session, not mount a dead panel",
+  /const meetingRoomIsGone = isRestoredMeetingStale\(\{[\s\S]*?roomLoadFailed: roomQuery\.isError,[\s\S]*?roomLoadErrorStatus:[\s\S]*?canConnectRoom: canConnectMeeting,/,
+  "a restored room id that no longer resolves must retire the session, not mount a dead panel - " +
+    "and only on the server's answer (roomLoadErrorStatus), never on a timeout (prod 2026-10-03)",
 );
 assert.doesNotMatch(
   withoutComments(appLayout),

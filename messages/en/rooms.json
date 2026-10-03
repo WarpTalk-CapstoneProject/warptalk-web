@@ -67,10 +67,6 @@
     "collapse": "Collapse",
     "expand": "Expand",
     "workspaceFallback": "Workspace",
-    "bridgeNotice": {
-      "line1": "Your call runs on <meet>Google Meet</meet>. WarpTalk sits beside it: this room gets two seats — you, and one stand-in for everyone on the other side. <src>Source</src> is the language you speak; <tgt>target</tgt> is what the call hears.",
-      "line2": "Needs the two virtual audio devices installed, and Meet pointed at them. The setup check runs when you open the room."
-    },
     "titlePlaceholder": "Meeting title",
     "descriptionPlaceholder": "Add description...",
     "dailyPill": "Daily {time}",
@@ -114,10 +110,7 @@
       "people": "People"
     },
     "language": {
-      "heading": "Meeting languages",
-      "blocked": "Blocked",
-      "blockedReason": "{language} is not allowed by this workspace's language policy.",
-      "blockedFooter": "Blocked languages are not permitted by this workspace's language policy. A workspace admin can change it in workspace settings."
+      "heading": "Meeting languages"
     },
     "options": {
       "dateAndTime": "Date & Time",
@@ -158,7 +151,6 @@
     },
     "templatePicker": {
       "meetingType": "Meeting Type",
-      "translateElsewhere": "Translate a call elsewhere",
       "types": {
         "event": "Event",
         "channelMeeting": "Channel Meeting",
@@ -263,8 +255,9 @@
     "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
   },
   "bridgeFarSide": {
-    "label": "They speak",
-    "ariaLabel": "They speak {language}. Change what the other side of the call speaks",
+    "name": "Language the other side of the call speaks",
+    "ariaLabel": "Language the other side of the call speaks: {language}. Change it",
+    "ariaLabelNotSet": "Language the other side of the call speaks: not set. Choose it",
     "hint": "What the other side of the call speaks",
     "connecting": "Connecting to WarpTalk…",
     "notSet": "Set",
@@ -280,5 +273,160 @@
     "subscriptionExpired": "Workspace subscription expired — translation paused. Ask the workspace owner to renew.",
     "suspended": "Translation stopped: this workspace's AI service is suspended. Ask a workspace owner to check billing.",
     "restored": "Translation is available again — the workspace's billing was restored."
+  },
+  "languagePolicy": {
+    "narrowedTitle": "{dropped} left out of this meeting",
+    "narrowedDescription": "Your workspace no longer allows {dropped}, so this meeting is running in {effective} only. Ask a workspace admin to allow it again, or edit the meeting's languages.",
+    "startRefused": "This meeting can't start: its languages ({meeting}) are no longer allowed by your workspace, which now allows {allowed}. Edit the meeting's languages, or ask a workspace admin to allow these again.",
+    "none": "no languages"
+  },
+  "seriesBlockedNotice": {
+    "title": "\"{title}\" has stopped scheduling",
+    "body": "No new meetings are being created for this series: its languages are no longer allowed by your workspace. Edit the meeting's languages, or ask a workspace admin to allow them again.",
+    "openFailed": "Could not open this series. Try again in a moment."
+  },
+  "bridgeWidget": {
+    "relay": {
+      "waiting": "Connecting to WarpTalk…",
+      "noHost": "WarpTalk isn't running this meeting yet.",
+      "incompatible": "WarpTalk was updated. Reload it to use this here."
+    },
+    "carry": {
+      "asking": "Opening this meeting in WarpTalk…",
+      "failed": "WarpTalk isn't running this meeting, so your language and voice can't be changed from here yet.",
+      "incompatible": "WarpTalk was updated. Reload the WarpTalk window to use these controls.",
+      "show": "Show WarpTalk"
+    },
+    "language": {
+      "connected": "Choose your language"
+    },
+    "listen": {
+      "label": "What you hear",
+      "text": "Text",
+      "voice": "Voice",
+      "textHint": "Text: you read the translation and hear the call as it is.",
+      "voiceHint": "Voice: you hear them translated, with the original quieter underneath.",
+      "prefix": "You hear",
+      "onlyYou": "This only changes what you hear. People in Meet are not affected."
+    },
+    "devices": {
+      "hint": "Opens device setup in the WarpTalk window"
+    },
+    "languagePolicy": {
+      "loading": "Loading your workspace's languages…",
+      "error": "Couldn't load your workspace's languages. Only this meeting's languages are shown."
+    },
+    "startStep": {
+      "title": "Translate this call",
+      "intro": "Pick your language. Everyone else in the call is translated into it for you.",
+      "start": "Start translation",
+      "pickFirst": "Choose your language first",
+      "farSideTitle": "Others in the call speak",
+      "farSideHint": "What the people in Google Meet speak. You can change it later from the people icon.",
+      "farSideAlsoTitle": "Also spoken in the call",
+      "farSideAlsoHint": "Meet hears the dub in {language}. Anyone speaking these is still transcribed and translated for you.",
+      "farSideAlsoFailed": "Could not add that language to the meeting",
+      "waitingForHost": "The meeting host or the person capturing this call starts translation.",
+      "continue": "Continue",
+      "started": "Translation started.",
+      "startFailed": "Failed to start translation.",
+      "notCarried": "Translation started, but WarpTalk could not open this meeting.",
+      "notCarriedDescription": "Open it in the WarpTalk window so your voice and the dub are carried."
+    },
+    "takeover": {
+      "notice": "The person capturing this call's audio has left WarpTalk.",
+      "action": "Capture audio on this device",
+      "done": "This device now captures the call's audio.",
+      "failed": "Could not capture the call's audio on this device.",
+      "failedDescription": "Someone may still be capturing it. Check the WarpTalk window for details."
+    },
+    "audioMode": {
+      "label": "How Meet hears you",
+      "settingsRow": "Meet hears you",
+      "voice": "Translated voice",
+      "text": "Your own voice",
+      "voiceHint": "Meet hears WarpTalk's translation of you through VB-CABLE.",
+      "textHint": "Meet hears your real microphone. You get the transcript and translations as text.",
+      "unknown": "Connecting to WarpTalk…",
+      "voiceNeedsCable": "Translated voice needs VB-CABLE. Install it from Device settings.",
+      "textUnavailable": "Your own voice isn't available on this computer.",
+      "lockedHint": "To switch back to translated voice: press Stop, pick Translated voice here, then press Start again.",
+      "headphones": "Use headphones: your speakers play the call, and your microphone can pick it up.",
+      "nowText": "Meet now hears your own voice.",
+      "nowVoice": "Meet now hears your translated voice.",
+      "locked": "Translated voice is locked while translation runs.",
+      "lockedDescription": "Stop translation first, then switch back.",
+      "failed": "Could not change how Meet hears you.",
+      "failedDescription": "Check the WarpTalk window for details."
+    },
+    "meetMic": {
+      "textOnCable": {
+        "title": "People in the Meet call can't hear you.",
+        "body": "Meet's microphone is set to “CABLE Output”, which only carries your translated voice, and WarpTalk is sending your own voice. In Meet, click the arrow next to the microphone button and choose your real microphone.",
+        "action": "Send my translated voice instead",
+        "locked": "Translated voice can't be switched on while translation is running. Either choose your real microphone in Meet, or press Stop, set ⚙ → “Meet hears you” to Translated voice, and press Start again."
+      },
+      "voiceOnReal": {
+        "title": "People in the Meet call hear you untranslated.",
+        "body": "WarpTalk is sending your translated voice through “CABLE Output”, but Meet's microphone is set to your real one. In Meet, click the arrow next to the microphone button and choose “CABLE Output (VB-Audio Virtual Cable)”.",
+        "action": "Send my own voice instead"
+      }
+    },
+    "meetCaptions": {
+      "title": "Turn on captions (CC) in Google Meet.",
+      "body": "WarpTalk reads speaker names from Meet's captions, and Meet isn't showing any right now. Click CC in Meet's toolbar so the other side's lines show who said them.",
+      "dismiss": "Dismiss"
+    },
+    "meetLeft": {
+      "title": "You left the Meet call. End the WarpTalk room?",
+      "countdown": "Ends automatically in {seconds}s.",
+      "endNow": "End now",
+      "keepOpen": "Keep open",
+      "kept": "Room kept open. WarpTalk is not listening to this call; rejoin in Google Meet to resume.",
+      "titleTabClosed": "The Google Meet tab was closed. End the WarpTalk room?",
+      "retrying": "Could not end the room yet. Trying again in {seconds}s.",
+      "keptTabClosed": "Room kept open. WarpTalk is not listening; reopen the call in Google Meet to resume."
+    },
+    "micChip": {
+      "off": "WarpTalk mic is off",
+      "on": "WarpTalk mic is on",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand.",
+      "followsMeet": "follows Meet's mute button",
+      "overridden": "set by hand until you next use Meet's mute button",
+      "meetHint": "WarpTalk follows Google Meet's mute button. If Meet shows you unmuted and this says off, turn it on here: it stays on until you next press Meet's mute button."
+    },
+    "voiceCloneMode": {
+      "label": "Voice clone mode",
+      "description": "Speak a Meet participant's translation in a copy of their own voice, once you have recorded that they agreed.",
+      "noticeLabel": "Notice for Meet's chat",
+      "notice": "WarpTalk is translating this call. With your OK, it will speak the translation of what you say in a copy of your own voice, for this meeting only. Tell me if you would rather not.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy the notice. Select the text and copy it by hand.",
+      "peopleLabel": "People in the Meet call",
+      "empty": "Names appear here once people speak with Meet captions (CC) on.",
+      "hint": "Tick only the people who said yes. Unticking a name removes that person's voice copy. Turning this mode off does not untick anyone.",
+      "statusFailed": "Could not check who is already ticked.",
+      "retry": "Try again",
+      "saveFailed": "Could not save this choice."
+    },
+    "micDevice": {
+      "settingsRow": "Microphone",
+      "title": "WarpTalk's microphone",
+      "hint": "The microphone WarpTalk listens to. Meet's own microphone stays on “CABLE Output”.",
+      "none": "No microphones found. Plug one in, or allow microphone access.",
+      "unknown": "Not known yet",
+      "virtual": "WarpTalk is recording “{label}”, a virtual cable, not your microphone. Pick your real microphone below."
+    },
+    "rawMic": {
+      "title": "People in Meet hear your own voice, untranslated.",
+      "body": "No translated voice has arrived from WarpTalk yet, so Meet gets your microphone as it is. If this stays, check that translation is running and that your microphone is picked under ⚙ → Microphone."
+    },
+    "meetSpeaker": {
+      "title": "Meet's speaker is set to “CABLE Input”.",
+      "body": "You can't hear the call, and the other side's voice loops back into your microphone. In Meet, open Settings → Audio and set Speakers to your headphones."
+    }
   }
 }

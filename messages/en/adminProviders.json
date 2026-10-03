@@ -22,7 +22,6 @@
     "day": "Daily",
     "hour": "Hourly",
     "hourlyLimit": "Hourly buckets are available for 14 days or less",
-    "currency": "Currency",
     "search": "Search providers",
     "sort": "Sort",
     "sorts": {
@@ -66,7 +65,6 @@
     "usage": "Usage",
     "billedCredits": "Credits billed",
     "costUsd": "Cost",
-    "costVnd": "Cost",
     "calls": "Calls",
     "failures": "Failures",
     "errorRate": "Error rate",
@@ -75,7 +73,7 @@
     "roomMinutes": "Room minutes",
     "recordings": "Recordings",
     "failedPayments": "Failed payments",
-    "volumeVnd": "Payment volume"
+    "volumeUsd": "Payment volume"
   },
   "chart": {
     "metricsLabel": "Metrics to draw",

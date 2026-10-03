@@ -21,7 +21,7 @@
   "stats": {
     "creditsRemaining": {
       "label": "残りクレジット",
-      "granted": "このサイクルで {total} 付与されました。",
+      "granted": "今サイクルで利用可能: {total}。",
       "noAllowance": "このサイクルには割り当てがありません。",
       "spent": "サイクル開始以降 {used} 使用しました。",
       "cycleEnds": "サイクル終了日: {date}"
@@ -30,10 +30,12 @@
       "label": "現在のプラン",
       "noPlan": "有効なプランがありません",
       "pricePerCycle": "サイクルごとに {price}。",
+      "billedMonthly": "月払いです。",
+      "billedYearly": "年払いです。",
       "noBalance": "会議はクレジット残高に対して課金されます。",
       "limits": "1会議あたり参加者{participants}人・{languages}言語。",
       "limitsUnavailable": "プランの上限情報がありません。",
-      "cancelled": "解約済み — {date} に翻訳が停止します。サブスクリプションの管理から再登録できます。",
+      "cancelled": "自動更新オフ — {date} に翻訳が停止します。サブスクリプションの管理から再開できます。",
       "renews": "更新日: {date}"
     }
   },
@@ -64,7 +66,19 @@
     "creditsPerCycle": "{credits} クレジット/サイクル",
     "limits": "参加者{participants}人・{languages}言語",
     "everythingInPlus": "{name} のすべての機能に加えて",
-    "moreCreditsAndLimits": "クレジットと上限がさらに増加"
+    "moreCreditsAndLimits": "クレジットと上限がさらに増加",
+    "title": "プラン",
+    "description": "WarpTalk が公開しているプランです。プランを開くと含まれる内容を確認できます。",
+    "yourPlan": "ご利用中",
+    "seeMore": "詳細を見る",
+    "coreTranslation": "基本のライブ翻訳",
+    "billedYearly": "年額: {total}",
+    "interval": {
+      "ariaLabel": "請求期間",
+      "monthly": "月払い",
+      "yearly": "年払い · {percent}% お得"
+    },
+    "plusVat": "+ {percent}% VAT · お支払い時 {total}"
   },
   "planPanel": {
     "currentPlan": "現在のプラン",
@@ -92,20 +106,20 @@
     "cappedThisCycle": "このサイクルの上限は {cap}",
     "nextCreditRefresh": "次回のクレジット更新",
     "nextBillingDate": "次回請求日",
-    "cancelledNoRenew": "解約済み — このプランは更新されません",
+    "cancelledNoRenew": "自動更新オフ — このプランは更新されません",
     "nextPaymentAmount": "次回請求額",
     "enableOverages": "超過利用を有効にする",
     "recommended": "推奨",
     "modifyPlan": "プランを変更",
     "changePlan": "プランを変更",
     "reactivating": "再開中…",
-    "resubscribe": "再登録",
-    "cancelling": "解約中…",
-    "confirmCancel": "解約を確定",
-    "cancelPlan": "プランを解約",
+    "resubscribe": "自動更新を再開",
+    "cancelling": "オフにしています…",
+    "confirmCancel": "更新停止を確定",
+    "cancelPlan": "更新を停止",
     "managePayments": "支払いを管理",
     "invoices": "請求書",
-    "cancelledNotice": "このワークスペースの翻訳は {date} に停止します。継続するにはそれまでに再登録してください — 現在の期間はすでに支払い済みのため追加費用はかかりません。",
+    "cancelledNotice": "自動更新がオフのため、このワークスペースの翻訳は {date} に停止します。継続するにはそれまでに自動更新をオンに戻してください — 次の期間が始まるまで請求は発生しません。",
     "billingCycle": {
       "yearly": "年払い",
       "semiannual": "半年払い",
@@ -167,5 +181,35 @@
     "failedTitle": "支払いに失敗しました — カードを更新してください",
     "failedBadge": "支払い失敗",
     "failedDescription": "プラン更新のためのカード請求ができませんでした。再試行の間、プランは{date}まで有効です。プランを維持するにはカードを更新してください。"
+  },
+  "meter": {
+    "level": {
+      "ok": "順調",
+      "warn": "残りが少なめ",
+      "critical": "ほぼ使い切り",
+      "full": "付与分を使い切り",
+      "unknown": "付与なし"
+    },
+    "ariaLabel": "このサイクルで使用したクレジット",
+    "ariaValueText": "今サイクルのクレジットの {percent}% を使用、{level}",
+    "paceTitle": "サイクルの経過割合",
+    "usedPercent": "{percent}% 使用",
+    "leftAmount": "残り {left}",
+    "granted": "今サイクルで利用可能: {total}",
+    "noneGranted": "このサイクルにはクレジットがありません。",
+    "paceDay": "サイクル {total} 日中 {day} 日目（{percent}% 経過）。",
+    "paceLasts": "このペースなら、付与分はサイクル終了まで持ちます。",
+    "paceRunsOut": "このペースだと約{days, plural, other {#日}}で使い切り、サイクル終了の{early, plural, other {#日}}前になります。",
+    "paceRunsOutAtEnd": "このペースだと約{days, plural, other {#日}}で使い切り、ちょうどサイクル終了時になります。",
+    "paceRunsOutWithinDay": "このペースだと1日以内に使い切り、サイクル終了の{early, plural, other {#日}}前になります。",
+    "paceRunsOutWithinDayAtEnd": "このペースだと1日以内に使い切り、ちょうどサイクル終了時になります。",
+    "overageRunning": "超過利用中です。付与分を {credits} クレジット超えています。",
+    "overageRunningNoAmount": "超過利用中です。",
+    "allowanceUsedStopped": "付与分を使い切りました。クレジットを追加するかサイクルが更新されるまで、会議は停止します。"
+  },
+  "zone": {
+    "ariaLabel": "セクション",
+    "plans": "プラン",
+    "extras": "クレジットパックとアドオン"
   }
 }

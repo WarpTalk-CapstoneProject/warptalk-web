@@ -114,4 +114,68 @@ assert.ok(
   "The dev preview must render a speaker with a picture AND one without.",
 );
 
+// 6. The Google Meet side of a bridge room is many people behind ONE participant id (the stand-in).
+//    Every name, grouping and colour goes through speaker-identity.ts, so no surface can key them by
+//    the shared id (all Meet lines merge into one turn) or print the roster's seat name ("External
+//    Meeting") over the Meet person the gateway put on the line.
+const display = read("src/lib/transcript/transcript-display.ts");
+const documentReading = read("src/lib/transcript/document-reading.ts");
+const liveOverlay = read("src/components/rooms/live/live-subtitle-overlay.tsx");
+const livePanel = read("src/components/rooms/live/side-panel/transcript-panel.tsx");
+const transcriptsHook = read("src/hooks/use-transcripts.ts");
+// The bridge popup over Meet: the surface where Meet speakers are read most.
+const widgetBubble = read("src/components/rooms/bridge/widget/transcript/widget-transcript-bubble.tsx");
+const catalogs = ["en", "vi", "ja"].map((locale) => [
+  locale,
+  JSON.parse(read(`messages/${locale}/meetingTranscript.json`)),
+]);
+
+assert.ok(
+  /isBridgeStandInSpeaker\(segment\.speakerId\)[\s\S]{0,400}?return transcriptSpeakerDisplayName/.test(display)
+    && display.indexOf("isBridgeStandInSpeaker(segment.speakerId)")
+      < display.indexOf(".find((participant) => participant.userId === segment.speakerId)"),
+  "resolveTranscriptSpeakerName must answer for the Google Meet stand-in BEFORE it asks the roster —"
+    + ' the roster names that seat "External Meeting", and the segment carries the real Meet person.',
+);
+for (const [file, source, minimum] of [
+  ["transcript-display.ts", display, 4],
+  ["document-reading.ts", documentReading, 1],
+  ["live-subtitle-overlay.tsx", liveOverlay, 1],
+]) {
+  const uses = (source.match(/transcriptSpeakerKey\(/g) ?? []).length;
+  assert.ok(
+    uses >= minimum,
+    `${file} must key speakers through transcriptSpeakerKey (found ${uses}, need ${minimum}) — keyed by`
+      + " participant id alone, two Google Meet people merge into one turn under the first one's name.",
+  );
+}
+assert.ok(
+  !/speakerParticipantId \?\? (previous|next|segment|line)\.speakerName/.test(display + documentReading),
+  "A speaker identity must not be rebuilt inline as `speakerParticipantId ?? speakerName` — that is"
+    + " the rule that merged every Meet speaker. Use transcriptSpeakerKey.",
+);
+assert.ok(
+  (panel.match(/speakerLabels/g) ?? []).length >= 6,
+  "The record panel must hand its translated speaker labels to every resolution — rows, turns, the"
+    + " .txt and the .docx — or a Meet line nobody identified prints in English, or as an id.",
+);
+assert.ok(
+  livePanel.includes("useTranscriptSpeakerIdentity(")
+    && widgetBubble.includes("useTranscriptSpeakerIdentity(")
+    && liveOverlay.includes("transcriptIdentityFor("),
+  "The live transcript and the caption lane must draw a Meet line's face from the line, not from the"
+    + " stand-in's roster row — otherwise every Meet speaker is one \"EM\" monogram.",
+);
+for (const [locale, catalog] of catalogs) {
+  assert.ok(
+    typeof catalog.speaker?.googleMeetParticipants === "string" && catalog.speaker.googleMeetParticipants,
+    `messages/${locale}/meetingTranscript.json must carry speaker.googleMeetParticipants.`,
+  );
+}
+assert.ok(
+  /export function useTranscriptSegments[\s\S]{0,1200}?refetchOnWindowFocus: true/.test(transcriptsHook),
+  "Saved segments must re-read on focus: the post-meeting Meet relabel has no realtime event, and"
+    + " without it the record keeps the names it loaded until a hard reload.",
+);
+
 console.log("Transcript speaker contract: PASS");

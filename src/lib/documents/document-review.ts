@@ -78,6 +78,26 @@ export function isPrivate(doc: Pick<WorkspaceDocumentDto, "status">): boolean {
 }
 
 /**
+ * WT-854 — a corrected version of a PUBLISHED document is waiting for a reviewer.
+ *
+ * The document stays published while it waits: readers keep the approved file, and the new one
+ * is only promoted by an approval. So this is a second way a document can need a decision, beside
+ * `pending_approval`, and it does not change `status`.
+ */
+export function hasPendingRevision(
+  doc: Pick<WorkspaceDocumentDto, "pendingRevision">,
+): boolean {
+  return Boolean(doc.pendingRevision);
+}
+
+/** Does this document need a reviewer's decision — a new upload, or a correction to a published one? */
+export function isAwaitingReview(
+  doc: Pick<WorkspaceDocumentDto, "status" | "pendingRevision">,
+): boolean {
+  return isPendingApproval(doc) || (isPublished(doc) && hasPendingRevision(doc));
+}
+
+/**
  * Which documents a tab shows.
  *
  * Archived is excluded from every tab but its own — an archived document is retired, and showing
@@ -85,7 +105,7 @@ export function isPrivate(doc: Pick<WorkspaceDocumentDto, "status">): boolean {
  * mutually exclusive, so a document appears under exactly one of them.
  */
 export function documentMatchesTab(
-  doc: Pick<WorkspaceDocumentDto, "status">,
+  doc: Pick<WorkspaceDocumentDto, "status" | "pendingRevision">,
   tab: DocumentTab,
 ): boolean {
   if (tab === DOCUMENT_TAB.ARCHIVED) return isArchived(doc);
@@ -93,7 +113,10 @@ export function documentMatchesTab(
 
   switch (tab) {
     case DOCUMENT_TAB.PENDING:
-      return isPendingApproval(doc);
+      // WT-854 — a published document with a correction waiting is in BOTH Published (readers
+      // still have it) and Pending (a reviewer still owes a decision). The one exception to the
+      // status tabs being exclusive, because it is the one case where both are true.
+      return isAwaitingReview(doc);
     case DOCUMENT_TAB.REJECTED:
       return isRejected(doc);
     case DOCUMENT_TAB.PUBLISHED:
@@ -117,11 +140,13 @@ export function documentMatchesTab(
  * the reviewer, and an archived or deleted one must not be quietly revived with new contents.
  */
 export function canUploadRevision(
-  doc: Pick<WorkspaceDocumentDto, "status" | "uploadedBy" | "ownerId">,
+  doc: Pick<WorkspaceDocumentDto, "status" | "uploadedBy" | "ownerId" | "pendingRevision">,
   currentUserId: string | null | undefined,
   canApproveDocuments: boolean,
 ): boolean {
   if (!isRejected(doc) && !isPublished(doc)) return false;
+  // WT-854 — one correction under review at a time; the API answers 409 to a second.
+  if (hasPendingRevision(doc)) return false;
 
   const isUploader = Boolean(
     currentUserId &&
@@ -221,4 +246,45 @@ export function isDecisionAction(action: string): boolean {
     action === "UnpublishDocument" ||
     action === "PublishDocument"
   );
+}
+
+/**
+ * Which stored file a document currently points at, as far as the API lets the browser tell.
+ * WT-854, WT-857.
+ *
+ * Since WT-633 a document's file can be replaced IN PLACE — same id, new bytes — by "Upload a
+ * corrected version". The preview cached the downloaded bytes by document id forever, so after a
+ * replacement (and after the approval that follows it) the page kept rendering the first file
+ * until a full reload; on desktop, which has no reload, until the app restarted. When the
+ * replacement was a different format, the old bytes were handed to the new format's reader: a
+ * .docx parsed as a workbook is "This workbook has no sheets to show."
+ *
+ * `updatedAt` is in the key because a replacement with the same name and size is still a new
+ * file. It also moves on an approval or a settings change, which costs one re-download — the
+ * cheap direction to be wrong in.
+ */
+export function documentFileRevision(
+  doc: Pick<WorkspaceDocumentDto, "fileName" | "fileExtension" | "sizeBytes" | "updatedAt">,
+): string {
+  return [doc.fileName, doc.fileExtension, String(doc.sizeBytes), doc.updatedAt].join("|");
+}
+
+/**
+ * WT-854 — the cache identity of the PENDING file, or null when none is waiting.
+ *
+ * Prefixed so it can never equal an approved file's revision: the preview caches bytes by
+ * revision, and the pending file and the approved file are fetched from different routes.
+ */
+export function pendingRevisionFileRevision(
+  doc: Pick<WorkspaceDocumentDto, "pendingRevision">,
+): string | null {
+  const pending = doc.pendingRevision;
+  if (!pending) return null;
+  return [
+    "pending",
+    pending.fileName,
+    pending.fileExtension,
+    String(pending.sizeBytes),
+    pending.uploadedAt,
+  ].join("|");
 }

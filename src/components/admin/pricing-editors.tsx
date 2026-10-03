@@ -31,10 +31,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+import { FeaturesEditor, PresetField } from "@/components/admin/plan-form-controls";
+import { usePlanTax } from "@/hooks/use-plan-tax";
+import { formatPlanPrice, priceWithVat } from "@/lib/billing/plan-display";
+import {
+  parsePlanFeatures,
+  serializePlanFeatures,
+  type PlanFeatures,
+} from "@/lib/billing/plan-features";
+import {
+  INVOICE_GRACE_PRESETS,
+  INVOICE_TERMS_PRESETS,
+  LANGUAGE_PRESETS,
+  PARTICIPANT_PRESETS,
+  lowBalancePresets,
+  overageCapPresets,
+  overagePricePresets,
+  rolloverPresets,
+} from "@/lib/billing/plan-presets";
 import { usePreviewAdminRateCard } from "@/hooks/use-admin-pricing";
 import { getErrorMessage } from "@/lib/api/errors";
-import { formatAdminMoney } from "@/lib/billing/admin-money";
+import { formatMoney } from "@/lib/format/currency";
 import {
   isCreditRateCard,
   parseProviderCostUsd,
@@ -48,7 +65,7 @@ import {
 } from "@/lib/billing/rate-card-preview";
 import {
   PLAN_BILLING_CYCLE,
-  PLAN_CURRENCIES,
+  planCurrencyOptions,
   applyPlanEdits,
   validatePlanRequest,
 } from "@/lib/billing/plan-request";
@@ -164,7 +181,7 @@ type PlanDraft = {
   aiAssistantEnabled: boolean;
   glossaryEnabled: boolean;
   dedicatedGpu: boolean;
-  features: string;
+  features: PlanFeatures;
 };
 
 function draftFromPlan(plan: PlanDto): PlanDraft {
@@ -189,7 +206,7 @@ function draftFromPlan(plan: PlanDto): PlanDraft {
     aiAssistantEnabled: plan.aiAssistantEnabled,
     glossaryEnabled: plan.glossaryEnabled,
     dedicatedGpu: plan.dedicatedGpu,
-    features: plan.features,
+    features: parsePlanFeatures(plan.features),
   };
 }
 
@@ -218,7 +235,7 @@ function editsFromDraft(draft: PlanDraft): Partial<PlanRequest> {
     aiAssistantEnabled: draft.aiAssistantEnabled,
     glossaryEnabled: draft.glossaryEnabled,
     dedicatedGpu: draft.dedicatedGpu,
-    features: draft.features.trim(),
+    features: serializePlanFeatures(draft.features),
   };
 }
 
@@ -280,11 +297,12 @@ const NEW_PLAN_SEED: PlanDto = {
   slug: "",
   tier: "standard",
   price: 0,
-  currency: "VND",
+  // USD is the accounting currency; the per-credit overage default is the backend's (4 VND at 26,300).
+  currency: "USD",
   billingCycle: PLAN_BILLING_CYCLE,
   creditsPerCycle: 0,
   overageCapCredits: 0,
-  overagePricePerCredit: 4,
+  overagePricePerCredit: 0.0001520913,
   lowBalanceThresholdCredits: 0,
   rolloverCapCredits: 0,
   invoiceTermsDays: 15,
@@ -293,7 +311,8 @@ const NEW_PLAN_SEED: PlanDto = {
   sortOrder: 0,
   isActive: true,
   maxParticipants: 10,
-  maxLanguages: 4,
+  // 3, the ceiling ValidatePlanRequest allows; 4 failed the save until it was retyped.
+  maxLanguages: 3,
   voiceCloneEnabled: false,
   aiAssistantEnabled: false,
   glossaryEnabled: false,
@@ -305,11 +324,14 @@ export function PlanCreateDialog({
   onOpenChange,
   onSubmit,
   isSaving,
+  sortOrder = 0,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (request: PlanRequest) => Promise<unknown>;
   isSaving: boolean;
+  /** Where the new plan lands in the ladder: after the last one (there is no field for it). */
+  sortOrder?: number;
 }) {
   const t = useTranslations("adminPlansSettings.pricingEditors.planForm");
   return (
@@ -323,7 +345,7 @@ export function PlanCreateDialog({
         {open ? (
           <PlanEditForm
             key="new-plan"
-            plan={NEW_PLAN_SEED}
+            plan={{ ...NEW_PLAN_SEED, sortOrder }}
             onCancel={() => onOpenChange(false)}
             onSubmit={onSubmit}
             onSaved={() => onOpenChange(false)}
@@ -332,6 +354,34 @@ export function PlanCreateDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * What the buyer is charged for this price on Stripe (3 Oct 2026): prices are stored without VAT
+ * and checkout adds the platform rate. Shown beside the price so nobody types a VAT-inclusive
+ * number into a field that is about to have VAT added to it.
+ */
+function VatPreview({ price, currency }: { price: number; currency: string }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.planForm");
+  const { vatPercent } = usePlanTax();
+  if (vatPercent === null || !Number.isFinite(price)) return null;
+  return (
+    <div className="rounded-lg border border-hairline/60 bg-surface-2/60 px-3 py-2.5 text-[12px] sm:col-span-2">
+      {vatPercent > 0 ? (
+        <>
+          <p className="text-ink">
+            {t("vat.charged", {
+              total: formatPlanPrice(priceWithVat(price, vatPercent, currency), currency),
+              percent: vatPercent,
+            })}
+          </p>
+          <p className="mt-0.5 text-ink-subtle">{t("vat.hint")}</p>
+        </>
+      ) : (
+        <p className="text-ink-subtle">{t("vat.off")}</p>
+      )}
+    </div>
   );
 }
 
@@ -400,14 +450,8 @@ function PlanEditForm({
                   onChange={(event) => set("tier", event.target.value)}
                 />
               </Field>
-              <Field label={t("fields.sortOrder")} htmlFor="plan-sort" hint={t("fields.sortOrderHint")}>
-                <Input
-                  id="plan-sort"
-                  inputMode="numeric"
-                  value={draft.sortOrder}
-                  onChange={(event) => set("sortOrder", event.target.value)}
-                />
-              </Field>
+              {/* No sort-order field: the order is set by dragging cards on the Preview tab
+                  (3 Oct 2026). The stored number is carried through untouched. */}
               <ToggleField
                 label={t("fields.active")}
                 hint={t("fields.activeHint")}
@@ -432,7 +476,7 @@ function PlanEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {planCurrencyOptions(plan.id ? plan.currency : null).map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>
@@ -447,6 +491,7 @@ function PlanEditForm({
               >
                 <Input id="plan-cycle" value={PLAN_BILLING_CYCLE} disabled readOnly />
               </Field>
+              <VatPreview price={toNumber(draft.price)} currency={draft.currency} />
             </Section>
 
             <Section title={t("sections.creditsOverage")}>
@@ -458,84 +503,76 @@ function PlanEditForm({
                   onChange={(event) => set("creditsPerCycle", event.target.value)}
                 />
               </Field>
-              <Field
+              <PresetField
+                id="plan-overage-cap"
                 label={t("fields.overageCap")}
-                htmlFor="plan-overage-cap"
                 hint={t("fields.overageCapHint")}
-              >
-                <Input
-                  id="plan-overage-cap"
-                  inputMode="numeric"
-                  value={draft.overageCapCredits}
-                  onChange={(event) => set("overageCapCredits", event.target.value)}
-                />
-              </Field>
-              <Field label={t("fields.overagePrice")} htmlFor="plan-overage-price">
-                <Input
-                  id="plan-overage-price"
-                  inputMode="decimal"
-                  value={draft.overagePricePerCredit}
-                  onChange={(event) => set("overagePricePerCredit", event.target.value)}
-                />
-              </Field>
-              <Field
+                value={draft.overageCapCredits}
+                options={overageCapPresets(toNumber(draft.creditsPerCycle))}
+                onChange={(value) => set("overageCapCredits", value)}
+              />
+              <PresetField
+                id="plan-overage-price"
+                label={t("fields.overagePrice")}
+                hint={t("fields.overagePriceHint", { currency: draft.currency })}
+                value={draft.overagePricePerCredit}
+                options={overagePricePresets(toNumber(draft.price), toNumber(draft.creditsPerCycle))}
+                onChange={(value) => set("overagePricePerCredit", value)}
+                inputMode="decimal"
+              />
+              <PresetField
+                id="plan-low-balance"
                 label={t("fields.lowBalance")}
-                htmlFor="plan-low-balance"
                 hint={t("fields.lowBalanceHint")}
-              >
-                <Input
-                  id="plan-low-balance"
-                  inputMode="numeric"
-                  value={draft.lowBalanceThresholdCredits}
-                  onChange={(event) => set("lowBalanceThresholdCredits", event.target.value)}
-                />
-              </Field>
-              <Field label={t("fields.rolloverCap")} htmlFor="plan-rollover">
-                <Input
-                  id="plan-rollover"
-                  inputMode="numeric"
-                  value={draft.rolloverCapCredits}
-                  onChange={(event) => set("rolloverCapCredits", event.target.value)}
-                />
-              </Field>
+                value={draft.lowBalanceThresholdCredits}
+                options={lowBalancePresets(toNumber(draft.creditsPerCycle))}
+                onChange={(value) => set("lowBalanceThresholdCredits", value)}
+              />
+              <PresetField
+                id="plan-rollover"
+                label={t("fields.rolloverCap")}
+                hint={t("fields.rolloverCapHint")}
+                value={draft.rolloverCapCredits}
+                options={rolloverPresets(toNumber(draft.creditsPerCycle))}
+                onChange={(value) => set("rolloverCapCredits", value)}
+              />
             </Section>
 
             <Section title={t("sections.invoicing")}>
-              <Field label={t("fields.invoiceTerms")} htmlFor="plan-terms">
-                <Input
-                  id="plan-terms"
-                  inputMode="numeric"
-                  value={draft.invoiceTermsDays}
-                  onChange={(event) => set("invoiceTermsDays", event.target.value)}
-                />
-              </Field>
-              <Field label={t("fields.invoiceGrace")} htmlFor="plan-grace">
-                <Input
-                  id="plan-grace"
-                  inputMode="numeric"
-                  value={draft.invoiceGraceHours}
-                  onChange={(event) => set("invoiceGraceHours", event.target.value)}
-                />
-              </Field>
+              <PresetField
+                id="plan-terms"
+                label={t("fields.invoiceTerms")}
+                hint={t("fields.invoiceTermsHint")}
+                value={draft.invoiceTermsDays}
+                options={INVOICE_TERMS_PRESETS}
+                onChange={(value) => set("invoiceTermsDays", value)}
+              />
+              <PresetField
+                id="plan-grace"
+                label={t("fields.invoiceGrace")}
+                hint={t("fields.invoiceGraceHint")}
+                value={draft.invoiceGraceHours}
+                options={INVOICE_GRACE_PRESETS}
+                onChange={(value) => set("invoiceGraceHours", value)}
+              />
             </Section>
 
             <Section title={t("sections.limits")}>
-              <Field label={t("fields.maxParticipants")} htmlFor="plan-participants">
-                <Input
-                  id="plan-participants"
-                  inputMode="numeric"
-                  value={draft.maxParticipants}
-                  onChange={(event) => set("maxParticipants", event.target.value)}
-                />
-              </Field>
-              <Field label={t("fields.maxLanguages")} htmlFor="plan-languages" hint={t("fields.maxLanguagesHint")}>
-                <Input
-                  id="plan-languages"
-                  inputMode="numeric"
-                  value={draft.maxLanguages}
-                  onChange={(event) => set("maxLanguages", event.target.value)}
-                />
-              </Field>
+              <PresetField
+                id="plan-participants"
+                label={t("fields.maxParticipants")}
+                value={draft.maxParticipants}
+                options={PARTICIPANT_PRESETS}
+                onChange={(value) => set("maxParticipants", value)}
+              />
+              <PresetField
+                id="plan-languages"
+                label={t("fields.maxLanguages")}
+                hint={t("fields.maxLanguagesHint")}
+                value={draft.maxLanguages}
+                options={LANGUAGE_PRESETS}
+                onChange={(value) => set("maxLanguages", value)}
+              />
             </Section>
 
             <Section title={t("sections.entitlements")}>
@@ -559,20 +596,10 @@ function PlanEditForm({
                 checked={draft.dedicatedGpu}
                 onChange={(next) => set("dedicatedGpu", next)}
               />
-              <Field
-                label={t("fields.features")}
-                htmlFor="plan-features"
-                hint={t("fields.featuresHint")}
-                className="sm:col-span-2"
-              >
-                <Textarea
-                  id="plan-features"
-                  rows={3}
-                  className="font-mono text-[12px]"
-                  value={draft.features}
-                  onChange={(event) => set("features", event.target.value)}
-                />
-              </Field>
+              <FeaturesEditor
+                features={draft.features}
+                onChange={(next) => set("features", next)}
+              />
             </Section>
 
         <FormError message={error} />
@@ -797,7 +824,8 @@ function RateCardEditForm({
                   onChange={(event) => set("currency", event.target.value)}
                   className="h-9 w-full rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  {PLAN_CURRENCIES.map((currency) => (
+                  {/* Part of the card's identity: the service matches on it and refuses any other. */}
+                  {[card.currency.toUpperCase()].map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>
@@ -858,29 +886,26 @@ function RateCardEditForm({
               <dd className="text-right tabular-nums text-ink">{preview.result.unitPriceCredits}</dd>
               <dt className="text-ink-muted">{t("preview.customerPrice")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.customerPriceVnd, currency: "VND" })}{" "}
-                {t("preview.vndSuffix")}
+                {formatMoney(preview.result.customerPriceUsd, "USD")}
               </dd>
               <dt className="text-ink-muted">{t("preview.providerCost")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.providerCostVnd, currency: "VND" })}{" "}
-                {t("preview.vndSuffix")}
+                {formatMoney(preview.result.providerCostUsd, "USD")}
               </dd>
               <dt className="text-ink-muted">{t("preview.margin")}</dt>
               <dd
                 className={cn(
                   "text-right font-semibold tabular-nums",
-                  preview.result.marginVnd < 0 ? "text-destructive" : "text-ink",
+                  preview.result.marginUsd < 0 ? "text-destructive" : "text-ink",
                 )}
               >
-                {formatAdminMoney({ amount: preview.result.marginVnd, currency: "VND" })} ·{" "}
+                {formatMoney(preview.result.marginUsd, "USD")} ·{" "}
                 {formatMarginRatio(preview.result.marginRatio)}
               </dd>
               <dt className="col-span-2 mt-1 font-mono text-[10px] text-ink-subtle">
                 {t("preview.formulaLine", {
                   formula: preview.result.formula,
-                  fx: preview.result.fxRateUsdVnd,
-                  credit: preview.result.creditValueVnd,
+                  credit: preview.result.creditValueUsd,
                 })}
               </dt>
             </dl>
@@ -1078,7 +1103,8 @@ function RateCardDeactivateForm({
         <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-muted">
           {card.chargeType} · {card.provider}
           {card.model ? ` · ${card.model}` : ""} · {tRateCard("perUnit", { unit: card.unit })} ·{" "}
-          {formatAdminMoney({ amount: card.unitPrice, currency: card.currency })} ({card.currency})
+          {/* unitPrice is credits per unit on every card; `currency` is only the card's label. */}
+          {card.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 6 })} credits ({card.currency})
         </p>
         <Field label={t("confirmLabel", { chargeType: card.chargeType })} htmlFor="card-deactivate-confirm">
           <Input
@@ -1110,7 +1136,7 @@ function RateCardDeactivateForm({
 /**
  * The knobs this dialog edits, in the order they are read on screen.
  *
- * WT-690: `creditValueVnd` and `minimumPricePerCreditVnd` are deliberately absent. Stripe owns
+ * WT-690: `creditValueUsd` and `minimumPricePerCreditUsd` are deliberately absent. Stripe owns
  * customer pricing; billing still reads both (top-up pricing and the plan/contract price floor),
  * so the request omits them and the backend keeps the stored values.
  *
@@ -1120,7 +1146,6 @@ function RateCardDeactivateForm({
 const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   // No fxRateUsdVnd: the rate is Stripe's, recorded daily; an override is its own explicit action on
   // /admin/settings (PUT /admin/billing/fx/override). Sending it here would read as an override.
-  "minimumContractPriceVnd",
   "minimumContractPriceUsd",
   "salesUsageWeight",
   "salesMembersWeight",

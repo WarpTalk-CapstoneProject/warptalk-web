@@ -1,0 +1,18 @@
+{
+  "title": "Sử dụng",
+  "caption": {
+    "cycle": "Chu kỳ {start} – {end}",
+    "currentCycle": "Chu kỳ thanh toán hiện tại",
+    "followsCycle": "Mức sử dụng tính theo chu kỳ thanh toán hiện tại, không theo khoảng thời gian chọn ở các tab khác."
+  },
+  "state": {
+    "loading": "Đang tải mức sử dụng",
+    "unavailable": "Chưa có dữ liệu",
+    "retry": "Thử lại"
+  },
+  "noSubscription": {
+    "title": "Chưa có gói đang hoạt động",
+    "body": "Mức sử dụng được tính theo từng chu kỳ thanh toán, và workspace này chưa có gói nào. Hãy chọn một gói để bắt đầu chu kỳ.",
+    "action": "Đến trang thanh toán"
+  }
+}

@@ -18,6 +18,29 @@
   "new": "New",
   "gridView": "Grid View",
   "listView": "List View",
+  "listOptions": {
+    "fileType": "File type",
+    "kinds": {
+      "pdf": "PDF",
+      "word": "Word",
+      "spreadsheet": "Spreadsheet",
+      "text": "Text & Markdown",
+      "image": "Image",
+      "other": "Other"
+    },
+    "mineOnly": "Uploaded by me",
+    "clearFilters": "Clear filters",
+    "layout": "Layout",
+    "orderBy": "Order by",
+    "sort": {
+      "modified": "Last modified",
+      "name": "Name",
+      "size": "Size"
+    },
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "resetDisplay": "Reset to default"
+  },
   "empty": {
     "title": "No documents found",
     "descriptionCanUpload": "Use New above to upload a reference document.",
@@ -36,11 +59,12 @@
     "rejected": "Rejected",
     "private": "Private",
     "pendingApproval": "Pending Approval",
+    "revisionPending": "Revision pending",
     "administrative": "Administrative",
-    "aiReady": "AI Ready",
-    "aiFailed": "AI Failed",
-    "aiIngestionFailed": "AI Ingestion Failed",
-    "processingAi": "Processing AI...",
+    "aiReady": "Ready in WarpBot knowledgebase",
+    "aiFailed": "Couldn't load into WarpBot knowledgebase",
+    "aiIngestionFailed": "Couldn't load into WarpBot knowledgebase",
+    "processingAi": "Loading into WarpBot knowledgebase…",
     "aiContext": "AI Context"
   },
   "actions": {
@@ -132,6 +156,14 @@
     "reject": "Reject",
     "rejectTitle": "Reject document",
     "download": "Download",
+    "pendingRevision": {
+      "title": "A corrected version is awaiting review",
+      "body": "{fileName}, uploaded {date}. Everyone keeps reading the approved file until a reviewer approves this one.",
+      "note": "Note from the uploader: {note}",
+      "previewLabel": "Which file to preview",
+      "showApproved": "Approved file",
+      "showPending": "Corrected version"
+    },
     "toasts": {
       "downloadSaved": "File saved successfully!",
       "downloadStarted": "Downloading file...",
@@ -141,10 +173,71 @@
       "approveActionFailed": "Action failed.",
       "revisionSubmitted": "Corrected version submitted for approval.",
       "revisionFailed": "Failed to upload the corrected version.",
+      "revisionApproved": "Corrected version approved. It is now the document.",
+      "revisionRejected": "Corrected version rejected and deleted. Readers keep the approved file.",
       "visibilityChangeFailed": "Failed to change who can see this document.",
       "aiIndexingEnabled": "AI indexing enabled. The document will be re-indexed.",
       "aiIndexingDisabled": "AI indexing disabled. Existing AI copies of this document are being deleted.",
-      "aiIndexingFailed": "Failed to change AI indexing."
+      "aiIndexingFailed": "Failed to change AI indexing.",
+      "rescanStarted": "Re-scan started. The masked copy appears here when it is ready.",
+      "rescanFailed": "Could not start the re-scan."
+    },
+    "masking": {
+      "versionLabel": "Which version to show",
+      "original": "Original",
+      "masked": "Masked",
+      "download": "Download",
+      "downloadMasked": "Download masked copy",
+      "rescan": "Re-scan",
+      "restricted": "Contains personal data",
+      "memberBanner": {
+        "title": "Personal data hidden",
+        "body": "Names, ID numbers, phone numbers and emails in this document have been replaced. This is the version available to you."
+      },
+      "ownerBanner": {
+        "title": "Contains personal data",
+        "body": "Members see a masked copy of this document. Switch to Masked to see exactly what they see."
+      },
+      "viewingMasked": "You are viewing the masked copy that members see.",
+      "pdfLayout": "The masked PDF is rebuilt from the document's text, so the original layout is not kept.",
+      "none": {
+        "title": "No readable version yet",
+        "body": "This document contains personal data and its masked copy is not ready. Ask a workspace owner or admin to re-scan it."
+      },
+      "status": {
+        "pending": {
+          "title": "Creating the masked copy",
+          "detail": "The security scan is running again. This page updates when it finishes."
+        },
+        "notGenerated": {
+          "title": "No masked copy yet",
+          "detail": "This document was restricted before masked copies existed. Re-scan it so members can read it."
+        },
+        "noPiiFound": {
+          "title": "No personal data found",
+          "detail": "The last scan found nothing to hide, so there is no masked copy. Members cannot open this document while it is restricted."
+        },
+        "dlpBlocked": {
+          "title": "Blocked by a banned keyword",
+          "detail": "This document contains a keyword on the workspace blocklist. Hiding personal data would not make it shareable, so members cannot open it."
+        },
+        "unsupportedFormat": {
+          "title": "This format cannot be masked",
+          "detail": "Images and other files without editable text get no masked copy. Members cannot open this document."
+        },
+        "unsupportedContent": {
+          "title": "This file cannot be masked safely",
+          "detail": "It contains parts the masker cannot rewrite, such as macros or pivot caches. Members cannot open this document."
+        },
+        "converterUnavailable": {
+          "title": "PDF converter unavailable",
+          "detail": "The masked PDF could not be rendered. Re-scan once the converter is back."
+        },
+        "failed": {
+          "title": "The masked copy could not be created",
+          "detail": "Nothing was shared with members, because a copy that might still contain personal data is never stored. Re-scan to try again."
+        }
+      }
     }
   }
 }

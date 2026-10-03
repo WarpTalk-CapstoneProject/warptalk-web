@@ -23,6 +23,12 @@ import {
   mediaDeviceLabel,
 } from "@/lib/meeting/media-device-label";
 import type { MediaDeviceKindLabel } from "@/lib/meeting/media-device-label";
+import {
+  rememberSelectedMicrophone,
+  rememberSelectedSpeaker,
+} from "@/lib/meeting/meeting-join-state";
+import { toast } from "sonner";
+import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 
 type DeviceKind = MediaDeviceKindLabel;
 
@@ -67,7 +73,38 @@ function DeviceSection({
                 aria-checked={selected}
                 onClick={async () => {
                   try {
-                    await setActiveMediaDevice(device.deviceId);
+                    // `exact` for every kind (3 Oct 2026). WT-631 switched the microphone as a
+                    // preference (`exact: false`), and a preference is exactly that: the browser
+                    // weighs it against the other capture constraints and may hand back the
+                    // default input instead — silently, with the menu then ticking "Default".
+                    // That was the "I pick a device and it falls back to the default" report.
+                    //
+                    // WT-631's worry was an exact id outliving an unplugged headset. For a live
+                    // microphone livekit-client answers that itself (livekit-client 2.22,
+                    // LocalParticipant.handleTrackEnded): the unplugged device ends the track and
+                    // it is restarted on `deviceId: 'default'`; for a speaker its devicechange
+                    // handler moves to the first output still present. The one gap left is a
+                    // microphone unplugged while MUTED and then unmuted, which now fails to
+                    // restart instead of landing on the default — rare, visible, and fixed by
+                    // picking a device here again, against a silent wrong device on every switch.
+                    // A device that vanishes between this list being drawn and the click throws
+                    // here and says so below, instead of quietly capturing from somewhere else.
+                    await setActiveMediaDevice(device.deviceId, { exact: true });
+                    // WT-631. The switch above lasts as long as this connection. A reload builds
+                    // a new one from the pre-join record, which would put the participant straight
+                    // back on the device they just left — so the pick goes into that record too.
+                    // The meeting bar is only ever rendered by the active meeting's session, so
+                    // the active room is the room this pick belongs to.
+                    const roomId = useActiveMeetingStore.getState().activeRoomId;
+                    if (roomId && kind === "audioinput") {
+                      rememberSelectedMicrophone(window.sessionStorage, roomId, device.deviceId);
+                    } else if (roomId && kind === "audiooutput") {
+                      rememberSelectedSpeaker(window.sessionStorage, roomId, device.deviceId);
+                    }
+                  } catch {
+                    toast.error(
+                      `Could not switch to ${mediaDeviceLabel(device, index, kind)}. It may have been unplugged or be in use by another app.`,
+                    );
                   } finally {
                     // Closed either way. A switch that failed leaves the previous device
                     // active, and holding the menu open would read as "still working".

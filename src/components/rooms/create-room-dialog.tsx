@@ -16,8 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MEETING_TYPES, meetingTypeByValue, isExternalBridge } from "@/lib/meeting/meeting-types";
-import { planBridgeRoomLanguages } from "@/lib/meeting/bridge-far-side-language";
+import { MEETING_TYPES, meetingTypeByValue } from "@/lib/meeting/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -232,12 +231,10 @@ export function CreateRoomDialog() {
   const effectiveRequiresApproval =
     requiresApproval ?? selectedMeetingType.defaults.requiresApproval;
 
-  // WT-525. The one type whose meeting does not happen on WarpTalk: the call is on Google Meet
-  // and WarpTalk sits beside it, so the room is seeded with exactly two seats — the host, and a
-  // stand-in that carries everyone on the far side. Several controls below mean something
-  // different (or nothing) under it, and the host needs to know that before submitting rather
-  // than after the room exists.
-  const bridgeSelected = isExternalBridge(selectedMeetingType.value);
+  // External Meeting (EXTERNAL_BRIDGE) is not offered by this dialog any more — the picker lists
+  // CREATABLE_MEETING_TYPES. A bridge room is created where the Meet call is: by WarpBot (with
+  // the Meet link and calendar event) or by the desktop's Meet auto-detect (bridge-auto-room.ts),
+  // which also plans the far side's language. So there is no bridge branch below.
 
   // An instant meeting: no start time and no repeat rule, i.e. "now". This is the same
   // distinction the server draws at creation — `ScheduledAt.HasValue ? "SCHEDULED" : "WAITING"` —
@@ -340,24 +337,8 @@ export function CreateRoomDialog() {
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      let sourceLanguage = languages[0];
-      let targetLanguages = languages;
-      // A bridge room's second seat is the other side of the external call, and its language is
-      // the only thing that makes the room translate. Positional targets seeded it with the host's
-      // own language (languages[0] is both the source and the first target), so it is now named:
-      // the first declared language that is not the host's, or the workspace-aware default.
-      // Same rule as the desktop's automatic Meet room (lib/meeting/bridge-auto-room).
-      let externalMeetingLanguage: string | undefined;
-      if (bridgeSelected && !editRoomId) {
-        const bridgeLanguages = planBridgeRoomLanguages({
-          speak: sourceLanguage,
-          candidates: languages,
-          allowedLanguages: allowedTargetLanguages ?? [],
-        });
-        sourceLanguage = bridgeLanguages.sourceLanguage;
-        targetLanguages = bridgeLanguages.targetLanguages;
-        externalMeetingLanguage = bridgeLanguages.externalMeetingLanguage;
-      }
+      const sourceLanguage = languages[0];
+      const targetLanguages = languages;
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({
@@ -397,7 +378,6 @@ export function CreateRoomDialog() {
           translationRoomType: (meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0]).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
-          ...(externalMeetingLanguage ? { externalMeetingLanguage } : {}),
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
           // member nullable precisely so "not sent" stays distinguishable from "sent false", and
@@ -594,25 +574,6 @@ export function CreateRoomDialog() {
                   )}
                 </button>
               </div>
-
-              {/* WT-525: what picking External Meeting actually does. Shown here rather than as a
-                  tooltip in the picker because it changes what the rest of this dialog means —
-                  the seat count is fixed at two, and the languages below stop being "what the
-                  room offers" and become "what you speak" and "what the call speaks". */}
-              {bridgeSelected && (
-                <div className="mx-5 mt-1 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2">
-                  <p className="text-[12px] leading-relaxed text-ink-muted">
-                    {t.rich("bridgeNotice.line1", {
-                      meet: (chunks) => <span className="text-ink font-medium">{chunks}</span>,
-                      src: (chunks) => <span className="text-ink">{chunks}</span>,
-                      tgt: (chunks) => <span className="text-ink">{chunks}</span>,
-                    })}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-ink-muted/70">
-                    {t("bridgeNotice.line2")}
-                  </p>
-                </div>
-              )}
 
               {/* Header / Title Input */}
               <div

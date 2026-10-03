@@ -18,12 +18,12 @@ import type { SubscriptionDto } from "@/types/billing";
  * "unchanged", it is "clear the override and fall back to the plan". Build it from the stored
  * subscription (`draftFromSubscription`) so an edit to one field does not reset the other five.
  *
- * `contractPriceVnd` is VND by name and by the server's reading of it — `AdminSubscriptionRevenue`
- * labels it VND regardless of the plan's own currency.
+ * `contractPriceUsd` is USD (the accounting currency) by name and by the server's reading of it —
+ * `AdminSubscriptionRevenue` labels it USD regardless of the plan's own currency.
  */
 export interface ContractTermsRequest {
   creditsPerCycleOverride: number | null;
-  contractPriceVnd: number | null;
+  contractPriceUsd: number | null;
   overageCapCreditsOverride: number | null;
   overagePricePerCreditOverride: number | null;
   invoiceTermsDaysOverride: number | null;
@@ -47,13 +47,16 @@ export interface CreateContractSubscriptionRequest {
  */
 export interface AdminContractSubscriptionDto extends SubscriptionDto {
   creditsPerCycleOverride?: number | null;
-  contractPriceVnd?: number | null;
+  contractPriceUsd?: number | null;
   overageCapCreditsOverride?: number | null;
   overagePricePerCreditOverride?: number | null;
   invoiceTermsDaysOverride?: number | null;
   billingContactEmail?: string | null;
   effectiveCreditsPerCycle?: number;
-  effectiveContractPriceVnd?: number;
+  /** One cycle's price: the negotiated USD price, else the plan's price in the plan's currency. */
+  effectiveContractPrice?: number;
+  /** Upper-case currency of `effectiveContractPrice` ("USD", "VND"). */
+  effectiveContractCurrency?: string;
   effectiveOverageCapCredits?: number;
   effectiveOveragePricePerCredit?: number;
   effectiveInvoiceTermsDays?: number;
@@ -65,7 +68,7 @@ export interface AdminContractSubscriptionDto extends SubscriptionDto {
   trialEndsAt?: string | null;
 }
 
-/** `POST /usages/rate-card/preview`. FX and credit value fall back to the stored config. */
+/** `POST /usages/rate-card/preview`. The credit value falls back to the stored config; no FX is involved. */
 export interface RateCardPreviewRequest {
   providerUnitCostUsd: number;
   markupMultiplier: number;
@@ -75,11 +78,10 @@ export interface RateCardPreviewRequest {
 export interface RateCardPreviewDto {
   unitPriceCredits: number;
   creditsCharged: number;
-  customerPriceVnd: number;
-  providerCostVnd: number;
-  marginVnd: number;
+  customerPriceUsd: number;
+  providerCostUsd: number;
+  marginUsd: number;
   marginRatio: number;
-  fxRateUsdVnd: number;
-  creditValueVnd: number;
+  creditValueUsd: number;
   formula: string;
 }

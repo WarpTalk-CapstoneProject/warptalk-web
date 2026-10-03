@@ -1,6 +1,6 @@
 {
   "absence": {
-    "withheld": "This meeting has a transcript, but it is not shared with you. Only the people who took part can read it — ask the host if you need access.",
+    "withheld": "This meeting has a transcript, but it is not shared with you. The host decides who can read it — ask them if you need access.",
     "unavailable": "The transcript could not be loaded right now. Refresh to try again.",
     "notYet": "The transcript is saved here as the meeting is transcribed.",
     "notKept": "This meeting was set not to keep a transcript. Subtitles and translation ran live, but nothing was saved, so there is no transcript, AI summary or minutes.",
@@ -81,7 +81,8 @@
   "speaker": {
     "you": "You",
     "unknownSpeaker": "Unknown speaker",
-    "unknownSpeakerLower": "unknown speaker"
+    "unknownSpeakerLower": "unknown speaker",
+    "googleMeetParticipants": "Google Meet participants"
   },
   "line": {
     "editAria": "Edit transcript line",
@@ -123,5 +124,51 @@
     "originalTitle": "View original unfiltered transcript. Only changes your view.",
     "showCleanTitle": "Return to clean transcript. Only changes your view.",
     "selfRepair": "The speaker corrected themselves. As said: \"{rawText}\""
+  },
+  "suggestion": {
+    "categories": {
+      "clarification": {
+        "label": "Unanswered",
+        "meaning": "A question that was asked and not answered"
+      },
+      "term": {
+        "label": "Term",
+        "meaning": "A term used in this meeting without being defined"
+      },
+      "action": {
+        "label": "Action",
+        "meaning": "A commitment with no owner or no deadline"
+      },
+      "correction": {
+        "label": "Check",
+        "meaning": "This contradicts something said earlier"
+      },
+      "fact": {
+        "label": "Reference",
+        "meaning": "From a document attached to this meeting"
+      },
+      "other": {
+        "label": "Suggestion",
+        "meaning": "Noticed automatically from what was said"
+      }
+    },
+    "actions": {
+      "askWarpBot": "Ask WarpBot",
+      "researchTerm": "Research this term",
+      "findTermInDocuments": "Find it in our documents",
+      "askQuestion": "Ask WarpBot this",
+      "findWhoKnows": "Find who would know",
+      "checkInDocuments": "Check this in the documents",
+      "checkWhichIsRight": "Check which is right",
+      "draftTask": "Draft this task",
+      "researchTopic": "Research this",
+      "planExecution": "Plan how to do it",
+      "draftGlossaryEntry": "Draft a glossary entry",
+      "verifyOnline": "Verify it on the web",
+      "researchHowTo": "Research how to do it",
+      "findRelatedWork": "Find related work"
+    },
+    "disclaimer": "Generated automatically — check before relying on it.",
+    "dismissAria": "Dismiss suggestion"
   }
 }

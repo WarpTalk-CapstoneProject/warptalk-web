@@ -27,5 +27,14 @@ export function openProviderConsent(url: string): boolean {
   }
   if (parsed.protocol !== "https:") return false;
 
-  return window.open(url, "_blank", "noopener,noreferrer") !== null;
+  // No "noopener" feature here: per the HTML spec it makes window.open return null even when the
+  // window opened, which read as "blocked" on every connect. Sever the opener by hand instead.
+  const opened = window.open(url, "_blank");
+  if (!opened) return false;
+  try {
+    opened.opener = null;
+  } catch {
+    // Cross-origin hardening only; the window is open either way.
+  }
+  return true;
 }

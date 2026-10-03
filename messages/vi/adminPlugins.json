@@ -526,5 +526,174 @@
       "saving": "Đang lưu…",
       "failed": "Chưa thay đổi được. Hãy thử lại."
     }
+  },
+  "warpbotTools": {
+    "eyebrow": "Cấu hình",
+    "title": "Công cụ WarpBot",
+    "description": "WarpBot làm được gì trên nền tảng này, và đã chạy ra sao. Chỉ có số đếm và kết quả: không lưu, không hiện tham số hay câu trả lời.",
+    "refresh": "Làm mới",
+    "tabsLabel": "Chế độ xem công cụ WarpBot",
+    "tabs": {
+      "catalog": "Danh mục",
+      "usage": "Sử dụng"
+    },
+    "source": {
+      "builtin": "Có sẵn",
+      "webSearch": "Tìm kiếm web",
+      "plugin": "Plugin"
+    },
+    "health": {
+      "healthy": "Ổn định",
+      "degraded": "Suy giảm",
+      "failing": "Đang lỗi",
+      "notEnoughCalls": "Chưa đủ lượt gọi"
+    },
+    "catalog": {
+      "loading": "Đang tải…",
+      "usageUnavailable": "Chưa có số lượt gọi.",
+      "pluginsNote": "Công cụ plugin được quản lý theo từng plugin.",
+      "pluginsLink": "Plugin →",
+      "webSearch": {
+        "title": "Tìm kiếm web",
+        "subtitle": "Công cụ do OpenAI vận hành",
+        "flagLabel": "Cờ nền tảng",
+        "flagNoAccess": "Cần quyền settings.read để xem cờ này.",
+        "flagUnavailable": "Không đọc được cài đặt nền tảng.",
+        "flagHint": "Mặc định cho mọi workspace",
+        "flagDenied": "{count} workspace bị cờ tắt",
+        "flagOverrides": "{count} giá trị ghi đè theo gói hoặc workspace",
+        "flagRollout": "triển khai {percent}%",
+        "state": {
+          "on": "Bật",
+          "off": "Tắt",
+          "unknown": "Không rõ"
+        },
+        "changeInSettings": "Đổi trong Cài đặt nền tảng",
+        "openInSettings": "Mở trong Cài đặt nền tảng",
+        "ceilingLabel": "Cài đặt triển khai",
+        "ceilingHint": "Đây là trần: tắt ở bản triển khai AI worker là tắt ở mọi nơi, bất kể cờ. Portal không đọc được giá trị này.",
+        "ceilingNotVisible": "Không xem được ở đây",
+        "usageLabel": "Lượt gọi, 30 ngày qua",
+        "usageLine": "{calls} lượt gọi · {rate} thành công · {workspaces} workspace",
+        "usageNone": "Không có lượt tìm kiếm web nào trong 30 ngày qua."
+      },
+      "builtIn": {
+        "title": "Công cụ có sẵn",
+        "subtitle": "{count} công cụ · định nghĩa trong AI worker; ở đây chỉ đọc",
+        "columns": {
+          "tool": "Công cụ",
+          "description": "Chức năng",
+          "calls": "Lượt gọi, 30 ngày",
+          "success": "Thành công"
+        },
+        "noCopy": "Có trong số liệu sử dụng; chưa có mô tả.",
+        "note": "Đây là bản mô tả công cụ mà web mang theo. Danh sách của từng workspace do AI worker cung cấp, đã lọc theo workspace đó. {webSearch} nằm ở phía trên. Tỉ lệ thành công chỉ tính các lượt công cụ thực sự chạy."
+      }
+    },
+    "usage": {
+      "periodLabel": "Khoảng thời gian",
+      "periods": {
+        "today": "Hôm nay",
+        "7d": "7 ngày",
+        "30d": "30 ngày",
+        "180d": "180 ngày"
+      },
+      "comparison": {
+        "today": "Hôm nay đến giờ (UTC) · so với cùng khoảng trước đó",
+        "7d": "7 ngày qua · so với 7 ngày trước đó",
+        "30d": "30 ngày qua · so với 30 ngày trước đó",
+        "180d": "180 ngày qua · so với 180 ngày trước đó"
+      },
+      "loading": "Đang tải…",
+      "recordingSince": "Lượt gọi công cụ được ghi từ {date}. Những ngày trước đó trống vì chưa ghi, không phải vì không có ai dùng.",
+      "recordingNothingYet": "Chưa ghi lượt gọi công cụ nào.",
+      "privacyNote": "Chỉ hiện số đếm và kết quả. Không lưu, không trả về tham số, câu trả lời hay người gọi.",
+      "unavailable": {
+        "notYetTitle": "Chưa khả dụng",
+        "notYetBody": "Backend này chưa cung cấp số liệu sử dụng công cụ.",
+        "title": "Không tải được số liệu sử dụng công cụ",
+        "body": "Assistant service không phản hồi. Hãy thử lại sau giây lát.",
+        "forbidden": "Vai trò nhân viên của bạn không đọc được số liệu công cụ (plugins.read).",
+        "tryAgain": "Thử lại"
+      },
+      "cards": {
+        "calls": "Lượt gọi công cụ",
+        "successRate": "Tỉ lệ thành công",
+        "failed": "Lỗi",
+        "failedSub": "Lỗi khi đang chạy",
+        "medianDuration": "Thời gian trung vị",
+        "medianDurationSub": "Không đo thời gian tìm kiếm web",
+        "needsSetup": "Cần thiết lập",
+        "needsSetupSub": "Thành viên phải kết nối hoặc sửa quyền",
+        "blocked": "Bị luật chặn",
+        "blockedSub": "Luật của owner hoặc thành viên, không phải lỗi",
+        "awaiting": "Không chạy",
+        "awaitingSub": "Chờ xác nhận hoặc bị từ chối ({declined} bị từ chối)",
+        "degraded": "Công cụ suy giảm",
+        "degradedSub": "trên {count} công cụ được gọi",
+        "noPrevious": "Kỳ trước không có lượt nào",
+        "newSincePrevious": "Mới trong kỳ này",
+        "fromPrevious": "từ {value}",
+        "ratePoints": "{arrow} {points} điểm",
+        "ratePointsFlat": "±0 điểm"
+      },
+      "charts": {
+        "calls": "Lượt gọi",
+        "perDay": "Lượt gọi theo ngày",
+        "perDayAria": "Lượt gọi công cụ theo ngày, chồng theo nguồn",
+        "empty": "Không có lượt gọi công cụ nào trong kỳ này.",
+        "dayTotal": "{calls} lượt gọi",
+        "successRate": "Tỉ lệ thành công",
+        "successRateAria": "Tỉ lệ thành công theo ngày so với mục tiêu",
+        "target": "mục tiêu {percent}%",
+        "noCalls": "Không có lượt gọi",
+        "dayFailed": "{failed} lỗi",
+        "outcomes": "Kết quả",
+        "outcomesAside": "mọi lượt gọi trong kỳ",
+        "byTool": "Lượt gọi theo công cụ",
+        "sourceFilter": "Nguồn",
+        "allSources": "Tất cả"
+      },
+      "outcomes": {
+        "ok": "Thành công",
+        "blocked": "Bị luật chặn",
+        "needsSetup": "Cần thiết lập",
+        "confirmationRequired": "Chờ xác nhận",
+        "declined": "Bị từ chối",
+        "error": "Lỗi"
+      },
+      "failing": {
+        "title": "Lỗi nhiều nhất",
+        "aside": "tỉ lệ lỗi, tối thiểu {min} lượt gọi",
+        "none": "Chưa có công cụ đủ lượt gọi nào bị lỗi.",
+        "detail": "{errors} lỗi trên {ran} lượt chạy"
+      },
+      "health": {
+        "title": "Tình trạng công cụ",
+        "aside": "Ổn định ≥ 95% · Suy giảm 85–95% · Đang lỗi < 85% (tối thiểu {min} lượt gọi)",
+        "note": "Tỉ lệ thành công ở đây chỉ tính các lượt công cụ thực sự chạy. Bị luật chặn và cần thiết lập được tách riêng: đó là luật đang chạy đúng, hoặc việc của thành viên, không phải công cụ lỗi.",
+        "columns": {
+          "tool": "Công cụ",
+          "status": "Trạng thái",
+          "calls": "Lượt gọi",
+          "success": "Thành công",
+          "stopped": "Bị chặn / thiết lập",
+          "median": "Trung vị",
+          "workspaces": "Workspace",
+          "lastCalled": "Gọi gần nhất"
+        }
+      },
+      "workspaces": {
+        "title": "Workspace dùng nhiều nhất",
+        "aside": "theo lượt gọi",
+        "none": "Không có workspace nào gọi công cụ trong kỳ này.",
+        "columns": {
+          "workspace": "Workspace",
+          "calls": "Lượt gọi",
+          "failed": "Lỗi",
+          "failedShare": "Tỉ lệ lỗi"
+        }
+      }
+    }
   }
 }

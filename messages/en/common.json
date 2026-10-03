@@ -28,6 +28,8 @@
       "history": "History",
       "artifacts": "Artifacts",
       "voiceProfiles": "Voice Profiles",
+      "tools": "Tools",
+      "insights": "Insights",
       "dashboard": "Dashboard",
       "members": "Members",
       "documents": "Documents",
@@ -97,6 +99,7 @@
         "team": "Team"
       },
       "items": {
+        "accountSettings": "Account settings",
         "insights": "Insights",
         "inbox": "Inbox",
         "workspaces": "Workspaces",
@@ -114,8 +117,8 @@
         "emailTemplates": "Email templates",
         "platformSettings": "Platform settings",
         "plugins": "Plugins",
+        "warpbotTools": "WarpBot tools",
         "globalGlossary": "Global glossary",
-        "glossaryTemplates": "Glossary templates",
       "staff": "Staff",
       "roles": "Roles",
       "packages": "Packages"
@@ -136,9 +139,10 @@
       "plugins": "Plugins",
       "workspaceSettingsCollapsed": "Workspace settings",
       "workspaceSettingsExpanded": "Workspace Settings",
+      "insights": "Insights",
+      "tools": "Tools",
       "pluginActivity": "Plugin activity",
       "billing": "Billing",
-      "usage": "Usage",
       "invoices": "Invoices",
       "features": "Features",
       "memberRoles": "Member roles",
@@ -218,8 +222,8 @@
         "body": "Who is in this workspace, who is waiting to join, and what each of them may do."
       },
       "dashboard": {
-        "title": "Dashboard",
-        "body": "How fast this workspace is spending its credits, what it is spending them on, and whether the balance reaches the renewal date."
+        "title": "Insights",
+        "body": "Credits, meetings and WarpBot tool calls for the period you pick, with what needs your attention."
       },
       "warpbot": {
         "title": "Ask WarpBot",
@@ -247,8 +251,11 @@
     "nextWeek": "Next week"
   },
   "chatbot": {
+    "stopReply": "Stop",
+    "replyStopped": "Stopped",
     "askWarpBot": "Ask WarpBot",
     "newChat": "New chat",
+    "closeChat": "Close",
     "chatHistory": "Chat history",
     "activePageContext": "Active page context",
     "removePageContext": "Remove page context",
@@ -259,6 +266,9 @@
     "attachFiles": "Attach images or documents",
     "offInThisChat": "Off in this chat",
     "alwaysAllowChanges": "Always allow changes",
+    "alwaysAllowLocked": "Set by workspace Owner",
+    "alwaysAllowLockedHint": "The workspace Owner set this plugin's changes to ask every time or blocked them, so they can't run without asking.",
+    "alwaysAllowPartlyLocked": "Some changes are set by the workspace Owner and still ask or stay blocked.",
     "pluginPermissionSaveFailed": "Could not save WarpBot's permission for {label}.",
     "sendMessage": "Send message",
     "thinking": "Thinking...",
@@ -284,6 +294,8 @@
     "connect": "Connect",
     "useInThisChat": "Use {label} in this chat",
     "noToolsForPage": "No tools for this page. Open a meeting or a document.",
+    "exploreTools": "Explore",
+    "browseAllTools": "Browse WarpBot tools",
     "installPluginsHint": "Install plugins from Personal Settings.",
     "loadingConversations": "Loading conversations…",
     "loadHistoryFailed": "Could not load chat history.",
@@ -342,6 +354,9 @@
       "documentDetail": "Document",
       "documents": "Documents",
       "history": "History",
+      "insights": "Insights",
+      "insightsUsage": "Insights · Usage",
+      "insightsTools": "Insights · Tools",
       "fallback": "Page"
     }
   },

@@ -128,9 +128,30 @@
       "nextMonth": "Next month",
       "currentMonthTitle": "This is the current month",
       "export": "Export",
+      "exportReport": "Report (Word or PDF)…",
+      "exportCsv": "Raw data (.csv)",
       "from": "From",
       "to": "To (inclusive)",
-      "showRange": "Show this range"
+      "showRange": "Show this range",
+      "exportDialog": {
+        "title": "Export report",
+        "description": "A formatted report of the period on screen. Every figure is real data from the dashboard's own sources, in USD.",
+        "format": "Format",
+        "formatDocx": "Word (.docx)",
+        "formatPdf": "PDF (.pdf)",
+        "formatPdfHint": "Converted from the same Word file, so the two always match.",
+        "classification": "Classification",
+        "confidential": "Confidential",
+        "internal": "Internal",
+        "classificationHint": "Printed under the title, in the page header and in the footer.",
+        "contents": "Contents",
+        "includeDaily": "Day-by-day table",
+        "openPeriod": "This period is not closed yet. The report says so on its first page.",
+        "submit": "Export",
+        "cancel": "Cancel",
+        "pdfUnavailable": "PDF conversion is not available on this deployment. Export the Word report instead.",
+        "failed": "The report could not be exported. Try again."
+      }
     },
     "delta": {
       "noFigure": "no figure last period",
@@ -156,7 +177,7 @@
     },
     "mrr": {
       "note": "Monthly recurring revenue",
-      "cannotTotal": "Cannot be totalled in VND"
+      "cannotTotal": "Cannot be totalled in USD"
     },
     "churn": {
       "breakdown": "{cancelled} cancelled / {atMonthStart} at month start",
@@ -165,7 +186,7 @@
     "outstanding": {
       "invoiceCount": "{count, plural, one {# invoice} other {# invoices}}",
       "pastDueCount": "{count, plural, one {# past due} other {# past due}}",
-      "cannotTotal": "amount cannot be totalled in VND",
+      "cannotTotal": "amount cannot be totalled in USD",
       "amountNotTotalled": "Amount not totalled",
       "amountNotTotalledWithNote": "Amount not totalled ({note})",
       "amountOutstanding": "{value} outstanding"

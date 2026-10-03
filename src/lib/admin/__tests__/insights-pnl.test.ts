@@ -65,16 +65,15 @@ test("provider colours follow the provider, never its rank", () => {
   assert.equal(withOthers.unknown, "var(--viz-4)");
 });
 
-test("provider cost series: a day without a rate is a gap in VND, never 0; USD always has a figure", () => {
+test("provider cost series is USD, largest total first, and a day a provider was idle is 0", () => {
   const days = [
-    day("2026-09-01", 0, [{ provider: "openai", credits: 10, costUsd: 1, costVnd: 26_000 }]),
-    day("2026-09-02", 0, [{ provider: "openai", credits: 10, costUsd: 2, costVnd: null }, { provider: "cartesia", credits: 5, costUsd: 3, costVnd: 78_000 }]),
+    day("2026-09-01", 0, [{ provider: "openai", credits: 10, costUsd: 1 }]),
+    day("2026-09-02", 0, [{ provider: "openai", credits: 10, costUsd: 2 }, { provider: "cartesia", credits: 5, costUsd: 3.5 }]),
   ];
-  const vnd = providerCostSeries(days, "VND");
-  assert.deepEqual(vnd.map((s) => s.key), ["cartesia", "openai"]);
-  assert.deepEqual(vnd.find((s) => s.key === "openai")!.values, [26_000, null]);
-  assert.deepEqual(vnd.find((s) => s.key === "cartesia")!.values, [0, 78_000]);
-  assert.deepEqual(providerCostSeries(days, "USD").find((s) => s.key === "openai")!.values, [1, 2]);
+  const series = providerCostSeries(days);
+  assert.deepEqual(series.map((s) => s.key), ["cartesia", "openai"]);
+  assert.deepEqual(series.find((s) => s.key === "openai")!.values, [1, 2]);
+  assert.deepEqual(series.find((s) => s.key === "cartesia")!.values, [0, 3.5]);
 });
 
 test("the FX line says where the rate came from, and warns when it is stale", () => {

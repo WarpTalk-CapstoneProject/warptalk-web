@@ -32,13 +32,17 @@ export const MENTION_NAMESPACES: readonly MentionNamespace[] = [
   "artifact",
 ];
 
-/** What each namespace is typed as, canonical keyword first. */
+/**
+ * What each namespace is typed as, canonical keyword first. The plurals are there because that is
+ * how people reach for them: "@documents:" fell through to a plain search for "documents:" and
+ * matched nothing (3 Oct).
+ */
 const NAMESPACE_KEYWORDS: Record<MentionNamespace, readonly string[]> = {
-  document: ["document", "doc"],
-  meeting: ["meeting", "room"],
-  summary: ["summary"],
-  transcript: ["transcript"],
-  artifact: ["artifact"],
+  document: ["document", "doc", "documents", "docs"],
+  meeting: ["meeting", "room", "meetings", "rooms"],
+  summary: ["summary", "summaries"],
+  transcript: ["transcript", "transcripts"],
+  artifact: ["artifact", "artifacts"],
 };
 
 /**
@@ -53,8 +57,11 @@ export const NAMESPACE_ENTITY_TYPES: Record<MentionNamespace, readonly string[]>
   artifact: ["summary", "transcript"],
 };
 
-const TRIGGER =
-  /(?<![\p{L}\p{N}_.])@(?:(document|doc|meeting|room|summary|transcript|artifact):)?([^\s@]*)$/iu;
+// Built from NAMESPACE_KEYWORDS so a keyword added there cannot be missing here.
+const TRIGGER = new RegExp(
+  `(?<![\\p{L}\\p{N}_.])@(?:(${Object.values(NAMESPACE_KEYWORDS).flat().join("|")}):)?([^\\s@]*)$`,
+  "iu",
+);
 
 export interface MentionTrigger {
   /** Index of the "@" in the text the trigger was read from — where an inserted token begins. */

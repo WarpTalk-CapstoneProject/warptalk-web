@@ -46,6 +46,7 @@ import {
   Spinner,
 } from "@phosphor-icons/react/dist/ssr";
 import { isAxiosError } from "axios";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -90,10 +91,10 @@ import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options
 import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
 /** The short form, for the badge beside the number. */
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft",
-  IN_REVIEW: "Signed by secretary",
-  APPROVED: "Approved",
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  DRAFT: "panel.statusDraft",
+  IN_REVIEW: "panel.statusInReview",
+  APPROVED: "panel.statusApproved",
 };
 
 /**
@@ -103,10 +104,10 @@ const STATUS_LABEL: Record<string, string> = {
  * moment somebody prints or forwards it — which is exactly when being able to tell a draft from
  * a signed document matters. So the status says what is missing, not just what state it is in.
  */
-const DOCUMENT_STATUS: Record<string, string> = {
-  DRAFT: "Draft — not signed and not approved",
-  IN_REVIEW: "Signed by the secretary — not yet approved by the chair",
-  APPROVED: "Approved",
+const DOCUMENT_STATUS_KEYS: Record<string, string> = {
+  DRAFT: "panel.documentStatusDraft",
+  IN_REVIEW: "panel.documentStatusInReview",
+  APPROVED: "panel.documentStatusApproved",
 };
 
 export function MinutesPanel({
@@ -126,6 +127,7 @@ export function MinutesPanel({
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
+  const t = useTranslations("minutes");
   const { data: read, isLoading } = useMeetingMinutes(roomId);
   // WT-651: an unapproved document follows the room's artifactAccess policy, so "not shared with
   // you" is one of the three normal answers here rather than a failure.
@@ -256,7 +258,7 @@ export function MinutesPanel({
           // one that names the languages it does — replacing it with a generic apology is what
           // made this picker look broken rather than bounded.
           toast.error(
-            await readableErrorMessage(error, "Could not read this record in that language."),
+            await readableErrorMessage(error, t("toasts.translationFailed")),
           );
           return true;
         }
@@ -272,7 +274,7 @@ export function MinutesPanel({
             }
             setReadingLanguage(null);
             setFetched(null);
-            toast.error("That reading has not arrived. Try again.");
+            toast.error(t("toasts.translationNotArrived"));
             return;
           }
           void read().then((done) => {
@@ -317,7 +319,7 @@ export function MinutesPanel({
     return (
       <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted">
         <Spinner size={14} className="animate-spin" />
-        Loading minutes…
+        {t("panel.loading")}
       </div>
     );
   }
@@ -326,7 +328,7 @@ export function MinutesPanel({
     return (
       <div className="p-6">
         <div className="max-w-lg space-y-3">
-          <h3 className="text-[14px] font-semibold text-ink">Still a draft</h3>
+          <h3 className="text-[14px] font-semibold text-ink">{t("panel.withheldTitle")}</h3>
           {/* The same distinction summary-absence.ts draws, in this document's own words: the
               minutes exist and are being worked on, and what is missing is permission rather than
               the document. A flat "unauthorized" here would send somebody who WAS at the meeting
@@ -335,9 +337,7 @@ export function MinutesPanel({
               Says what changes it, in the terms the server uses: signing is the act that publishes
               a biên bản, so "once it is signed" is the answer, not "once it is shared". */}
           <p className="text-[13px] leading-relaxed text-ink-muted">
-            These minutes have been drawn up but nobody has signed them yet. A draft stays with the
-            people who can act on it; you will be able to read it here once the host or the
-            secretary signs it.
+            {t("panel.withheldBody")}
           </p>
         </div>
       </div>
@@ -348,11 +348,9 @@ export function MinutesPanel({
     return (
       <div className="p-6">
         <div className="max-w-lg space-y-3">
-          <h3 className="text-[14px] font-semibold text-ink">No minutes yet</h3>
+          <h3 className="text-[14px] font-semibold text-ink">{t("panel.emptyTitle")}</h3>
           <p className="text-[13px] leading-relaxed text-ink-muted">
-            The minutes are drafted from the meeting&apos;s own record — attendees, absences and the
-            times it opened and closed come straight from the room data, and the body comes from the
-            summary. You review and sign; the system does not sign for you.
+            {t("panel.emptyBody")}
           </p>
           {hostAuthority ? (
             // The same Button the Summary tab's "Download summary file" uses, rather than a
@@ -364,7 +362,7 @@ export function MinutesPanel({
               onClick={() =>
                 createDraft.mutate(undefined, {
                   onError: () =>
-                    toast.error("Could not draft the minutes. Has the meeting ended?"),
+                    toast.error(t("toasts.draftFailed")),
                 })
               }
               disabled={createDraft.isPending}
@@ -378,7 +376,7 @@ export function MinutesPanel({
               Draft minutes
             </Button>
           ) : (
-            <p className="text-[12px] text-ink-subtle">Only the meeting chair can draft the minutes.</p>
+            <p className="text-[12px] text-ink-subtle">{t("panel.onlyChairCanDraft")}</p>
           )}
         </div>
       </div>
@@ -461,8 +459,8 @@ export function MinutesPanel({
       const status = isAxiosError(error) ? error.response?.status : undefined;
       toast.error(
         status === 503
-          ? "PDF conversion is unavailable here. The Word file still downloads."
-          : await readableErrorMessage(error, "Could not download the minutes."),
+          ? t("toasts.pdfUnavailable")
+          : await readableErrorMessage(error, t("toasts.downloadFailed")),
       );
     } finally {
       setDownloading(null);
@@ -482,9 +480,9 @@ export function MinutesPanel({
         onSuccess: () => {
           // The response is now the stored document, so the working copy has nothing left to hold.
           setDraft(null);
-          toast.success("Minutes saved.");
+          toast.success(t("toasts.saveSuccess"));
         },
-        onError: (error) => toast.error(getErrorMessage(error, "Could not save the minutes.")),
+        onError: (error) => toast.error(getErrorMessage(error, t("toasts.saveFailed"))),
       },
     );
   }
@@ -503,18 +501,16 @@ export function MinutesPanel({
                 : "bg-surface-2 text-ink-muted",
             )}
           >
-            {STATUS_LABEL[minutes.status] ?? minutes.status}
+            {t(STATUS_LABEL_KEYS[minutes.status] ?? minutes.status)}
           </span>
           {minutes.version > 1 ? (
-            <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
+            <span className="text-[11px] text-ink-subtle">{t("panel.revision", { n: String(minutes.version - 1) })}</span>
           ) : null}
           {/* WT-685: this used to be `toLocaleString("en-US")` in the READER's zone — "9/12/26,
               1:29 PM" beside a document saying 06:29 (UTC+00:00) for the same moment. It now
               reads the way the document below it does: same template, same workspace zone. */}
           <span className="text-[11px] text-ink-subtle">
-            Drafted{" "}
-            {formatDocumentMoment(minutes.createdAt, template, workspaceSettings?.timezone ?? null) ??
-              "—"}
+            {t("panel.draftedAt", { moment: formatDocumentMoment(minutes.createdAt, template, workspaceSettings?.timezone ?? null) ?? "—" })}
           </span>
         </div>
 
@@ -549,7 +545,7 @@ export function MinutesPanel({
                   checked={fileMode === "bilingual"}
                   onChange={(event) => setFileMode(event.target.checked ? "bilingual" : "mono")}
                 />
-                File with the original beside it
+                {t("toolbar.bilingualFile")}
               </label>
             ) : null}
             <Button
@@ -559,7 +555,7 @@ export function MinutesPanel({
               className="h-8 rounded-md text-[11px] shadow-none"
             >
               <Printer size={13} />
-              Print
+              {t("toolbar.print")}
             </Button>
             {/* WT-654 named the layout on this button because the server had only one writer to
                 render with, and a download that ignored the switcher above had to at least say so.
@@ -582,7 +578,7 @@ export function MinutesPanel({
               ) : (
                 <DownloadSimple size={13} />
               )}
-              Download Word
+              {t("toolbar.downloadWord")}
             </Button>
             <Button
               size="sm"
@@ -596,7 +592,7 @@ export function MinutesPanel({
               ) : (
                 <FilePdf size={13} />
               )}
-              Download PDF
+              {t("toolbar.downloadPdf")}
             </Button>
             {/* Sharing is the host's to decide, so the button is theirs alone — a reader who
                 could hand the document on would be deciding for them. */}
@@ -608,7 +604,7 @@ export function MinutesPanel({
                 className="h-8 rounded-md text-[11px] shadow-none"
               >
                 <ShareNetwork size={13} />
-                Share
+                {t("toolbar.share")}
               </Button>
             ) : null}
           </div>
@@ -624,7 +620,7 @@ export function MinutesPanel({
                   disabled={save.isPending}
                   className="h-8 rounded-md text-[11px] shadow-none"
                 >
-                  {save.isPending ? "Saving…" : "Save changes"}
+                  {save.isPending ? t("editing.saving") : t("editing.saveChanges")}
                 </Button>
                 <Button
                   size="sm"
@@ -636,12 +632,12 @@ export function MinutesPanel({
                   Discard
                 </Button>
                 <span className="text-[11px] text-ink-subtle">
-                  Unsaved changes. Timestamps stay attached to their line.
+                  {t("editing.unsavedHint")}
                 </span>
               </>
             ) : editing ? (
               <span className="text-[11px] text-ink-subtle">
-                Click any line with a dashed rule in the document below to edit it.
+                {t("editing.clickToEditHint")}
               </span>
             ) : null}
 
@@ -655,9 +651,9 @@ export function MinutesPanel({
                     { minutesId: minutes.id, participantId },
                     {
                       onSuccess: () =>
-                        toast.success(participantId ? "Secretary assigned." : "Secretary removed."),
+                        toast.success(participantId ? t("toasts.secretaryAssigned") : t("toasts.secretaryRemoved")),
                       onError: (error) =>
-                        toast.error(getErrorMessage(error, "Could not assign the secretary.")),
+                        toast.error(getErrorMessage(error, t("toasts.secretaryAssignFailed"))),
                     },
                   )
                 }
@@ -669,14 +665,14 @@ export function MinutesPanel({
                 size="sm"
                 onClick={() =>
                   sign.mutate(minutes.id, {
-                    onSuccess: () => toast.success("Minutes signed."),
-                    onError: () => toast.error("Could not sign the minutes."),
+                    onSuccess: () => toast.success(t("toasts.signSuccess")),
+                    onError: () => toast.error(t("toasts.signFailed")),
                   })
                 }
                 disabled={sign.isPending}
                 className="h-8 rounded-md text-[11px] shadow-none"
               >
-                Sign as secretary
+                {t("roles.signAsSecretary")}
               </Button>
             ) : null}
 
@@ -685,14 +681,14 @@ export function MinutesPanel({
                 size="sm"
                 onClick={() =>
                   approve.mutate(minutes.id, {
-                    onSuccess: () => toast.success("Minutes approved."),
-                    onError: () => toast.error("Could not approve the minutes."),
+                    onSuccess: () => toast.success(t("toasts.approveSuccess")),
+                    onError: () => toast.error(t("toasts.approveFailed")),
                   })
                 }
                 disabled={approve.isPending}
                 className="h-8 rounded-md text-[11px] shadow-none"
               >
-                Approve as chair
+                {t("roles.approveAsChair")}
               </Button>
             ) : null}
 
@@ -701,8 +697,8 @@ export function MinutesPanel({
                 size="sm"
                 onClick={() =>
                   revise.mutate(minutes.id, {
-                    onSuccess: () => toast.success("Addendum opened."),
-                    onError: () => toast.error("Could not open an addendum."),
+                    onSuccess: () => toast.success(t("toasts.addendumSuccess")),
+                    onError: () => toast.error(t("toasts.addendumFailed")),
                   })
                 }
                 disabled={revise.isPending}
@@ -710,7 +706,7 @@ export function MinutesPanel({
                 className="h-8 rounded-md text-[11px] shadow-none"
               >
                 <ClockCounterClockwise size={14} />
-                Draft an addendum
+                {t("roles.draftAddendum")}
               </Button>
             ) : null}
           </div>
@@ -750,7 +746,7 @@ export function MinutesPanel({
           transcriptKept={room ? (room.settings?.saveTranscript ?? true) : null}
           timeZone={workspaceSettings?.timezone ?? null}
           showGuides={false}
-          statusLabel={DOCUMENT_STATUS[minutes.status] ?? minutes.status}
+          statusLabel={t(DOCUMENT_STATUS_KEYS[minutes.status] ?? minutes.status)}
         />
       </div>
 
@@ -792,18 +788,19 @@ function SecretaryPicker({
   busy: boolean;
   onChange: (participantId: string | null) => void;
 }) {
+  const t = useTranslations("minutes");
   const candidates = attendees.filter((person) => Boolean(person.participantId));
 
   return (
     <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
-      Secretary
+      {t("roles.secretaryLabel")}
       <select
         value={value ?? ""}
         disabled={busy}
         onChange={(event) => onChange(event.target.value || null)}
         className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
       >
-        <option value="">Not assigned</option>
+        <option value="">{t("roles.notAssigned")}</option>
         {candidates.map((person) => (
           <option key={person.participantId} value={person.participantId ?? ""}>
             {person.name}
@@ -848,6 +845,7 @@ function ReadingLanguagePicker({
   disabled: boolean;
   onChange: (language: string) => void;
 }) {
+  const t = useTranslations("minutes");
   // What is carried is always offered, unfiltered; only what would be WRITTEN is narrowed to the
   // meeting's own languages — anything else is refused by the server, and a choice that can only
   // fail is not a choice. Both lists come from the one helper: with `keep` for what the select
@@ -860,7 +858,7 @@ function ReadingLanguagePicker({
     carried.map((code) => normalizeLanguageCode(code)).filter(Boolean),
   );
   // The language the record was drawn up in is already the "As drawn up" reading, so listing it
-  // again under "Written on request" would offer to pay for a translation into itself.
+  // again under t("toolbar.readingGroups.writtenOnRequest") would offer to pay for a translation into itself.
   const primary = normalizeLanguageCode(primaryLanguage ?? "");
   const drawnUp = offered.filter((option) => carriedCodes.has(option.code));
   const writable = offered.filter(
@@ -885,13 +883,13 @@ function ReadingLanguagePicker({
         value={readingCode}
         disabled={disabled || busy}
         onChange={(event) => onChange(event.target.value)}
-        aria-label="Read this record in"
-        title="Read this record in another language"
+        aria-label={t("toolbar.readingAriaLabel")}
+        title={t("toolbar.readingTitle")}
         className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
       >
-        <option value="">As drawn up</option>
+        <option value="">{t("toolbar.readingPlaceholder")}</option>
         {drawnUp.length > 0 ? (
-          <optgroup label="Drawn up in">
+          <optgroup label={t("toolbar.readingGroups.drawnUpIn")}>
             {drawnUp.map((option) => (
               <option key={option.code} value={option.code}>
                 {option.label}
@@ -900,7 +898,7 @@ function ReadingLanguagePicker({
           </optgroup>
         ) : null}
         {writable.length > 0 ? (
-          <optgroup label="Written on request">
+          <optgroup label={t("toolbar.readingGroups.writtenOnRequest")}>
             {writable.map((option) => (
               <option key={option.code} value={option.code}>
                 {option.label}

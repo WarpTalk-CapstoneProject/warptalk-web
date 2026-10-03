@@ -1,9 +1,9 @@
 // WT-690: Stripe owns customer pricing, so the admin portal no longer edits the credit value or the
 // per-credit price floor.
 //
-// Neither value is dead config — billing reads `credit_value_vnd` to turn a top-up's credit count
-// into the Stripe amount, and `minimum_price_per_credit_vnd` is the floor plan and contract prices
-// are validated against. So the backend keeps both stored and makes them OPTIONAL on
+// Neither value is dead config — billing reads `credit_value_usd` to turn a top-up's credit count
+// into the Stripe amount, and `minimum_price_per_credit_usd` is the floor USD plan and contract
+// prices are validated against (both were *_vnd until USD became the accounting currency). So the backend keeps both stored and makes them OPTIONAL on
 // `PUT /usages/pricing-config` (omitted = keep stored). This check pins the web half of that
 // agreement: the dialog must never put either field in the request (sending a stale draft would
 // re-open the knob), and no admin page may render them as editable economics again.
@@ -39,7 +39,7 @@ const check = (label, ok) => {
 const fieldList = editors.match(/const CONFIG_FIELD_KEYS[^=]*=\s*\[([\s\S]*?)\];/);
 check("pricing-editors.tsx still declares CONFIG_FIELD_KEYS", Boolean(fieldList));
 if (fieldList) {
-  for (const key of ["creditValueVnd", "minimumPricePerCreditVnd"]) {
+  for (const key of ["creditValueUsd", "minimumPricePerCreditUsd"]) {
     check(`the pricing dialog does not edit ${key}`, !fieldList[1].includes(`"${key}"`));
   }
   // The FX rate is Stripe's now (billing records it daily). The dialog must not send it: any value
@@ -51,10 +51,10 @@ for (const [name, source] of [
   ["settings", settings],
   ["plans", plans],
 ]) {
-  check(`/admin/${name} does not show the credit value`, !/config\.creditValueVnd/.test(source));
+  check(`/admin/${name} does not show the credit value`, !/config\.creditValueUsd/.test(source));
   check(
     `/admin/${name} does not show the per-credit price floor`,
-    !/config\.minimumPricePerCreditVnd/.test(source),
+    !/config\.minimumPricePerCreditUsd/.test(source),
   );
 }
 
@@ -69,11 +69,11 @@ check("the FX row offers going back to Stripe", /clearOverride/.test(settings));
 const request = types.match(/export interface UpdatePricingConfigRequest \{([\s\S]*?)\n\}/);
 check("UpdatePricingConfigRequest exists", Boolean(request));
 if (request) {
-  check("creditValueVnd is optional on the request", /creditValueVnd\?:/.test(request[1]));
+  check("creditValueUsd is optional on the request", /creditValueUsd\?:/.test(request[1]));
   check("fxRateUsdVnd is optional on the request (omitted = keep Stripe's)", /fxRateUsdVnd\?:/.test(request[1]));
   check(
-    "minimumPricePerCreditVnd is optional on the request",
-    /minimumPricePerCreditVnd\?:/.test(request[1]),
+    "minimumPricePerCreditUsd is optional on the request",
+    /minimumPricePerCreditUsd\?:/.test(request[1]),
   );
 }
 

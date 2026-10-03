@@ -5,6 +5,7 @@ import {
   buildArtifactLibrary,
   countByKind,
   describeAbsence,
+  parseKindParam,
   entryExcerpt,
   entryMatches,
   entryScope,
@@ -675,4 +676,13 @@ test("the raw stored content is kept beside the flattened body, for the document
 test("the meeting's start is its end minus its length", () => {
   const entry = personalLibrary().find((item) => item.id === "t-hosted")!;
   assert.equal(entryStartedAt(entry), "2026-09-01T09:00:00.000Z");
+});
+
+test("parseKindParam accepts only the three known kinds", () => {
+  assert.equal(parseKindParam("transcript"), "transcript");
+  assert.equal(parseKindParam("summary"), "summary");
+  assert.equal(parseKindParam("minutes"), "minutes");
+  assert.equal(parseKindParam("bogus"), null);
+  assert.equal(parseKindParam(""), null);
+  assert.equal(parseKindParam(null), null);
 });
