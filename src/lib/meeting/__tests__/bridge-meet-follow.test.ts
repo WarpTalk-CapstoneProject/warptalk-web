@@ -4,6 +4,8 @@ import test from "node:test";
 import type { MeetCallState, MeetSelfMic } from "../../desktop/bridge.ts";
 import {
   INITIAL_MEET_FOLLOW,
+  MEET_LEAVE_RETRY_BASE_MS,
+  MEET_LEAVE_RETRY_MAX_MS,
   MEET_LEFT_COUNTDOWN_MS,
   acceptsManualMic,
   describeMeetFollowMicReason,
@@ -12,8 +14,11 @@ import {
   meetFollowMicControl,
   meetFollowMicOverridden,
   meetFollowMicTarget,
+  meetLeaveCause,
+  meetLeaveFailureRetryable,
   meetLeaveOutcome,
   meetLeavePrompt,
+  meetLeaveRetryDelayMs,
   meetLeaveSecondsLeft,
   reduceMeetFollow,
   trustedMeetPhase,
@@ -273,4 +278,106 @@ test("the reaper is told the raw phase, unknown included, and nothing for anothe
   assert.equal(trustedMeetPhase(call("in-call"), ROOM_CODE), "in-call");
   assert.equal(trustedMeetPhase(call("unknown", { meetCode: null }), ROOM_CODE), "unknown");
   assert.equal(trustedMeetPhase(null, ROOM_CODE), null);
+});
+
+// ── closing the Meet tab (PO, 2026-10-03) ────────────────────────────────────
+
+test("closing the Meet tab is leaving: the same 30 s countdown, worded for the tab", () => {
+  for (const reason of ["tab-closed", "tab-navigated", "window-closed", "browser-gone"]) {
+    const state = run([callEvent(call("in-call")), callEvent(call("left", { reason }), T0)]);
+    assert.deepEqual(state.leave, { endsAtMs: T0 + MEET_LEFT_COUNTDOWN_MS }, reason);
+    assert.equal(meetLeaveCause(reason), "tab-closed");
+    assert.deepEqual(meetLeavePrompt(state, { mayEndRoom: true }), {
+      state: "countdown",
+      endsAtMs: T0 + MEET_LEFT_COUNTDOWN_MS,
+      cause: "tab-closed",
+    });
+    // Keep open remembers why, so the "kept" line can say it too.
+    const kept = reduceMeetFollow(state, { type: "keep-open" });
+    assert.deepEqual(meetLeavePrompt(kept, { mayEndRoom: true }), { state: "kept", cause: "tab-closed" });
+  }
+});
+
+test("a desktop that sends no tab-gone reason reads exactly as before", () => {
+  // `call()` sends reason "test"; older builds send free text. Neither may change the prompt's shape.
+  assert.equal(meetLeaveCause("test"), "left-call");
+  assert.equal(meetLeaveCause(undefined), "left-call");
+  assert.equal(meetLeaveCause(""), "left-call");
+  const state = run([callEvent(call("in-call")), callEvent(call("left"), T0)]);
+  assert.deepEqual(meetLeavePrompt(state, { mayEndRoom: true }), {
+    state: "countdown",
+    endsAtMs: T0 + MEET_LEFT_COUNTDOWN_MS,
+  });
+});
+
+test("a closed tab for ANOTHER call ends nothing here", () => {
+  const state = run([
+    callEvent(call("in-call")),
+    callEvent(call("left", { reason: "tab-closed", meetCode: "xyz-wxyz-xyz" }), T0),
+  ]);
+  assert.equal(state.leave, null);
+  assert.equal(meetFollowInCall(state), true);
+});
+
+test("the next leave after a tab-closed one is worded by its own cause", () => {
+  const state = run([
+    callEvent(call("in-call")),
+    callEvent(call("left", { reason: "tab-closed" }), T0),
+    callEvent(call("in-call"), T0 + 5_000),
+    callEvent(call("left"), T0 + 10_000),
+  ]);
+  assert.deepEqual(meetLeavePrompt(state, { mayEndRoom: true }), {
+    state: "countdown",
+    endsAtMs: T0 + 10_000 + MEET_LEFT_COUNTDOWN_MS,
+  });
+});
+
+// ── an End that fails is tried again (prod incident 2026-10-03) ──────────────
+
+test("the reported defect: a failed End keeps the leave pending and retries with backoff", () => {
+  const left = run([callEvent(call("in-call")), callEvent(call("left"), T0)]);
+  const deadline = T0 + MEET_LEFT_COUNTDOWN_MS;
+  const once = reduceMeetFollow(left, { type: "leave-failed", now: deadline, retryable: true });
+  assert.deepEqual(once.leave, { endsAtMs: deadline + MEET_LEAVE_RETRY_BASE_MS, failures: 1 });
+  assert.deepEqual(meetLeavePrompt(once, { mayEndRoom: true }), {
+    state: "countdown",
+    endsAtMs: deadline + MEET_LEAVE_RETRY_BASE_MS,
+    retrying: true,
+  });
+  const twice = reduceMeetFollow(once, { type: "leave-failed", now: deadline + 5_000, retryable: true });
+  assert.deepEqual(twice.leave, { endsAtMs: deadline + 5_000 + 2 * MEET_LEAVE_RETRY_BASE_MS, failures: 2 });
+  // And it lands: the countdown is resolved like any other.
+  assert.equal(reduceMeetFollow(twice, { type: "leave-resolved" }).leave, null);
+});
+
+test("the retry delay doubles and is capped", () => {
+  assert.equal(meetLeaveRetryDelayMs(1), 5_000);
+  assert.equal(meetLeaveRetryDelayMs(2), 10_000);
+  assert.equal(meetLeaveRetryDelayMs(3), 20_000);
+  assert.equal(meetLeaveRetryDelayMs(4), 40_000);
+  assert.equal(meetLeaveRetryDelayMs(5), MEET_LEAVE_RETRY_MAX_MS);
+  assert.equal(meetLeaveRetryDelayMs(50), MEET_LEAVE_RETRY_MAX_MS);
+});
+
+test("retrying stops on Keep open, on rejoining, and on an answer no retry will change", () => {
+  const failed = reduceMeetFollow(run([callEvent(call("in-call")), callEvent(call("left"), T0)]), {
+    type: "leave-failed",
+    now: T0 + MEET_LEFT_COUNTDOWN_MS,
+    retryable: true,
+  });
+  assert.equal(reduceMeetFollow(failed, { type: "keep-open" }).leave, null);
+  assert.equal(reduceMeetFollow(failed, callEvent(call("in-call"), T0 + 40_000)).leave, null);
+  assert.equal(
+    reduceMeetFollow(failed, { type: "leave-failed", now: T0 + 40_000, retryable: false }).leave,
+    null,
+  );
+  // A failure arriving after the user already answered or rejoined changes nothing.
+  const rejoined = reduceMeetFollow(failed, callEvent(call("in-call"), T0 + 40_000));
+  assert.equal(reduceMeetFollow(rejoined, { type: "leave-failed", now: T0 + 41_000, retryable: true }), rejoined);
+});
+
+test("only a failure the server has not really answered is retried", () => {
+  assert.equal(meetLeaveFailureRetryable(undefined), true, "timeout / no response");
+  for (const status of [500, 502, 503, 504, 408, 429]) assert.equal(meetLeaveFailureRetryable(status), true);
+  for (const status of [400, 401, 403, 404, 409, 410]) assert.equal(meetLeaveFailureRetryable(status), false);
 });

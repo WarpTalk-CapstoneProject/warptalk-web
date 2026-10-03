@@ -436,6 +436,22 @@ test("WT-913: meetLeave round-trips both states, and an unreadable one is droppe
   }
 });
 
+test("meetLeave carries the tab-closed cause and the retry flag, and drops unknown extras alone", () => {
+  const prompt = { state: "countdown", endsAtMs: 31_000, cause: "tab-closed", retrying: true } as const;
+  assert.deepEqual(buildBridgeWidgetSnapshot({ ...baseFields, meetLeave: prompt }, 1_000).meetLeave, prompt);
+  assert.deepEqual(parsedSnapshot({ meetLeave: prompt }).meetLeave, prompt);
+  assert.deepEqual(parsedSnapshot({ meetLeave: { state: "kept", cause: "tab-closed" } }).meetLeave, {
+    state: "kept",
+    cause: "tab-closed",
+  });
+  // A cause this build does not know, or a retry flag that is not `true`: the plain prompt survives.
+  assert.deepEqual(
+    parsedSnapshot({ meetLeave: { state: "countdown", endsAtMs: 31_000, cause: "teleported", retrying: "yes" } })
+      .meetLeave,
+    { state: "countdown", endsAtMs: 31_000 },
+  );
+});
+
 test("WT-913: the popup asks only while a live main window says the user left", () => {
   const view = connected(parsedSnapshot({ meetLeave: { state: "countdown", endsAtMs: 31_000 } }));
   assert.deepEqual(bridgeWidgetMeetLeave(view), { state: "countdown", endsAtMs: 31_000 });

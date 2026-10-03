@@ -45,7 +45,9 @@
  * LEAVING
  *   The reducer starts the 30 s countdown; this hook only runs the clock and calls
  *   `onLeaveDeadline` when it runs out. What that does (end the room, or leave it) is the
- *   session's, because the session owns the native exit.
+ *   session's, because the session owns the native exit. The session reports back: `resolveLeave`
+ *   when the exit landed, `leaveFailed` when it did not - which moves the deadline out (the
+ *   reducer's backoff) and so re-arms this same timer. No second clock for the retry.
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type RefObject } from "react";
@@ -103,8 +105,10 @@ export type BridgeMeetFollow = {
   setManualMic: (enabled: boolean) => void;
   /** "Keep open". */
   keepOpen: () => void;
-  /** The countdown was acted on. */
+  /** The countdown was acted on and the exit landed. */
   resolveLeave: () => void;
+  /** The exit the countdown ran into failed; `retryable` per meetLeaveFailureRetryable. */
+  leaveFailed: (retryable: boolean) => void;
 };
 
 export function useBridgeMeetFollow({
@@ -249,6 +253,11 @@ export function useBridgeMeetFollow({
     () => dispatch({ roomId, event: { type: "leave-resolved" } }),
     [roomId],
   );
+  const leaveFailed = useCallback(
+    (retryable: boolean) =>
+      dispatch({ roomId, event: { type: "leave-failed", now: Date.now(), retryable } }),
+    [roomId],
+  );
 
   const callPhase =
     enabled && rawCall?.roomId === roomId ? trustedMeetPhase(rawCall.call, roomMeetCode) : null;
@@ -271,7 +280,8 @@ export function useBridgeMeetFollow({
       setManualMic,
       keepOpen,
       resolveLeave,
+      leaveFailed,
     }),
-    [state, callPhase, call, micControl, micOverridden, leftCall, setManualMic, keepOpen, resolveLeave],
+    [state, callPhase, call, micControl, micOverridden, leftCall, setManualMic, keepOpen, resolveLeave, leaveFailed],
   );
 }

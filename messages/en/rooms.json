@@ -382,7 +382,10 @@
       "countdown": "Ends automatically in {seconds}s.",
       "endNow": "End now",
       "keepOpen": "Keep open",
-      "kept": "Room kept open. WarpTalk is not listening to this call; rejoin in Google Meet to resume."
+      "kept": "Room kept open. WarpTalk is not listening to this call; rejoin in Google Meet to resume.",
+      "titleTabClosed": "The Google Meet tab was closed. End the WarpTalk room?",
+      "retrying": "Could not end the room yet. Trying again in {seconds}s.",
+      "keptTabClosed": "Room kept open. WarpTalk is not listening; reopen the call in Google Meet to resume."
     },
     "micChip": {
       "off": "WarpTalk mic is off",

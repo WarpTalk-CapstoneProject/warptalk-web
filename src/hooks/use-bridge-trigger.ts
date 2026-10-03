@@ -178,7 +178,6 @@ export function useBridgeTrigger({
         })
       : null;
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- a latch fed by the room list, not by an event
     if (visibleLatch && visibleLatch !== seenRoomIdRef.current) setSeenRoomId(visibleLatch);
   }, [visibleLatch]);
 
