@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { createPublishSupervisor, type PublishSupervisor } from "@/lib/meeting/publish-supervisor";
 
@@ -10,6 +10,9 @@ import { createPublishSupervisor, type PublishSupervisor } from "@/lib/meeting/p
  *
  * `kick` true brings the next check forward to now: when it turns true, and when the supervisor
  * starts while it is true. It never restarts the loop, so failures and the back-off survive it.
+ *
+ * Returns a stable `kick()` for one-off events that are not a flag (the Meet tab moving to another
+ * browser window): same effect, an immediate check while enabled, nothing otherwise.
  */
 export function useSupervisedPublish({
   enabled,
@@ -22,7 +25,7 @@ export function useSupervisedPublish({
   publish: () => Promise<string> | null;
   /** For the console: "Meet window", "Meet audio". */
   label: string;
-}): void {
+}): () => void {
   const publishRef = useRef(publish);
   useEffect(() => {
     publishRef.current = publish;
@@ -50,4 +53,7 @@ export function useSupervisedPublish({
   useEffect(() => {
     if (enabled && kick) supervisorRef.current?.kick();
   }, [enabled, kick, label]);
+
+  // The supervisor ignores a kick while it is not started, so no `enabled` check is needed here.
+  return useCallback(() => supervisorRef.current?.kick(), []);
 }
