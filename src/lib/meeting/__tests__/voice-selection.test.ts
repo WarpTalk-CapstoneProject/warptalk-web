@@ -80,12 +80,12 @@ test("a dub voice the catalog no longer offers says so", () => {
   assert.match(selection.detail, /not offered for this language/);
 });
 
-test("with no voice of your own, others hear your original voice", () => {
+test("with no voice of your own, listeners get a stand-in voice", () => {
   const selection = describeVoiceSelection({ voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "automatic");
   assert.equal(selection.label, "Off");
-  assert.match(selection.detail, /original voice/);
+  assert.match(selection.detail, /stand-in voice/);
 });
 
 test("a carried-over clone is named without its locale tag", () => {

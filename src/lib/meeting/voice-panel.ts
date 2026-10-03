@@ -120,26 +120,28 @@ export function planVoicePanel({
     };
   }
 
-  // Meeting: the speaker decides how they are heard, and nothing the listener sets overrides it.
-  //
-  // Reported: Kỳ turned voice clone on and Tuấn heard the clone only after turning on his OWN
-  // switch. That switch was this panel's "Voice" (hear translated voice), and "Your voice" sat
-  // behind it — so the one person whose setting should not have mattered had to change it, and
-  // could not even reach their own clone choice until they did. The room now plays a speaker's
-  // dub only when it is in the speaker's own voice (room-audio-routing), whatever the listener
-  // has set, so the switch and the stand-in list no longer change anything and are not offered.
-  // `voiceEnabled` is still accepted so the bridge mode and older callers keep their shape.
-  void voiceEnabled;
-  void canToggleVoice;
+  // Meeting. Two questions, both answered here: how YOU sound (Your voice, always shown) and
+  // whether YOU hear people translated (the switch) — in their clone where they chose one, in a
+  // stand-in voice otherwise. See room-audio-routing. The switch sits at the top with the other
+  // switches, and no longer hides Your voice when it is off. There is no stand-in picker.
+  const hearing = voiceEnabled !== false;
   return {
-    voiceSwitch: null,
+    voiceSwitch: canToggleVoice
+      ? {
+          label: "Hear translated voice",
+          detail: hearing
+            ? "On — in their cloned voice where they turned it on."
+            : "Off — you hear everyone's original voice.",
+          ariaLabel: "Hear translated voice",
+        }
+      : null,
     yourVoice: hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
     listenVoice: null,
-    dividerAfterSwitch: false,
+    dividerAfterSwitch: Boolean(canToggleVoice),
     summaryReadsVoiceEnabled: false,
     automaticOption: {
       label: "Off",
-      detail: "Others hear your original voice",
+      detail: "Listeners hear a stand-in voice",
     },
   };
 }
