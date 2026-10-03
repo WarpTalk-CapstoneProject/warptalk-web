@@ -19,9 +19,11 @@ import {
   DownloadSimple,
   Info,
 } from "@phosphor-icons/react/dist/ssr";
+import axios from "axios";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
 import {
@@ -62,6 +64,7 @@ import {
   providerLabel,
 } from "@/lib/admin/insights-pnl";
 import {
+  browserTimeZone,
   monthKeyLabel,
   seriesAxis,
   type InsightsPeriod,
@@ -71,7 +74,8 @@ import { usageServiceOf } from "@/lib/billing/usage-labels";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatMoney } from "@/lib/format/currency";
 import { downloadBlob } from "@/lib/ui/download-blob";
-import { chartLayout, renderChartPng } from "@/lib/admin/insights-report-charts";
+import { ExportReportDialog, type ReportExportOptions } from "@/components/admin/insights/export-report-dialog";
+import { adminInsightsService } from "@/services/admin-insights.service";
 import { buildInsightsReport, insightsReportFileName } from "@/lib/admin/insights-report";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -103,6 +107,8 @@ export interface PeriodChoice {
 
 export interface InsightsDashboardProps {
   period: ResolvedInsightsPeriod;
+  /** The IANA zone the period's days were cut in (the `tz` the queries carried). Absent = the browser's. */
+  timeZone?: string;
   onChoosePeriod: (choice: PeriodChoice) => void;
   /** Epoch ms of the newest successful read across every source; 0 before the first. */
   updatedAt: number;
@@ -1075,7 +1081,9 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
     ).catch(() => undefined);
   };
 
-  const handleExportReport = () => {
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+
+  const handleExportReport = (options: ReportExportOptions) => {
     // The picker must open inside the click, so the (async) build happens inside the loader.
     void downloadBlob(async () => {
       const [{ buildInsightsReportDocx }] = await Promise.all([import("@/lib/admin/insights-report-docx")]);
@@ -1089,17 +1097,24 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           pnl: props.pnl ? dataOf(props.pnl) : undefined,
         },
         period,
+        new Date(),
+        {
+          timeZone: props.timeZone ?? browserTimeZone(),
+          classification: options.classification,
+          includeDaily: options.includeDaily,
+        },
       );
-      const images: Parameters<typeof buildInsightsReportDocx>[1] = {};
-      for (const chart of report.sections.flatMap((section) => section.charts)) {
-        const data = await renderChartPng(chart);
-        if (data) {
-          const { width, height } = chartLayout(chart);
-          images[chart.id] = { data, width, height };
-        }
-      }
-      return buildInsightsReportDocx(report, images);
-    }, insightsReportFileName(period)).catch(() => undefined);
+      const docx = await buildInsightsReportDocx(report);
+      // The PDF is this very file, converted: one layout, so the two can never disagree.
+      return options.format === "pdf" ? adminInsightsService.convertReportToPdf(docx) : docx;
+    }, insightsReportFileName(period, options.format)).catch((error: unknown) => {
+      // 503: the deployment has no converter. The Word report still works, and the toast says so.
+      toast.error(
+        axios.isAxiosError(error) && error.response?.status === 503
+          ? t("periodBar.exportDialog.pdfUnavailable")
+          : t("periodBar.exportDialog.failed"),
+      );
+    });
   };
 
   const liveState: SourceState<AdminMeetingCountsDto> =
@@ -1233,8 +1248,14 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         key={`${period.period}:${period.customFrom}:${period.customTo}`}
         period={period}
         onChoosePeriod={props.onChoosePeriod}
-        onExportReport={handleExportReport}
+        onExportReport={() => setReportDialogOpen(true)}
         onExportCsv={handleExportCsv}
+      />
+      <ExportReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        periodOpen={!period.closed}
+        onExport={handleExportReport}
       />
 
       {/* Period cards follow the period bar; the rows under them are "right now". */}

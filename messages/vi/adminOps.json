@@ -128,11 +128,30 @@
       "nextMonth": "Tháng sau",
       "currentMonthTitle": "Đây là tháng hiện tại",
       "export": "Xuất dữ liệu",
-      "exportReport": "Báo cáo chi tiết (.docx)",
+      "exportReport": "Báo cáo (Word hoặc PDF)…",
       "exportCsv": "Dữ liệu thô (.csv)",
       "from": "Từ ngày",
       "to": "Đến ngày (bao gồm)",
-      "showRange": "Xem khoảng này"
+      "showRange": "Xem khoảng này",
+      "exportDialog": {
+        "title": "Xuất báo cáo",
+        "description": "Báo cáo định dạng sẵn cho kỳ đang xem. Mọi số liệu là dữ liệu thật từ chính các nguồn của dashboard, tính bằng USD.",
+        "format": "Định dạng",
+        "formatDocx": "Word (.docx)",
+        "formatPdf": "PDF (.pdf)",
+        "formatPdfHint": "Được chuyển đổi từ chính file Word, nên hai bản luôn khớp nhau.",
+        "classification": "Phân loại tài liệu",
+        "confidential": "Mật",
+        "internal": "Nội bộ",
+        "classificationHint": "In dưới tiêu đề, ở đầu trang và ở chân trang.",
+        "contents": "Nội dung",
+        "includeDaily": "Bảng theo từng ngày",
+        "openPeriod": "Kỳ này chưa kết thúc. Báo cáo sẽ ghi rõ điều đó ở trang đầu.",
+        "submit": "Xuất",
+        "cancel": "Huỷ",
+        "pdfUnavailable": "Môi trường này chưa hỗ trợ chuyển sang PDF. Hãy xuất báo cáo Word.",
+        "failed": "Không xuất được báo cáo. Hãy thử lại."
+      }
     },
     "delta": {
       "noFigure": "chưa có số liệu kỳ trước",

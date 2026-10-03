@@ -128,11 +128,30 @@
       "nextMonth": "Next month",
       "currentMonthTitle": "This is the current month",
       "export": "Export",
-      "exportReport": "Report (.docx)",
+      "exportReport": "Report (Word or PDF)…",
       "exportCsv": "Raw data (.csv)",
       "from": "From",
       "to": "To (inclusive)",
-      "showRange": "Show this range"
+      "showRange": "Show this range",
+      "exportDialog": {
+        "title": "Export report",
+        "description": "A formatted report of the period on screen. Every figure is real data from the dashboard's own sources, in USD.",
+        "format": "Format",
+        "formatDocx": "Word (.docx)",
+        "formatPdf": "PDF (.pdf)",
+        "formatPdfHint": "Converted from the same Word file, so the two always match.",
+        "classification": "Classification",
+        "confidential": "Confidential",
+        "internal": "Internal",
+        "classificationHint": "Printed under the title, in the page header and in the footer.",
+        "contents": "Contents",
+        "includeDaily": "Day-by-day table",
+        "openPeriod": "This period is not closed yet. The report says so on its first page.",
+        "submit": "Export",
+        "cancel": "Cancel",
+        "pdfUnavailable": "PDF conversion is not available on this deployment. Export the Word report instead.",
+        "failed": "The report could not be exported. Try again."
+      }
     },
     "delta": {
       "noFigure": "no figure last period",

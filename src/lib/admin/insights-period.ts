@@ -70,6 +70,12 @@ export interface ResolvedInsightsPeriod {
    * so the days still to come are on the axis and drawn blank. Null for the to-now presets.
    */
   axisEndDay: string | null;
+  /**
+   * True when the period has ended: a past month, or a custom range whose last day is over. False
+   * for Today, Last 7 days, 6 months and the current month, whose `to` is only "now" — the figures
+   * will still move. The report prints a warning instead of letting a half month read as a month.
+   */
+  closed: boolean;
   /** Set when the URL asked for something unusable and a default was shown instead. */
   notice: string | null;
 }
@@ -178,6 +184,7 @@ export function resolveInsightsPeriod(
   let label: string;
   let caption: string;
   let axisEndDay: string | null = null;
+  let closed = false;
 
   // Custom is resolved first so an unusable range can fall back to the default month.
   let customFrom = parseDay(params.from);
@@ -231,6 +238,7 @@ export function resolveInsightsPeriod(
       from = start;
       const endExclusive = addDays(endInclusive, 1);
       to = endExclusive.getTime() > now.getTime() ? now : endExclusive;
+      closed = endExclusive.getTime() <= now.getTime();
       const days = Math.round((endExclusive.getTime() - start.getTime()) / DAY_MS);
       label = start.getFullYear() === endInclusive.getFullYear()
         ? `${dayLabel(start)} – ${dayLabel(endInclusive)}, ${endInclusive.getFullYear()}`
@@ -245,6 +253,7 @@ export function resolveInsightsPeriod(
       const monthEnd = addMonths(selectedMonth, 1);
       const isCurrent = selectedMonth.getTime() === currentMonth.getTime();
       to = isCurrent ? now : monthEnd;
+      closed = !isCurrent;
       compare = "previousMonth";
       label = monthLabel(selectedMonth);
       caption = isCurrent
@@ -279,6 +288,7 @@ export function resolveInsightsPeriod(
     customFrom: dayKey(customFrom as Date),
     customTo: dayKey(customTo as Date),
     axisEndDay,
+    closed,
     notice,
   };
 }

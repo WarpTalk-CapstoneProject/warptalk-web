@@ -750,6 +750,8 @@ export const API = {
     workspaces: "/admin/workspaces/insights",
     meetings: "/admin/meetings/insights",
     pnl: "/admin/billing/insights/pnl",
+    /** POST a .docx, get the PDF back (translation-room's Gotenberg converter, billing.read). */
+    reportPdf: "/admin/reports/pdf",
     /** Every WarpBot tool call, platform-wide (assistant service, plugins.read). */
     warpbotTools: "/assistant/admin/insights/tools",
   },
