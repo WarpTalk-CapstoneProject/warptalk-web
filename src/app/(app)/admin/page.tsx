@@ -161,6 +161,7 @@ function InsightsRoute() {
 
   return (
     <InsightsDashboard
+      timeZone={timeZone}
       period={period}
       onChoosePeriod={onChoosePeriod}
       updatedAt={updatedAt}

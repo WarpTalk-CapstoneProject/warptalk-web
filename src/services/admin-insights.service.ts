@@ -52,6 +52,20 @@ export const adminInsightsService = {
     return data;
   },
 
+  /**
+   * The report's Word file, converted to PDF by the server (Gotenberg). The browser sends the very
+   * .docx it just built, so the PDF is that document and not a second layout. 503 = no converter here.
+   */
+  convertReportToPdf: async (docx: Blob): Promise<Blob> => {
+    const { data } = await apiClient.post<Blob>(API.adminInsights.reportPdf, docx, {
+      responseType: "blob",
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+    });
+    return data;
+  },
+
   getFxRate: async (): Promise<FxRateStatusDto> => {
     const { data } = await apiClient.get<FxRateStatusDto>(API.adminFx.status);
     return data;
