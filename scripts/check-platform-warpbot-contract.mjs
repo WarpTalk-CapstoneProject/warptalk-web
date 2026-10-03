@@ -81,7 +81,8 @@ expect(/composerReadiness\(\{[\s\S]*?scope:\s*assistantScope[\s\S]*?\}\)/.test(w
   `${WIDGET}: composerReadiness must be told the scope, or /admin stays blocked on "no workspace".`);
 expect(/readiness\.scope === "platform"\s*\?\s*await createPlatformConversation\.mutateAsync\(\)\s*:\s*await createConversation\.mutateAsync\(readiness\.workspaceId\)/.test(widget),
   `${WIDGET}: a platform turn must create a PLATFORM conversation; a workspace turn a workspace one.`);
-expect(/if \(platformTurn\) \{\s*await sendPlatformMessage\.mutateAsync\(\{ conversationId: convId, content \}\);/.test(widget),
+// `sent =`: the reply's id is kept for Stop (3 Oct 2026); what is sent is unchanged.
+expect(/if \(platformTurn\) \{\s*(?:sent = )?await sendPlatformMessage\.mutateAsync\(\{ conversationId: convId, content \}\);/.test(widget),
   `${WIDGET}: a platform turn must be sent through sendPlatformMessage with text only.`);
 expect(/usePlatformAssistantConversations\(\s*historyMenuOpen && isPlatformScope/.test(widget),
   `${WIDGET}: platform history must be listed from the platform store, only in platform mode.`);

@@ -446,6 +446,8 @@ export const API = {
     conversations: "/assistant/conversations",
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
+    /** POST — Stop a reply still being written. Idempotent once it finished. */
+    stopReply: (id: string, messageId: string) => `/assistant/conversations/${id}/messages/${messageId}/stop`,
     /**
      * Platform-scope WarpBot (system admins, admin portal). A separate store behind the
      * system-admin policy — never the workspace routes above with an empty workspace id.
@@ -454,6 +456,8 @@ export const API = {
       conversations: "/assistant/platform/conversations",
       conversation: (id: string) => `/assistant/platform/conversations/${id}`,
       sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
+      stopReply: (id: string, messageId: string) =>
+        `/assistant/platform/conversations/${id}/messages/${messageId}/stop`,
     },
     skills: "/assistant/skills",
     /** GET ?workspaceId= — WarpBot's built-in tools, web search state and offered plugin tools. */
