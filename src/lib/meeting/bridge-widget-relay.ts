@@ -58,7 +58,9 @@
  *                    answer-meet-left         { end }                 WT-913: "End now" (true) or
  *                                                                     "Keep open" (false), after the
  *                                                                     user left the Meet call
- *                    (reserved: set-mic-device { deviceId } — not accepted yet)
+ *                    set-mic-device           { deviceId }            voice mode: the microphone WarpTalk
+ *                                                                     records, picked in the popup
+ *                                                                     (lib/meeting/bridge-mic-device)
  *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
  *                                                 micDeviceId?, browserCapture, voice?,
  *                                                 inboundHealth?, translation?, transcriptPause?,
@@ -66,7 +68,8 @@
  *                                                 meetingError?, idleReaped?, connection?,
  *                                                 isRoomHost?, roomEnded?, bridgeRole?,
  *                                                 bridgeCapturerAway?, audioMode?, sessionDisplaced?,
- *                                                 meetCaptionsOff?, mic?, meetLeave?, at }
+ *                                                 meetCaptionsOff?, mic?, meetLeave?, outbound?,
+ *                                                 at }
  *                    host-gone                the main window left this room's meeting
  *
  *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
@@ -135,6 +138,14 @@
  *       (`acceptsMeetLeftAnswer`).
  *   Both optional and forgiving like the WT-901 fields.
  *
+ *   Translated-voice bridge (PO, 2026-10-03): devices are picked in the popup, never in Meet, once
+ *   Meet's microphone is on the cable. `micDeviceId` (always in the snapshot, now filled) is the
+ *   microphone WarpTalk records; `set-mic-device` switches it on the live call. `outbound` is what
+ *   Meet hears from this person — the dub, the untranslated microphone, or nothing — and since
+ *   when, so the popup can say when Meet has been hearing them untranslated for too long
+ *   (lib/meeting/bridge-mic-device). Optional and forgiving like the WT-901 fields; the popup offers
+ *   the picker only to a main window whose snapshot carries `micDeviceId`.
+ *
  * VERSIONING
  *   `v` changes only when an EXISTING message changes shape. A new message type does not need a
  *   bump: receivers drop types they do not know ("unknown-type"), so an older window ignores a
@@ -153,6 +164,7 @@ import { applySingleLanguageChoice, describeLanguageChoice } from "./language-ch
 import { isBridgeRole, type BridgeRole } from "./bridge-capturer.ts";
 import { isBridgeAudioMode, type BridgeAudioMode } from "./bridge-audio-mode.ts";
 import type { MeetLeavePrompt, MeetMicControl } from "./bridge-meet-follow.ts";
+import type { BridgeOutboundLeg } from "./bridge-mic-device.ts";
 
 export const BRIDGE_WIDGET_RELAY_VERSION = 1;
 
@@ -274,11 +286,15 @@ export type BridgeWidgetSnapshot = {
    * `endsAtMs` unless told otherwise; "kept": the room was kept open. Absent: nothing to ask.
    */
   meetLeave?: MeetLeavePrompt;
+  /** What Meet hears from this person, and since when (main-window clock). See the header. */
+  outbound?: BridgeWidgetOutboundSnapshot;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
 };
 
 export type BridgeWidgetMicSnapshot = { enabled: boolean; control: MeetMicControl };
+
+export type BridgeWidgetOutboundSnapshot = { leg: BridgeOutboundLeg; sinceMs: number };
 
 export type BridgeWidgetTranslationSnapshot = { started: boolean };
 
@@ -335,9 +351,8 @@ export type BridgeWidgetIntent =
   | { type: "set-audio-mode"; mode: BridgeAudioMode }
   | { type: "take-over-session" }
   | { type: "set-mic-enabled"; enabled: boolean }
-  | { type: "answer-meet-left"; end: boolean };
-// Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
-// INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
+  | { type: "answer-meet-left"; end: boolean }
+  | { type: "set-mic-device"; deviceId: string };
 
 /** Main → popup. */
 export type BridgeWidgetHostMessage =
@@ -383,6 +398,7 @@ const INTENT_TYPES = new Set<string>([
   "take-over-session",
   "set-mic-enabled",
   "answer-meet-left",
+  "set-mic-device",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
 
@@ -396,6 +412,7 @@ const MEETING_CONNECTIONS = new Set<string>(
   ["connecting", "connected", "reconnecting", "disconnected"] satisfies BridgeWidgetMeetingConnection[],
 );
 const MIC_CONTROLS = new Set<string>(["meet", "manual", "none"] satisfies MeetMicControl[]);
+const OUTBOUND_LEGS = new Set<string>(["dub", "raw-mic", "none"] satisfies BridgeOutboundLeg[]);
 /** A sentence for a person, from another window: bounded so it cannot flood the popup. */
 const MEETING_ERROR_MAX = 500;
 const CREDITS_REASON_MAX = 64;
@@ -421,6 +438,12 @@ function parseMic(raw: unknown): BridgeWidgetMicSnapshot | null {
   if (!isRecord(raw) || typeof raw.enabled !== "boolean") return null;
   if (typeof raw.control !== "string" || !MIC_CONTROLS.has(raw.control)) return null;
   return { enabled: raw.enabled, control: raw.control as MeetMicControl };
+}
+
+function parseOutbound(raw: unknown): BridgeWidgetOutboundSnapshot | null {
+  if (!isRecord(raw) || typeof raw.leg !== "string" || !OUTBOUND_LEGS.has(raw.leg)) return null;
+  if (typeof raw.sinceMs !== "number" || !Number.isFinite(raw.sinceMs) || raw.sinceMs < 0) return null;
+  return { leg: raw.leg as BridgeOutboundLeg, sinceMs: raw.sinceMs };
 }
 
 function parseMeetLeave(raw: unknown): MeetLeavePrompt | null {
@@ -472,6 +495,8 @@ function parseMeetingFields(raw: Record<string, unknown>, snapshot: BridgeWidget
   if (mic) snapshot.mic = mic;
   const meetLeave = parseMeetLeave(raw.meetLeave);
   if (meetLeave) snapshot.meetLeave = meetLeave;
+  const outbound = parseOutbound(raw.outbound);
+  if (outbound) snapshot.outbound = outbound;
 }
 
 /** A language code, or null when the value is not one. Bounded: it came from another window. */
@@ -606,6 +631,10 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return typeof raw.enabled === "boolean" ? { type: "set-mic-enabled", enabled: raw.enabled } : null;
     case "answer-meet-left":
       return typeof raw.end === "boolean" ? { type: "answer-meet-left", end: raw.end } : null;
+    case "set-mic-device": {
+      const deviceId = opaqueId(raw.deviceId);
+      return deviceId ? { type: "set-mic-device", deviceId } : null;
+    }
     case "snapshot": {
       const snapshot = parseSnapshot(raw);
       return snapshot ? { type: "snapshot", ...snapshot } : null;
@@ -719,6 +748,8 @@ export type BridgeWidgetSnapshotFields = {
   mic?: BridgeWidgetMicSnapshot;
   /** WT-913: see `BridgeWidgetSnapshot.meetLeave`. */
   meetLeave?: MeetLeavePrompt;
+  /** See `BridgeWidgetSnapshot.outbound`. */
+  outbound?: BridgeWidgetOutboundSnapshot;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -769,6 +800,7 @@ export function buildBridgeWidgetSnapshot(
         ? { state: "countdown", endsAtMs: fields.meetLeave.endsAtMs }
         : { state: "kept" };
   }
+  if (fields.outbound) snapshot.outbound = { leg: fields.outbound.leg, sinceMs: fields.outbound.sinceMs };
   return snapshot;
 }
 
