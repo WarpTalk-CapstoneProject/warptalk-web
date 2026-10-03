@@ -86,12 +86,6 @@ export type RoomAudioRoutingInput = {
    * previouslyDubbedSpeakerIds.
    */
   previouslyDubbedOutbound?: boolean;
-  /**
-   * identity -> the `warptalk.voice` attribute each interpreter bot sets (tts_worker
-   * VOICE_KIND_ATTRIBUTE): "cloned" | "profile" | "default" | "preference". Absent for a bot from
-   * a pipeline that predates the attribute, which keeps the old rule.
-   */
-  dubVoiceKindByIdentity?: Readonly<Record<string, string>>;
 };
 
 export type RoomAudioRouting = {
@@ -107,11 +101,6 @@ export type RoomAudioRouting = {
    * into Meet at a time.
    */
   outboundRawMic: boolean;
-  /**
-   * Speakers whose own microphone is played UNDER their dub, at ORIGINAL_UNDER_DUB_VOLUME, rather
-   * than at full volume. Only ever speakers dubbed in their own voice, in a meeting room.
-   */
-  duckedSpeakerIds: ReadonlySet<string>;
 };
 
 /** A speaker's interpreter track in ANY language: the language it is in, and whether it is the default voice. */
@@ -166,17 +155,6 @@ export function findOutboundDubIdentity({
   );
 }
 
-/** The participant attribute each interpreter bot sets — tts_worker VOICE_KIND_ATTRIBUTE. */
-export const DUB_VOICE_ATTRIBUTE = "warptalk.voice";
-
-/** How loud a speaker's original voice plays beneath their cloned dub: present, not competing. */
-export const ORIGINAL_UNDER_DUB_VOLUME = 0.3;
-
-/** A dub in the speaker's OWN voice — cloned from them, or a voice they picked for themselves. */
-export function isOwnVoiceKind(kind: string | null | undefined): boolean {
-  return kind === "cloned" || kind === "profile";
-}
-
 export function routeRoomAudio({
   identities,
   targetLanguageNormalized,
@@ -189,7 +167,6 @@ export function routeRoomAudio({
   bridgeStandInIdentity,
   previouslyDubbedSpeakerIds,
   previouslyDubbedOutbound = false,
-  dubVoiceKindByIdentity,
 }: RoomAudioRoutingInput): RoomAudioRouting {
   const standIn = bridgeStandInIdentity || null;
   const farSideLanguage = standIn ? speakerLanguageByUserId[standIn] || null : null;
@@ -228,44 +205,15 @@ export function routeRoomAudio({
         })
       : null;
 
-  // THE SPEAKER DECIDES (reported: Kỳ turned voice clone on and Tuấn heard the clone only once
-  // Tuấn turned HIS switch on too). In a meeting room a dub is played only when it is in the
-  // speaker's own voice, whatever the listener has set, and the speaker's original stays audible
-  // beneath it, quieter. A speaker without a voice of their own is heard as they actually sound.
-  //
-  // Only where the pipeline reports voice kinds at all: until the AI side is deployed no bot
-  // carries the attribute, and the rule below is the one that has always run. Bridge rooms keep
-  // their own rules — the far side's dub is the only way the host understands them, and it is
-  // never in the far side's own voice.
-  const isBridgeRoom = Boolean(standIn) || bridgeOutboundReady;
-  const kindOf = (identity: string): string | undefined => dubVoiceKindByIdentity?.[identity] || undefined;
-  const speakerOwnedVoice =
-    !isBridgeRoom && identities.some((identity) => identity.startsWith(AI_INTERPRETER_PREFIX) && kindOf(identity));
-  // REVISED BY THE OWNER, 4 Oct 2026, after that release: the LISTENER decides. With their switch
-  // (`voiceEnabled`) on, every speaker is dubbed — in their own voice if they chose one (cloned or
-  // picked), otherwise in a stand-in voice, because a speaker who did not consent is never cloned.
-  // Off, everyone is heard as they actually sound. What stayed from the release: the original
-  // plays under a dub at ORIGINAL_UNDER_DUB_VOLUME instead of being muted. The voice kind no longer
-  // decides playback; its presence only says the pipeline is new enough for this rule.
-  const ownVoiceDubbed = new Set<string>();
-  if (speakerOwnedVoice && translationActive && voiceEnabled) {
-    for (const identity of identities) {
-      const dubbed = dubbedSpeakerId(identity);
-      if (dubbed && dubbed !== localUserId) ownVoiceDubbed.add(dubbed);
-    }
-  }
-
+  // History of this rule, 4 Oct 2026: the speaker-owned rule (web#723) played a dub only in the
+  // speaker's own voice, with the original under it at 30%; the owner then made the LISTENER's
+  // switch decide (web#725), and after a live test asked for the original to be MUTED again while
+  // the dub plays (heard first and quiet, it made every dub feel late, and it leaked into other
+  // people's microphones — one Vietnamese mic was transcribed as Japanese). What is left is exactly
+  // the rule below: the switch on dubs everyone, a stand-in for whoever is not cloned; off plays
+  // everyone as they sound.
   const isWanted = (identity: string): boolean => {
     if (identity === outboundIdentity) return true;
-
-    if (speakerOwnedVoice) {
-      if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
-        const dubbed = dubbedSpeakerId(identity);
-        return voiceEnabled && translationActive && dubbed !== null && dubbed !== localUserId;
-      }
-      // Every person stays audible; duckedSpeakerIds says which play quieter under their dub.
-      return true;
-    }
 
     // The far side, raw. The host is sitting in the Meet call and already hears it there; playing
     // it here as well is the same voice twice, one round trip apart. Never subscribed, under any
@@ -307,7 +255,6 @@ export function routeRoomAudio({
 
   return {
     wanted: new Set(identities.filter(isWanted)),
-    duckedSpeakerIds: ownVoiceDubbed,
     outboundIdentity,
     dubbedSpeakerIds,
     outboundRawMic: bridgeOutboundReady

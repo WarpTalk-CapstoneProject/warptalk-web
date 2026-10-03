@@ -870,6 +870,9 @@ export function PersistentMeetingSession({
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  // The caption lane's caret: collapsed holds the one line being spoken and gives the rest of the
+  // lane's height back to the camera view; open, the lane scrolls back through earlier captions.
+  const [captionLaneCollapsed, setCaptionLaneCollapsed] = useState(false);
   // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   // Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged.
@@ -5628,9 +5631,10 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                // WT-873: the lane is a fixed box that clips its own content — it no longer opens
-                // a history panel over the camera view, so nothing here may grow past it.
-                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
+                // A fixed box that clips its own content: the history scrolls INSIDE it and never
+                // grows over the camera view (WT-873). Collapsed, it shrinks to one line.
+                data-collapsed={captionLaneCollapsed ? "" : undefined}
+                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden transition-[height] duration-200 data-[collapsed]:h-10"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -5648,12 +5652,8 @@ export function PersistentMeetingSession({
                   // ...but only once there IS another language. Before Start Translation the
                   // captions are the transcript and nothing else.
                   translationActive={translationStarted}
-                  // The lane shows the current caption only; the panel is where to read back.
-                  // Both calls, in this order — the panel only renders while the sidebar is open.
-                  onOpenTranscript={() => {
-                    setSidePanelMode("transcript");
-                    setRightSidebarOpen(true);
-                  }}
+                  collapsed={captionLaneCollapsed}
+                  onToggleCollapsed={() => setCaptionLaneCollapsed((value) => !value)}
                 />
               </div>
             ) : null}

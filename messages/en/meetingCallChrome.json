@@ -6,7 +6,9 @@
     "addOthers": "Add others"
   },
   "captions": {
-    "openFullTranscript": "Open full transcript",
+    "collapse": "Collapse captions",
+    "expand": "Expand captions",
+    "latest": "Latest",
     "liveRegionAria": "Live captions",
     "emptyState": "Captions will appear here as people speak."
   },

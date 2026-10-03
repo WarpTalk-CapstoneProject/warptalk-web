@@ -166,11 +166,10 @@ assert.match(
   /<\/section>[\s\S]*subtitlesEnabled[\s\S]*data-meeting-subtitle-lane[\s\S]*<LiveSubtitleOverlay[\s\S]*data-meeting-bottom-dock/,
   "enabled subtitles must render in a reserved lane between camera and controls",
 );
-// WT-873 — the caption lane shows the current caption only. It used to open an "Earlier
-// captions" history panel that grew UPWARD over the camera view when the reader scrolled up in
-// it, covering the people speaking and duplicating the Transcript side panel. Pinned three ways:
-// the lane container clips, the overlay renders a bounded window of the newest lines (never a
-// history), and nothing in it scrolls or measures an expanded height.
+// WT-873, revised 4 Oct 2026 — the caption lane once opened an "Earlier captions" panel that
+// grew UPWARD over the camera view. Its history is back, but it scrolls INSIDE the lane's fixed
+// box: the lane container clips, the overlay renders a bounded window (liveCaptionLines), and
+// nothing in it measures an expanded height or opens over the video. A caret collapses it.
 assert.match(
   roomPage,
   /data-meeting-subtitle-lane[\s\S]{0,400}?className="[^"]*overflow-hidden[^"]*"\s*>\s*<LiveSubtitleOverlay/,
@@ -179,22 +178,27 @@ assert.match(
 assert.match(
   liveSubtitle,
   /liveCaptionLines\(/,
-  "the caption lane must render only the newest lines (liveCaptionLines), not a scrollable history",
+  "the caption lane must render a bounded window of lines (liveCaptionLines)",
 );
 assert.doesNotMatch(
   liveSubtitle,
-  /caption-scrollback|windowCaptionLines|measureExpandedHeight|earlierCaptions|overflow-y-auto|onScroll=/,
-  "the caption lane must not scroll back through history or expand over the video (WT-873)",
+  /caption-scrollback|windowCaptionLines|measureExpandedHeight|earlierCaptions/,
+  "the caption lane must not expand over the video (WT-873)",
 );
 assert.match(
   liveSubtitle,
-  /data-caption-lane[\s\S]{0,1500}?role="region"[\s\S]{0,200}?text-center/,
+  /role="region"[\s\S]{0,400}?overflow-y-auto/,
+  "the open caption lane must scroll back through earlier captions inside its own box",
+);
+assert.match(
+  liveSubtitle,
+  /data-caption-lane[\s\S]{0,3000}?role="region"[\s\S]{0,1200}?text-center/,
   "live captions must be centred like subtitles, not left-aligned like a chat thread",
 );
 assert.match(
   roomPage,
-  /<LiveSubtitleOverlay[\s\S]{0,2500}?onOpenTranscript=\{/,
-  "the caption lane must offer a way into the full transcript panel",
+  /<LiveSubtitleOverlay[\s\S]{0,2500}?onToggleCollapsed=\{/,
+  "the caption lane must offer a caret to collapse and reopen it",
 );
 assert.doesNotMatch(
   roomPage,

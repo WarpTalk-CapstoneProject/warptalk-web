@@ -6,7 +6,9 @@
     "addOthers": "Mời thêm người"
   },
   "captions": {
-    "openFullTranscript": "Xem toàn bộ bản ghi",
+    "collapse": "Thu gọn phụ đề",
+    "expand": "Mở rộng phụ đề",
+    "latest": "Mới nhất",
     "liveRegionAria": "Phụ đề trực tiếp",
     "emptyState": "Phụ đề sẽ hiện ở đây khi có người nói."
   },
