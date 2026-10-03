@@ -99,7 +99,12 @@ import { WorkspaceGlobalGlossaryView } from "@/components/glossary/workspace-glo
 import { WorkspaceImportTemplateView } from "@/components/glossary/workspace-import-template-view";
 import { GlossaryPairEditor } from "@/components/glossary/glossary-pair-editor";
 import { GlossaryWarpBotStatusChip } from "@/components/glossary/glossary-warpbot-status";
-import { ALL_PAIRS, groupGlossariesByPair } from "@/lib/glossary/glossary-pairs";
+import {
+  ALL_PAIRS,
+  filterAfterPairChange,
+  glossaryPairKey,
+  groupGlossariesByPair,
+} from "@/lib/glossary/glossary-pairs";
 import {
   groupTermsByDomain,
   findCrossDomainTerms,
@@ -455,7 +460,19 @@ export default function WorkspaceGlossaryPage() {
               {pairView.options.length > 1 ? (
                 <Select value={pairView.filter} onValueChange={(value) => value && setPairFilter(value)}>
                   <SelectTrigger className="h-7 w-auto min-w-[150px] text-[12px]" aria-label={t("pairs.filterLabel")}>
-                    <SelectValue />
+                    {/* WT-937: the key ("en>vi") is not a label; render what the menu item says. */}
+                    <SelectValue>
+                      {(value) => {
+                        const option = pairView.options.find((candidate) => candidate.key === value);
+                        return option
+                          ? t("pairs.option", {
+                              source: getLanguageName(option.source),
+                              target: getLanguageName(option.target),
+                              count: option.count,
+                            })
+                          : t("pairs.all", { count: glossaries.length });
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ALL_PAIRS}>{t("pairs.all", { count: glossaries.length })}</SelectItem>
@@ -593,6 +610,12 @@ export default function WorkspaceGlossaryPage() {
               glossary={selected}
               termCount={termsQuery.data?.length ?? selected.termCount}
               canManage={canManage}
+              onChanged={(pair) => {
+                // WT-937: stay on the glossary that was just relabelled. With the filter left on
+                // the old pair it was filtered out and a different glossary opened in its place.
+                setSelectedId(selected.id);
+                setPairFilter((current) => filterAfterPairChange(current, glossaryPairKey(pair)));
+              }}
             />
             {/* PO 2026-10-02: real "Loading into WarpBot knowledgebase…" → Ready / Couldn't load. */}
             <GlossaryWarpBotStatusChip

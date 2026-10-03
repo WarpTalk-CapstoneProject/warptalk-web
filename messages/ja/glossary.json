@@ -160,11 +160,12 @@
   },
   "pairEditor": {
     "label": "言語ペア",
+    "edit": "ペアを変更",
     "source": "ソース言語",
     "target": "ターゲット言語",
     "changed": "言語ペアを {source} → {target} に変更しました。",
     "changeFailed": "言語ペアを変更できませんでした。",
-    "confirm": "既存の訳語はそのまま残ります。{source} → {target} に変更しますか?",
+    "confirm": "ラベルだけが変わります。{count} 件の用語はそのまま残り、翻訳されません。{source} → {target} に変更しますか?",
     "confirmButton": "変更",
     "cancel": "キャンセル"
   },

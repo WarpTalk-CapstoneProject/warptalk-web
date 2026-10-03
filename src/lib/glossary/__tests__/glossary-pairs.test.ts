@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ALL_PAIRS, glossaryPairKey, groupGlossariesByPair } from "../glossary-pairs.ts";
+import { ALL_PAIRS, filterAfterPairChange, glossaryPairKey, groupGlossariesByPair } from "../glossary-pairs.ts";
 
 const names: Record<string, string> = { en: "English", vi: "Vietnamese", ja: "Japanese" };
 const nameOf = (code: string) => names[code] ?? code;
@@ -60,5 +60,31 @@ describe("PO 2026-10-02 — glossary chips grouped and filtered by language pair
     const result = groupGlossariesByPair([], ALL_PAIRS, nameOf, "x");
     assert.equal(result.selected, undefined);
     assert.deepEqual(result.options, []);
+  });
+});
+
+describe("WT-937 — changing the open glossary's pair keeps it open", () => {
+  test("filtered to the old pair, the relabelled glossary stays selected instead of a neighbour", () => {
+    const before = [g("it", "en", "en"), g("gaming", "en", "en"), g("twelve", "en", "en")];
+    const opened = groupGlossariesByPair(before, "en>en", nameOf, "twelve");
+    assert.equal(opened.selected?.id, "twelve");
+
+    // The editor relabels "twelve" as en>vi; "it" and "gaming" keep en>en alive as a pair.
+    const after = [g("it", "en", "en"), g("gaming", "en", "en"), g("twelve", "en", "vi")];
+    const filter = filterAfterPairChange(opened.filter, glossaryPairKey(after[2]));
+    const view = groupGlossariesByPair(after, filter, nameOf, "twelve");
+
+    assert.equal(filter, "en>vi");
+    assert.equal(view.selected?.id, "twelve");
+    assert.deepEqual(view.groups.map((group) => group.key), ["en>vi"]);
+  });
+
+  test("the old behaviour — keeping the filter — is exactly what swapped the glossary out", () => {
+    const after = [g("it", "en", "en"), g("gaming", "en", "en"), g("twelve", "en", "vi")];
+    assert.equal(groupGlossariesByPair(after, "en>en", nameOf, "twelve").selected?.id, "it");
+  });
+
+  test("All pairs stays All pairs", () => {
+    assert.equal(filterAfterPairChange(ALL_PAIRS, "en>vi"), ALL_PAIRS);
   });
 });

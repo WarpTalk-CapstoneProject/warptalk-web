@@ -382,7 +382,10 @@
       "countdown": "{seconds} 秒後に自動で終了します。",
       "endNow": "今すぐ終了",
       "keepOpen": "開いたままにする",
-      "kept": "ルームは開いたままです。WarpTalk はこの通話を聞いていません。再開するには Google Meet に再参加してください。"
+      "kept": "ルームは開いたままです。WarpTalk はこの通話を聞いていません。再開するには Google Meet に再参加してください。",
+      "titleTabClosed": "Google Meet のタブが閉じられました。WarpTalk のルームを終了しますか？",
+      "retrying": "ルームをまだ終了できません。{seconds} 秒後に再試行します。",
+      "keptTabClosed": "ルームは開いたままです。WarpTalk は聞いていません。再開するには Google Meet で通話を開き直してください。"
     },
     "micChip": {
       "off": "WarpTalk のマイクはオフです",

@@ -16,9 +16,11 @@ import {
   OFFER_TRIGGER,
   selectTriggerMeeting,
   shouldShowBridgeWidget,
+  sightingLatchRoomId,
   type BridgeTriggerSnapshot,
   type BridgeTriggerState,
   type BridgeWindowLedger,
+  type TriggerMeeting,
 } from "../bridge-trigger.ts";
 
 const NOW = 1_700_000_000_000;
@@ -392,4 +394,183 @@ test("a popup reopened from the tray is adopted, so the trigger still closes it 
 test("a reopened popup showing something else is left to whoever owns it", () => {
   const closed = bridgeWindowClosed(drive([["room-1", "running"]]).ledger, "room-1", "running");
   assert.deepEqual(bridgeWindowReopened(closed, "room-9", "room-1"), closed);
+});
+
+// ── The sighting narrows the schedule (prod incident 2026-10-03) ────────────────────────────────
+
+/**
+ * The incident: Meet X got room A; A's session was torn down without ending it, so A sat in the
+ * room list with no end for its one-hour tail. Selection by clock kept picking A, a selected
+ * meeting can never be `offer`, and the next Meet calls were never claimed.
+ */
+const X = "jkm-bfek-dio";
+const Y = "uys-xppr-xjd";
+const Z = "nht-fzkw-igv";
+const roomA: TriggerMeeting = { roomId: "A", startsAtMs: NOW - 10 * 60_000, meetCode: X };
+const roomB: TriggerMeeting = { roomId: "B", startsAtMs: NOW - 60_000, meetCode: Y };
+
+test("a room for another call does not hold the trigger: a new Meet code is an offer", () => {
+  const selected = selectTriggerMeeting([roomA], NOW, null, Y);
+  assert.equal(selected, null);
+  assert.deepEqual(
+    nextBridgeTrigger({ state: "ready", roomId: "A" }, {
+      meeting: selected,
+      nowMs: NOW,
+      meetWindowVisible: true,
+      observedMeetCode: Y,
+      translationStarted: false,
+    }),
+    OFFER_TRIGGER,
+  );
+});
+
+test("the room whose code is on screen wins, even when another room is nearer to now", () => {
+  const nearer: TriggerMeeting = { roomId: "A", startsAtMs: NOW, meetCode: X };
+  const further: TriggerMeeting = { roomId: "B", startsAtMs: NOW - 30 * 60_000, meetCode: Y };
+  assert.equal(selectTriggerMeeting([nearer, further], NOW)?.roomId, "A", "by clock alone");
+  assert.equal(selectTriggerMeeting([nearer, further], NOW, null, Y)?.roomId, "B");
+});
+
+test("a room with no code stays selectable under any observed code", () => {
+  // Absence proves nothing: Meet drops the code from the title once the event has a name.
+  const noCode: TriggerMeeting = { roomId: "N", startsAtMs: NOW };
+  assert.equal(selectTriggerMeeting([noCode], NOW, null, Y)?.roomId, "N");
+  assert.equal(selectTriggerMeeting([noCode, roomA], NOW, null, Y)?.roomId, "N");
+  // ...but a room that MATCHES is better evidence than one that merely does not disagree.
+  assert.equal(selectTriggerMeeting([noCode, roomB], NOW, null, Y)?.roomId, "B");
+});
+
+test("with no observed code and no preferred room the old nearest-start rule is unchanged", () => {
+  assert.equal(selectTriggerMeeting([roomA, roomB], NOW)?.roomId, "B");
+  assert.equal(selectTriggerMeeting([roomA, roomB], NOW, null, undefined, null)?.roomId, "B");
+});
+
+test("a translating room wins over a sighting of some other call", () => {
+  const selected = selectTriggerMeeting([roomA, roomB], NOW, "A", Y);
+  assert.equal(selected?.roomId, "A");
+  assert.deepEqual(
+    nextBridgeTrigger(IDLE_TRIGGER, {
+      meeting: selected,
+      nowMs: NOW,
+      meetWindowVisible: true,
+      observedMeetCode: Y,
+      translationStarted: true,
+    }),
+    { state: "running", roomId: "A" },
+  );
+  // ...and the other call's window is not recorded as a sighting of the translated room.
+  assert.equal(
+    sightingLatchRoomId({ meetings: [roomA], nowMs: NOW, translatingRoomId: "A", observedMeetCode: Y }),
+    null,
+  );
+});
+
+test("picture-in-picture keeps the call the user was seen in, and the latch does not jump", () => {
+  // PiP: visible, but the title carries no code. A is older and still in its tail; B is the call.
+  const oldA: TriggerMeeting = { roomId: "A", startsAtMs: NOW - 2 * 60_000, meetCode: X };
+  const newB: TriggerMeeting = { roomId: "B", startsAtMs: NOW - 20 * 60_000, meetCode: Y };
+  assert.equal(selectTriggerMeeting([oldA, newB], NOW)?.roomId, "A", "the clock alone prefers A");
+  assert.equal(selectTriggerMeeting([oldA, newB], NOW, null, undefined, "B")?.roomId, "B");
+  assert.equal(
+    sightingLatchRoomId({ meetings: [oldA, newB], nowMs: NOW, translatingRoomId: null, preferredRoomId: "B" }),
+    "B",
+  );
+});
+
+test("a scheduled room in its lead does not steal an unrelated call the user is in", () => {
+  const scheduled: TriggerMeeting = { roomId: "S", startsAtMs: NOW + 3 * 60_000, meetCode: "sch-edul-edd" };
+  const current: TriggerMeeting = { roomId: "B", startsAtMs: NOW - 40 * 60_000, meetCode: Y };
+  assert.equal(selectTriggerMeeting([scheduled, current], NOW, null, Y)?.roomId, "B");
+  // Tab hidden: no code to compare, but the latch remembers B.
+  assert.equal(selectTriggerMeeting([scheduled, current], NOW, null, undefined, "B")?.roomId, "B");
+  // With nothing remembered the schedule is still free to bring S forward.
+  assert.equal(selectTriggerMeeting([scheduled, current], NOW)?.roomId, "S");
+});
+
+test("a sighting that belongs to no room leaves the latch alone", () => {
+  assert.equal(
+    sightingLatchRoomId({
+      meetings: [roomA],
+      nowMs: NOW,
+      translatingRoomId: null,
+      observedMeetCode: Y,
+      preferredRoomId: "A",
+    }),
+    null,
+  );
+  assert.equal(
+    sightingLatchRoomId({ meetings: [roomA], nowMs: NOW, translatingRoomId: null, observedMeetCode: X }),
+    "A",
+  );
+});
+
+/**
+ * The incident, replayed through every pure piece the hook composes: the sighting latch, the
+ * selection, the reducer, and the popup ledger. The claim is modelled as the room list gaining a
+ * room for the offered code, which is what use-bridge-auto-room's invalidation produces.
+ */
+test("replay: three Meet calls in a row each get their own room and popup, never the old one", () => {
+  let meetings: TriggerMeeting[] = [];
+  let seen: string | null = null;
+  let ledger: BridgeWindowLedger = EMPTY_BRIDGE_WINDOW;
+  const commands: string[] = [];
+  const states: string[] = [];
+  let nowMs = NOW;
+
+  const render = (presence: { visible: boolean; code?: string }) => {
+    // The hook's latch: the sensor callback and the room-list catch-up run the same rule.
+    if (presence.visible) {
+      const latch = sightingLatchRoomId({
+        meetings,
+        nowMs,
+        translatingRoomId: null,
+        observedMeetCode: presence.code,
+        preferredRoomId: seen,
+      });
+      if (latch) seen = latch;
+    }
+    const selected = selectTriggerMeeting(meetings, nowMs, null, presence.code, seen);
+    const trigger = nextBridgeTrigger(seen ? { state: "ready", roomId: seen } : IDLE_TRIGGER, {
+      meeting: selected,
+      nowMs,
+      meetWindowVisible: presence.visible,
+      observedMeetCode: presence.code,
+      translationStarted: false,
+    });
+    const target = trigger.state === "idle" || trigger.state === "offer" ? null : trigger.roomId;
+    const result = nextBridgeWindow(ledger, target, trigger.state);
+    ledger = result.ledger;
+    if (result.command) {
+      commands.push(result.command.kind === "open" ? `open ${result.command.target}` : "close");
+    }
+    states.push(`${trigger.state} ${trigger.roomId ?? "-"}`);
+    return trigger;
+  };
+  const claim = (roomId: string, code: string) => {
+    meetings = [...meetings, { roomId, startsAtMs: nowMs, meetCode: code }];
+  };
+
+  // Call 1: Meet X. Offer, claim, ready A.
+  assert.deepEqual(render({ visible: true, code: X }), OFFER_TRIGGER);
+  claim("A", X);
+  assert.deepEqual(render({ visible: true, code: X }), { state: "ready", roomId: "A" });
+
+  // A's session dies without ending it; A stays in the list with no end. The user moves on.
+  nowMs += 5 * 60_000;
+  render({ visible: false });
+
+  // Call 2: Meet Y. Must be an offer, not "ready A".
+  assert.deepEqual(render({ visible: true, code: Y }), OFFER_TRIGGER);
+  claim("B", Y);
+  assert.deepEqual(render({ visible: true, code: Y }), { state: "ready", roomId: "B" });
+  // Tab switch: no code. The latch is B now, so the older A does not come back.
+  assert.deepEqual(render({ visible: false }), { state: "ready", roomId: "B" });
+
+  // Call 3: Meet Z, with both A and B still in their tails.
+  nowMs += 5 * 60_000;
+  assert.deepEqual(render({ visible: true, code: Z }), OFFER_TRIGGER);
+  claim("C", Z);
+  assert.deepEqual(render({ visible: true, code: Z }), { state: "ready", roomId: "C" });
+
+  assert.deepEqual(commands, ["open A", "close", "open B", "close", "open C"], states.join(" | "));
 });

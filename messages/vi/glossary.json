@@ -160,11 +160,12 @@
   },
   "pairEditor": {
     "label": "Cặp ngôn ngữ",
+    "edit": "Đổi cặp",
     "source": "Ngôn ngữ nguồn",
     "target": "Ngôn ngữ đích",
     "changed": "Đã đổi cặp ngôn ngữ thành {source} → {target}.",
     "changeFailed": "Không đổi được cặp ngôn ngữ.",
-    "confirm": "Các bản dịch hiện có được giữ nguyên. Đổi sang {source} → {target}?",
+    "confirm": "Chỉ đổi nhãn — {count} thuật ngữ giữ nguyên như đã nhập, không được dịch. Đổi sang {source} → {target}?",
     "confirmButton": "Đổi",
     "cancel": "Huỷ"
   },

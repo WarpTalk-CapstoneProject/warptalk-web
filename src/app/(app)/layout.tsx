@@ -3,7 +3,8 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import gsap from "gsap";
@@ -195,6 +196,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
+  const queryClient = useQueryClient();
+  /**
+   * The session is gone, so the room list the bridge trigger reads is stale until proven fresh.
+   *
+   * That list (`useTranslationRooms`, 60 s staleTime, no interval) was refreshed only by an End
+   * this client pressed and by a claim. A room that ended any other way - the TranslationRoomEnded
+   * broadcast, the WT-899 status poll, the stale-session retire - kept its old row with no
+   * `endedAt`, and so kept the bridge trigger pointed at it for the one-hour tail: the next Meet
+   * call could not become an offer (prod, 2026-10-03). Every one of those exits, and Leave, funnels
+   * through this callback, which is why the refresh lives here rather than once per path.
+   */
+  const handleMeetingClosed = useCallback(() => {
+    closeMeeting();
+    void queryClient.invalidateQueries({ queryKey: ["translationRooms"] });
+  }, [closeMeeting, queryClient]);
   const openTour = useOnboardingStore((state) => state.openTour);
   const tourSeenAtByUser = useOnboardingStore((state) => state.tourSeenAtByUser);
   const [mounted, setMounted] = useState(false);
@@ -832,7 +848,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   roomId={activeMeetingRoomId}
                   compact={meetingWidgetFloating}
                   meetSensor={meetSensor}
-                  onMeetingClosed={closeMeeting}
+                  onMeetingClosed={handleMeetingClosed}
                   onBridgeMeetingEnded={setEndedBridgeRoomId}
                 />
               </MiniMeetingDock>

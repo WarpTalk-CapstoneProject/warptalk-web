@@ -382,7 +382,10 @@
       "countdown": "Tự kết thúc sau {seconds} giây.",
       "endNow": "Kết thúc ngay",
       "keepOpen": "Giữ phòng mở",
-      "kept": "Phòng vẫn đang mở. WarpTalk không nghe cuộc gọi này; vào lại Google Meet để tiếp tục."
+      "kept": "Phòng vẫn đang mở. WarpTalk không nghe cuộc gọi này; vào lại Google Meet để tiếp tục.",
+      "titleTabClosed": "Tab Google Meet đã bị đóng. Kết thúc phòng WarpTalk?",
+      "retrying": "Chưa kết thúc được phòng. Thử lại sau {seconds} giây.",
+      "keptTabClosed": "Phòng vẫn đang mở. WarpTalk không nghe; mở lại cuộc gọi trong Google Meet để tiếp tục."
     },
     "micChip": {
       "off": "Mic WarpTalk đang tắt",

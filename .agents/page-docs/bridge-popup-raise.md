@@ -81,3 +81,74 @@ popup kept coming back over Chrome.
 - `npm run test:bridge-capture-consent-relay` (includes the replayed prod sequence).
 - Desktop: join a bridge, leave the consent question unanswered, close Meet's tab, close the popup:
   it must not come back. With Meet on screen, closing it brings it back at most 3 times per question.
+
+## Stale room blocks the next Meet call (prod incident 2026-10-03)
+
+### What happened
+
+Meet `jkm-bfek-dio` claimed room A. The backend hung briefly, the room query timed out, and the
+session carrying A was torn down about 41 s in - popup, idle reaper and Meet-left countdown with it -
+so A was never ended and the shell's room list kept it with no `endedAt`. The trigger then picked A
+by clock alone for its whole one-hour tail: Meet `uys-xppr-xjd` re-opened the popup for OLD room A
+(no claim), and Meet `nht-fzkw-igv` got no popup at all.
+
+### What changed, and why
+
+1. **The sighting narrows the selection** (`selectTriggerMeeting` in
+   `src/lib/meeting/bridge-trigger.ts`). New args `observedMeetCode`, `preferredRoomId`. Order:
+   translating room wins; then the trigger window; then, with an observed code, rooms with that code
+   if any, else rooms whose KNOWN code differs drop out (code-less rooms stay); then the preferred
+   room (the hook's latch, `seenRoomId`) if it survived; else nearest start. No code and no
+   preferred = the old rule. A stale room for another call can no longer hide the `offer`.
+2. **The latch is written with the NEW sighting's code** (`sightingLatchRoomId`, used by
+   `src/hooks/use-bridge-trigger.ts`). The sensor callback used to latch the last render's
+   selection on any visible sighting (`setSeenRoomId(meetingRoomIdRef.current)`), which latched the
+   old room to `ready`. A second path re-latches when the claimed room reaches the room list while
+   Meet stays on screen (presence events fire only on change), so a later hidden-tab sighting (no
+   code) prefers the new room, not the old one.
+3. **One claim per call, not per code forever** (`claimKeyAfterTrigger` in
+   `src/lib/meeting/bridge-auto-room.ts`, used by `use-bridge-auto-room.ts`). The key resets on
+   `upcoming`/`ready`/`running`, NOT on `idle`, so re-opening a Meet link after its room ended
+   claims again while a failed claim is still toasted once per call.
+4. **The room list is refreshed whenever the session closes** (`handleMeetingClosed` in
+   `src/app/(app)/layout.tsx`): every exit - TranslationRoomEnded, the WT-899 status poll, the stale
+   retire, Leave/End - goes through `onMeetingClosed`, which now invalidates `["translationRooms"]`.
+5. **A timeout no longer tears down a live session** (`isRestoredMeetingStale` in
+   `src/lib/meeting/meeting-session-lifecycle.ts`). Only 403/404/410 retire it; timeouts, 5xx and
+   network errors hold ("absence is not evidence", as `canConnectToRoom`). The render guard in
+   `persistent-meeting-session.tsx` is now `!room` instead of `roomQuery.isError || !room`, so a
+   failed refetch with the last good room in hand keeps the meeting mounted.
+6. **A failed End after the Meet-left countdown is retried** (`bridge-meet-follow.ts`:
+   `leave-failed` event, `meetLeaveRetryDelayMs` 5 s doubling to 60 s,
+   `meetLeaveFailureRetryable`). The leave stays pending until the exit lands; `handleExit` now
+   resolves `{ kind: "done" | "busy" | "failed", status }`. Stops on Keep open, rejoining, or a
+   definitive 4xx. Only the first failure is toasted; the popup says "Could not end the room yet.
+   Trying again in Ns." (`retrying: true` on the prompt).
+7. **Tab closed = Meet ended** (PO). A `left` reading with a desktop `reason` of `tab-closed`,
+   `tab-navigated`, `window-closed` or `browser-gone` (`MeetCallTabGoneReason` in
+   `src/lib/desktop/bridge.ts`) runs the same 30 s countdown; only the wording changes ("The Google
+   Meet tab was closed. End the WarpTalk room?", `meetLeft.titleTabClosed` / `keptTabClosed` in
+   en/vi/ja). `cause` and `retrying` are optional fields on the relay's `meetLeave`; a desktop that
+   never sends these reasons, and a snapshot without them, read exactly as before.
+
+### Known limitations / tech debt (PO 2026-10-03)
+
+- User in Meet A (not translating) opens a second Meet tab B: the selection follows the sighting,
+  so the trigger moves to B (or offers B) and back to A when A's tab is in front. There is no
+  "bridge room this window already carries" in the selection; only a translating room is pinned.
+- The trigger's latch (`seenRoomId`) is never cleared; it only matters while that room is still in
+  its window and not ruled out by a code.
+- Retrying the End runs only while this main window (and the session) is alive.
+
+### Testing checklist
+
+- `npm run test:bridge-trigger` (includes the replayed three-call incident),
+  `npm run test:bridge-auto-room`, `npm run test:meeting-session-lifecycle`,
+  `npm run test:bridge-widget-relay`, `npm run test:bridge-trigger-meet-code`,
+  `npm run test:contracts`.
+- Desktop: open Meet X (room A claimed), kill the network/backend for ~1 min - the popup and the
+  session must survive. Leave Meet X with the backend down: the countdown must say it is retrying
+  and end A once the backend is back. Open Meet Y with A still open: a new room B must be claimed
+  and its popup opened, never A's. Switch tabs: the popup stays on B.
+- Desktop with the tab-closed reasons: close the Meet tab mid-call - "The Google Meet tab was
+  closed" with the 30 s countdown. Older desktop: the old "You left the Meet call" text.

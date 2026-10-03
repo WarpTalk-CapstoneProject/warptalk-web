@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { planBridgeClaim } from "../bridge-auto-room.ts";
+import { claimKeyAfterTrigger, planBridgeClaim } from "../bridge-auto-room.ts";
 
 // W4b part 1: a Google Meet call is CLAIMED (POST /translation-rooms/bridge/claim), never created
 // by the client. The language planning is the claim body.
@@ -93,4 +93,37 @@ test("a one-language workspace still claims, marked as unable to translate", () 
   assert.equal(plan.body.externalMeetingLanguage, "vi");
   assert.deepEqual(plan.body.targetLanguages, ["vi"]);
   assert.equal(plan.translatable, false);
+});
+
+// ── One claim per call, not one per code forever ────────────────────────────────────────────────
+
+test("a room taking the trigger frees the code for the next offer", () => {
+  assert.equal(claimKeyAfterTrigger("jkq-yaax-phw", "ready"), null);
+  assert.equal(claimKeyAfterTrigger("jkq-yaax-phw", "upcoming"), null);
+  assert.equal(claimKeyAfterTrigger("jkq-yaax-phw", "running"), null);
+});
+
+test("leaving the Meet tab does not re-arm a claim that failed", () => {
+  // Idle is every tab switch longer than the offer's grace; a refusal is shown once per call.
+  assert.equal(claimKeyAfterTrigger("jkq-yaax-phw", "idle"), "jkq-yaax-phw");
+  assert.equal(claimKeyAfterTrigger("jkq-yaax-phw", "offer"), "jkq-yaax-phw");
+});
+
+test("the same Meet link re-opened after its room ended is claimed again", () => {
+  // offer (claim X) -> ready (room A) -> A ends -> offer X again: must claim, not stay silent.
+  let handled: string | null = null;
+  const claims: string[] = [];
+  const see = (state: Parameters<typeof claimKeyAfterTrigger>[1], code = "jkq-yaax-phw") => {
+    handled = claimKeyAfterTrigger(handled, state);
+    if (state === "offer" && handled !== code) {
+      handled = code;
+      claims.push(code);
+    }
+  };
+  see("offer");
+  see("offer");
+  see("ready");
+  see("idle");
+  see("offer");
+  assert.deepEqual(claims, ["jkq-yaax-phw", "jkq-yaax-phw"]);
 });
