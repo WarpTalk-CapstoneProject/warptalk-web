@@ -542,13 +542,19 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
    * room and the meeting is not over: the desktop polls Core Audio for as long as anyone listens.
    */
   const [meetMicState, setMeetMicState] = useState<MeetMicState["state"] | null>(null);
+  // Where Meet's browser PLAYS, from the same reading; null from a desktop that does not say.
+  const [meetSpeakerState, setMeetSpeakerState] = useState<MeetMicState["speaker"] | null>(null);
   const watchMeetMic = relayView.status === "connected" && !ended;
   useEffect(() => {
     if (!watchMeetMic) return;
-    const stop = watchMeetMicState((state) => setMeetMicState(state.state));
+    const stop = watchMeetMicState((state) => {
+      setMeetMicState(state.state);
+      setMeetSpeakerState(isMeetSpeaker(state.speaker) ? state.speaker : null);
+    });
     return () => {
       stop?.();
       setMeetMicState(null);
+      setMeetSpeakerState(null);
     };
   }, [watchMeetMic]);
 
@@ -593,6 +599,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       canSwitchAudioMode,
       modeSupport,
       meetMic: meetMicState,
+      meetSpeaker: meetSpeakerState,
       deviceLabels,
     }),
     [
@@ -633,7 +640,13 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       canSwitchAudioMode,
       modeSupport,
       meetMicState,
+      meetSpeakerState,
       deviceLabels,
     ],
   );
+}
+
+/** Read defensively: another process sent it, and an older or newer desktop may say anything. */
+function isMeetSpeaker(value: unknown): value is NonNullable<MeetMicState["speaker"]> {
+  return value === "cable" || value === "real" || value === "unknown";
 }

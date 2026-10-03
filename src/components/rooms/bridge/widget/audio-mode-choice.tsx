@@ -165,7 +165,10 @@ export function BridgeAudioModeChoice({ compact = false }: { compact?: boolean }
  *
  *   text + Meet on the cable   nothing is played into the cable any more: the call hears silence.
  *                              Offer translated voice back only where it is allowed (not while
- *                              translating, and with the cable installed).
+ *                              translating, and with the cable installed). Where translation
+ *                              running is what forbids it, say so and say the two ways out (real
+ *                              mic in Meet, or Stop → Translated voice → Start): a greyed-out
+ *                              option in a settings panel nobody opens is not an answer.
  *   voice + Meet on real mic   the call hears this user untranslated. Voice → text is always
  *                              allowed, so "Use my own voice" is always offered.
  *
@@ -185,7 +188,9 @@ export function BridgeMeetMicNotice() {
   if (!mismatch) return null;
   const key = mismatch === "text-on-cable" ? "textOnCable" : "voiceOnReal";
   const target: BridgeAudioMode = mismatch === "text-on-cable" ? "voice" : "text";
-  const canSwitch = modeSwitch.availability(target).allowed;
+  const availability = modeSwitch.availability(target);
+  const canSwitch = availability.allowed;
+  const lockedByTranslation = mismatch === "text-on-cable" && availability.reason === "lockedHint";
 
   return (
     <div
@@ -199,6 +204,11 @@ export function BridgeMeetMicNotice() {
           <span className="font-semibold">{t(`meetMic.${key}.title`)}</span> {t(`meetMic.${key}.body`)}
         </span>
       </p>
+      {lockedByTranslation ? (
+        <p data-bridge-meet-mic-locked className="mt-1 pl-5 text-ink-muted">
+          {t("meetMic.textOnCable.locked")}
+        </p>
+      ) : null}
       {canSwitch ? (
         <Button
           size="sm"

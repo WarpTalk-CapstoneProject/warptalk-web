@@ -366,6 +366,8 @@ test("WT-912: mic is built only when given, round-trips, and an unreadable one i
   assert.equal("mic" in buildBridgeWidgetSnapshot(baseFields, 1), false);
   const built = buildBridgeWidgetSnapshot({ ...baseFields, mic: { enabled: false, control: "manual" } }, 1);
   assert.deepEqual(built.mic, { enabled: false, control: "manual" });
+  const overridden = buildBridgeWidgetSnapshot({ ...baseFields, mic: { enabled: true, control: "meet", override: true } }, 1);
+  assert.deepEqual(overridden.mic, { enabled: true, control: "meet", override: true });
   assert.deepEqual(parsedSnapshot({ mic: { enabled: true, control: "meet" } }).mic, {
     enabled: true,
     control: "meet",
@@ -377,19 +379,34 @@ test("WT-912: mic is built only when given, round-trips, and an unreadable one i
   }
 });
 
-test("WT-912: the chip shows only while Meet's mute cannot be read and the meeting is connected", () => {
+test("WT-912: the mic strip shows while in the call and the meeting is connected", () => {
   const chip = (over: Record<string, unknown>) => bridgeWidgetMicChip(connected(parsedSnapshot(over)));
   // The fallback: an older desktop, macOS, a button the sensor never read.
   assert.deepEqual(chip({ connection: "connected", mic: { enabled: false, control: "manual" } }), {
     enabled: false,
+    control: "manual",
+    override: false,
   });
   // Turned on by hand: still there, so it can be turned off again.
   assert.deepEqual(chip({ connection: "connected", mic: { enabled: true, control: "manual" } }), {
     enabled: true,
+    control: "manual",
+    override: false,
   });
-  // Following Meet normally: nothing, whether the mic is on or off.
-  assert.equal(chip({ connection: "connected", mic: { enabled: false, control: "meet" } }), null);
-  assert.equal(chip({ connection: "connected", mic: { enabled: true, control: "meet" } }), null);
+  // Following Meet (2026-10-03: a misread "muted" must be visible, and overridable).
+  assert.deepEqual(chip({ connection: "connected", mic: { enabled: false, control: "meet" } }), {
+    enabled: false,
+    control: "meet",
+    override: false,
+  });
+  assert.deepEqual(chip({ connection: "connected", mic: { enabled: true, control: "meet", override: true } }), {
+    enabled: true,
+    control: "meet",
+    override: true,
+  });
+  // An override is a "meet" thing only, and anything but `true` is no override.
+  assert.equal(chip({ connection: "connected", mic: { enabled: true, control: "manual", override: true } })?.override, false);
+  assert.equal(chip({ connection: "connected", mic: { enabled: true, control: "meet", override: "yes" } })?.override, false);
   // Not in the call (lobby, left): no mic to offer.
   assert.equal(chip({ connection: "connected", mic: { enabled: false, control: "none" } }), null);
   // Not connected: nothing could publish it.

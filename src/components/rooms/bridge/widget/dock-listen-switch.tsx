@@ -11,7 +11,9 @@
  * meeting starts.
  *
  * Two words rather than an icon toggle: the window floats over a call bar full of icon buttons, and
- * which of two listening modes is on has to be readable without hovering.
+ * which of two listening modes is on has to be readable without hovering. Prefixed "You hear", and
+ * the tooltip says Meet is not affected (2026-10-03): read bare, "Text | Voice" sat next to the
+ * Meet-facing settings and was taken for how MEET hears the host.
  *
  * The choice lives in the main window (voiceEnabled in persistent-meeting-session), so a press is
  * relayed and the switch shows what the main window then reports. With no main window to ask, the
@@ -48,9 +50,7 @@ export function DockListenSwitch() {
         ? t("relay.noHost")
         : view.status === "incompatible"
           ? t("relay.incompatible")
-          : voiceEnabled
-            ? t("listen.voiceHint")
-            : t("listen.textHint");
+          : `${voiceEnabled ? t("listen.voiceHint") : t("listen.textHint")} ${t("listen.onlyYou")}`;
 
   return (
     <span className="group/listen relative inline-flex shrink-0">
@@ -64,6 +64,9 @@ export function DockListenSwitch() {
           !connected && "opacity-50",
         )}
       >
+        <span aria-hidden="true" className="pl-1.5 pr-0.5 text-[11px] font-medium text-ink-subtle">
+          {t("listen.prefix")}
+        </span>
         {OPTIONS.map((option) => {
           const selected = connected && option.voice === voiceEnabled;
           const Icon = option.icon;

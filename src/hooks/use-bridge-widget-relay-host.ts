@@ -59,6 +59,7 @@ import {
   openBridgeWidgetRelay,
   type BridgeWidgetMeetingConnection,
   type BridgeWidgetMicSnapshot,
+  type BridgeWidgetOutboundSnapshot,
   type BridgeWidgetRelay,
   type BridgeWidgetSnapshotFields,
   type BridgeWidgetTranscriptPauseSnapshot,
@@ -76,8 +77,12 @@ export type BridgeWidgetRelayHostOptions = {
   speakLanguage?: string | null;
   listenLanguage?: string | null;
   voiceEnabled: boolean;
-  /** Reserved for the widget's mic picker (`set-mic-device`, not in the protocol yet). */
+  /** The microphone WarpTalk records (LiveKit's active audioinput); the popup's picker ticks it. */
   micDeviceId?: string | null;
+  /** The popup's microphone pick (`set-mic-device`). Absent: answered with a snapshot. */
+  onSetMicDevice?: (deviceId: string) => void;
+  /** What Meet hears from this person, and since when (lib/meeting/bridge-mic-device). */
+  outbound?: BridgeWidgetOutboundSnapshot;
   /** `consentState` in persistent-meeting-session. Absent reads as nothing to ask. */
   browserCaptureState?: BrowserCaptureConsentState;
   selectedLoopbackSourceId?: string | null;
@@ -205,8 +210,10 @@ export function useBridgeWidgetRelayHost({
   meetCaptionsOff,
   mic,
   meetLeave,
+  outbound,
   onSetMicEnabled,
   onAnswerMeetLeft,
+  onSetMicDevice,
   onSetLanguage,
   onSetVoiceEnabled,
   onSetVoicePreference,
@@ -248,6 +255,7 @@ export function useBridgeWidgetRelayHost({
     meetCaptionsOff,
     mic,
     meetLeave,
+    outbound,
   });
   const handlersRef = useRef({
     onSetLanguage,
@@ -267,6 +275,7 @@ export function useBridgeWidgetRelayHost({
     onTakeOverSession,
     onSetMicEnabled,
     onAnswerMeetLeft,
+    onSetMicDevice,
   });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
@@ -290,6 +299,7 @@ export function useBridgeWidgetRelayHost({
       onTakeOverSession,
       onSetMicEnabled,
       onAnswerMeetLeft,
+      onSetMicDevice,
     };
   });
 
@@ -304,8 +314,11 @@ export function useBridgeWidgetRelayHost({
   // And for the two WT-912 / WT-913 objects.
   const micEnabled = mic?.enabled;
   const micControl = mic?.control;
+  const micOverride = mic?.override;
   const meetLeaveState = meetLeave?.state;
   const meetLeaveEndsAtMs = meetLeave?.state === "countdown" ? meetLeave.endsAtMs : undefined;
+  const outboundLeg = outbound?.leg;
+  const outboundSinceMs = outbound?.sinceMs;
 
   // Declared BEFORE the channel effect on purpose. On mount it only records the fields (the
   // channel is not open yet, and the channel effect announces them); after that it is what
@@ -335,6 +348,7 @@ export function useBridgeWidgetRelayHost({
       meetCaptionsOff,
       mic,
       meetLeave,
+      outbound,
     };
     // An end already announced stays announced: a late re-render must not un-end the room.
     if (fieldsRef.current.roomEnded) fields.roomEnded = true;
@@ -369,8 +383,11 @@ export function useBridgeWidgetRelayHost({
     meetCaptionsOff,
     micEnabled,
     micControl,
+    micOverride,
     meetLeaveState,
     meetLeaveEndsAtMs,
+    outboundLeg,
+    outboundSinceMs,
   ]);
 
   useEffect(() => {
@@ -465,8 +482,14 @@ export function useBridgeWidgetRelayHost({
             sendSnapshot();
           }
           break;
-        // WT-912. Stale once the mic follows Meet's own button (or the user is out of the call):
-        // the chip the press came from no longer exists, so say what is true instead.
+        // No reply when applied, like set-language: the switch changes `micDeviceId`, and the field
+        // effect reports it. A main window that cannot switch answers with what is true.
+        case "set-mic-device":
+          if (handlers.onSetMicDevice) handlers.onSetMicDevice(message.deviceId);
+          else sendSnapshot();
+          break;
+        // WT-912. Stale once the user is out of the call ("none"): the strip the press came from no
+        // longer exists, so say what is true instead. While following Meet it is an override.
         case "set-mic-enabled":
           if (handlers.onSetMicEnabled && acceptsManualMic(fieldsRef.current.mic?.control)) {
             handlers.onSetMicEnabled(message.enabled);

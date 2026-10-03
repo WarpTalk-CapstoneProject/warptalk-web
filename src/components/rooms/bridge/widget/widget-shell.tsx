@@ -60,6 +60,7 @@ import { MeetingNotices } from "./meeting-notices";
 import { RecordingChip } from "./recording-chip";
 import { RecordingStartNotice } from "./recording-start-notice";
 import { BridgeMeetMicNotice } from "./audio-mode-choice";
+import { BridgeMeetSpeakerNotice, BridgeRawMicNotice } from "./bridge-mic-notices";
 import { SessionDisplacedNotice } from "./session-displaced-notice";
 import { RelayCarryNotice } from "./relay-carry-notice";
 import { SettingsFlyout } from "./settings-flyout";
@@ -89,8 +90,8 @@ export function WidgetShell() {
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-canvas text-ink">
-      {/* WT-912 / WT-913: "You left the Meet call" and the mic fallback chip. Above both screens
-          (the language step and the tabs), and nothing at all while the room simply follows Meet. */}
+      {/* WT-912 / WT-913: "You left the Meet call" and the WarpTalk mic strip (on / off, and who
+          decides it). Above both screens (the language step and the tabs). */}
       <MeetFollowNotices />
       {ended ? (
         <EndedView />
@@ -112,6 +113,8 @@ export function WidgetShell() {
           <InboundNoSignalNotice />
           <MeetingNotices />
           <BridgeMeetMicNotice />
+          <BridgeMeetSpeakerNotice />
+          <BridgeRawMicNotice />
           <MeetCaptionsNotice />
         </WidgetTabs>
       )}

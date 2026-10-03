@@ -214,6 +214,11 @@ export type BridgeWidgetState = {
    */
   meetMic: MeetMicState["state"] | null;
   /**
+   * Where the Meet browser PLAYS, from the same desktop reading, or null where it does not say (an
+   * older desktop). "cable": Meet's speaker is CABLE Input, so the user hears nothing of the call.
+   */
+  meetSpeaker: MeetMicState["speaker"] | null;
+  /**
    * The bridge's device names, from the same desktop status reading as `modeSupport`
    * (`bridgeDeviceLabelsFor`): the desktop's `endpointLabels`, else the fallback tables.
    */

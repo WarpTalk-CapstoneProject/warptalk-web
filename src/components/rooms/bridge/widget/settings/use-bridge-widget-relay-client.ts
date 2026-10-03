@@ -65,10 +65,16 @@ export type BridgeWidgetRelayClient = {
   /** web #646: "Use this device" — the main window takes the meeting back from another login. */
   takeOverSession: () => boolean;
   /**
-   * WT-912: the fallback chip. Sent only to a main window whose snapshot says Meet's mute button
-   * cannot be read (`mic.control === "manual"`); the result is the next snapshot.
+   * WT-912: the WarpTalk mic strip. Sent only while the main window's snapshot says the user is in
+   * the call (`mic.control` "manual", or "meet" where it is an override); the result is the next
+   * snapshot.
    */
   setMicEnabled: (enabled: boolean) => boolean;
+  /**
+   * Voice mode: the microphone WarpTalk records. Sent only to a main window whose snapshot carries
+   * `micDeviceId` (it can switch); the result is the next snapshot's `micDeviceId`.
+   */
+  setMicDevice: (deviceId: string) => boolean;
   /**
    * WT-913: the answer to "You left the Meet call": true ends the room now, false keeps it open.
    * Sent only while the main window's snapshot carries a countdown. The END is the main window's.
@@ -224,9 +230,14 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
 
   const setMicEnabled = useCallback(
     (enabled: boolean) =>
-      viewRef.current.snapshot?.mic?.control === "manual"
+      viewRef.current.snapshot?.mic?.control === "manual" || viewRef.current.snapshot?.mic?.control === "meet"
         ? sendWhenConnected({ type: "set-mic-enabled", enabled })
         : false,
+    [sendWhenConnected],
+  );
+  const setMicDevice = useCallback(
+    (deviceId: string) =>
+      viewRef.current.snapshot?.micDeviceId ? sendWhenConnected({ type: "set-mic-device", deviceId }) : false,
     [sendWhenConnected],
   );
   const answerMeetLeft = useCallback(
@@ -258,6 +269,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       setAudioMode,
       takeOverSession,
       setMicEnabled,
+      setMicDevice,
       answerMeetLeft,
     }),
     [
@@ -278,6 +290,7 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
       setAudioMode,
       takeOverSession,
       setMicEnabled,
+      setMicDevice,
       answerMeetLeft,
     ],
   );

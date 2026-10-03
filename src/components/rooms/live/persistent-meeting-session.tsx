@@ -175,6 +175,13 @@ import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
 import { useBridgeMeetFollow } from "@/hooks/use-bridge-meet-follow";
 import { useSupervisedPublish } from "@/hooks/use-supervised-publish";
+import {
+  describeOutboundLegChange,
+  isVirtualMicrophoneLabel,
+  type BridgeOutboundLeg,
+} from "@/lib/meeting/bridge-mic-device";
+import type { BridgeWidgetOutboundSnapshot } from "@/lib/meeting/bridge-widget-relay";
+import { LocalMicSupervisor } from "./local-mic-supervisor";
 import { meetLeaveOutcome, meetLeavePrompt } from "@/lib/meeting/bridge-meet-follow";
 import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
 import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
@@ -264,6 +271,7 @@ import {
   meetingDeviceRoomOptions,
   readMeetingJoinState,
   readMeetingMediaPreferences,
+  rememberSelectedMicrophone,
 } from "@/lib/meeting/meeting-join-state";
 import {
   isResolvedSpeakLanguage,
@@ -350,6 +358,8 @@ const MINI_MEETING_IDLE_POLL_MS = 5 * 1000;
  */
 type LocalMediaControl = {
   setMicrophoneEnabled: (enabled: boolean) => void;
+  /** Moves the live microphone to this input (LiveKit's switchActiveDevice). Rejects on failure. */
+  switchMicrophone: (deviceId: string) => Promise<void>;
   setCameraEnabled: (enabled: boolean) => void;
   /** Resolves to what the share ended up as, so the caller can reflect a cancelled prompt. */
   setScreenShareEnabled: (enabled: boolean) => Promise<boolean>;
@@ -1166,6 +1176,13 @@ export function PersistentMeetingSession({
     onLeaveDeadline: () => finishMeetLeaveRef.current(),
   });
   const bridgeListening = Boolean(room) && transcriptOpen && !meetFollow.leftCall;
+  // For the hub's ForceMuted handler, which is installed once per connection.
+  const isBridgeRoomRef = useRef(isBridgeRoom);
+  const meetFollowSetManualMicRef = useRef(meetFollow.setManualMic);
+  useEffect(() => {
+    isBridgeRoomRef.current = isBridgeRoom;
+    meetFollowSetManualMicRef.current = meetFollow.setManualMic;
+  });
   /**
    * W4b (bridge claim): only the CAPTURER's desktop opens the far side — the stand-in token, the
    * loopback or cable leg, and the capture consent that comes before them. A MEMBER publishes its
@@ -3616,6 +3633,57 @@ export function PersistentMeetingSession({
     },
   });
 
+  // Translated-voice bridge (PO, 2026-10-03): the microphone WarpTalk records is picked in the
+  // popup, because Meet's own microphone stays on the cable. `activeMicrophoneId` is LiveKit's
+  // active audioinput, reported by <LocalMicSupervisor>; the popup ticks it.
+  const [activeMicrophoneId, setActiveMicrophoneId] = useState<string | null>(null);
+  const handleSetBridgeMicDevice = useCallback(
+    async (deviceId: string) => {
+      const control = localMediaControlRef.current;
+      if (!control) {
+        console.warn("[bridge] Microphone pick from the popup ignored: the meeting is not connected");
+        return;
+      }
+      // Never a virtual cable: its capture side is what WarpTalk itself plays to Meet, so recording
+      // it would transcribe WarpTalk's own output (lib/meeting/bridge-mic-device). The popup does
+      // not offer one; this refuses a stale or forged pick too.
+      let label = "";
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        label = devices.find((d) => d.kind === "audioinput" && d.deviceId === deviceId)?.label ?? "";
+      } catch {
+        // No list: the pick is still applied; the device line in main.log names what it became.
+      }
+      if (isVirtualMicrophoneLabel(label)) {
+        console.warn(`[bridge] Microphone pick refused: "${label}" is a virtual cable, not a microphone`);
+        return;
+      }
+      try {
+        await control.switchMicrophone(deviceId);
+        rememberSelectedMicrophone(window.sessionStorage, roomId, deviceId);
+        console.warn(`[bridge] WarpTalk mic switched from the popup to "${label || deviceId}"`);
+      } catch (error) {
+        console.warn(
+          `[bridge] WarpTalk mic switch to "${label || deviceId}" failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        toast.error("Could not switch your microphone. It may have been unplugged or be in use by another app.");
+      }
+    },
+    [roomId],
+  );
+  // What Meet hears from this person (the dub, the raw mic, nothing) and since when, from
+  // <FilteredRoomAudio>. Every change goes to main.log: "Meet heard me untranslated" is otherwise
+  // unanswerable after the fact.
+  const [bridgeOutbound, setBridgeOutbound] = useState<BridgeWidgetOutboundSnapshot | undefined>(undefined);
+  const handleBridgeOutboundLegChange = useCallback(
+    (leg: BridgeOutboundLeg, outboundIdentity: string | null) => {
+      if (!isBridgeRoom) return;
+      console.warn(describeOutboundLegChange(leg, outboundIdentity));
+      setBridgeOutbound({ leg, sinceMs: Date.now() });
+    },
+    [isBridgeRoom],
+  );
+
   const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
     enabled: isBridgeRoom,
@@ -3623,6 +3691,9 @@ export function PersistentMeetingSession({
     speakLanguage: isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : null,
     listenLanguage: targetLanguage,
     voiceEnabled,
+    micDeviceId: isBridgeRoom ? activeMicrophoneId : null,
+    onSetMicDevice: isBridgeRoom ? (deviceId) => void handleSetBridgeMicDevice(deviceId) : undefined,
+    outbound: isBridgeRoom ? bridgeOutbound : undefined,
     browserCaptureState: consentState,
     selectedLoopbackSourceId,
     voice: {
@@ -3703,9 +3774,15 @@ export function PersistentMeetingSession({
       router.push(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
       void showDesktopMainWindow();
     },
-    // WT-912: the WarpTalk mic follows Meet's mute button. The popup shows nothing while it does,
-    // and one chip where Meet cannot be read ("manual"), whose press lands here.
-    mic: isBridgeRoom ? { enabled: microphoneEnabled, control: meetFollow.micControl } : undefined,
+    // WT-912: the WarpTalk mic follows Meet's mute button. The popup always shows it while the user
+    // is in the call; its press lands here, as an override while following Meet (2026-10-03).
+    mic: isBridgeRoom
+      ? {
+          enabled: microphoneEnabled,
+          control: meetFollow.micControl,
+          ...(meetFollow.micOverridden ? { override: true } : {}),
+        }
+      : undefined,
     onSetMicEnabled: isBridgeRoom ? meetFollow.setManualMic : undefined,
     // WT-913: the user left the Meet call. Asked only of whoever may end the room (the server takes
     // an End from the room's host alone); "End now" is the same exit the countdown runs out into.
@@ -4057,6 +4134,9 @@ export function PersistentMeetingSession({
       // "host muted you" that only repainted an icon was the same lie WT-303 reports.
       localMediaControlRef.current?.setMicrophoneEnabled(false);
       setMicrophoneEnabled(false);
+      // A bridge mic follows Meet: record the mute as the popup's override, so the self-heal does
+      // not turn it back on and the next change of Meet's button hands control back to Meet.
+      if (isBridgeRoomRef.current) meetFollowSetManualMicRef.current(false);
       toast.error("You were muted by the host.");
     });
     // WT-06
@@ -5088,6 +5168,15 @@ export function PersistentMeetingSession({
           avatarUrl={user?.avatarUrl}
         />
 
+        {/* Field evidence 2026-10-03: the host's mic was lost from the wire by a LiveKit full
+            reconnect and nothing noticed. Bridge rooms only: see local-mic-supervisor.tsx. */}
+        {isBridgeRoom ? (
+          <LocalMicSupervisor
+            intentRef={meetFollow.micIntentRef}
+            onActiveMicrophoneChange={setActiveMicrophoneId}
+          />
+        ) : null}
+
         {/* WT-910: the Google Meet window, published for a bridge recording. Bridge rooms only. */}
         {isBridgeRoom ? (
           <BridgeMeetWindowPublisher controlRef={meetWindowControlRef} wanted={meetWindowWanted} />
@@ -5127,6 +5216,7 @@ export function PersistentMeetingSession({
           })}
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
+          onBridgeOutboundLegChange={handleBridgeOutboundLegChange}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}
@@ -5851,6 +5941,13 @@ function LocalMediaController({
           toast.error("Could not change your camera.");
         });
       },
+      // Exact, as media-device-menu.tsx switches: see its WT-631 note for why not a soft match.
+      // Also what LiveKit captures from on the next publish (it updates audioCaptureDefaults), so a
+      // mic re-published by the self-heal stays on the picked device.
+      switchMicrophone: async (deviceId) => {
+        const switched = await room.switchActiveDevice("audioinput", deviceId, true);
+        if (switched === false) throw new Error("LiveKit could not switch the microphone");
+      },
     };
 
     const mirror = () => {
@@ -5860,8 +5957,12 @@ function LocalMediaController({
     };
 
     mirror();
+    // Reconnected too: LiveKit re-publishes every local track after a full reconnect while the room
+    // is NOT Connected, so those events are skipped above, and a re-publish that failed (field
+    // evidence 2026-10-03) left this mirror saying "on" over a microphone that was gone.
     room
       .on(RoomEvent.Connected, mirror)
+      .on(RoomEvent.Reconnected, mirror)
       .on(RoomEvent.LocalTrackPublished, mirror)
       .on(RoomEvent.LocalTrackUnpublished, mirror)
       .on(RoomEvent.TrackMuted, mirror)
@@ -5870,6 +5971,7 @@ function LocalMediaController({
     return () => {
       room
         .off(RoomEvent.Connected, mirror)
+        .off(RoomEvent.Reconnected, mirror)
         .off(RoomEvent.LocalTrackPublished, mirror)
         .off(RoomEvent.LocalTrackUnpublished, mirror)
         .off(RoomEvent.TrackMuted, mirror)

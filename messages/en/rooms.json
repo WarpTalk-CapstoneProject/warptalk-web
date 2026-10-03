@@ -305,7 +305,9 @@
       "text": "Text",
       "voice": "Voice",
       "textHint": "Text: you read the translation and hear the call as it is.",
-      "voiceHint": "Voice: you hear them translated, with the original quieter underneath."
+      "voiceHint": "Voice: you hear them translated, with the original quieter underneath.",
+      "prefix": "You hear",
+      "onlyYou": "This only changes what you hear. People in Meet are not affected."
     },
     "devices": {
       "hint": "Opens device setup in the WarpTalk window"
@@ -348,7 +350,7 @@
       "unknown": "Connecting to WarpTalk…",
       "voiceNeedsCable": "Translated voice needs VB-CABLE. Install it from Device settings.",
       "textUnavailable": "Your own voice isn't available on this computer.",
-      "lockedHint": "You can switch back to translated voice after translation stops.",
+      "lockedHint": "To switch back to translated voice: press Stop, pick Translated voice here, then press Start again.",
       "headphones": "Use headphones: your speakers play the call, and your microphone can pick it up.",
       "nowText": "Meet now hears your own voice.",
       "nowVoice": "Meet now hears your translated voice.",
@@ -361,7 +363,8 @@
       "textOnCable": {
         "title": "People in the Meet call can't hear you.",
         "body": "Meet's microphone is set to “CABLE Output”, which only carries your translated voice, and WarpTalk is sending your own voice. In Meet, click the arrow next to the microphone button and choose your real microphone.",
-        "action": "Send my translated voice instead"
+        "action": "Send my translated voice instead",
+        "locked": "Translated voice can't be switched on while translation is running. Either choose your real microphone in Meet, or press Stop, set ⚙ → “Meet hears you” to Translated voice, and press Start again."
       },
       "voiceOnReal": {
         "title": "People in the Meet call hear you untranslated.",
@@ -386,7 +389,10 @@
       "on": "WarpTalk mic is on",
       "turnOn": "Turn on",
       "turnOff": "Turn off",
-      "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand."
+      "hint": "WarpTalk can't read Google Meet's mute button here, so its microphone is set by hand.",
+      "followsMeet": "follows Meet's mute button",
+      "overridden": "set by hand until you next use Meet's mute button",
+      "meetHint": "WarpTalk follows Google Meet's mute button. If Meet shows you unmuted and this says off, turn it on here: it stays on until you next press Meet's mute button."
     },
     "voiceCloneMode": {
       "label": "Voice clone mode",
@@ -402,6 +408,22 @@
       "statusFailed": "Could not check who is already ticked.",
       "retry": "Try again",
       "saveFailed": "Could not save this choice."
+    },
+    "micDevice": {
+      "settingsRow": "Microphone",
+      "title": "WarpTalk's microphone",
+      "hint": "The microphone WarpTalk listens to. Meet's own microphone stays on “CABLE Output”.",
+      "none": "No microphones found. Plug one in, or allow microphone access.",
+      "unknown": "Not known yet",
+      "virtual": "WarpTalk is recording “{label}”, a virtual cable, not your microphone. Pick your real microphone below."
+    },
+    "rawMic": {
+      "title": "People in Meet hear your own voice, untranslated.",
+      "body": "No translated voice has arrived from WarpTalk yet, so Meet gets your microphone as it is. If this stays, check that translation is running and that your microphone is picked under ⚙ → Microphone."
+    },
+    "meetSpeaker": {
+      "title": "Meet's speaker is set to “CABLE Input”.",
+      "body": "You can't hear the call, and the other side's voice loops back into your microphone. In Meet, open Settings → Audio and set Speakers to your headphones."
     }
   }
 }

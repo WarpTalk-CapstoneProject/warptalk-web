@@ -30,6 +30,15 @@
  *   (a PiP window whose title carried no code; a room whose URL has none). A code that DISAGREES
  *   is another call, and must neither unmute this room nor end it.
  *
+ * THE SENSOR CAN BE WRONG, SO THE USER CAN OVERRIDE IT (field evidence, 2026-10-03)
+ *   The desktop's reading of Meet's mute button flapped (muted / unmuted within a second) and
+ *   settled on "muted" while the button visibly showed unmuted; WarpTalk then heard nothing of the
+ *   host, and the popup said nothing because the mic was "following Meet". The popup now always
+ *   shows the WarpTalk mic, and its press while following Meet is an OVERRIDE (`micOverride`): it
+ *   wins over Meet's reading until that reading next CHANGES (any flip of the button, a real one or
+ *   a flap) or the user leaves the call. It never fights the follow loop: the next change of Meet's
+ *   button is the user operating Meet again, and Meet is the source of truth again from there.
+ *
  * THE FALLBACK IS A CHIP, NOT A GATE
  *   An older desktop, macOS, or a Meet the sensor cannot read never yields a mic reading. The mic
  *   then stays off, and the popup offers one compact chip to turn it on by hand (`micControl:
@@ -70,6 +79,11 @@ export type MeetFollowState = {
   leave: { endsAtMs: number } | null;
   /** "Keep open" was pressed for this leave; cleared by the next `in-call`. */
   leaveKept: boolean;
+  /**
+   * The popup's override of Meet's reading, or null. Held until Meet's reading next changes, or the
+   * user leaves the call. See THE SENSOR CAN BE WRONG above.
+   */
+  micOverride: boolean | null;
 };
 
 export const INITIAL_MEET_FOLLOW: MeetFollowState = {
@@ -78,6 +92,7 @@ export const INITIAL_MEET_FOLLOW: MeetFollowState = {
   meetMuted: null,
   leave: null,
   leaveKept: false,
+  micOverride: null,
 };
 
 export type MeetFollowEvent =
@@ -86,7 +101,9 @@ export type MeetFollowEvent =
   /** "Keep open" in the popup: no end for this leave, and no prompt until the next one. */
   | { type: "keep-open" }
   /** The countdown was acted on (ended, left) and must not fire again. */
-  | { type: "leave-resolved" };
+  | { type: "leave-resolved" }
+  /** The popup's press while the mic follows Meet: overrides Meet's reading (see above). */
+  | { type: "mic-override"; enabled: boolean };
 
 export function reduceMeetFollow(state: MeetFollowState, event: MeetFollowEvent): MeetFollowState {
   switch (event.type) {
@@ -103,15 +120,16 @@ export function reduceMeetFollow(state: MeetFollowState, event: MeetFollowEvent)
         case "lobby":
           // The join screen: not in the call. A countdown already running keeps running, since only
           // being back IN the call cancels it; and an armed leave stays armed, so closing the tab
-          // from here still counts as leaving.
-          return state.believed === "lobby" ? state : { ...state, believed: "lobby" };
+          // from here still counts as leaving. An override was for that call, and ends with it.
+          return state.believed === "lobby" ? state : { ...state, believed: "lobby", micOverride: null };
         case "left": {
           if (!state.leaveArmed) {
-            return state.believed === "left" ? state : { ...state, believed: "left" };
+            return state.believed === "left" ? state : { ...state, believed: "left", micOverride: null };
           }
           return {
             ...state,
             believed: "left",
+            micOverride: null,
             leaveArmed: false,
             leave: { endsAtMs: event.now + MEET_LEFT_COUNTDOWN_MS },
             leaveKept: false,
@@ -127,7 +145,16 @@ export function reduceMeetFollow(state: MeetFollowState, event: MeetFollowEvent)
       if (!trustsMeetReading(mic.meetCode, event.roomMeetCode)) return state;
       // Stale or unreadable: keep the last value that was actually read.
       if (mic.stale || typeof mic.muted !== "boolean") return state;
-      return state.meetMuted === mic.muted ? state : { ...state, meetMuted: mic.muted };
+      // A change of Meet's button ends an override: the user is operating Meet again.
+      return state.meetMuted === mic.muted ? state : { ...state, meetMuted: mic.muted, micOverride: null };
+    }
+    case "mic-override": {
+      // Only while the mic follows Meet. Elsewhere there is no reading to override: the chip
+      // applies directly ("manual"), or the user is not in the call ("none").
+      if (meetFollowMicControl(state) !== "meet") return state;
+      // Pressing for what Meet already says is not an override; it also ends one.
+      const micOverride = event.enabled === !state.meetMuted ? null : event.enabled;
+      return state.micOverride === micOverride ? state : { ...state, micOverride };
     }
     case "keep-open":
       return state.leave ? { ...state, leave: null, leaveKept: true } : state;
@@ -154,13 +181,17 @@ export function meetFollowLeftCall(state: MeetFollowState): boolean {
 /**
  * What the WarpTalk microphone should be, or null for "leave it as it is".
  *
- *   in the call, Meet's button read  → the opposite of muted
+ *   in the call, Meet's button read  → the popup's override if there is one, else the opposite of
+ *                                      muted
  *   in the call, never read          → null: stays off, and the popup's chip is the way to turn it on
  *   lobby / left                     → off. Not in the call, so nothing of theirs is published
  *   never told a phase               → null: an older desktop, macOS. The chip again
  */
 export function meetFollowMicTarget(state: MeetFollowState): boolean | null {
-  if (state.believed === "in-call") return state.meetMuted === null ? null : !state.meetMuted;
+  if (state.believed === "in-call") {
+    if (state.meetMuted === null) return null;
+    return state.micOverride ?? !state.meetMuted;
+  }
   if (state.believed === "lobby" || state.believed === "left") return false;
   return null;
 }
@@ -168,7 +199,7 @@ export function meetFollowMicTarget(state: MeetFollowState): boolean | null {
 /**
  * Who decides the WarpTalk mic right now.
  *
- *   "meet"    it follows Meet's button; the popup shows nothing
+ *   "meet"    it follows Meet's button (or the popup's override of it, until the button changes)
  *   "manual"  Meet's button cannot be read; the popup offers the chip
  *   "none"    the user is not in the call (lobby, left): no mic, and no chip to turn one on
  */
@@ -181,12 +212,35 @@ export function meetFollowMicControl(state: MeetFollowState): MeetMicControl {
 }
 
 /**
- * Whether the popup's chip may change the mic: only while Meet's button cannot be read. A press
- * that arrives after the mic started following Meet is stale, and applying it would put WarpTalk
- * out of step with the one button the user is told to use. Rejected, never reinterpreted.
+ * Whether the popup's mic button may change the mic: while Meet's button cannot be read (the chip,
+ * applied directly) and while it follows Meet (an override, held until Meet's button next changes:
+ * see THE SENSOR CAN BE WRONG). Not while the user is out of the call: nothing of theirs is
+ * published there, and a press from before they left is stale.
  */
 export function acceptsManualMic(control: MeetMicControl | undefined): boolean {
-  return control === "manual";
+  return control === "manual" || control === "meet";
+}
+
+/** Whether the mic is on the popup's override rather than on Meet's reading right now. */
+export function meetFollowMicOverridden(state: MeetFollowState): boolean {
+  return meetFollowMicControl(state) === "meet" && state.micOverride !== null;
+}
+
+/**
+ * Why `meetFollowMicTarget` is what it is, in words for main.log. Every applied on/off is logged
+ * with it, so a mic that went off can be traced to the reading (or the press) that turned it off.
+ */
+export function describeMeetFollowMicReason(state: MeetFollowState): string {
+  if (state.believed === "lobby") return "the user is in the Meet lobby";
+  if (state.believed === "left") return "the user left the Meet call";
+  if (state.believed === "in-call" && state.meetMuted !== null) {
+    const reading = state.meetMuted ? "muted" : "unmuted";
+    if (state.micOverride !== null) {
+      return `overridden in the popup (Meet's button reads ${reading}; held until it changes)`;
+    }
+    return `Meet's mute button reads ${reading}`;
+  }
+  return "Meet's mute button cannot be read";
 }
 
 /** What the main window does when a leave's countdown runs out, or "End now" is pressed. */

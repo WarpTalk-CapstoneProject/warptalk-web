@@ -6,9 +6,11 @@ import {
   INITIAL_MEET_FOLLOW,
   MEET_LEFT_COUNTDOWN_MS,
   acceptsManualMic,
+  describeMeetFollowMicReason,
   meetFollowInCall,
   meetFollowLeftCall,
   meetFollowMicControl,
+  meetFollowMicOverridden,
   meetFollowMicTarget,
   meetLeaveOutcome,
   meetLeavePrompt,
@@ -124,11 +126,61 @@ test("an older desktop or macOS never says a phase: nothing is applied, the chip
   assert.equal(meetFollowMicControl(mac), "manual");
 });
 
-test("the chip's press is accepted only while Meet's button cannot be read", () => {
+test("the popup's press is accepted while in the call (chip or override), never out of it", () => {
   assert.equal(acceptsManualMic("manual"), true);
-  assert.equal(acceptsManualMic("meet"), false);
+  assert.equal(acceptsManualMic("meet"), true);
   assert.equal(acceptsManualMic("none"), false);
   assert.equal(acceptsManualMic(undefined), false);
+});
+
+// ── the popup's override (field evidence 2026-10-03: the sensor read "muted" on an unmuted button) ──
+
+test("an override wins over Meet's reading until that reading next changes", () => {
+  let state = run([callEvent(call("in-call")), micEvent(mic(true))]);
+  assert.equal(meetFollowMicTarget(state), false);
+  state = reduceMeetFollow(state, { type: "mic-override", enabled: true });
+  assert.equal(meetFollowMicTarget(state), true);
+  assert.equal(meetFollowMicOverridden(state), true);
+  assert.equal(meetFollowMicControl(state), "meet");
+  assert.match(describeMeetFollowMicReason(state), /overridden in the popup .*reads muted/);
+  // The same reading again (the desktop repeats itself) keeps the override.
+  state = reduceMeetFollow(state, micEvent(mic(true)));
+  assert.equal(meetFollowMicTarget(state), true);
+  // A change of Meet's button (the user operating Meet, or a flap) hands control back to Meet.
+  state = reduceMeetFollow(state, micEvent(mic(false)));
+  assert.equal(meetFollowMicOverridden(state), false);
+  state = reduceMeetFollow(state, micEvent(mic(true)));
+  assert.equal(meetFollowMicTarget(state), false);
+});
+
+test("pressing for what Meet already says is not an override, and ends one", () => {
+  let state = run([callEvent(call("in-call")), micEvent(mic(false))]);
+  assert.equal(reduceMeetFollow(state, { type: "mic-override", enabled: true }), state);
+  state = reduceMeetFollow(state, { type: "mic-override", enabled: false });
+  assert.equal(meetFollowMicTarget(state), false);
+  state = reduceMeetFollow(state, { type: "mic-override", enabled: true });
+  assert.equal(meetFollowMicOverridden(state), false);
+  assert.equal(meetFollowMicTarget(state), true);
+});
+
+test("an override needs a reading to override, and ends when the user leaves the call", () => {
+  const unread = run([callEvent(call("in-call"))]);
+  assert.equal(reduceMeetFollow(unread, { type: "mic-override", enabled: true }), unread);
+  let state = run([callEvent(call("in-call")), micEvent(mic(true)), { type: "mic-override", enabled: true }]);
+  state = reduceMeetFollow(state, callEvent(call("lobby")));
+  assert.equal(state.micOverride, null);
+  assert.equal(meetFollowMicTarget(state), false);
+  state = reduceMeetFollow(state, callEvent(call("in-call")));
+  assert.equal(meetFollowMicTarget(state), false, "back in the call, Meet's reading again");
+});
+
+test("every reason the mic is on or off has words for main.log", () => {
+  assert.equal(describeMeetFollowMicReason(INITIAL_MEET_FOLLOW), "Meet's mute button cannot be read");
+  assert.equal(
+    describeMeetFollowMicReason(run([callEvent(call("in-call")), micEvent(mic(true))])),
+    "Meet's mute button reads muted",
+  );
+  assert.equal(describeMeetFollowMicReason(run([callEvent(call("lobby"))])), "the user is in the Meet lobby");
 });
 
 // ── leaving Meet (WT-913) ────────────────────────────────────────────────────
