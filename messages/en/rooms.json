@@ -319,6 +319,8 @@
       "intro": "Pick your language. Everyone else in the call is translated into it for you.",
       "start": "Start translation",
       "pickFirst": "Choose your language first",
+      "farSideTitle": "Others in the call speak",
+      "farSideHint": "What the people in Google Meet speak. You can change it later from the people icon.",
       "waitingForHost": "The meeting host or the person capturing this call starts translation.",
       "continue": "Continue",
       "started": "Translation started.",

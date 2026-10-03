@@ -7,6 +7,7 @@ import {
   farSideLanguageProblem,
   planBridgeRoomLanguages,
 } from "../bridge-far-side-language.ts";
+import { meetingLanguagesForPolicy } from "../../language/languages.ts";
 
 test("the stand-in id is the backend's ExternalBridgeConstants.ParticipantUserId", () => {
   assert.equal(BRIDGE_STAND_IN_USER_ID, "00000000-0000-0000-0000-00000000b21d");
@@ -17,10 +18,15 @@ test("default: the first allowed language that is not the host's", () => {
   assert.deepEqual(defaultFarSideLanguage("ja-JP", ["JA", "vi-VN"]), { language: "vi", translatable: true });
 });
 
-test("default: an unrestricted workspace gets English, or Vietnamese for an English speaker", () => {
-  assert.deepEqual(defaultFarSideLanguage("vi", []), { language: "en", translatable: true });
-  assert.deepEqual(defaultFarSideLanguage("ko", []), { language: "en", translatable: true });
-  assert.deepEqual(defaultFarSideLanguage("en-US", []), { language: "vi", translatable: true });
+test("default: an unrestricted workspace gets the catalog's first other language, like native pre-join", () => {
+  // WT-909: no pair of our own. The meeting-language catalog is what the far-side pill lists when
+  // nothing is restricted, and its first option that is not the host's is the pick.
+  const catalog = meetingLanguagesForPolicy([]).map((language) => language.code);
+  for (const speak of ["vi", "ko", "en-US", "ja"]) {
+    const host = speak.split("-")[0];
+    const expected = catalog.find((code) => code !== host);
+    assert.deepEqual(defaultFarSideLanguage(speak, []), { language: expected, translatable: true }, speak);
+  }
 });
 
 test("default: a one-language workspace falls back to that language and says it cannot translate", () => {

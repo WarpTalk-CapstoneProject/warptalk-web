@@ -32,7 +32,7 @@
  * with no capturer — so a host who is not the capturer is refused there; see bridge-capturer.ts.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CaretDown, CheckCircle, UsersThree, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -54,31 +54,20 @@ function hubRefusal(error: unknown): string | null {
   return at === -1 ? null : message.slice(at + marker.length).trim() || null;
 }
 
-
-export function DockFarSideLanguagePill() {
+/**
+ * What the far side speaks, what it may be changed to, and the one way to change it. Shared by the
+ * dock's pill and the popup's first screen (WT-909), so the two cannot disagree: both list the
+ * same options and both go through the same hub call.
+ */
+export function useFarSideLanguagePick() {
   const t = useTranslations("rooms.bridgeFarSide");
-  const {
-    roomId,
-    room,
-    canControl,
-    hub,
-    connectionState,
-    readerLanguage,
-    farSideLanguage,
-    setFarSideLanguage,
-  } = useBridgeWidget();
-  const tPolicy = useTranslations("rooms.bridgeWidget.languagePolicy");
+  const { roomId, room, hub, connectionState, readerLanguage, farSideLanguage, setFarSideLanguage } =
+    useBridgeWidget();
   // The same public per-room read the host's pill uses: it is about the ROOM's workspace.
   const { allowedTargetLanguages, policyStatus } = useBridgeLanguagePolicy();
-  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuId = useId();
-  const hintId = useId();
 
   const enabled = Boolean(hub) && connectionState === "live" && !pending;
-  const menuOpen = open && enabled;
 
   // Every meeting language the workspace allows — once the policy has loaded. While it is not
   // known (loading, no room code yet, or the read failed) only the room's own languages are
@@ -101,6 +90,44 @@ export function DockFarSideLanguagePill() {
     farSideLanguage,
     allowedLanguages: allowedTargetLanguages,
   });
+
+  const pick = useCallback(
+    (language: string) => {
+      if (!enabled || !hub) return;
+      const code = normalizeLanguageCode(language);
+      if (!code || code === farSideLanguage) return;
+
+      const previous = farSideLanguage;
+      // At once, like the host's pill: the dock should agree with the choice, not a round trip later.
+      setFarSideLanguage(code);
+      setPending(true);
+      hub
+        .invoke("SetExternalMeetingLanguage", roomId, code)
+        .catch((error: unknown) => {
+          if (previous) setFarSideLanguage(previous);
+          toast.error(t("failed"), { description: hubRefusal(error) ?? undefined });
+        })
+        .finally(() => setPending(false));
+    },
+    [enabled, hub, farSideLanguage, setFarSideLanguage, roomId, t],
+  );
+
+  return { enabled, pending, options, problem, farSideLanguage, policyStatus, pick };
+}
+
+export function DockFarSideLanguagePill() {
+  const t = useTranslations("rooms.bridgeFarSide");
+  const { room, canControl, connectionState } = useBridgeWidget();
+  const tPolicy = useTranslations("rooms.bridgeWidget.languagePolicy");
+  const farSide = useFarSideLanguagePick();
+  const { enabled, pending, options, problem, farSideLanguage, policyStatus } = farSide;
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  const hintId = useId();
+
+  const menuOpen = open && enabled;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -126,23 +153,10 @@ export function DockFarSideLanguagePill() {
   if (!canControl || (room && !isExternalBridge(room.translationRoomType))) return null;
 
   function pick(language: string) {
-    if (!enabled || !hub) return;
+    if (!enabled) return;
     setOpen(false);
     triggerRef.current?.focus();
-    const code = normalizeLanguageCode(language);
-    if (!code || code === farSideLanguage) return;
-
-    const previous = farSideLanguage;
-    // At once, like the host's pill: the dock should agree with the choice, not a round trip later.
-    setFarSideLanguage(code);
-    setPending(true);
-    hub
-      .invoke("SetExternalMeetingLanguage", roomId, code)
-      .catch((error: unknown) => {
-        if (previous) setFarSideLanguage(previous);
-        toast.error(t("failed"), { description: hubRefusal(error) ?? undefined });
-      })
-      .finally(() => setPending(false));
+    farSide.pick(language);
   }
 
   const hint = connectionState === "live" ? t("hint") : t("connecting");

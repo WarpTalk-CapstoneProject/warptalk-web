@@ -319,6 +319,8 @@
       "intro": "Chọn ngôn ngữ của bạn. Mọi người khác trong cuộc gọi được dịch sang ngôn ngữ đó cho bạn.",
       "start": "Bắt đầu dịch",
       "pickFirst": "Hãy chọn ngôn ngữ của bạn trước",
+      "farSideTitle": "Người khác trong cuộc gọi nói",
+      "farSideHint": "Ngôn ngữ của những người trong Google Meet. Bạn có thể đổi lại sau ở biểu tượng người.",
       "waitingForHost": "Chủ phòng hoặc người đang thu âm cuộc gọi này sẽ bắt đầu dịch.",
       "continue": "Tiếp tục",
       "started": "Đã bắt đầu dịch.",

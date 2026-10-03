@@ -13,30 +13,29 @@
  *   language is also listed first in `targetLanguages` so a server that predates the field still
  *   seeds the right one.
  *
- * THE DEFAULT
- *   Nobody has told us what the other side speaks when a room is created automatically, so the
- *   guess is the first language the workspace allows that is not the host's. An unrestricted
- *   workspace gets English — or Vietnamese when the host speaks English, since a Vietnamese
- *   product's most common other half is the pair. A workspace that allows ONE language has no
- *   second language to give; the room is still created (the host may be about to ask an admin) and
- *   the popup says why nothing will be translated, rather than producing a room that is silently
- *   dead.
+ * THE DEFAULT — THE NATIVE PRE-JOIN'S RULE, NOT A LANGUAGE OF OURS (WT-909)
+ *   Nobody has told us what the other side speaks when a room is created automatically, and there
+ *   is always ONE language picked, as on a native meeting's pre-join screen: the first option of
+ *   the list the picker offers (lib/language/prejoin.ts falls back to `options[0]` the same way).
+ *   That list is the workspace's allowed languages, or the meeting-language catalog when it allows
+ *   everything — the very list the far-side pill shows — minus the host's own language. This used
+ *   to be English, or Vietnamese for an English speaker, written here: a pair of our own, not the
+ *   list's. The popup's first screen shows the pick and changes it before Start.
+ *   A workspace that allows ONE language has no second language to give; the room is still
+ *   created (the host may be about to ask an admin) and the popup says why nothing will be
+ *   translated, rather than producing a room that is silently dead.
  *
  * Pure: no React, no network, so each rule is a unit test.
  */
 
 import { normalizeLanguage } from "../language/language-profile.ts";
+import { meetingLanguagesForPolicy } from "../language/languages.ts";
 
 /**
  * The stand-in's user id, which is also its LiveKit identity and its key in every per-room Redis
  * hash. The backend's WarpTalk.Shared.ExternalBridgeConstants.ParticipantUserId.
  */
 export const BRIDGE_STAND_IN_USER_ID = "00000000-0000-0000-0000-00000000b21d";
-
-/** Used when the workspace does not restrict languages. */
-const UNRESTRICTED_DEFAULT = "en";
-/** ...unless the host already speaks it. */
-const UNRESTRICTED_DEFAULT_FOR_ENGLISH_SPEAKERS = "vi";
 
 function normalizedList(languages: readonly (string | null | undefined)[]): string[] {
   const seen = new Set<string>();
@@ -48,9 +47,10 @@ function normalizedList(languages: readonly (string | null | undefined)[]): stri
 }
 
 /**
- * The far side's default: the first allowed language that differs from `speak`; with no
- * restriction, English (Vietnamese for an English speaker). `translatable` is false only when the
- * workspace allows nothing but the host's own language — `language` is then that language.
+ * The far side's default: the first offered language that differs from `speak` — the workspace's
+ * allowed list in its order, or the meeting-language catalog when nothing is restricted. False
+ * `translatable` only when the workspace allows nothing but the host's own language — `language`
+ * is then that language.
  */
 export function defaultFarSideLanguage(
   speak: string,
@@ -58,15 +58,9 @@ export function defaultFarSideLanguage(
 ): { language: string; translatable: boolean } {
   const host = normalizeLanguage(speak) ?? speak;
   const allowed = normalizedList(allowedLanguages);
+  const offered = allowed.length > 0 ? allowed : normalizedList(meetingLanguagesForPolicy([]).map((l) => l.code));
 
-  if (allowed.length === 0) {
-    return {
-      language: host === UNRESTRICTED_DEFAULT ? UNRESTRICTED_DEFAULT_FOR_ENGLISH_SPEAKERS : UNRESTRICTED_DEFAULT,
-      translatable: true,
-    };
-  }
-
-  const other = allowed.find((language) => language !== host);
+  const other = offered.find((language) => language !== host);
   return other ? { language: other, translatable: true } : { language: host, translatable: false };
 }
 
