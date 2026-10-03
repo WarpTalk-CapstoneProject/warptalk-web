@@ -24,6 +24,7 @@
     "filterNote": "これは現在WarpTalkが提供しているプラグインを絞り込みます。より広いマーケットプレイスを検索するものではありません。",
     "clearFilter": "絞り込みを解除"
   },
+  "addToWorkspace": "ワークスペースに追加",
   "actionLabels": {
     "connect": "接続",
     "manage": "管理",

@@ -168,6 +168,11 @@ export interface PluginWorkspaceBlock {
   reason: string;
   /** What the member can actually do about it, or null when we cannot tell which refusal this is. */
   remedy: string | null;
+  /**
+   * The caller is this workspace's Owner and the refusal is "not added": they can add it right
+   * here instead of asking themselves. The server says so with `canAdd`.
+   */
+  ownerCanAdd: boolean;
 }
 
 /**
@@ -180,10 +185,12 @@ export interface PluginWorkspaceBlock {
  * Matched on the sentence because the catalog DTO carries the sentence, not the error code. An
  * unrecognised sentence keeps its reason and gets no invented remedy.
  */
+const NOT_ADDED_MARKER = "has not been added to this workspace";
+
 const WORKSPACE_POLICY_REMEDIES: ReadonlyArray<{ marker: string; remedy: string }> = [
   {
     // WorkspacePluginConstants.Messages.NotAdded
-    marker: "has not been added to this workspace",
+    marker: NOT_ADDED_MARKER,
     remedy: "Only your workspace owner can add plugins. Close this and use Request to ask them.",
   },
 ];
@@ -197,7 +204,21 @@ export function pluginWorkspaceBlock(
 
   const normalized = reason.toLowerCase();
   const match = WORKSPACE_POLICY_REMEDIES.find((entry) => normalized.includes(entry.marker));
-  return { reason, remedy: match?.remedy ?? null };
+
+  // The Owner reading "Ask your workspace owner to add it" about their own workspace, with
+  // Continue disabled and nothing to press (prod, 3 Oct 2026). The server already sends `canAdd`
+  // for this row; the dialog never read it, because an installed row is a `connect` row and only
+  // uninstalled rows got the Add button. The server's sentence is replaced here because its second
+  // half is addressed to somebody else.
+  if (match?.marker === NOT_ADDED_MARKER && plugin.canAdd === true) {
+    return {
+      reason: "This plugin has not been added to this workspace yet.",
+      remedy: "You own this workspace, so you can add it here and then continue.",
+      ownerCanAdd: true,
+    };
+  }
+
+  return { reason, remedy: match?.remedy ?? null, ownerCanAdd: false };
 }
 
 /**

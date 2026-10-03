@@ -24,6 +24,7 @@
     "filterNote": "Bộ lọc này chỉ áp dụng cho các plugin WarpTalk cung cấp hiện tại. Nó không tìm kiếm trong một kho plugin rộng hơn.",
     "clearFilter": "Xóa bộ lọc"
   },
+  "addToWorkspace": "Thêm vào workspace",
   "actionLabels": {
     "connect": "Kết nối",
     "manage": "Quản lý",

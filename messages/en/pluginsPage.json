@@ -24,6 +24,7 @@
     "filterNote": "This filters the plugins WarpTalk offers today. It does not search a wider marketplace.",
     "clearFilter": "Clear filter"
   },
+  "addToWorkspace": "Add to workspace",
   "actionLabels": {
     "connect": "Connect",
     "manage": "Manage",
