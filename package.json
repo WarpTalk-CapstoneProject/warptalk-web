@@ -41,7 +41,7 @@
     "test:egress-participants": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/egress-participants.test.ts",
     "test:egress-template-public": "node scripts/check-egress-template-public-contract.mjs",
     "test:egress-meet-window": "node scripts/check-egress-meet-window-contract.mjs",
-    "test:meet-window-track": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meet-window-track.test.ts",
+    "test:meet-window-track": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meet-window-track.test.ts src/lib/meeting/__tests__/meet-window-crop.test.ts",
     "test:meet-audio-track": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meet-audio-track.test.ts",
     "test:publish-supervisor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/publish-supervisor.test.ts",
     "test:egress-meet-audio": "node scripts/check-egress-meet-audio-contract.mjs",

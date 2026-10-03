@@ -26,8 +26,17 @@
  *   It runs in the desktop app's main window, which is hidden behind Meet for the whole call. Its
  *   timers are not throttled: the desktop creates it with `backgroundThrottling: false`.
  *
+ * CROPPED TO THE PAGE (production recording, 03 Oct)
+ *   The capture is the whole browser window, tab strip and address bar included. `visibleRect`, when
+ *   given, is asked for every frame written — the live ones AND the repeats, so a layout change
+ *   (the bookmarks bar toggled) reaches a static window too — and the frame goes out as a WebCodecs
+ *   view of just that area (`new VideoFrame(frame, { visibleRect })`, no pixel copy). The last frame
+ *   is kept UNCROPPED, because a visibleRect is always relative to the coded frame, never to a
+ *   previous crop. A null answer, or a crop the browser refuses, sends the frame whole: what was
+ *   recorded before. See meet-window-crop.ts for how the rectangle is chosen.
+ *
  * Where the browser has no insertable streams it hands back the source unchanged, which is exactly
- * the behaviour before this file existed.
+ * the behaviour before this file existed (and uncropped).
  */
 
 import type { TrackPublishOptions } from "livekit-client";
@@ -78,10 +87,27 @@ export interface SteadyFrameTrack {
   stop: () => void;
 }
 
+/** A rectangle in a frame's coded pixels (WebCodecs DOMRectInit). */
+export interface FrameRectLike {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /* Insertable streams are Chromium-only and not in the DOM lib this project compiles against. */
 interface VideoFrameLike {
   clone(): VideoFrameLike;
   close(): void;
+  readonly codedWidth?: number;
+  readonly codedHeight?: number;
+  readonly visibleRect?: FrameRectLike | null;
+}
+interface VideoFrameInitLike {
+  timestamp?: number;
+  visibleRect?: FrameRectLike;
+  displayWidth?: number;
+  displayHeight?: number;
 }
 interface InsertableStreamsGlobals {
   MediaStreamTrackProcessor?: new (init: { track: MediaStreamTrack }) => {
@@ -90,7 +116,16 @@ interface InsertableStreamsGlobals {
   MediaStreamTrackGenerator?: new (init: { kind: "video" }) => MediaStreamTrack & {
     writable: WritableStream<VideoFrameLike>;
   };
-  VideoFrame?: new (source: VideoFrameLike, init: { timestamp: number }) => VideoFrameLike;
+  VideoFrame?: new (source: VideoFrameLike, init: VideoFrameInitLike) => VideoFrameLike;
+}
+
+/** The frame's own visible area in coded pixels, or null when the frame does not say. */
+export function frameVisibleArea(frame: Pick<VideoFrameLike, "codedWidth" | "codedHeight" | "visibleRect">): FrameRectLike | null {
+  const rect = frame.visibleRect;
+  if (rect && rect.width > 0 && rect.height > 0) return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  const width = frame.codedWidth ?? 0;
+  const height = frame.codedHeight ?? 0;
+  return width > 0 && height > 0 ? { x: 0, y: 0, width, height } : null;
 }
 
 /**
@@ -101,7 +136,15 @@ interface InsertableStreamsGlobals {
  */
 export async function steadyFrameTrack(
   source: MediaStreamTrack,
-  options: { intervalMs?: number; firstFrameTimeoutMs?: number } = {},
+  options: {
+    intervalMs?: number;
+    firstFrameTimeoutMs?: number;
+    /**
+     * The area of each frame to send, in its coded pixels, or null for the whole frame. Asked for
+     * every frame written, repeats included. Must be cheap: it runs up to 15 + 5 times a second.
+     */
+    visibleRect?: (frame: FrameRectLike) => FrameRectLike | null;
+  } = {},
 ): Promise<SteadyFrameTrack> {
   const intervalMs = options.intervalMs ?? MEET_WINDOW_REPEAT_INTERVAL_MS;
   const g = globalThis as unknown as InsertableStreamsGlobals;
@@ -129,6 +172,31 @@ export async function steadyFrameTrack(
     writer.write(frame).catch(() => frame.close());
   };
 
+  /**
+   * The frame to send for `base`: a view of the crop, or `base` whole. Never throws, and never
+   * closes `base` (the caller owns it). `timestamp` is set for a repeat, which needs a fresh one.
+   */
+  const shape = (base: VideoFrameLike, timestamp?: number): VideoFrameLike => {
+    const stamp = timestamp === undefined ? {} : { timestamp };
+    let rect: FrameRectLike | null = null;
+    if (options.visibleRect) {
+      const area = frameVisibleArea(base);
+      try {
+        rect = area ? options.visibleRect(area) : null;
+      } catch {
+        rect = null;
+      }
+    }
+    if (rect) {
+      try {
+        return new Frame(base, { ...stamp, visibleRect: rect, displayWidth: rect.width, displayHeight: rect.height });
+      } catch {
+        // The browser refused this rectangle (alignment, bounds): send the frame whole.
+      }
+    }
+    return timestamp === undefined ? base.clone() : new Frame(base, stamp);
+  };
+
   void (async () => {
     while (!stopped) {
       let result: ReadableStreamReadResult<VideoFrameLike>;
@@ -142,9 +210,10 @@ export async function steadyFrameTrack(
         break;
       }
       last?.close();
-      last = result.value.clone();
+      // Kept whole: a later crop is relative to the coded frame, not to an earlier crop.
+      last = result.value;
       lastAtMs = performance.now();
-      write(result.value);
+      write(shape(result.value));
       markFirstFrame();
     }
   })();
@@ -153,7 +222,7 @@ export async function steadyFrameTrack(
     if (stopped || !last || !shouldRepeatFrame(lastAtMs, performance.now(), intervalMs)) return;
     lastAtMs = performance.now();
     // A fresh timestamp: the encoder drops a frame that claims the same moment as the last one.
-    write(new Frame(last, { timestamp: Math.round(performance.now() * 1000) }));
+    write(shape(last, Math.round(performance.now() * 1000)));
   }, Math.max(20, Math.floor(intervalMs / 4)));
 
   const stop = () => {
