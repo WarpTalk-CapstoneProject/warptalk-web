@@ -68,6 +68,7 @@ const CATALOG: VoiceOptionDto[] = [
 
 const PROFILES = [
   { id: "p-carry", name: "My voice (vi-VN)", voiceId: "own-carry", language: "vi-VN" },
+  // i18n-allow: a profile name is what the person typed, in their own language.
   { id: "p-talk", name: "Tú · giọng thuyết trình", voiceId: "own-talk", language: "vi-VN" },
 ];
 
