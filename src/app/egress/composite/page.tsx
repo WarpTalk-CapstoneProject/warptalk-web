@@ -50,6 +50,15 @@
  *   drawn as a tile. Every recordable participant's AUDIO is still mounted and mixed exactly as in
  *   the grid — the layout changes the picture, never who is heard. Still read off the LiveKit room
  *   alone: no WarpTalk API, no session, the same public page.
+ *
+ * BRIDGE AUDIO: THE CALL ITSELF, AND ITS DUBS
+ *   A bridge recording was silent from 1.1 s to the end while the user talked in Meet: the mix was
+ *   WarpTalk's own STT tracks, and the user's WarpTalk mic was muted while Meet's was on. The
+ *   capturer now publishes the call's sound as `meet-audio`; when a person publishes it, it replaces
+ *   every other human audio track (they are already inside it). And a bridge recording carries the
+ *   translation too (product decision 2026-10-03): each speaker's DEFAULT dub per language is
+ *   mixed in at its published level, never as a tile. A native meeting still records no dubs. The
+ *   rules are egress-participants.ts `shouldRecordAudio`; this page only applies them.
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -66,8 +75,13 @@ import {
 import EgressHelper from "@livekit/egress-sdk";
 
 import {
+  isMeetAudioTrack,
   isMeetWindowTrack,
   isRecordableParticipant,
+  isRecordedBridgeDub,
+  meetWindowSlateAudioLine,
+  resolveEgressAudioContext,
+  shouldRecordAudio,
   MEET_WINDOW_FIRST_FRAME_TIMEOUT_MS,
   meetWindowShowsPicture,
   resolveEgressDisplayName,
@@ -85,6 +99,8 @@ interface Tile {
   kind: Track.Kind;
   /** WT-910: the Google Meet window of a bridge room, published under MEET_WINDOW_TRACK_NAME. */
   meetWindow: boolean;
+  /** A bridge room's `meet-audio`: the Google Meet call's own sound (MEET_AUDIO_TRACK_NAME). */
+  meetAudio?: boolean;
 }
 
 /** What overlays a video tile — everything here comes straight off the LiveKit `Room`. */
@@ -133,6 +149,11 @@ export default function EgressCompositePage() {
   /** Meet-window elements that have decoded a frame. See meetWindowShowsPicture. */
   const [framedElements, setFramedElements] = useState<ReadonlySet<HTMLMediaElement>>(new Set());
   const [meetWindowMuted, setMeetWindowMuted] = useState(false);
+  /**
+   * Audio that is mixed but never drawn: a bridge room's `meet-audio` and its dubs. Mounted hidden
+   * in both layouts; a dub is not a person and gets no tile.
+   */
+  const [callAudio, setCallAudio] = useState<Tile[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -209,6 +230,27 @@ export default function EgressCompositePage() {
       publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) {
+      // Bridge audio that is mixed but never drawn. Only subscribed when shouldRecordAudio said so
+      // (syncAudioSubscriptions), so this only decides where it is mounted.
+      if (
+        track.kind === Track.Kind.Audio &&
+        (isMeetAudioTrack(publication.trackName) || isRecordedBridgeDub(participant.identity))
+      ) {
+        const element = track.attach();
+        console.log(`RECORDING_AUDIO_ATTACHED ${participant.identity} ${publication.trackName || "-"}`);
+        setCallAudio((current) => [
+          ...current,
+          {
+            identity: participant.identity,
+            track,
+            element,
+            kind: track.kind,
+            meetWindow: false,
+            meetAudio: isMeetAudioTrack(publication.trackName),
+          },
+        ]);
+        return;
+      }
       // The filter, and the only line that matters. A bot's track is never subscribed, so its
       // audio never reaches the encoder.
       if (!isRecordableParticipant(participant.identity)) return;
@@ -240,6 +282,7 @@ export default function EgressCompositePage() {
       // By the track, not by `isConnected`: a subscribed tile the current layout does not mount (a
       // camera under the Meet window) is still subscribed and must survive somebody else leaving.
       setTiles((current) => current.filter((tile) => tile.track !== track));
+      setCallAudio((current) => current.filter((tile) => tile.track !== track));
     }
 
     function handleMuteChange(publication: TrackPublication, participant: Participant) {
@@ -281,14 +324,20 @@ export default function EgressCompositePage() {
           subscribeIfHuman(participant);
           refreshOverlay(participant);
         });
+        syncAudioSubscriptions();
         room.on(RoomEvent.ParticipantConnected, (participant) => {
           subscribeIfHuman(participant);
           refreshOverlay(participant);
+          syncAudioSubscriptions();
         });
         room.on(RoomEvent.TrackPublished, (_pub, participant) => {
           subscribeIfHuman(participant);
           refreshOverlay(participant);
+          syncAudioSubscriptions();
         });
+        // `meet-audio` going away hands the mix back to everyone's own tracks.
+        room.on(RoomEvent.TrackUnpublished, () => syncAudioSubscriptions());
+        room.on(RoomEvent.ParticipantDisconnected, () => syncAudioSubscriptions());
 
         EgressHelper.startRecording();
       } catch (cause) {
@@ -302,7 +351,46 @@ export default function EgressCompositePage() {
     function subscribeIfHuman(participant: RemoteParticipant) {
       if (!isRecordableParticipant(participant.identity)) return;
       participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
+        // Audio is syncAudioSubscriptions' call: whose audio is mixed depends on the whole room.
+        if (publication.kind === Track.Kind.Audio) return;
         publication.setSubscribed(true);
+      });
+    }
+
+    /** What this page last asked for, per audio publication; isSubscribed lags the request. */
+    const audioRequested = new Map<string, boolean>();
+    let audioSources = "";
+
+    /**
+     * Applies shouldRecordAudio to every audio publication in the room. Re-run on every change to
+     * who publishes what, because one publication (`meet-audio`, the stand-in) changes the answer
+     * for the others.
+     */
+    function syncAudioSubscriptions() {
+      const participants = Array.from(room.remoteParticipants.values());
+      const context = resolveEgressAudioContext(
+        participants.map((participant) => ({
+          identity: participant.identity,
+          trackNames: Array.from(participant.trackPublications.values()).map((pub) => pub.trackName),
+        })),
+      );
+      const sources = `bridge=${context.bridge} meetAudio=${context.meetAudio}`;
+      if (sources !== audioSources) {
+        audioSources = sources;
+        // The egress logs see this page's console and nothing else.
+        console.log(`RECORDING_AUDIO_SOURCES ${sources}`);
+      }
+      participants.forEach((participant) => {
+        participant.trackPublications.forEach((publication: RemoteTrackPublication) => {
+          if (publication.kind !== Track.Kind.Audio) return;
+          const wanted = shouldRecordAudio(
+            { identity: participant.identity, trackName: publication.trackName },
+            context,
+          );
+          if (audioRequested.get(publication.trackSid) === wanted) return;
+          audioRequested.set(publication.trackSid, wanted);
+          publication.setSubscribed(wanted);
+        });
       });
     }
 
@@ -326,6 +414,12 @@ export default function EgressCompositePage() {
       ? tiles.find((tile) => tile.kind === Track.Kind.Video && tile.meetWindow)
       : undefined;
 
+  const slateAudioLine = meetWindowSlateAudioLine({
+    meetAudio: callAudio.some((tile) => tile.meetAudio === true),
+    otherAudio:
+      callAudio.length > 0 || tiles.some((tile) => tile.kind === Track.Kind.Audio),
+  });
+
   if (meetWindowTile && !error) {
     const showsPicture = meetWindowShowsPicture({
       firstFrameSeen: framedElements.has(meetWindowTile.element),
@@ -346,11 +440,10 @@ export default function EgressCompositePage() {
         {/* Mounted while the slate covers it: a <video> outside the document decodes nothing, and
             the first frame is exactly what the slate is waiting for. */}
         <MediaHolder tile={meetWindowTile} style={{ width: "100%", height: "100%" }} />
-        {showsPicture ? null : <MeetWindowSlate />}
+        {showsPicture ? null : <MeetWindowSlate audioLine={slateAudioLine} />}
         {/* Everyone's audio, mounted exactly as the grid mounts it: headless Chrome only records
             what is in the DOM, and the layout must never decide who is heard. */}
-        {tiles
-          .filter((tile) => tile.kind === Track.Kind.Audio)
+        {[...tiles.filter((tile) => tile.kind === Track.Kind.Audio), ...callAudio]
           .map((tile, index) => (
             <MediaHolder
               key={`${tile.identity}-audio-${index}`}
@@ -381,6 +474,15 @@ export default function EgressCompositePage() {
       {error ? (
         <p style={{ color: "#fff", fontFamily: "sans-serif", padding: "2rem" }}>{error}</p>
       ) : null}
+      {/* Bridge audio without a tile (meet-audio, dubs): mounted, because headless Chrome only
+          records what is in the DOM; out of flow, so it takes no grid cell. */}
+      {callAudio.map((tile, index) => (
+        <MediaHolder
+          key={`${tile.identity}-call-audio-${index}`}
+          tile={tile}
+          style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+        />
+      ))}
       {participantIdentities.map((identity) => {
         const overlay = overlays[identity] || {
           name: resolveEgressDisplayName(undefined, identity),
@@ -411,7 +513,7 @@ export default function EgressCompositePage() {
  * line, never a black rectangle. Static on purpose - this page is recorded, and anything that
  * moves here would move for the length of the meeting.
  */
-function MeetWindowSlate() {
+function MeetWindowSlate({ audioLine }: { audioLine: string }) {
   return (
     <div
       style={{
@@ -428,9 +530,7 @@ function MeetWindowSlate() {
       }}
     >
       <p style={{ margin: 0, fontSize: "22px", fontWeight: 600, color: INK }}>Google Meet</p>
-      <p style={{ margin: 0, fontSize: "15px" }}>
-        Waiting for the meeting window. Audio is being recorded.
-      </p>
+      <p style={{ margin: 0, fontSize: "15px" }}>Waiting for the meeting window. {audioLine}</p>
     </div>
   );
 }

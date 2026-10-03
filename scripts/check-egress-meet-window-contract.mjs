@@ -68,7 +68,7 @@ expect(
 );
 expect(
   template,
-  /showsPicture \? null : <MeetWindowSlate \/>/,
+  /showsPicture \? null : <MeetWindowSlate[ />]/,
   TEMPLATE,
   "the template must show the slate, not a black stage, until the Meet window has a picture",
 );

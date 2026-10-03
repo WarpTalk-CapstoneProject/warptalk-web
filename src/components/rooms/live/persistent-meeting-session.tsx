@@ -227,6 +227,8 @@ import {
 } from "@/lib/meeting/bridge-recording";
 import { hydrateFromJoin, readJoinHostState } from "@/lib/meeting/join-host-state";
 import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
+import { meetAudioLocalVoiceOn, shouldPublishMeetAudio } from "@/lib/meeting/meet-audio-track";
+import { BridgeMeetAudioPublisher, type MeetAudioControl } from "./bridge-meet-audio-publisher";
 import {
   MEET_WINDOW_CAPTURE_CONSTRAINTS,
   MEET_WINDOW_PUBLISH_OPTIONS,
@@ -542,6 +544,11 @@ export function PersistentMeetingSession({
    * still WANTED is derived beside the recording effect, not stored here.
    */
   const [bridgeInboundOpenRoomId, setBridgeInboundOpenRoomId] = useState<string | null>(null);
+  /**
+   * The inbound leg's capture of Meet's playback while it is up, for the recording's `meet-audio`
+   * mix (BridgeMeetAudioPublisher). Borrowed: the leg owns and stops it.
+   */
+  const [bridgeInboundTrack, setBridgeInboundTrack] = useState<MediaStreamTrack | null>(null);
   /**
    * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
    * the published track, because an open, published leg carrying digital silence looks exactly
@@ -1514,6 +1521,7 @@ export function PersistentMeetingSession({
             // this: the replacement is already on its way, and the recording's picture must not
             // blink off across it.
             setBridgeInboundOpenRoomId(null);
+            setBridgeInboundTrack((current) => (current === handles.track ? null : current));
             stopProbe?.();
             stopProbe = null;
             setInboundHealth("unknown");
@@ -1592,6 +1600,7 @@ export function PersistentMeetingSession({
         const release = async () => {
           released = true;
           handles.track.removeEventListener("ended", onTrackEnded);
+          setBridgeInboundTrack((current) => (current === handles.track ? null : current));
           stopProbe?.();
           stopProbe = null;
           setInboundHealth("unknown");
@@ -1614,6 +1623,8 @@ export function PersistentMeetingSession({
         // WT-910: capture has started. This is the moment a bridge recording starts (not Start
         // Translation) — see the recording effect further down.
         setBridgeInboundOpenRoomId(roomId);
+        // The recording's `meet-audio` hears the far side through this same track.
+        setBridgeInboundTrack(handles.track);
         farSideMonitorRef.current = monitor;
         if (monitor) setFarSideMonitorRunning(true);
       } catch (error) {
@@ -3279,6 +3290,8 @@ export function PersistentMeetingSession({
   }, [roomId]);
   /** Published by <BridgeMeetWindowPublisher>, which is inside <LiveKitRoom> and can reach the Room. */
   const meetWindowControlRef = useRef<MeetWindowControl | null>(null);
+  /** Published by <BridgeMeetAudioPublisher>: the call's sound for the recording. */
+  const meetAudioControlRef = useRef<MeetAudioControl | null>(null);
   const startRecordingRef = useRef(setRecordingMutation.mutateAsync);
   useEffect(() => {
     startRecordingRef.current = setRecordingMutation.mutateAsync;
@@ -3345,6 +3358,12 @@ export function PersistentMeetingSession({
           : ((await meetWindowControlRef.current?.publishMeetWindow(roomId)) ?? "no-publisher");
         if (video !== "published") {
           console.warn(`[bridge] Recording without the Meet window: ${video}.`);
+        }
+        // 2b. The call's sound, so the file's first second already has it (meet-audio-track.ts).
+        // Best effort like the picture: without it the template mixes WarpTalk's own tracks.
+        const audio = (await meetAudioControlRef.current?.publishMeetAudio()) ?? "no-publisher";
+        if (audio !== "published") {
+          console.warn(`[bridge] Recording without the Meet call audio: ${audio}.`);
         }
         // 3. The same endpoint the native button calls.
         const state = await startRecordingRef.current("start");
@@ -3433,6 +3452,21 @@ export function PersistentMeetingSession({
     recording: isRecording,
     starting: bridgeRecordingStarting,
     meetOnTab,
+  });
+  // The call's sound (meet-audio) for the same recording. Not tied to the Meet tab: the call keeps
+  // sounding in PiP or behind another tab.
+  const meetAudioWanted = shouldPublishMeetAudio({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+  });
+  // This user's voice in it follows MEET's mute button, not WarpTalk's microphone (which the
+  // bridge starts off, mute-on-entry and the half-duplex gate also hold down).
+  const meetAudioLocalVoice = meetAudioLocalVoiceOn({
+    believed: meetFollow.state.believed,
+    meetMuted: meetFollow.state.meetMuted,
+    warptalkMicrophoneEnabled: microphoneEnabled,
   });
   // B18: Meet is back on its tab mid-recording: arm the desktop capture again and publish it.
   const meetWindowRepublish = shouldRepublishMeetWindow({
@@ -4875,6 +4909,16 @@ export function PersistentMeetingSession({
         {/* WT-910: the Google Meet window, published for a bridge recording. Bridge rooms only. */}
         {isBridgeRoom ? (
           <BridgeMeetWindowPublisher controlRef={meetWindowControlRef} wanted={meetWindowWanted} />
+        ) : null}
+        {/* The Google Meet call's sound, published for a bridge recording. Bridge rooms only. */}
+        {isBridgeRoom ? (
+          <BridgeMeetAudioPublisher
+            controlRef={meetAudioControlRef}
+            wanted={meetAudioWanted}
+            farSideTrack={bridgeInboundTrack}
+            localVoiceOn={meetAudioLocalVoice}
+            selectedMicrophoneId={selectedMicrophoneId}
+          />
         ) : null}
 
         <FilteredRoomAudio
