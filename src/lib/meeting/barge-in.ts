@@ -95,6 +95,14 @@ export function rms(samples: ArrayLike<number>): number {
   return Math.sqrt(sum / samples.length);
 }
 
+/**
+ * RMS (0..1) as dBFS; exact silence is -Infinity, which no threshold passes. The one copy: the
+ * bridge inbound health probe and the meet-audio echo duck both read levels through it.
+ */
+export function rmsToDbfs(level: number): number {
+  return level > 0 ? 20 * Math.log10(level) : Number.NEGATIVE_INFINITY;
+}
+
 /** Combined RMS of several simultaneous sources: powers add, amplitudes do not. */
 export function combineRms(levels: readonly number[]): number {
   let power = 0;

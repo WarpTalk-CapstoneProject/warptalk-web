@@ -7,8 +7,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { rmsToDbfs } from "../barge-in.ts";
 import {
   INITIAL_FAR_SPEECH,
+  createLatestRequest,
+  meetAudioPublishState,
+  settleWithin,
   MEET_AUDIO_DUCK_GAIN,
   MEET_AUDIO_FAR_SPEECH_HANG_MS,
   farSpeechActive,
@@ -16,7 +20,6 @@ import {
   meetAudioMicGain,
   meetAudioMicrophoneCandidates,
   reduceFarSpeech,
-  rmsToDbfs,
   shouldReopenMeetAudioMic,
   meetAudioMicrophoneConstraints,
   shouldPublishMeetAudio,
@@ -128,4 +131,34 @@ test("the microphone copy tries the meeting's device, then the default", () => {
   assert.deepEqual(meetAudioMicrophoneCandidates("headset-abc"), ["headset-abc", ""]);
   assert.deepEqual(meetAudioMicrophoneCandidates(""), [""]);
   assert.deepEqual(meetAudioMicrophoneCandidates("default"), [""]);
+});
+
+// Review round 2: only the latest mic open wins; a gone publication is not "published".
+
+test("only the latest microphone request wins; an older one landing late is discarded", () => {
+  const requests = createLatestRequest();
+  const unplugReopen = requests.begin();
+  const deviceSwitch = requests.begin();
+  assert.equal(requests.isLatest(unplugReopen), false);
+  assert.equal(requests.isLatest(deviceSwitch), true);
+});
+
+test("settleWithin reports ok, error and timeout, and never throws", async () => {
+  assert.deepEqual(await settleWithin(Promise.resolve(), 50), { outcome: "ok" });
+  const failed = await settleWithin(Promise.reject(new Error("no grant")), 50);
+  assert.equal(failed.outcome, "error");
+  assert.deepEqual(await settleWithin(new Promise(() => {}), 5), { outcome: "timeout" });
+});
+
+test("a mix whose publication left the local participant is stale, not published", () => {
+  assert.equal(meetAudioPublishState({ hasMix: false, publishedTrackSid: null, localTrackSids: [] }), "none");
+  assert.equal(
+    meetAudioPublishState({ hasMix: true, publishedTrackSid: "TR_a", localTrackSids: ["TR_mic", "TR_a"] }),
+    "published",
+  );
+  assert.equal(
+    meetAudioPublishState({ hasMix: true, publishedTrackSid: "TR_a", localTrackSids: ["TR_mic"] }),
+    "stale",
+  );
+  assert.equal(meetAudioPublishState({ hasMix: true, publishedTrackSid: null, localTrackSids: [] }), "stale");
 });

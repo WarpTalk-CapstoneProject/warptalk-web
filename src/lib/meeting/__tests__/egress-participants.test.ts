@@ -234,6 +234,7 @@ test("a room is a bridge when the stand-in, the Meet window or the Meet audio is
     bridge: false,
     meetAudio: false,
     meetAudioWithoutMic: [],
+      meetAudioFallbackMicLive: false,
   });
   assert.equal(resolveEgressAudioContext([{ identity: STAND_IN, trackNames: [""] }]).bridge, true);
   assert.equal(
@@ -244,6 +245,7 @@ test("a room is a bridge when the stand-in, the Meet window or the Meet audio is
     bridge: true,
     meetAudio: true,
     meetAudioWithoutMic: [],
+      meetAudioFallbackMicLive: false,
   });
 });
 
@@ -261,18 +263,19 @@ test("the layout's latch carries into the audio: a bridge stays a bridge after t
     bridge: true,
     meetAudio: false,
     meetAudioWithoutMic: [],
+      meetAudioFallbackMicLive: false,
   });
 });
 
 test("a bot naming a track meet-audio does not take over the mix", () => {
   assert.deepEqual(
     resolveEgressAudioContext([{ identity: DUB_FOR_HOST, trackNames: ["meet-audio"] }]),
-    { bridge: false, meetAudio: false, meetAudioWithoutMic: [] },
+    { bridge: false, meetAudio: false, meetAudioWithoutMic: [], meetAudioFallbackMicLive: false },
   );
 });
 
 test("a native meeting records every person's audio and no dub, exactly as before", () => {
-  const native = { bridge: false, meetAudio: false, meetAudioWithoutMic: [] };
+  const native = { bridge: false, meetAudio: false, meetAudioWithoutMic: [], meetAudioFallbackMicLive: false };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, native), true);
   assert.equal(shouldRecordAudio({ identity: MEMBER, trackName: "" }, native), true);
   assert.equal(shouldRecordAudio({ identity: DUB_FOR_HOST, trackName: "" }, native), false);
@@ -280,7 +283,7 @@ test("a native meeting records every person's audio and no dub, exactly as befor
 });
 
 test("a bridge recording with meet-audio mixes the call once, plus each default dub", () => {
-  const bridge = { bridge: true, meetAudio: true, meetAudioWithoutMic: [] };
+  const bridge = { bridge: true, meetAudio: true, meetAudioWithoutMic: [], meetAudioFallbackMicLive: false };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "meet-audio" }, bridge), true);
   // Already inside meet-audio: the host's WarpTalk mic, the stand-in's capture, a member's mic.
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), false);
@@ -295,7 +298,7 @@ test("a bridge recording with meet-audio mixes the call once, plus each default 
 });
 
 test("a bridge recording without meet-audio (older client) keeps WarpTalk's tracks, and the dubs", () => {
-  const bridge = { bridge: true, meetAudio: false, meetAudioWithoutMic: [] };
+  const bridge = { bridge: true, meetAudio: false, meetAudioWithoutMic: [], meetAudioFallbackMicLive: false };
   assert.equal(shouldRecordAudio({ identity: HOST, trackName: "" }, bridge), true);
   assert.equal(shouldRecordAudio({ identity: STAND_IN, trackName: "" }, bridge), true);
   assert.equal(shouldRecordAudio({ identity: DUB_FOR_FAR_SIDE, trackName: "" }, bridge), true);
@@ -350,11 +353,33 @@ test("meet-audio with its microphone (\"1\" or no attribute yet) replaces the Wa
   }
 });
 
-test("the slate says when the local voice is the WarpTalk microphone and not meet-audio", () => {
+test("the slate says the local voice is the WarpTalk microphone only while that mic is live", () => {
   assert.match(
-    meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true, meetAudioWithoutMic: true }),
-    /WarpTalk microphone/,
+    meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true, meetAudioWithoutMic: true, fallbackMicLive: true }),
+    /comes from their WarpTalk microphone/,
   );
+  // Muted or absent (the usual bridge state): the voice is missing, and the slate says so.
+  assert.match(
+    meetWindowSlateAudioLine({ meetAudio: true, otherAudio: true, meetAudioWithoutMic: true, fallbackMicLive: false }),
+    /voice is missing/,
+  );
+});
+
+test("the fallback mic counts as live only when it is published and unmuted", () => {
+  const withoutMic = { [MEET_AUDIO_MIC_ATTRIBUTE]: "0" };
+  const live = resolveEgressAudioContext([
+    { identity: HOST, trackNames: ["", "meet-audio"], attributes: withoutMic, microphoneLive: true },
+  ]);
+  assert.equal(live.meetAudioFallbackMicLive, true);
+  for (const microphoneLive of [false, undefined]) {
+    const off = resolveEgressAudioContext([
+      { identity: HOST, trackNames: ["", "meet-audio"], attributes: withoutMic, microphoneLive },
+    ]);
+    assert.equal(off.meetAudioFallbackMicLive, false);
+  }
+  // meet-audio with its microphone needs no fallback at all.
+  const withMic = resolveEgressAudioContext([{ identity: HOST, trackNames: ["meet-audio"], microphoneLive: true }]);
+  assert.equal(withMic.meetAudioFallbackMicLive, false);
 });
 
 test("a detached track's elements leave the decoded-frame set; nothing else does", () => {

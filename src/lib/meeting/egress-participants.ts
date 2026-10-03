@@ -272,7 +272,6 @@ export function isRecordedBridgeDub(identity: string | null | undefined): boolea
   return !identity.slice("ai-interpreter-".length).includes("-voice-");
 }
 
-/** One remote participant as the audio policy sees it. */
 /**
  * The participant attribute the `meet-audio` publisher sets to say whether its own microphone is in
  * the mix: "1" when the microphone copy is open, "0" when it could not be opened (getUserMedia
@@ -286,12 +285,15 @@ export function meetAudioLacksMicrophone(attributes: Readonly<Record<string, str
   return attributes?.[MEET_AUDIO_MIC_ATTRIBUTE] === "0";
 }
 
+/** One remote participant as the audio policy sees it. */
 export interface EgressAudioParticipant {
   identity: string;
   /** Names of every track the participant has PUBLISHED (subscribed or not). */
   trackNames: readonly (string | null | undefined)[];
   /** LiveKit participant attributes (MEET_AUDIO_MIC_ATTRIBUTE). */
   attributes?: Readonly<Record<string, string>>;
+  /** A published, UNMUTED microphone-source track (their WarpTalk mic actually carrying sound). */
+  microphoneLive?: boolean;
 }
 
 export interface EgressAudioContext {
@@ -304,6 +306,12 @@ export interface EgressAudioContext {
    * then kept in the mix (theirs only; the stand-in and members are inside `meet-audio`).
    */
   meetAudioWithoutMic: readonly string[];
+  /**
+   * Of those, whether every one has their WarpTalk microphone live (published and unmuted). In a
+   * bridge it is usually held off (it starts off, follows the Meet sensor, mute-on-entry), so the
+   * fallback is often silent, and the slate must say the local voice is missing then.
+   */
+  meetAudioFallbackMicLive: boolean;
 }
 
 /**
@@ -322,8 +330,9 @@ export function resolveEgressAudioContext(
   const meetAudioPublishers = people.filter((participant) => participant.trackNames.some(isMeetAudioTrack));
   const meetAudio = meetAudioPublishers.length > 0;
   const meetAudioWithoutMic = meetAudioPublishers
-    .filter((participant) => meetAudioLacksMicrophone(participant.attributes))
-    .map((participant) => participant.identity);
+    .filter((participant) => meetAudioLacksMicrophone(participant.attributes));
+  const meetAudioFallbackMicLive =
+    meetAudioWithoutMic.length > 0 && meetAudioWithoutMic.every((participant) => participant.microphoneLive === true);
   const bridge =
     options.latched === true ||
     isBridgeRecording({
@@ -331,7 +340,12 @@ export function resolveEgressAudioContext(
       meetWindowPublished: published(isMeetWindowTrack),
       meetAudioPublished: meetAudio,
     });
-  return { bridge, meetAudio, meetAudioWithoutMic };
+  return {
+    bridge,
+    meetAudio,
+    meetAudioWithoutMic: meetAudioWithoutMic.map((participant) => participant.identity),
+    meetAudioFallbackMicLive,
+  };
 }
 
 /**
@@ -346,6 +360,11 @@ export function resolveEgressAudioContext(
  *                                  except the `meet-audio` publisher's own MICROPHONE when their
  *                                  `meet-audio` says it has no microphone in it (their voice would
  *                                  otherwise be missing from the file).
+ *
+ * LIMITATION OF THAT FALLBACK: the WarpTalk microphone is not gated by MEET's mute button the way
+ * the meet-audio copy is. It is whatever WarpTalk publishes: off unless the Meet sensor turned it
+ * on, mute-on-entry and force-mute apply, and the half-duplex gate silences it while a dub plays.
+ * The template does not try to re-gate it (it cannot see Meet); the slate says whether it is live.
  */
 export function shouldRecordAudio(
   publication: { identity: string; trackName: string | null | undefined; source?: string },
@@ -368,11 +387,15 @@ export function shouldRecordAudio(
 export function meetWindowSlateAudioLine(input: {
   meetAudio: boolean;
   otherAudio: boolean;
-  /** `meet-audio` carries the far side only; the local voice is their WarpTalk microphone. */
+  /** `meet-audio` carries the far side only; the local voice can only be their WarpTalk microphone. */
   meetAudioWithoutMic?: boolean;
+  /** That WarpTalk microphone is published and unmuted right now. */
+  fallbackMicLive?: boolean;
 }): string {
   if (input.meetAudio && input.meetAudioWithoutMic) {
-    return "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone.";
+    return input.fallbackMicLive
+      ? "The Google Meet call audio is being recorded; the local speaker comes from their WarpTalk microphone."
+      : "The Google Meet call audio is being recorded, but the local speaker's voice is missing (their microphone is off in WarpTalk).";
   }
   if (input.meetAudio) return "The Google Meet call audio is being recorded.";
   if (input.otherAudio) return "Only audio published in WarpTalk is being recorded, not the Meet call itself.";

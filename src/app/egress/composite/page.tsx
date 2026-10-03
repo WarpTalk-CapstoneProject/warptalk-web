@@ -176,6 +176,8 @@ export default function EgressCompositePage() {
   const [callAudio, setCallAudio] = useState<Tile[]>([]);
   /** A `meet-audio` publisher says its own microphone is not in it (MEET_AUDIO_MIC_ATTRIBUTE). */
   const [meetAudioWithoutMic, setMeetAudioWithoutMic] = useState(false);
+  /** And whether their WarpTalk microphone, the only other source of their voice, is live. */
+  const [fallbackMicLive, setFallbackMicLive] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -229,11 +231,15 @@ export default function EgressCompositePage() {
           identity: participant.identity,
           trackNames: Array.from(participant.trackPublications.values()).map((pub) => pub.trackName),
           attributes: participant.attributes,
+          microphoneLive: Array.from(participant.trackPublications.values()).some(
+            (pub) => pub.source === Track.Source.Microphone && !pub.isMuted,
+          ),
         })),
         { latched: bridgeLatched },
       );
       if (context.bridge) latchBridge();
       setMeetAudioWithoutMic(context.meetAudioWithoutMic.length > 0);
+      setFallbackMicLive(context.meetAudioFallbackMicLive);
       const sources = `bridge=${context.bridge} meetAudio=${context.meetAudio} withoutMic=${context.meetAudioWithoutMic.join(",") || "-"}`;
       if (sources !== audioSources) {
         audioSources = sources;
@@ -367,6 +373,8 @@ export default function EgressCompositePage() {
     function handleMuteChange(publication: TrackPublication, participant: Participant) {
       if (isMeetWindowTrack(publication.trackName)) setMeetWindowMuted(publication.isMuted);
       refreshOverlay(participant as RemoteParticipant);
+      // A muted/unmuted WarpTalk mic changes whether the slate may claim the local voice.
+      noteBridge();
     }
 
     room
@@ -471,6 +479,7 @@ export default function EgressCompositePage() {
   const slateAudioLine = meetWindowSlateAudioLine({
     meetAudio: callAudio.some((tile) => tile.meetAudio === true),
     meetAudioWithoutMic,
+    fallbackMicLive,
     otherAudio:
       callAudio.length > 0 || tiles.some((tile) => tile.kind === Track.Kind.Audio),
   });

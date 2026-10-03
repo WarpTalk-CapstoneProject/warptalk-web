@@ -1,4 +1,5 @@
 import type { InboundLevelSample } from "./bridge-inbound-health";
+import { rms as rmsOf, rmsToDbfs } from "@/lib/meeting/barge-in";
 
 /** How often the inbound track is measured. Four a second is plenty for rules measured in tens of seconds. */
 const SAMPLE_INTERVAL_MS = 250;
@@ -48,16 +49,13 @@ export function startInboundLevelProbe(
   const timer = setInterval(() => {
     if (stopped || context.state !== "running" || track.readyState === "ended") return;
     analyser.getFloatTimeDomainData(block);
-    let sumSquares = 0;
     let peakAbs = 0;
     for (const value of block) {
-      sumSquares += value * value;
       const magnitude = Math.abs(value);
       if (magnitude > peakAbs) peakAbs = magnitude;
     }
-    const rms = Math.sqrt(sumSquares / block.length);
     onSample({
-      rmsDbfs: rms > 0 ? 20 * Math.log10(rms) : -Infinity,
+      rmsDbfs: rmsToDbfs(rmsOf(block)),
       peakAbs,
       allZero: peakAbs === 0,
     });

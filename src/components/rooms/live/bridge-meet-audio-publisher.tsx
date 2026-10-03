@@ -5,17 +5,21 @@ import { ConnectionState, RoomEvent, Track, type LocalTrackPublication } from "l
 import { useRoomContext } from "@livekit/components-react";
 
 import { useSupervisedPublish } from "@/hooks/use-supervised-publish";
+import { rms, rmsToDbfs } from "@/lib/meeting/barge-in";
 import { MEET_AUDIO_MIC_ATTRIBUTE, MEET_AUDIO_TRACK_NAME } from "@/lib/meeting/egress-participants";
 import {
   INITIAL_FAR_SPEECH,
+  MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS,
   MEET_AUDIO_LOCAL_RAMP_S,
   MEET_AUDIO_VAD_TICK_MS,
+  createLatestRequest,
   farSpeechActive,
   meetAudioMicGain,
   meetAudioMicrophoneCandidates,
   meetAudioMicrophoneConstraints,
+  meetAudioPublishState,
   reduceFarSpeech,
-  rmsToDbfs,
+  settleWithin,
   shouldReopenMeetAudioMic,
   type FarSpeechState,
 } from "@/lib/meeting/meet-audio-track";
@@ -35,6 +39,8 @@ interface Mix {
   far: { track: MediaStreamTrack; node: MediaStreamAudioSourceNode } | null;
   mic: { stream: MediaStream; node: MediaStreamAudioSourceNode; deviceId: string } | null;
   farSpeech: FarSpeechState;
+  /** The gain last scheduled on localGain: a new ramp only when the target changes. */
+  gainTarget: number;
   vadTimer: ReturnType<typeof setInterval>;
   publication: LocalTrackPublication | null;
   drop: () => void;
@@ -119,16 +125,37 @@ export function BridgeMeetAudioPublisher({
     /** False once this effect is cleaned up (unmount, a new Room): nothing may be published after. */
     let alive = true;
 
-    const announceMic = (inMix: boolean) => {
-      // Best effort: an older token without canUpdateOwnMetadata refuses, and the template then
-      // assumes the microphone is in (the attribute is absent).
-      void room.localParticipant
-        .setAttributes({ [MEET_AUDIO_MIC_ATTRIBUTE]: inMix ? "1" : "0" })
-        .catch(() => {});
+    /**
+     * Says in MEET_AUDIO_MIC_ATTRIBUTE whether the microphone is in the mix. Awaited (bounded) before
+     * the first publish, so the template knows from the track's first second; later changes are
+     * sent the same way. A refusal (a token without canUpdateOwnMetadata) or a timeout is logged:
+     * the template then assumes the microphone is in, which is wrong exactly when it is not.
+     */
+    const announceMic = async (inMix: boolean): Promise<void> => {
+      if (!inMix) {
+        console.warn(
+          "[bridge] meet-audio has NO microphone: the recording falls back to your WarpTalk microphone, which only carries your voice while it is on in WarpTalk.",
+        );
+      }
+      const answer = await settleWithin(
+        room.localParticipant.setAttributes({ [MEET_AUDIO_MIC_ATTRIBUTE]: inMix ? "1" : "0" }),
+        MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS,
+      );
+      if (answer.outcome !== "ok") {
+        console.warn(
+          `[bridge] Could not tell the recorder whether meet-audio has the microphone (${answer.outcome}):`,
+          answer.outcome === "error" ? answer.error : `no answer in ${MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS} ms`,
+        );
+      }
     };
+
+    /** Serializes openMic: a getUserMedia that lands after a newer request is discarded. */
+    const micRequests = createLatestRequest();
 
     /** Opens the microphone copy into `mix`, replacing the one there. Device first, then default. */
     const openMic = async (mix: Mix): Promise<boolean> => {
+      const request = micRequests.begin();
+      const current = () => micRequests.isLatest(request) && mixRef.current === mix && alive;
       const wantedDevice = deviceRef.current;
       for (const deviceId of meetAudioMicrophoneCandidates(wantedDevice)) {
         let stream: MediaStream;
@@ -138,10 +165,12 @@ export function BridgeMeetAudioPublisher({
           });
         } catch (error) {
           console.warn(`[bridge] meet-audio could not open the microphone (${deviceId || "default"}):`, error);
+          if (!current()) return false;
           continue;
         }
         const [track] = stream.getAudioTracks();
-        if (mixRef.current !== mix || !alive || !track) {
+        if (!current() || !track) {
+          // Superseded by a newer open (or the mix went away) while this one was in getUserMedia.
           stream.getTracks().forEach((t) => t.stop());
           return false;
         }
@@ -163,17 +192,17 @@ export function BridgeMeetAudioPublisher({
           console.warn("[bridge] The meet-audio microphone keeps ending; recording without it.");
           mix.mic = null;
           node.disconnect();
-          announceMic(false);
+          void announceMic(false);
         });
-        announceMic(true);
+        await announceMic(true);
         return true;
       }
-      if (mixRef.current === mix && alive) {
+      if (current()) {
         // Nothing opened: the far side still records, and the template keeps the WarpTalk mic.
         mix.mic?.node.disconnect();
         mix.mic?.stream.getTracks().forEach((t) => t.stop());
         mix.mic = null;
-        announceMic(false);
+        await announceMic(false);
       }
       return false;
     };
@@ -184,7 +213,18 @@ export function BridgeMeetAudioPublisher({
     };
 
     const publish = async (): Promise<string> => {
-      if (mixRef.current) return "published";
+      const existing = mixRef.current;
+      const state = meetAudioPublishState({
+        hasMix: Boolean(existing),
+        publishedTrackSid: existing?.publication?.trackSid ?? null,
+        localTrackSids: room.localParticipant.trackPublications.keys(),
+      });
+      if (state === "published") return "published";
+      if (state === "stale") {
+        // The mix is here but its publication is not: torn down, and published afresh below.
+        console.warn("[bridge] meet-audio was no longer published; publishing it again.");
+        existing?.drop();
+      }
       if (room.state !== ConnectionState.Connected) return "the meeting is not connected";
 
       const context = new AudioContext({ sampleRate: 48_000 });
@@ -215,18 +255,16 @@ export function BridgeMeetAudioPublisher({
         const now = Date.now();
         if (mix.far) {
           mix.farAnalyser.getFloatTimeDomainData(samples);
-          let sum = 0;
-          for (const value of samples) sum += value * value;
-          mix.farSpeech = reduceFarSpeech(mix.farSpeech, {
-            dbfs: rmsToDbfs(Math.sqrt(sum / samples.length)),
-            nowMs: now,
-          });
+          mix.farSpeech = reduceFarSpeech(mix.farSpeech, { dbfs: rmsToDbfs(rms(samples)), nowMs: now });
         }
         const gain = meetAudioMicGain({
           localVoiceOn: localVoiceRef.current,
           farSpeechActive: farSpeechActive(mix.farSpeech, now),
         });
-        if (Math.abs(mix.localGain.gain.value - gain) > 0.001) {
+        // Only when the target changes: re-scheduling a ramp every tick stacks automation events.
+        if (gain !== mix.gainTarget) {
+          mix.gainTarget = gain;
+          mix.localGain.gain.cancelScheduledValues(mix.context.currentTime);
           mix.localGain.gain.setTargetAtTime(gain, mix.context.currentTime, MEET_AUDIO_LOCAL_RAMP_S);
         }
       }, MEET_AUDIO_VAD_TICK_MS);
@@ -252,13 +290,15 @@ export function BridgeMeetAudioPublisher({
         far: null,
         mic: null,
         farSpeech: INITIAL_FAR_SPEECH,
+        gainTarget: 0,
         vadTimer,
         publication: null,
         drop,
       };
       mixRef.current = mix;
       connectFarSide(farSideRef.current);
-      // Before the publish, so MEET_AUDIO_MIC_ATTRIBUTE is set when the template first sees the track.
+      // Before the publish, so MEET_AUDIO_MIC_ATTRIBUTE is set (or its failure logged, at most
+      // MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS later) when the template first sees the track.
       await openMic(mix);
       if (mixRef.current !== mix || !alive) {
         drop();
@@ -307,12 +347,23 @@ export function BridgeMeetAudioPublisher({
       deviceRef.current = deviceId;
       reopenMicRef.current?.();
     };
+    // The publication went away under a live mix (the SFU, a reconnect that did not carry it): the
+    // mix is torn down now, and the supervisor's next check publishes a fresh one.
+    const onLocalTrackUnpublished = (publication: LocalTrackPublication) => {
+      const mix = mixRef.current;
+      if (!mix?.publication || publication.trackSid !== mix.publication.trackSid) return;
+      console.warn("[bridge] meet-audio was unpublished; the supervisor will publish it again.");
+      mix.publication = null;
+      mix.drop();
+    };
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveDeviceChanged, onActiveDeviceChanged);
+    room.on(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
     return () => {
       alive = false;
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.ActiveDeviceChanged, onActiveDeviceChanged);
+      room.off(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
       controlRef.current = null;
       reopenMicRef.current = null;
       mixRef.current?.drop();

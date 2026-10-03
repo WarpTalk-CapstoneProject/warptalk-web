@@ -108,7 +108,16 @@ export const MEET_AUDIO_FAR_SPEECH_DBFS = -50;
 export const MEET_AUDIO_FAR_SPEECH_HANG_MS = 400;
 /** The microphone copy's gain while the far side is sounding (about -16 dB). */
 export const MEET_AUDIO_DUCK_GAIN = 0.15;
-/** How often the far side's level is measured. The desktop window is never timer-throttled. */
+/**
+ * How often the far side's level is measured, on a main-thread timer.
+ *
+ * ASSUMPTION, WITH ITS EVIDENCE: this runs only in the desktop app's main window (a bridge needs
+ * the desktop), which warptalk-desktop creates with `backgroundThrottling: false`
+ * (src/main/index.ts, the main BrowserWindow's webPreferences, with the reason: "This window does
+ * realtime audio work while nobody is looking at it"). So the timer keeps its 20 ms while the
+ * window sits hidden behind Meet. In a throttled page it would slow to ~1 s and the duck would
+ * lag the far side by up to a second; an AudioWorklet would be the fix if this ever ran there.
+ */
 export const MEET_AUDIO_VAD_TICK_MS = 20;
 
 export interface FarSpeechState {
@@ -117,11 +126,6 @@ export interface FarSpeechState {
 }
 
 export const INITIAL_FAR_SPEECH: FarSpeechState = { lastSoundAtMs: null };
-
-/** RMS (0..1) as dBFS; silence is -Infinity, which no threshold passes. */
-export function rmsToDbfs(rms: number): number {
-  return rms > 0 ? 20 * Math.log10(rms) : Number.NEGATIVE_INFINITY;
-}
 
 export function reduceFarSpeech(
   state: FarSpeechState,
@@ -165,4 +169,64 @@ export function shouldReopenMeetAudioMic(
  */
 export function meetAudioMicrophoneCandidates(deviceId: string): string[] {
   return deviceId && deviceId !== "default" ? [deviceId, ""] : [""];
+}
+
+// ── Who wins, what is up, how long to wait ───────────────────────────────────
+
+/**
+ * Only the latest request wins. A microphone (re)open can be asked for again while an older one
+ * is still in getUserMedia (a device switch right after an unplug); the older result must be
+ * stopped and discarded when it lands, not connected over the newer one.
+ */
+export function createLatestRequest(): { begin: () => number; isLatest: (token: number) => boolean } {
+  let latest = 0;
+  return {
+    begin: () => (latest += 1),
+    isLatest: (token) => token === latest,
+  };
+}
+
+/** How long the publisher waits for the microphone attribute before publishing anyway. */
+export const MEET_AUDIO_ATTRIBUTE_TIMEOUT_MS = 1_500;
+
+/** Waits for `promise` at most `ms`: what happened, never a throw. */
+export async function settleWithin(
+  promise: Promise<unknown>,
+  ms: number,
+): Promise<{ outcome: "ok" } | { outcome: "timeout" } | { outcome: "error"; error: unknown }> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<{ outcome: "timeout" }>((resolve) => {
+    timer = setTimeout(() => resolve({ outcome: "timeout" }), ms);
+  });
+  try {
+    return await Promise.race([
+      promise.then(
+        () => ({ outcome: "ok" as const }),
+        (error: unknown) => ({ outcome: "error" as const, error }),
+      ),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Whether `meet-audio` is really on the wire. A mix in memory is not enough: the publication can
+ * go away under it (unpublished by the SFU, a reconnect that did not carry it back) while the mix
+ * stays, and the supervisor was then told "published" for a track nobody could subscribe to.
+ *
+ *   none       no mix: publish one.
+ *   published  the mix's publication is one the local participant still has.
+ *   stale      a mix whose publication is gone: tear it down and publish again.
+ */
+export function meetAudioPublishState(input: {
+  hasMix: boolean;
+  publishedTrackSid: string | null;
+  localTrackSids: Iterable<string>;
+}): "none" | "published" | "stale" {
+  if (!input.hasMix) return "none";
+  if (!input.publishedTrackSid) return "stale";
+  for (const sid of input.localTrackSids) if (sid === input.publishedTrackSid) return "published";
+  return "stale";
 }
