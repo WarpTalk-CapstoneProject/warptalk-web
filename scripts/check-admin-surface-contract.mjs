@@ -181,6 +181,10 @@ for (const href of hrefs) {
 // Nested detail routes are exempt — they are reached from their own list.
 const NAV_EXEMPT = new Set([
   `${ADMIN_ROOT}/layout.tsx`,
+  // The staff member's own account (3 Oct 2026). Reached from the user card at the foot of the
+  // sidebar, as account settings are everywhere, not from a platform section - see the check
+  // below that both admin branches link to it.
+  `${ADMIN_ROOT}/account/page.tsx`,
   `${ADMIN_ROOT}/workspaces/[workspaceRef]/page.tsx`,
   // Reached from /admin/plugins, one row at a time. A nav row per catalog entry would be a nav
   // that changes shape whenever someone adds a plugin.
@@ -208,6 +212,13 @@ const NAV_EXEMPT = new Set([
   // One email's editor, reached from its card on /admin/email-templates.
   `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);
+// Exempt from the nav, not from being reachable: the collapsed AND the expanded admin sidebar each
+// link to it - the two branches share no markup, which is how the portal once lost its sign-out.
+checks.push([
+  "both admin sidebar branches link to /admin/account",
+  (adminBranch.match(/href="\/admin\/account"/g) ?? []).length >= 2,
+]);
+
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;
   const segment = rel.slice(ADMIN_ROOT.length + 1).replace(/\/?page\.tsx$/, "");

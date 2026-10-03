@@ -99,6 +99,7 @@
         "team": "Team"
       },
       "items": {
+        "accountSettings": "Account settings",
         "insights": "Insights",
         "inbox": "Inbox",
         "workspaces": "Workspaces",

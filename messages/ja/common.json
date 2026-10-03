@@ -99,6 +99,7 @@
         "team": "チーム"
       },
       "items": {
+        "accountSettings": "アカウント設定",
         "insights": "インサイト",
         "inbox": "受信トレイ",
         "workspaces": "ワークスペース",
