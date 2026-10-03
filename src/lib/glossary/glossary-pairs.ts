@@ -86,3 +86,16 @@ export function groupGlossariesByPair<T extends PairedGlossary>(
     selected: visible.find((glossary) => glossary.id === selectedId) ?? visible[0],
   };
 }
+
+/**
+ * WT-937 — the pair filter to show after the open glossary's pair was changed to `newKey`.
+ *
+ * The filter used to stay where it was. Filtered to `en>en`, relabelling the open glossary as
+ * `en>vi` filtered it OUT, and the page fell back to the first glossary still in `en>en` — a
+ * different glossary, under a toast that had just said "changed to English → Vietnamese". QA read
+ * it as the two pairs swapping their data. "All pairs" stays all pairs; a specific pair follows the
+ * glossary to the pair it now belongs to.
+ */
+export function filterAfterPairChange(currentFilter: string, newKey: string): string {
+  return currentFilter === ALL_PAIRS ? ALL_PAIRS : newKey;
+}
