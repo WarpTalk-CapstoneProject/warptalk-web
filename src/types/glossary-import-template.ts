@@ -37,20 +37,6 @@ export interface ImportTemplateColumn {
 /** language code (bare ISO-639) → column key → sample value. */
 export type ImportTemplateSamples = Record<string, Partial<Record<ImportTemplateColumnKey, string>>>;
 
-export interface GlossaryImportTemplateDto {
-  columns: ImportTemplateColumn[];
-  samples: ImportTemplateSamples;
-  /** True while no admin has saved a configuration (the built-in default is served). */
-  isDefault: boolean;
-  updatedAt?: string | null;
-  updatedBy?: string | null;
-}
-
-export interface UpdateGlossaryImportTemplateRequest {
-  columns: ImportTemplateColumn[];
-  samples: ImportTemplateSamples;
-}
-
 /** `SupportedLanguageDto` from TranslationRoomService. */
 export interface PublishedLanguageDto {
   code: string;

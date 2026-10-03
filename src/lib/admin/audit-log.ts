@@ -274,7 +274,7 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
     case "glossary_term":
       return "/admin/global-glossary";
     case "glossary_import_template":
-      return "/admin/global-glossary?tab=import-template";
+      return "/admin/global-glossary";
     case "notification":
       return entity.id ? `/admin/announcements/${encodeURIComponent(entity.id)}` : "/admin/announcements";
     case "sales_lead":

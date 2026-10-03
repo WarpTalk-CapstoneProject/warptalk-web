@@ -13,7 +13,6 @@
 
 import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Info } from "@phosphor-icons/react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -73,13 +72,6 @@ export function WorkspaceImportTemplateView({
         <h2 className="text-[14px] font-semibold text-ink">{t("title")}</h2>
         <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-ink-muted">{t("description")}</p>
       </div>
-
-      {template.isFallback ? (
-        <p className="flex items-start gap-1.5 text-[12px] text-amber-600 dark:text-amber-500">
-          <Info className="mt-px h-3.5 w-3.5 shrink-0" />
-          {t("fallbackNotice")}
-        </p>
-      ) : null}
 
       <ImportTemplatePairPicker
         languages={languages}

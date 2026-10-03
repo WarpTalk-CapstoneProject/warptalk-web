@@ -1,98 +1,37 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   DEFAULT_IMPORT_TEMPLATE,
   baseLanguage,
-  normalizeImportTemplateConfig,
   type ImportTemplateConfig,
 } from "@/lib/glossary/import-template";
 import { getLanguageByCode, languagesInScope } from "@/lib/language/languages";
 import { GlossaryImportTemplateService } from "@/services/glossary-import-template.service";
-import type { UpdateGlossaryImportTemplateRequest } from "@/types/glossary-import-template";
 
 export const GLOSSARY_IMPORT_TEMPLATE_KEYS = {
-  workspace: ["glossary-import-template", "workspace"] as const,
-  admin: ["glossary-import-template", "admin"] as const,
   publishedLanguages: ["published-languages"] as const,
 };
 
 export interface ImportTemplateState {
   config: ImportTemplateConfig;
-  isDefault: boolean;
-  isLoading: boolean;
-  /** The server could not be read; `config` is the built-in default. */
-  isFallback: boolean;
-  updatedAt?: string | null;
-  updatedBy?: string | null;
 }
 
-function toState(
-  query: { data?: { isDefault: boolean; updatedAt?: string | null; updatedBy?: string | null } & Partial<ImportTemplateConfig>; isLoading: boolean; isError: boolean },
-): ImportTemplateState {
-  if (!query.data) {
-    return {
-      config: DEFAULT_IMPORT_TEMPLATE,
-      isDefault: true,
-      isLoading: query.isLoading,
-      isFallback: query.isError,
-    };
-  }
-  return {
-    config: normalizeImportTemplateConfig(query.data),
-    isDefault: query.data.isDefault,
-    isLoading: false,
-    isFallback: false,
-    updatedAt: query.data.updatedAt,
-    updatedBy: query.data.updatedBy,
-  };
-}
+const FIXED_TEMPLATE: ImportTemplateState = { config: DEFAULT_IMPORT_TEMPLATE };
 
 /**
- * The template for the workspace tab and the Import dialog. Never blocks a download: until the
- * server answers, or if it cannot, the built-in default (identical to the server's) is used.
+ * The template for the workspace tab and the Import dialog.
+ *
+ * WT-880 option B (PO 2026-10-02): the import file shape is a fixed default the web owns - it
+ * generates the file and parses it on import - so there is nothing to fetch. The backend removed
+ * the table and both endpoints with that decision (warptalk-backend 268bedf7); this hook kept
+ * asking for them, so every visit made a failing request, the workspace tab showed its amber
+ * "could not load, using the default" notice, and the admin tab could not load at all (3 Oct 2026).
  */
 export function useGlossaryImportTemplate(): ImportTemplateState {
-  const query = useQuery({
-    queryKey: GLOSSARY_IMPORT_TEMPLATE_KEYS.workspace,
-    queryFn: () => GlossaryImportTemplateService.get(),
-    staleTime: 5 * 60_000,
-    retry: 1,
-  });
-  const { data, isLoading, isError } = query;
-  return useMemo(() => toState({ data, isLoading, isError }), [data, isLoading, isError]);
-}
-
-export function useAdminGlossaryImportTemplate(enabled = true) {
-  const query = useQuery({
-    queryKey: GLOSSARY_IMPORT_TEMPLATE_KEYS.admin,
-    queryFn: () => GlossaryImportTemplateService.getAdmin(),
-    enabled,
-  });
-  return { ...toState(query), query };
-}
-
-function useInvalidateTemplate() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["glossary-import-template"] });
-}
-
-export function useUpdateGlossaryImportTemplate() {
-  const invalidate = useInvalidateTemplate();
-  return useMutation({
-    mutationFn: (request: UpdateGlossaryImportTemplateRequest) => GlossaryImportTemplateService.update(request),
-    onSuccess: invalidate,
-  });
-}
-
-export function useResetGlossaryImportTemplate() {
-  const invalidate = useInvalidateTemplate();
-  return useMutation({
-    mutationFn: () => GlossaryImportTemplateService.reset(),
-    onSuccess: invalidate,
-  });
+  return FIXED_TEMPLATE;
 }
 
 export interface TemplateLanguageOption {

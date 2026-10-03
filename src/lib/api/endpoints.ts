@@ -441,7 +441,6 @@ export const API = {
     warpbotStatus: (id: string) => `/glossaries/${id}/warpbot-status`,
     global: "/glossaries/global",
     /** WT-880 — the admin-configured import file shape, read-only, any signed-in user. */
-    importTemplate: "/glossaries/import-template",
   },
   assistant: {
     conversations: "/assistant/conversations",
@@ -998,6 +997,5 @@ export const API = {
     bulkImport: "/admin/global-glossary/bulk-import",
     audits: (id: string) => `/admin/global-glossary/${id}/audits`,
     /** WT-880 — GET / PUT (whole config) / DELETE (back to the built-in default). */
-    importTemplate: "/admin/global-glossary/import-template",
   },
 } as const;
