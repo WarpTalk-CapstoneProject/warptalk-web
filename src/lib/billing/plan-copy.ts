@@ -12,6 +12,7 @@
  * Pure and dependency-free: node-run tests import it without a bundler.
  */
 import type { PlanDto } from "../../types/billing";
+import { planHighlights } from "./plan-features.ts";
 
 /**
  * Translator shape shared by `getPlanDescription`/`buildFeatureList`, matching
@@ -79,12 +80,10 @@ export function buildFeatureList(plan: PlanDto, t: PlanCopyTranslator = defaultP
   }
 
 
-  try {
-    const parsed = JSON.parse(plan.features || "[]");
-    if (Array.isArray(parsed)) {
-      features.push(...parsed);
-    }
-  } catch {}
+  // The lines an admin ticked under "Shown on the pricing page" (features.highlights), or a legacy
+  // array. The column is an object on every production plan, so before 3 Oct 2026 nothing in it was
+  // ever listed here.
+  features.push(...planHighlights(plan.features));
 
   // Add defaults if it's completely empty
   if (features.length === 0) {

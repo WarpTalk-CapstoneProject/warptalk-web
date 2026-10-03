@@ -77,7 +77,8 @@
       "ariaLabel": "請求期間",
       "monthly": "月払い",
       "yearly": "年払い · {percent}% お得"
-    }
+    },
+    "plusVat": "+ {percent}% VAT · お支払い時 {total}"
   },
   "planPanel": {
     "currentPlan": "現在のプラン",

@@ -77,7 +77,8 @@
       "ariaLabel": "Kỳ thanh toán",
       "monthly": "Hằng tháng",
       "yearly": "Hằng năm · Tiết kiệm {percent}%"
-    }
+    },
+    "plusVat": "+ {percent}% VAT · {total} khi thanh toán"
   },
   "planPanel": {
     "currentPlan": "Gói hiện tại",
