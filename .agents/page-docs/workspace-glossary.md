@@ -146,3 +146,43 @@ only — no timers. Copy (en, fixed by the PO): **Loading into WarpBot knowledge
 - Pair filter: select a pair that hides the open glossary → the first visible one opens.
 - At 1366×768 and ~390px wide the dialog stays inside the viewport and the chip row wraps.
 - `npm run -s test:glossary-template`, `npx tsc --noEmit -p .`, eslint on changed files.
+
+## Filters and dropdowns (2026-10-03)
+
+What changed and why (PO screenshot, 2026-10-03):
+
+- **Two filters, one row each.** The toolbar row answers "which pair" (the select) then "which
+  glossary" (the chips, grouped under a pair label, groups separated by a divider). It no longer
+  wraps: a second pair used to drop under the select and read as a stray line. The row scrolls
+  sideways inside the toolbar filter slot. When the select is on one pair, the group label is hidden
+  because the select already names it. The domain pills below remain the second filter (which
+  domain inside the open glossary).
+- **The domain filter is scoped to the open glossary.** `activeDomain` is derived: a domain the open
+  glossary does not have reads as "all". Before, picking "Food" in one glossary and switching to
+  another left the page empty with no pill row to undo it.
+- **Dropdown size.** `SelectTrigger` carries `data-[size=default]:h-9`, which outranks a bare `h-7`
+  class, so the pair filter and the Change pair selects rendered 36px tall beside 28px controls.
+  They now pass `size="sm"`. The pair filter menu opens below the trigger and is as wide as its
+  longest pair.
+- **Change pair follows the workspace language policy.** The two selects in `GlossaryPairEditor`
+  used to list every language the platform admin had published, so a workspace limited to English
+  and Vietnamese could relabel a glossary as Japanese. They now take the same list as the New
+  glossary dialog (`meetingLanguagesForPolicy(allowedTargetLanguages)`, WT-875) through
+  `pairEditorLanguageOptions`, and wait until the policy has loaded. The glossary's current
+  languages stay listed even if the policy has since dropped them. An empty policy still means
+  unrestricted.
+
+Not changed: the Import template tab still offers every published language (PO 2026-10-02 — it is
+a file shape, not something the workspace creates). This change is a UI bound only; whether the
+server also rejects an out-of-policy pair change was not checked.
+
+Files: `src/app/(app)/[workspaceSlug]/glossary/page.tsx`,
+`src/components/glossary/glossary-pair-editor.tsx`, `src/lib/glossary/glossary-pairs.ts`,
+`src/lib/glossary/__tests__/glossary-pairs.test.ts`.
+
+Testing checklist:
+
+- Workspace allowing only English + Vietnamese: Change pair lists only those two (plus the
+  glossary's current languages if outside the policy).
+- Three glossaries across two pairs: toolbar stays on one line; filtering to one pair hides the label.
+- Pick a domain pill, switch glossary: the new glossary shows all its terms.
