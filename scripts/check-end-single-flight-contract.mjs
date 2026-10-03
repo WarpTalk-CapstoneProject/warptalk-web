@@ -39,7 +39,10 @@ assert.match(
 );
 
 const topBar = await read("src/components/rooms/live/meeting-top-bar.tsx");
-const endButton = topBar.slice(topBar.indexOf("End Meeting for All"));
+// The dialog copy moved into the message catalog (i18n), so anchor on its key, not the English text.
+const endAnchor = topBar.indexOf('t("exitControl.endDialogTitle")');
+assert.ok(endAnchor >= 0, "the End for Everyone dialog must still be found in meeting-top-bar.tsx.");
+const endButton = topBar.slice(endAnchor);
 assert.match(
   endButton,
   /disabled=\{endForAll\.isPending\}/,

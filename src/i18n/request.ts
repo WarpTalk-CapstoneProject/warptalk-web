@@ -76,6 +76,8 @@ const NAMESPACES = [
   "meetingRoomPage",
   "meetingTranscript",
   "meetingSummary",
+  "minutes",
+  "meetingLive",
   "workspaceInsights",
   "workspaceInsightsUsage",
   "workspaceInsightsTools",

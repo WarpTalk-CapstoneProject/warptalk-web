@@ -65,6 +65,14 @@
     "percentAriaLabel": "{percent}% of the speaking",
     "footnote": "Measured from the transcript, so it counts time spent speaking rather than time spent in the meeting."
   },
+  "templates": {
+    "general": { "label": "General meeting", "description": "Overview, decisions, action items and anything left unresolved." },
+    "traceable": { "label": "Traceable summary", "description": "Every sentence carries the moments it came from." },
+    "standup": { "label": "Standup", "description": "Per-person progress, plans and blockers." },
+    "interview": { "label": "Candidate interview", "description": "Background, answers, strengths, concerns and next steps." },
+    "demo": { "label": "Product demo", "description": "What was shown, how it landed, objections and follow-ups." },
+    "technical": { "label": "Technical discussion", "description": "Problems, options weighed, what was chosen and why." }
+  },
   "absence": {
     "generating": "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute.",
     "failed": "Summary generation did not complete for this meeting. The transcript is still available.",

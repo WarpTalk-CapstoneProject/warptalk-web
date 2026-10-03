@@ -1,0 +1,141 @@
+{
+  "panel": {
+    "loading": "議事録を読み込み中…",
+    "withheldTitle": "まだドラフトです",
+    "withheldBody": "この議事録は作成済みですが、まだ誰も署名していません。ドラフトは対応できる人のみが閲覧でき、ホストまたは書記が署名するとここで読めるようになります。",
+    "emptyTitle": "議事録はまだありません",
+    "emptyBody": "議事録は会議自体の記録から作成されます — 出席者・欠席者や開会・閉会時刻はルームデータから、本文は要約から作られます。確認と署名はあなたが行います。システムが代わりに署名することはありません。",
+    "draftAction": "議事録を作成",
+    "onlyChairCanDraft": "議事録を作成できるのは議長のみです。",
+    "draftedAt": "作成 {moment}",
+    "statusDraft": "ドラフト",
+    "statusInReview": "書記が署名済み",
+    "statusApproved": "承認済み",
+    "documentStatusDraft": "ドラフト — 未署名・未承認",
+    "documentStatusInReview": "書記が署名済み — 議長の承認待ち",
+    "documentStatusApproved": "承認済み",
+    "revision": "改訂 {n}"
+  },
+  "toolbar": {
+    "readingPlaceholder": "作成時のまま",
+    "readingGroups": {
+      "drawnUpIn": "作成済みの言語",
+      "writtenOnRequest": "リクエスト時に作成"
+    },
+    "readingAriaLabel": "議事録の表示言語",
+    "readingTitle": "この記録を別の言語で読む",
+    "bilingualFile": "原文を併記したファイル",
+    "print": "印刷",
+    "downloadWord": "Wordをダウンロード",
+    "downloadPdf": "PDFをダウンロード",
+    "share": "共有"
+  },
+  "editing": {
+    "saveChanges": "変更を保存",
+    "saving": "保存中…",
+    "discard": "破棄",
+    "unsavedHint": "未保存の変更があります。タイムスタンプは元の行に紐づいたままです。",
+    "clickToEditHint": "下の文書内で点線のある行をクリックして編集してください。"
+  },
+  "roles": {
+    "secretaryLabel": "書記",
+    "notAssigned": "未割り当て",
+    "signAsSecretary": "書記として署名",
+    "approveAsChair": "議長として承認",
+    "draftAddendum": "追補を作成"
+  },
+  "shareDialog": {
+    "title": "この議事録を共有",
+    "description": "リンクはこの文書のみを開きます — 議事録以外の文字起こし、録画、会議自体へのアクセスは含まれません。",
+    "modeRestrictedTitle": "追加した人のみ",
+    "modeRestrictedDetail": "サインインが必要で、アドレスだけでは不十分です。",
+    "modePublicTitle": "リンクを知っている全員",
+    "modePublicDetail": "アカウント不要。アドレスを受け取った誰でも閲覧・保存できます。",
+    "publicWarning": "この文書はアドレスを知る誰にでも公開されます。取り消しても今後の閲覧は止まりますが、既に取得されたコピーまでは回収できません — 共有はあなたの判断で行ってください。",
+    "draftWarning": "この議事録はまだドラフトのため、リンクは誰にも開きません — ドラフトは機械の初版であり、まだ誰も署名していません。文書に署名すると同じアドレスが有効になります。共有し直す必要はありません。",
+    "linkRevoked": "リンクを取り消しました",
+    "linkRevokedHint": "送信済みのアドレスはもう何も開きません。上のモードを選び直すと新しいアドレスが発行されます — 古いアドレスは無効のままです。",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copyFallback": "上のフィールドからアドレスをコピーしてください。",
+    "letReadersDownload": "閲覧者にファイルのダウンロードを許可",
+    "letReadersDownloadHint": "オフにするとボタンが消えます。読める内容をコピーされることまでは防げません。",
+    "emailPlaceholder": "name@company.com",
+    "add": "追加",
+    "nobodyAdded": "まだ誰も追加されていません。会議に参加した人は既にこの文書を読めます。",
+    "removeAria": "{email}を削除",
+    "revokeLink": "リンクを取り消す",
+    "loading": "読み込み中…",
+    "modeChangeFailed": "閲覧できる人を変更できませんでした。",
+    "addFailed": "そのアドレスを追加できませんでした。",
+    "revokeFailed": "リンクを取り消せませんでした。"
+  },
+  "toasts": {
+    "draftFailed": "議事録を作成できませんでした。会議は終了していますか？",
+    "saveFailed": "議事録を保存できませんでした。",
+    "saveSuccess": "議事録を保存しました。",
+    "signSuccess": "議事録に署名しました。",
+    "signFailed": "議事録に署名できませんでした。",
+    "approveSuccess": "議事録を承認しました。",
+    "approveFailed": "議事録を承認できませんでした。",
+    "addendumSuccess": "追補を開きました。",
+    "addendumFailed": "追補を開けませんでした。",
+    "secretaryAssigned": "書記を割り当てました。",
+    "secretaryRemoved": "書記を解除しました。",
+    "secretaryAssignFailed": "書記を割り当てられませんでした。",
+    "downloadFailed": "議事録をダウンロードできませんでした。",
+    "pdfUnavailable": "この環境ではPDF変換を利用できません。Wordファイルはダウンロードできます。",
+    "translationFailed": "この言語でこの記録を読めませんでした。",
+    "translationNotArrived": "その表示はまだ届いていません。もう一度お試しください。",
+    "translationUnavailableFallback": "この表示はその言語では利用できません。",
+    "assigned": "書記を割り当てました。",
+    "removed": "書記を解除しました。"
+  },
+  "assignedWork": {
+    "heading": "割り当てられた作業",
+    "notPartOfRecord": "記録の一部ではありません — 署名済みの文書を変更せずにフォローアップを見えるままにするため、下に追記しています。",
+    "empty": "割り当ては記録されませんでした。",
+    "columns": {
+      "task": "タスク",
+      "owner": "担当者",
+      "due": "期限",
+      "status": "ステータス"
+    }
+  },
+  "document": {
+    "heading": "議事録",
+    "noLabel": "No.: {no}",
+    "fields": {
+      "opened": "開会",
+      "closed": "閉会",
+      "scheduledFor": "予定",
+      "location": "場所",
+      "attendees": "出席者",
+      "absentees": "欠席者"
+    },
+    "quorumMet": "定足数：成立 — {rule}",
+    "quorumNotMet": "定足数：不成立 — {rule}",
+    "agenda": "議題。",
+    "noBodyCarried": "可決された内容はありません。",
+    "motion": "動議。提案 {mover} ／ 賛成 {seconder} — {outcome}",
+    "present": "出席",
+    "absent": "欠席",
+    "secretarySign": "書記（署名・記名）",
+    "chairSign": "議長（署名・記名）",
+    "provenanceDrafted": "{engine} が {at} に作成",
+    "provenanceSigned": "{name} が {at} に署名；{n}件の変更",
+    "provenanceApproved": "{name} が {at} に承認",
+    "retentionNotice": "この会議は文字起こしされました。{date}まで保存されます。",
+    "guestNotice": "1名がゲストとして参加しました — ワークスペースのメンバーではありません。",
+    "policyRows": {
+      "documentId": "文書ID",
+      "versionStatus": "バージョン / ステータス",
+      "classification": "分類",
+      "recordOwner": "記録責任者",
+      "circulation": "回覧範囲",
+      "retention": "保存期間",
+      "language": "言語"
+    },
+    "untranslatedNotice": "このセクションはまだ{language}に翻訳されていません。"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "panel": {
+    "loading": "Loading minutes…",
+    "withheldTitle": "Still a draft",
+    "withheldBody": "These minutes have been drawn up but nobody has signed them yet. A draft stays with the people who can act on it; you will be able to read it here once the host or the secretary signs it.",
+    "emptyTitle": "No minutes yet",
+    "emptyBody": "The minutes are drafted from the meeting's own record — attendees, absences and the times it opened and closed come straight from the room data, and the body comes from the summary. You review and sign; the system does not sign for you.",
+    "draftAction": "Draft minutes",
+    "onlyChairCanDraft": "Only the meeting chair can draft the minutes.",
+    "draftedAt": "Drafted {moment}",
+    "statusDraft": "Draft",
+    "statusInReview": "Signed by secretary",
+    "statusApproved": "Approved",
+    "documentStatusDraft": "Draft — not signed and not approved",
+    "documentStatusInReview": "Signed by the secretary — not yet approved by the chair",
+    "documentStatusApproved": "Approved",
+    "revision": "Revision {n}"
+  },
+  "toolbar": {
+    "readingPlaceholder": "As drawn up",
+    "readingGroups": {
+      "drawnUpIn": "Drawn up in",
+      "writtenOnRequest": "Written on request"
+    },
+    "readingAriaLabel": "Minutes reading language",
+    "readingTitle": "Read this record in another language",
+    "bilingualFile": "File with the original beside it",
+    "print": "Print",
+    "downloadWord": "Download Word",
+    "downloadPdf": "Download PDF",
+    "share": "Share"
+  },
+  "editing": {
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "discard": "Discard",
+    "unsavedHint": "Unsaved changes. Timestamps stay attached to their line.",
+    "clickToEditHint": "Click any line with a dashed rule in the document below to edit it."
+  },
+  "roles": {
+    "secretaryLabel": "Secretary",
+    "notAssigned": "Not assigned",
+    "signAsSecretary": "Sign as secretary",
+    "approveAsChair": "Approve as chair",
+    "draftAddendum": "Draft an addendum"
+  },
+  "shareDialog": {
+    "title": "Share these minutes",
+    "description": "A link opens this document — the minutes and nothing else. It carries no access to the transcript, the recording or the meeting itself.",
+    "modeRestrictedTitle": "Only people you add",
+    "modeRestrictedDetail": "They sign in, and the address alone is not enough.",
+    "modePublicTitle": "Anyone with the link",
+    "modePublicDetail": "No account needed. Anyone who is sent the address can read and keep the document.",
+    "publicWarning": "This document is public to anyone holding the address. Revoking stops future reads, but not a copy somebody already took — sharing it is your call to make.",
+    "draftWarning": "These minutes are still a draft, so the link does not open for anyone yet — a draft is a machine's first version and nobody has signed it. Sign the document and the same address starts working; you do not have to share it again.",
+    "linkRevoked": "Link revoked",
+    "linkRevokedHint": "The address that was sent no longer opens anything. Choosing a mode above issues a new one — the old address stays dead.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFallback": "Copy the address from the field above.",
+    "letReadersDownload": "Let readers download the file",
+    "letReadersDownloadHint": "Off removes the button. It does not stop somebody copying what they can read.",
+    "emailPlaceholder": "name@company.com",
+    "add": "Add",
+    "nobodyAdded": "Nobody has been added yet. The people who were at the meeting can already read this document.",
+    "removeAria": "Remove {email}",
+    "revokeLink": "Revoke the link",
+    "loading": "Loading…",
+    "modeChangeFailed": "Could not change who can open this.",
+    "addFailed": "Could not add that address.",
+    "revokeFailed": "Could not revoke the link."
+  },
+  "toasts": {
+    "draftFailed": "Could not draft the minutes. Has the meeting ended?",
+    "saveFailed": "Could not save the minutes.",
+    "saveSuccess": "Minutes saved.",
+    "signSuccess": "Minutes signed.",
+    "signFailed": "Could not sign the minutes.",
+    "approveSuccess": "Minutes approved.",
+    "approveFailed": "Could not approve the minutes.",
+    "addendumSuccess": "Addendum opened.",
+    "addendumFailed": "Could not open an addendum.",
+    "secretaryAssigned": "Secretary assigned.",
+    "secretaryRemoved": "Secretary removed.",
+    "secretaryAssignFailed": "Could not assign the secretary.",
+    "downloadFailed": "Could not download the minutes.",
+    "pdfUnavailable": "PDF conversion is unavailable here. The Word file still downloads.",
+    "translationFailed": "Could not read this record in that language.",
+    "translationNotArrived": "That reading has not arrived. Try again.",
+    "translationUnavailableFallback": "This reading is not available in that language.",
+    "assigned": "Secretary assigned.",
+    "removed": "Secretary removed."
+  },
+  "assignedWork": {
+    "heading": "Assigned work",
+    "notPartOfRecord": "Not part of the record — tracked below so follow-ups stay visible without changing a signed document.",
+    "empty": "No assignments were recorded.",
+    "columns": {
+      "task": "Task",
+      "owner": "Owner",
+      "due": "Due",
+      "status": "Status"
+    }
+  },
+  "document": {
+    "heading": "Minutes of meeting",
+    "noLabel": "No.: {no}",
+    "fields": {
+      "opened": "Opened",
+      "closed": "Closed",
+      "scheduledFor": "Scheduled for",
+      "location": "Location",
+      "attendees": "Attendees",
+      "absentees": "Absentees"
+    },
+    "quorumMet": "Quorum: met — {rule}",
+    "quorumNotMet": "Quorum: not met — {rule}",
+    "agenda": "Agenda.",
+    "noBodyCarried": "No body was carried.",
+    "motion": "Motion. Moved by {mover} / Seconded by {seconder} — {outcome}",
+    "present": "Present",
+    "absent": "Absent",
+    "secretarySign": "Secretary (Sign and print name)",
+    "chairSign": "Chair (Sign and print name)",
+    "provenanceDrafted": "Drafted by {engine} at {at}",
+    "provenanceSigned": "Signed by {name} at {at}; {n} changes",
+    "provenanceApproved": "Approved by {name} at {at}",
+    "retentionNotice": "This meeting was transcribed. Retained until {date}.",
+    "guestNotice": "One participant attended as a guest — not a workspace member.",
+    "policyRows": {
+      "documentId": "Document ID",
+      "versionStatus": "Version / Status",
+      "classification": "Classification",
+      "recordOwner": "Record owner",
+      "circulation": "Circulation",
+      "retention": "Retention",
+      "language": "Language"
+    },
+    "untranslatedNotice": "This section has not been translated into {language} yet."
+  }
+}

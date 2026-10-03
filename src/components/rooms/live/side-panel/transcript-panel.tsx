@@ -1,9 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRef, useEffect, useMemo, useState } from "react";
 import { ClosedCaptioning, PauseCircle } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
-import { useTranslations } from "next-intl";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   confidencePercent,
@@ -128,6 +128,7 @@ export function TranscriptPanel({
    */
   transcriptPause?: { paused: boolean; since: string | null };
 }) {
+  const t = useTranslations("meetingLive");
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const hasRestoredRef = useRef(false);
@@ -325,7 +326,7 @@ export function TranscriptPanel({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {pausedNotice}
-        <EmptyPanel text="Start WarpTalk to see live translation here." />
+        <EmptyPanel text={t("transcriptPanel.empty")} />
       </div>
     );
   }
