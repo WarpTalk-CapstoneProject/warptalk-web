@@ -21,6 +21,7 @@
 // Relative, with the extension: this module's unit tests run under the plain node test
 // runner, which does not resolve the "@/" alias for real values.
 import { getLanguageCode, getLanguageName } from "../language/languages.ts";
+import { isBridgeStandInSpeaker, transcriptSpeakerDisplayName } from "../transcript/speaker-identity.ts";
 
 /**
  * One page, big enough for any workspace that fits in a meeting.
@@ -171,6 +172,35 @@ export function identityFor(
     userId: userId ?? "",
     name,
     initials: getInitials(name),
+  };
+}
+
+/**
+ * The face beside a TRANSCRIPT line — identityFor, except for the Google Meet stand-in.
+ *
+ * The stand-in's roster row is the SEAT ("External Meeting") that everybody on the Meet side
+ * shares, so a line's face is built from the line's own name — the Meet person who said it, or the
+ * far-side fallback — keeping only the seat's languages for the badge. Through identityFor every
+ * Meet speaker would be drawn as one "EM" monogram under one name.
+ *
+ * Transcript-only on purpose: the video tile of the stand-in IS the seat, and identityFor stays
+ * right for it.
+ */
+export function transcriptIdentityFor(
+  identities: Record<string, ParticipantIdentity>,
+  userId: string | null | undefined,
+  lineSpeakerName?: string | null,
+): ParticipantIdentity {
+  if (!isBridgeStandInSpeaker(userId)) return identityFor(identities, userId, lineSpeakerName);
+
+  const seat = userId ? identities[userId] : undefined;
+  const name = transcriptSpeakerDisplayName(userId, lineSpeakerName);
+  return {
+    userId: userId ?? "",
+    name,
+    initials: getInitials(name),
+    speakLanguage: seat?.speakLanguage,
+    listenLanguage: seat?.listenLanguage,
   };
 }
 

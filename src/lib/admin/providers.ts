@@ -186,7 +186,6 @@ export const METRIC_COLORS: Record<ProviderMetricKey, string> = {
   usage: "var(--viz-1)",
   billedCredits: "color-mix(in oklab, var(--viz-1) 50%, var(--muted-foreground))",
   costUsd: "var(--viz-2)",
-  costVnd: "var(--viz-2)",
   calls: "var(--viz-5)",
   failures: "var(--viz-3)",
   errorRate: "var(--destructive)",
@@ -195,28 +194,24 @@ export const METRIC_COLORS: Record<ProviderMetricKey, string> = {
   roomMinutes: "var(--viz-5)",
   recordings: "var(--viz-3)",
   failedPayments: "var(--viz-3)",
-  volumeVnd: "var(--viz-2)",
+  volumeUsd: "var(--viz-2)",
 };
 
 /** The chips each provider starts with (the rest are one click away). */
 export function defaultMetrics(provider: ProviderKey): ProviderMetricKey[] {
   switch (provider) {
     case "livekit":
-      return ["usage", "roomMinutes", "costUsd", "costVnd"];
+      return ["usage", "roomMinutes", "costUsd"];
     case "stripe":
-      return ["usage", "costUsd", "costVnd", "failures", "p95Ms"];
+      return ["usage", "costUsd", "failures", "p95Ms"];
     default:
-      return ["usage", "costUsd", "costVnd", "failures", "p95Ms"];
+      return ["usage", "costUsd", "failures", "p95Ms"];
   }
 }
 
-/** Cost in the page's currency only: USD and VND are one metric shown two ways. */
-export function visibleMetricKeys(
-  metrics: readonly AdminProviderMetricSeriesDto[],
-  currency: "USD" | "VND",
-): ProviderMetricKey[] {
-  const hidden: ProviderMetricKey = currency === "USD" ? "costVnd" : "costUsd";
-  return metrics.map((metric) => metric.key).filter((key) => key !== hidden);
+/** The metrics the page offers, in the server's order. Cost is USD only (the accounting currency). */
+export function visibleMetricKeys(metrics: readonly AdminProviderMetricSeriesDto[]): ProviderMetricKey[] {
+  return metrics.map((metric) => metric.key);
 }
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -227,8 +222,6 @@ export function formatMetric(value: number | null | undefined, unit: ProviderMet
   switch (unit) {
     case "usd":
       return `$${value >= 100 ? integerFormat.format(value) : value >= 1 ? value.toFixed(2) : value.toFixed(value === 0 ? 0 : 4)}`;
-    case "vnd":
-      return `${integerFormat.format(Math.round(value))} ₫`;
     case "percent":
       return `${value.toFixed(value >= 99.95 || value === 0 ? 0 : 2)}%`;
     case "ms":

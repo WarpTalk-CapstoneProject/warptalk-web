@@ -146,10 +146,22 @@ assert.match(
   /aria-label=\{label\}[\s\S]{0,120}?title=\{label\}/,
   "The icon-only pause control must carry an aria-label, and the same string as its tooltip — the tooltip is the only place the words appear, so the two must not be able to drift.",
 );
-for (const copy of ["Pause transcript", "Resume transcript", "Transcript request in progress"]) {
+// The words live in the message catalog now (i18n), so check the keys the control reads and
+// that the English catalog still carries the same state language.
+const meetingLiveEn = JSON.parse(read("messages/en/meetingLive.json"));
+for (const [key, copy] of [
+  ["pauseTranscript", "Pause transcript"],
+  ["resumeTranscript", "Resume transcript"],
+  ["transcriptRequestInProgress", "Transcript request in progress"],
+]) {
   assert.ok(
-    sidePanel.includes(copy),
-    `The pause control's tooltip must still offer "${copy}" — the state language is the whole label, since the button shows no text.`,
+    sidePanel.includes(`t("sidePanel.${key}")`),
+    `The pause control must read its label from sidePanel.${key} — the state language is the whole label, since the button shows no text.`,
+  );
+  assert.equal(
+    meetingLiveEn.sidePanel[key],
+    copy,
+    `The pause control's tooltip must still offer "${copy}" in the English catalog (sidePanel.${key}).`,
   );
 }
 
@@ -551,7 +563,14 @@ assert.doesNotMatch(
 );
 assert.match(
   confirmDialog,
-  /Pause transcript\s*<\/Button>/,
+  /t\("transcriptPause\.confirm"\)\s*\}\s*<\/Button>/,
+  "The confirm button must read its label from transcriptPause.confirm.",
+);
+// The copy lives in the message catalog (i18n); the contract is about the English words.
+const pauseCopy = JSON.parse(read("messages/en/meetingLive.json")).transcriptPause;
+assert.equal(
+  pauseCopy.confirm,
+  "Pause transcript",
   "The confirm button must name the action. 'OK' under a yes/no title is answered by muscle memory; the button is the last chance to notice which of the two switches is about to move.",
 );
 // Both halves of the ruling, in the one sentence a host reads before losing data. Dropping either
@@ -560,16 +579,21 @@ assert.match(
 // meeting stops with the transcript and never press it at all.
 assert.match(
   confirmDialog,
+  /t\("transcriptPause\.description"\)/,
+  "The dialog must read its sentence from transcriptPause.description.",
+);
+assert.match(
+  pauseCopy.description,
   /is written to the transcript or stored/,
   "The dialog must say the words are neither written down NOR stored — 'not shown' or a bare 'paused' loses the reason it is worth confirming.",
 );
 assert.match(
-  confirmDialog,
+  pauseCopy.description,
   /dubbing and voice clone keep running/,
   "The dialog must say what does NOT stop. WT-605 introduced a separate event pair precisely so pausing the transcript could not be read as stopping the meeting.",
 );
 assert.doesNotMatch(
-  withoutComments(confirmDialog),
+  withoutComments(confirmDialog) + JSON.stringify(pauseCopy),
   /Meeting paused|Pause meeting|Pause translation/i,
   "Copy in the confirmation must not call this pausing the meeting or the translation — they are different switches and the backend refuses to conflate them.",
 );

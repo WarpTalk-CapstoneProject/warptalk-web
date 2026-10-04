@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowUp,
+  Square,
   ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
@@ -25,6 +26,7 @@ import {
   Paperclip,
   FileText,
   BookBookmark,
+  Lock,
   PlugsConnected,
   MagnifyingGlass,
   Sparkle,
@@ -52,7 +54,7 @@ import { composerReadiness } from "@/lib/assistant/composer-readiness";
 import {
   assistantScopeFor,
   PLATFORM_SCOPE_LABEL,
-  PLATFORM_SUGGESTED_PROMPTS,
+  suggestedPromptsFor,
 } from "@/lib/assistant/assistant-scope";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
@@ -83,7 +85,9 @@ import type {
   AssistantMentionDto,
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
+  SendAssistantMessageResponse,
 } from "@/types/assistant";
+import { assistantService } from "@/services/assistant.service";
 import {
   AssistantQuestionCard,
   parseAssistantQuestions,
@@ -105,6 +109,7 @@ import {
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
@@ -113,6 +118,7 @@ import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
 import { UserMessageBody } from "@/components/assistant/message-mention-chips";
+import { ComposerMentionMirror } from "@/components/assistant/composer-mention-mirror";
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
 import {
   hasMentionToken,
@@ -131,12 +137,14 @@ import {
 } from "@/lib/assistant/mention-trigger";
 import { matchesSearchText } from "@/lib/ui/search-text";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import { mentionBlurb } from "@/lib/assistant/mention-blurb";
 import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
   pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
   togglePluginKey,
   writeDisabledPluginKeys,
+  workspaceWriteLock,
   writeToolPolicyUpdate,
   type KeyValueStore,
 } from "@/lib/assistant/tool-policy";
@@ -221,6 +229,8 @@ interface ChatMessage {
   content: string;
   context?: string;
   failed?: boolean;
+  /** The user pressed Stop on this reply; what is in `content` is what had arrived by then. */
+  stopped?: boolean;
   /**
    * What this answer cited. Held on the message rather than in a lookup beside it, so it
    * survives every path a message arrives by — streamed, completed, or replayed out of
@@ -347,6 +357,9 @@ function buildPageContextLabels(
     document_detail: t("pageContextLabels.documentDetail"),
     documents: t("pageContextLabels.documents"),
     history: t("pageContextLabels.history"),
+    workspace_insights: t("pageContextLabels.insights"),
+    workspace_insights_usage: t("pageContextLabels.insightsUsage"),
+    workspace_insights_tools: t("pageContextLabels.insightsTools"),
   };
 }
 
@@ -544,6 +557,16 @@ export function GlobalChatbot() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
+  // Stop (3 Oct 2026). `isAiTyping` drops as soon as text streams in, so it cannot say whether a
+  // reply is still being written; this does, from send until the reply completes, fails or is
+  // stopped - it is what turns the send button into Stop.
+  const [replyInFlight, setReplyInFlight] = useState(false);
+  /** The reply being written: its id arrives with the send response (or AssistantMessageStarted). */
+  const activeReplyRef = useRef<{ conversationId: string; replyId: string | null; platform: boolean } | null>(null);
+  /** Stop pressed before the reply's id was known: sent the moment it is. */
+  const stopPendingRef = useRef(false);
+  /** Replies the user stopped. Their late chunks are dropped, and their "failure" is not an error. */
+  const stoppedRepliesRef = useRef(new Set<string>());
   /**
    * The tools WarpBot reached for this turn, in order, kept until the next question.
    *
@@ -866,8 +889,22 @@ export function GlobalChatbot() {
     updateSteps(() => []);
     setIsSlow(false);
     setIsMinimized(false);
+    // The ask card is its own state, not a message: without this it survived New chat and
+    // sat alone in an empty thread, which read as the button doing nothing.
+    setPendingQuestions(null);
     clearPluginCards();
     shouldAutoScrollRef.current = true;
+  };
+
+  /**
+   * The header's X. It used to BE the New chat button (a Plus turned 45°), so it looked like
+   * close and did something else — and with an ask card open it appeared to do nothing at all.
+   * Close now closes: the thread is put away and the panel shuts, without a minimized chip.
+   */
+  const closeConversation = () => {
+    startNewConversation();
+    setIsMinimized(false);
+    setIsOpen(false);
   };
 
   /**
@@ -890,6 +927,7 @@ export function GlobalChatbot() {
     try {
       const detail = await conversationLoader.mutateAsync(id);
       clearResponseTimeout();
+      setPendingQuestions(null);
       setMessages(
         detail.messages
           .filter(
@@ -1041,7 +1079,9 @@ export function GlobalChatbot() {
       // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
       // handling, and the avatar contract forbids bypassing the primitives with a bare <img>.
       icon: <PluginGlyph plugin={plugin} size="xs" />,
-      description: plugin.description,
+      // The first clause only: the full catalog text is written for the Plugins page. See
+      // mentionBlurb.
+      description: mentionBlurb(plugin.description),
       entityType: "plugin",
       entityId: plugin.key,
     }));
@@ -1106,6 +1146,12 @@ export function GlobalChatbot() {
       ? null
       : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
+  // Insights starters follow the page context they are answered from: switch the context off and
+  // they go with it.
+  const suggestedPrompts = suggestedPromptsFor({
+    scope: assistantScope,
+    pageType: effectivePageContext?.pageType,
+  });
 
   const slashCommands = useMemo(() => buildSlashCommands(t), [t]);
   const pageContextLabels = useMemo(() => buildPageContextLabels(t), [t]);
@@ -1161,6 +1207,10 @@ export function GlobalChatbot() {
       "AssistantMessageStarted",
       (payload: { conversationId: string; messageId: string }) => {
         if (payload.conversationId !== conversationId) return;
+        if (stoppedRepliesRef.current.has(payload.messageId)) return;
+        if (activeReplyRef.current && !activeReplyRef.current.replyId) {
+          activeReplyRef.current.replyId = payload.messageId;
+        }
         setIsAiTyping(true);
         // A new turn starts a new trail; the previous one has been folded into the answer it
         // produced and stays there.
@@ -1188,6 +1238,9 @@ export function GlobalChatbot() {
         delta: string;
       }) => {
         if (payload.conversationId !== conversationId) return;
+        // Stopped: the worker notices within half a second, and what arrives meanwhile is not
+        // what the user chose to keep.
+        if (stoppedRepliesRef.current.has(payload.messageId)) return;
         setIsAiTyping(false);
         setIsSlow(false);
         // Marked finished, NOT discarded. Once prose starts arriving no tool is still running,
@@ -1215,6 +1268,7 @@ export function GlobalChatbot() {
       "AssistantToolCallStarted",
       (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
+        if (!activeReplyRef.current) return; // a stopped turn's last step, arriving late
         setIsAiTyping(true);
         updateSteps((current) => [
           // Anything still marked running when a new tool starts has finished — the worker
@@ -1235,6 +1289,7 @@ export function GlobalChatbot() {
       "AssistantReasoning",
       (payload: { conversationId: string; title?: string; body?: string }) => {
         if (payload.conversationId !== conversationId) return;
+        if (!activeReplyRef.current) return; // a stopped turn's last thought, arriving late
         const title = payload.title?.trim() ?? "";
         const body = payload.body?.trim() ?? "";
         if (!title && !body) return;
@@ -1298,6 +1353,17 @@ export function GlobalChatbot() {
         sourcesJson?: string | null;
       }) => {
         if (payload.conversationId !== conversationId) return;
+        if (stoppedRepliesRef.current.has(payload.id)) {
+          // The worker kept what it had written; that is the stopped reply's text now.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === payload.id ? { ...m, content: payload.content || m.content } : m)),
+          );
+          return;
+        }
+        if (!activeReplyRef.current?.replyId || activeReplyRef.current.replyId === payload.id) {
+          activeReplyRef.current = null;
+          setReplyInFlight(false);
+        }
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
@@ -1342,6 +1408,13 @@ export function GlobalChatbot() {
         error: string;
       }) => {
         if (payload.conversationId !== conversationId) return;
+        // A reply stopped before it wrote anything is "failed" on the server so it stays out of
+        // the next turn's history; on screen it is simply stopped.
+        if (stoppedRepliesRef.current.has(payload.messageId)) return;
+        if (!activeReplyRef.current?.replyId || activeReplyRef.current.replyId === payload.messageId) {
+          activeReplyRef.current = null;
+          setReplyInFlight(false);
+        }
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
@@ -1665,6 +1738,8 @@ export function GlobalChatbot() {
     })),
   ).segments;
 
+  const composerHasMention = composerMentionSegments.some((part) => part.kind === "mention");
+
   // What Tab would finish the typed name with — see mention-completion.ts for when it is empty.
   const mentionGhost = mentionMenuOpen
     ? mentionCompletion({
@@ -1673,6 +1748,11 @@ export function GlobalChatbot() {
         highlightedTitle: filteredOptions[selectedIndex]?.title,
       })
     : "";
+  // Drawn for a ghost completion or a mention chip, never while the textarea is at its cap and
+  // scrolling (the two would wrap differently). Only with a chip does it paint the whole
+  // sentence, and only then do the textarea's own glyphs go transparent.
+  const composerMirrorDrawn = (Boolean(mentionGhost) || composerHasMention) && !composerOverflowing;
+  const composerMentionsDrawn = composerMirrorDrawn && composerHasMention;
 
   const insertMention = (opt: MentionMenuItem) => {
     const cursorPosition = inputRef.current?.selectionStart || 0;
@@ -1841,6 +1921,50 @@ export function GlobalChatbot() {
     void addFiles(files);
   };
 
+  /**
+   * Stop the reply being written (3 Oct 2026). The screen settles at once - the trail is sealed
+   * under the reply, which keeps what had arrived - and the server is told, so the worker stops
+   * calling the model and tools within half a second and keeps that text as the stored reply.
+   * Pressed before the send response named the reply, it is remembered and sent then.
+   */
+  const stopReply = () => {
+    const active = activeReplyRef.current;
+    if (!active) return;
+    if (!active.replyId) {
+      stopPendingRef.current = true;
+    } else {
+      const replyId = active.replyId;
+      stoppedRepliesRef.current.add(replyId);
+      activeReplyRef.current = null;
+      stopPendingRef.current = false;
+      const request = active.platform
+        ? assistantService.platform.stopReply(active.conversationId, replyId)
+        : assistantService.stopReply(active.conversationId, replyId);
+      // Best effort: if the call is lost the reply finishes on its own and is shown as stopped.
+      void request.catch(() => undefined);
+
+      const sealed = stepsRef.current.map((step) => ({ ...step, done: true }));
+      const startedAt = turnStartedAtRef.current;
+      setMessages((prev) => {
+        const durationMs = startedAt ? Date.now() - startedAt : undefined;
+        const steps = sealed.length > 0 ? sealed : undefined;
+        if (prev.some((m) => m.id === replyId)) {
+          return prev.map((m) =>
+            m.id === replyId ? { ...m, stopped: true, steps: steps ?? m.steps, durationMs } : m,
+          );
+        }
+        return [...prev, { id: replyId, role: "assistant" as const, content: "", stopped: true, steps, durationMs }];
+      });
+    }
+    turnStartedAtRef.current = null;
+    updateSteps(() => []);
+    setReplyInFlight(false);
+    setIsAiTyping(false);
+    setIsSlow(false);
+    clearResponseTimeout();
+    setTurnEndedAt(() => Date.now());
+  };
+
   const sendMessage = async (
     overrideContent?: string,
     // Set only by the permission form's own answer. Every other send starts a turn that has
@@ -1951,19 +2075,23 @@ export function GlobalChatbot() {
     if (!options?.keepPermissionPrompt) clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
+    activeReplyRef.current = { conversationId: convId, replyId: null, platform: platformTurn };
+    stopPendingRef.current = false;
+    setReplyInFlight(true);
 
     try {
       // The hub effect only begins negotiating once conversationId is in state, so without
       // this the first message of a conversation is POSTed before the client has joined the
       // group and its whole answer streams past an unsubscribed client.
       await waitForConversationJoin(convId);
+      let sent: SendAssistantMessageResponse;
       // Ambient page context (e.g. "user is looking at this room") rides along with every
       // message automatically — no explicit @-mention needed. It's a hint, not a hard fact:
       // .NET re-validates it against the conversation's own workspace before forwarding it.
       if (platformTurn) {
-        await sendPlatformMessage.mutateAsync({ conversationId: convId, content });
+        sent = await sendPlatformMessage.mutateAsync({ conversationId: convId, content });
       } else {
-        await sendAssistantMessage.mutateAsync({
+        sent = await sendAssistantMessage.mutateAsync({
           conversationId: convId,
           content,
           pageContext: effectivePageContext,
@@ -1973,7 +2101,14 @@ export function GlobalChatbot() {
         });
       }
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
+      const active = activeReplyRef.current;
+      if (active && active.conversationId === convId && !active.replyId) {
+        active.replyId = sent.assistantMessageId;
+      }
+      if (stopPendingRef.current) stopReply();
     } catch {
+      activeReplyRef.current = null;
+      setReplyInFlight(false);
       clearResponseTimeout();
       setIsAiTyping(false);
       setMessages((prev) => [
@@ -2089,12 +2224,22 @@ export function GlobalChatbot() {
                     )}
                   </button>
                   <button
+                    type="button"
                     aria-label={t("newChat")}
                     title={t("newChat")}
                     onClick={startNewConversation}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
-                    <Plus size={16} className="rotate-45" />
+                    <Plus size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("closeChat")}
+                    title={t("closeChat")}
+                    onClick={closeConversation}
+                    className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
+                  >
+                    <X size={14} />
                   </button>
                 </div>
               </div>
@@ -2106,12 +2251,12 @@ export function GlobalChatbot() {
                 onScroll={handleMessagesScroll}
                 className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
-                {isPlatformScope && messages.length === 0 && !isAiTyping ? (
+                {suggestedPrompts.length > 0 && messages.length === 0 && !isAiTyping ? (
                   <div
-                    data-testid="warpbot-platform-suggestions"
+                    data-testid={isPlatformScope ? "warpbot-platform-suggestions" : "warpbot-insights-suggestions"}
                     className="mt-auto flex flex-col items-start gap-1.5 px-2 pb-2"
                   >
-                    {PLATFORM_SUGGESTED_PROMPTS.map((prompt) => (
+                    {suggestedPrompts.map((prompt) => (
                       <button
                         key={prompt}
                         type="button"
@@ -2146,6 +2291,9 @@ export function GlobalChatbot() {
                         {msg.role === "assistant" && !msg.failed ? (
                           <>
                             <AssistantMarkdown withMeetingCards>{msg.content}</AssistantMarkdown>
+                            {msg.stopped ? (
+                              <p className="mt-1 text-[11.5px] italic text-ink-subtle">{t("replyStopped")}</p>
+                            ) : null}
                             <AnswerSources
                               sources={msg.sources ?? []}
                               workspaceSlug={activeWorkspaceSlug}
@@ -2299,7 +2447,11 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                {/* Never overflow-hidden: the "/" and "@" menus below are `absolute bottom-full`
+                    children of this box, so clipping it cut both menus off entirely and left only
+                    their shadow on the composer's top edge (#591 → "@ shows no list", 3 Oct). The
+                    permission form rounds its own top corners instead. */}
+                <div className={`${contextInputShellClassName} relative z-10`}>
                   {/* What WarpBot is waiting on, where the user's hands already are. In the thread
                       it scrolled away behind the answer that followed it and was gone when the
                       conversation was reopened, leaving WarpBot talking about a card nobody could
@@ -2319,6 +2471,7 @@ export function GlobalChatbot() {
                       // Declined, or the receipt's four seconds are up. One path out, so a
                       // dismissal cannot leave the answered stamp behind for the next prompt.
                       onDismiss={clearPluginCards}
+                      className="overflow-hidden rounded-t-[inherit]"
                     />
                   ) : null}
                   {/* Slash Command Dropdown */}
@@ -2410,17 +2563,21 @@ export function GlobalChatbot() {
                                           {opt.icon}
                                         </span>
                                       )}
-                                      <div className="flex items-center gap-1.5 truncate">
+                                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
                                         {/* A summary row shows the meeting's name: its group
                                             heading already says "Summaries". A hint shows what it
-                                            will write, "@document:". */}
-                                        <span className="font-medium truncate">
+                                            will write, "@document:".
+                                            The name is what the user picks by, so it does not
+                                            shrink until it takes 70% of the row; the description
+                                            gives way first. Both shrinking equally cut "Linear"
+                                            to "Li…" beside its own description (3 Oct 2026). */}
+                                        <span className="max-w-[70%] shrink-0 truncate font-medium">
                                           {isNamespaceHint(opt)
                                             ? `@${opt.title}`
                                             : (opt.label ?? opt.title)}
                                         </span>
                                         {opt.description && (
-                                          <span className="text-[12px] text-ink-subtle truncate">
+                                          <span className="min-w-0 truncate text-[12px] text-ink-subtle">
                                             {opt.description}
                                           </span>
                                         )}
@@ -2516,28 +2673,22 @@ export function GlobalChatbot() {
                         aria-hidden: the open menu already announces the option, and hearing the
                         sentence read back a second time is worse than not hearing the hint. */}
                     <div className="relative flex-1 min-w-[120px]">
-                      {(mentionGhost || composerMentionSegments.some((part) => part.kind === "mention"))
-                      && !composerOverflowing ? (
+                      {composerMirrorDrawn ? (
                         <div
                           aria-hidden
                           className="pointer-events-none absolute inset-0 overflow-hidden text-[13px] whitespace-pre-wrap break-words"
                         >
-                          {/* Same string, same glyphs: a mention token gets a tint BEHIND the
-                              textarea's own text (text-transparent keeps its background, where
-                              invisible would hide it), everything else stays invisible. No
-                              padding on the tint - padding would move every glyph after it. */}
-                          {composerMentionSegments.map((part, index) =>
-                            part.kind === "mention" ? (
-                              <span key={index} className="rounded-[3px] bg-primary/15 text-transparent">
-                                {mentionToken(mentionTokenLabel(part.mention))}
-                              </span>
-                            ) : (
-                              <span key={index} className="invisible">
-                                {part.text}
-                              </span>
-                            ),
-                          )}
-                          <span className="text-ink-subtle">{mentionGhost}</span>
+                          {/* The same string, glyph for glyph: each @mention drawn as a chip with
+                              its mark over the "@" (3 Oct 2026). With a mention in the text the
+                              mirror paints the whole sentence and the textarea's glyphs go
+                              transparent - its caret and selection stay. See
+                              ComposerMentionMirror for why nothing here may change a width. */}
+                          <ComposerMentionMirror
+                            segments={composerMentionSegments}
+                            plugins={catalogPlugins}
+                            ghost={mentionGhost}
+                            paintText={composerMentionsDrawn}
+                          />
                         </div>
                       ) : null}
                       <textarea
@@ -2559,7 +2710,12 @@ export function GlobalChatbot() {
                         // the box the size of its text, and stretching fights it. `relative` puts
                         // the text above the ghost mirror; `block w-full` makes the wrapper, not
                         // the textarea, the flex item, so both share one width.
-                        className="relative block w-full bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
+                        className={cn(
+                          "relative block w-full bg-transparent resize-none overflow-y-auto outline-none text-[13px] placeholder:text-ink-subtle",
+                          // The mirror paints the sentence while it draws mention chips; the caret
+                          // and the selection stay the textarea's own.
+                          composerMentionsDrawn ? "text-transparent caret-ink" : "text-ink",
+                        )}
                         rows={1}
                       />
                     </div>
@@ -2649,7 +2805,7 @@ export function GlobalChatbot() {
                                   onClick={() => setSkillsMenuOpen(false)}
                                   className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
                                 >
-                                  <span>Explore</span>
+                                  <span>{t("exploreTools")}</span>
                                   <ArrowSquareOut size={11} />
                                 </Link>
                               )}
@@ -2692,7 +2848,7 @@ export function GlobalChatbot() {
                                     onClick={() => setSkillsMenuOpen(false)}
                                     className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary hover:underline pt-0.5"
                                   >
-                                    <span>Browse All 14 WarpBot Tools</span>
+                                    <span>{t("browseAllTools")}</span>
                                     <ArrowSquareOut size={11} />
                                   </Link>
                                 )}
@@ -2722,6 +2878,9 @@ export function GlobalChatbot() {
                                 {installedAssistantPlugins.map((plugin) => {
                                   const connected = plugin.connectionStatus === "connected";
                                   const alwaysAllowed = pluginWritesAlwaysAllowed(plugin.tools);
+                                  // Write tools the workspace Owner set to ask or blocked: the box
+                                  // leaves them alone, and is locked when they are all of them.
+                                  const writeLock = workspaceWriteLock(plugin.tools);
                                   return (
                                     <li
                                       key={plugin.key}
@@ -2740,16 +2899,37 @@ export function GlobalChatbot() {
                                               : t("connected")}
                                         </div>
                                         {connected && alwaysAllowed !== null ? (
-                                          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-ink-muted">
-                                            <input
-                                              type="checkbox"
-                                              checked={alwaysAllowed}
-                                              disabled={updateToolPolicy.isPending}
-                                              onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
-                                              className="size-3 accent-primary"
-                                            />
-                                            {t("alwaysAllowChanges")}
-                                          </label>
+                                          <Tooltip
+                                            content={
+                                              writeLock === "all"
+                                                ? t("alwaysAllowLockedHint")
+                                                : writeLock === "some"
+                                                  ? t("alwaysAllowPartlyLocked")
+                                                  : null
+                                            }
+                                          >
+                                            <label
+                                              className={cn(
+                                                "mt-1 flex w-fit items-center gap-1.5 text-[11px] text-ink-muted",
+                                                writeLock === "all" ? "cursor-not-allowed" : "cursor-pointer",
+                                              )}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={alwaysAllowed}
+                                                disabled={updateToolPolicy.isPending || writeLock === "all"}
+                                                onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
+                                                className="size-3 accent-primary"
+                                              />
+                                              {t("alwaysAllowChanges")}
+                                              {writeLock ? (
+                                                <span className="inline-flex items-center gap-0.5 text-ink-subtle">
+                                                  <Lock size={10} aria-hidden />
+                                                  {writeLock === "all" ? t("alwaysAllowLocked") : null}
+                                                </span>
+                                              ) : null}
+                                            </label>
+                                          </Tooltip>
                                         ) : null}
                                       </div>
                                       {connected ? (
@@ -2829,6 +3009,20 @@ export function GlobalChatbot() {
                           It once sat here with no handler and nothing to wire it to, and was
                           removed rather than left on screen as a control that cannot succeed —
                           the attachment path it needed now exists. */}
+                      {replyInFlight ? (
+                        // Stop (3 Oct 2026): while a reply is being written the send button is the
+                        // way to end it, as in ChatGPT - a turn going the wrong way, or running a
+                        // tool it should not, could otherwise only be waited out.
+                        <button
+                          type="button"
+                          aria-label={t("stopReply")}
+                          title={t("stopReply")}
+                          onClick={stopReply}
+                          className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted transition-colors ml-1"
+                        >
+                          <Square weight="fill" size={10} />
+                        </button>
+                      ) : (
                       <button
                         type="button"
                         aria-label={t("sendMessage")}
@@ -2845,6 +3039,7 @@ export function GlobalChatbot() {
                       >
                         <ArrowUp weight="bold" size={13} />
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>

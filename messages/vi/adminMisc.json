@@ -291,6 +291,7 @@
       "rate_card_upserted": "Công bố biểu giá",
       "rate_card_deactivated": "Ngừng biểu giá",
       "rate_card_provider_cost_set": "Đặt chi phí nhà cung cấp",
+      "rate_card_credit_price_set": "Đổi mức trừ credit của cuộc họp",
       "pricing_config_updated": "Đổi thiết lập định giá",
       "billing_policy_updated": "Đổi chính sách thanh toán",
       "subscription_contract_created": "Tạo hợp đồng",
@@ -360,7 +361,9 @@
       "setting_reset": "Đã đặt lại cài đặt nền tảng",
       "setting_reverted": "Đã hoàn tác cài đặt nền tảng",
       "setting_imported": "Đã nhập cài đặt nền tảng",
-      "settings_exported": "Đã xuất cài đặt nền tảng"
+      "settings_exported": "Đã xuất cài đặt nền tảng",
+      "glossary_template_updated": "Đã lưu mẫu import glossary",
+      "glossary_template_reset": "Đã đưa mẫu import glossary về mặc định"
     },
     "entities": {
       "workspace": "Workspace",
@@ -393,7 +396,8 @@
       "credit_pack": "Gói credit",
       "addon": "Tiện ích bổ sung",
       "coupon": "Mã giảm giá",
-      "platform_setting": "Cài đặt nền tảng"
+      "platform_setting": "Cài đặt nền tảng",
+      "glossary_import_template": "Mẫu import glossary"
     },
     "sources": {
       "workspace_service": "Workspace",

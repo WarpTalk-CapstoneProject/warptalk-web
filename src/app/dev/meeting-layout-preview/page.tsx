@@ -21,7 +21,7 @@
  *   at `clamp(96px,15vh,148px)` holds three lines; it cannot show that the stage renders.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
@@ -68,6 +68,7 @@ function fixtureSegment(index: number) {
 }
 
 export default function MeetingLayoutPreview() {
+  const [captionLaneCollapsed, setCaptionLaneCollapsed] = useState(false);
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
 
   useEffect(() => {
@@ -86,6 +87,19 @@ export default function MeetingLayoutPreview() {
       captionSegments: [...state.captionSegments, next],
       transcriptSegments: [...state.transcriptSegments, next],
     }));
+  }
+
+  /** Kenji mid-sentence: the live caption the pipeline sends before the turn closes. */
+  function speakLive() {
+    const store = useTranslationRoomStore.getState();
+    const current = store.liveLines.u3?.text ?? "";
+    // i18n-allow: a transcript line, like SEGMENTS above.
+    const words = ["遅延の", "数字を", "先に", "確認", "しましょう。"];
+    const next = words.slice(0, Math.min(words.length, current ? current.split(" ").length + 1 : 1)).join(" ");
+    store.upsertLiveLine(
+      { speakerId: "u3", speakerName: "Kenji Watanabe", itemId: "preview-item", text: next, language: "ja" },
+      Date.now(),
+    );
   }
 
   return (
@@ -111,8 +125,19 @@ export default function MeetingLayoutPreview() {
             </div>
           </section>
 
-          <div className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center">
-            <LiveSubtitleOverlay enabled onOpenTranscript={() => undefined} />
+          <div
+            data-collapsed={captionLaneCollapsed ? "" : undefined}
+            className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center data-[collapsed]:h-8"
+          >
+            {/* Read as Sarah (listens in English): a vi/ja line whose translation has not arrived is
+                shown as spoken and muted. Kenji's live words (ja) are NOT shown to her — live text
+                appears only in the reader's own language. Scroll up in the lane for history. */}
+            <LiveSubtitleOverlay
+              enabled
+              readerLanguage="en"
+              collapsed={captionLaneCollapsed}
+              onToggleCollapsed={() => setCaptionLaneCollapsed((value) => !value)}
+            />
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-2">
@@ -130,6 +155,14 @@ export default function MeetingLayoutPreview() {
                 className="grid h-10 place-items-center rounded-xl bg-surface-2 px-3 text-[12px] font-medium"
               >
                 + line
+              </button>
+              <button
+                type="button"
+                data-preview-live-caption
+                onClick={speakLive}
+                className="grid h-10 place-items-center rounded-xl bg-surface-2 px-3 text-[12px] font-medium"
+              >
+                live
               </button>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>

@@ -28,7 +28,7 @@ const provider = (key: AdminProviderSummaryDto["key"], name: string, overrides: 
   statusSource: "calls",
   statusNote: null,
   statusPage: null,
-  today: { usageUnit: "credits", usage: 10, costUsd: 1, costVnd: 25_000, usageNote: null, costNote: null },
+  today: { usageUnit: "credits", usage: 10, costUsd: 1, usageNote: null, costNote: null },
   live: { calls: 10, failures: 0, successRate: 100, errorRate: 0, p50Ms: 200, p95Ms: 800, callsLastHour: 1, note: null },
   uptime: { percent: 99.9, basis: "calls", trackedSince: null, days: 90 },
   config: [],
@@ -143,10 +143,10 @@ test("a line with no measurement at all stays null (a gap), never a flat 0", () 
   assert.equal(metricIsEmpty(metric("usage", "credits", [null, null])), true);
 });
 
-test("cost is shown in the page's currency only, and defaults include it", () => {
-  const metrics = [metric("usage", "credits", []), metric("costUsd", "usd", []), metric("costVnd", "vnd", [])];
-  assert.deepEqual(visibleMetricKeys(metrics, "USD"), ["usage", "costUsd"]);
-  assert.deepEqual(visibleMetricKeys(metrics, "VND"), ["usage", "costVnd"]);
+test("cost is one USD metric, offered in the server's order, and defaults include it", () => {
+  const metrics = [metric("usage", "credits", []), metric("costUsd", "usd", [])];
+  assert.deepEqual(visibleMetricKeys(metrics), ["usage", "costUsd"]);
+  assert.ok(defaultMetrics("openai").includes("costUsd"));
   assert.ok(defaultMetrics("openai").includes("p95Ms"));
   assert.ok(!defaultMetrics("stripe").includes("calls"));
 });
@@ -155,7 +155,6 @@ test("figures are formatted by unit and a null is a dash", () => {
   assert.equal(formatMetric(null, "usd"), "—");
   assert.equal(formatMetric(0.0123, "usd"), "$0.0123");
   assert.equal(formatMetric(12.5, "usd"), "$12.50");
-  assert.equal(formatMetric(1_250_000, "vnd"), "1,250,000 ₫");
   assert.equal(formatMetric(1540, "ms"), "1.54 s");
   assert.equal(formatMetric(99.5, "percent"), "99.50%");
   assert.equal(formatMetric(100, "percent"), "100%");

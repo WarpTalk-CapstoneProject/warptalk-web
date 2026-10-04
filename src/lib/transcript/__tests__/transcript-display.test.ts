@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   captionTextForReader,
+  isCaptionPending,
   pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
@@ -731,10 +732,9 @@ test("a speaker already in the reader's language is captioned, not held back", (
   assert.equal(captionTextForReader(line, "en-US"), "Hello everyone");
 });
 
-test("a line whose translation has not arrived yet is held rather than shown in the wrong language", () => {
-  // The transcript segment lands before its translation does. Showing the original in the gap is
-  // the defect being fixed, not a smaller version of it: the line would go up in the wrong
-  // language and then change under the reader.
+test("a line whose translation has not arrived yet is shown as spoken, marked pending", () => {
+  // Owner, 4 Oct 2026: holding it cost every cross-language caption the whole translation stage
+  // (~1s p50). The original goes up now, drawn muted, and the translation replaces it.
   const line = segment({
     originalLanguage: "vi",
     originalText: "Xin chào",
@@ -743,7 +743,17 @@ test("a line whose translation has not arrived yet is held rather than shown in 
     targetLanguage: undefined,
   });
 
-  assert.equal(captionTextForReader(line, "en"), null);
+  assert.equal(captionTextForReader(line, "en"), "Xin chào");
+  assert.equal(isCaptionPending(line, "en"), true);
+});
+
+test("a translation in hand is not pending; the reader's own language never was", () => {
+  const translated = segment({ originalLanguage: "vi", originalText: "Xin chào", translations: { en: "Hello" } });
+  const own = segment({ originalLanguage: "en", originalText: "Hello everyone", translations: {} });
+
+  assert.equal(isCaptionPending(translated, "en"), false);
+  assert.equal(isCaptionPending(own, "en"), false);
+  assert.equal(isCaptionPending(own, null), false);
 });
 
 test("somebody else's translation is never shown as this reader's caption", () => {
@@ -753,7 +763,9 @@ test("somebody else's translation is never shown as this reader's caption", () =
     translations: { ja: "こんにちは" },
   });
 
-  assert.equal(captionTextForReader(line, "en"), null);
+  // The original, pending — never the Japanese line meant for somebody else.
+  assert.equal(captionTextForReader(line, "en"), "Xin chào");
+  assert.equal(isCaptionPending(line, "en"), true);
 });
 
 test("before Start Translation the caption is what was said, not an empty lane", () => {
@@ -770,9 +782,10 @@ test("before Start Translation the caption is what was said, not an empty lane",
     targetLanguage: undefined,
   });
 
-  assert.equal(captionTextForReader(line, "en", false), "Xin chào");
-  // ...and the hold comes straight back once translation is running.
-  assert.equal(captionTextForReader(line, "en", true), null);
+  assert.equal(captionTextForReader(line, "en"), "Xin chào");
+  // Not pending: no translation is coming before Start.
+  assert.equal(isCaptionPending(line, "en", false), false);
+  assert.equal(isCaptionPending(line, "en", true), true);
 });
 
 test("a translation already in hand is shown whether or not translation is still running", () => {
@@ -783,7 +796,7 @@ test("a translation already in hand is shown whether or not translation is still
     translations: { en: "Hello" },
   });
 
-  assert.equal(captionTextForReader(line, "en", false), "Hello");
+  assert.equal(captionTextForReader(line, "en"), "Hello");
 });
 
 test("a reader with no resolved language yet sees the original rather than an empty lane", () => {
@@ -1358,6 +1371,26 @@ test("a pause the window list already knows about is not counted twice", () => {
   const gaps = withLivePauseGap(fromWindows, { paused: true, since: "2026-09-03T10:01:00Z" }, BASE_TIME);
 
   assert.equal(gaps.length, 1, "two open gaps would split one pause in two and draw it twice");
+});
+
+test("a room known to be running is not withheld by a window list that still says paused", () => {
+  // After a resume: the broadcast has landed, the refetch has not (or failed, and is not retried).
+  const stale = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+  assert.equal(stale.filter((gap) => gap.endMs === null).length, 1, "the fixture must hold an open window");
+
+  const gaps = withLivePauseGap(stale, { paused: false, since: null, known: true }, BASE_TIME);
+  const kept = withoutSegmentsInOpenPauseGaps([{ startTimeMs: 90_000, id: "after-resume" }], gaps);
+
+  assert.equal(kept.segments.length, 1);
+  assert.equal(kept.hiddenCount, 0);
+});
+
+test("an unknown state leaves an open window alone", () => {
+  // Before anything has told this client the state, the window list is all there is.
+  const open = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.deepEqual(withLivePauseGap(open, { paused: false, since: null, known: false }, BASE_TIME), open);
+  assert.deepEqual(withLivePauseGap(open, { paused: false, since: null }, BASE_TIME), open);
 });
 
 test("no live pause, or nothing to anchor it against, changes nothing", () => {

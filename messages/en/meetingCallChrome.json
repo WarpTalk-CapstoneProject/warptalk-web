@@ -6,7 +6,9 @@
     "addOthers": "Add others"
   },
   "captions": {
-    "openFullTranscript": "Open full transcript",
+    "collapse": "Hide captions",
+    "expand": "Show captions",
+    "latest": "Latest",
     "liveRegionAria": "Live captions",
     "emptyState": "Captions will appear here as people speak."
   },
@@ -22,5 +24,10 @@
       "reconnecting": "Reconnecting",
       "waiting": "Waiting for LiveKit"
     }
+  },
+  "displaced": {
+    "title": "You joined this meeting from another device or tab.",
+    "description": "This account is in the meeting somewhere else now, so this window stopped connecting rather than push that one out. Keep using the other one, or move the meeting here.",
+    "takeOver": "Use this device"
   }
 }

@@ -288,8 +288,8 @@ export default function AdminWorkspaceBillingPage({
 
   const displayPlanName = subscription?.planName || "Free Plan";
   const displayPlanPrice = subscription
-    ? formatMoney(subscription.price, "VND")
-    : formatMoney(0, "VND");
+    ? formatMoney(subscription.price, subscription.planCurrency)
+    : formatMoney(0, "USD");
 
   const usageBreakdown = report?.usageBreakdown || [];
 

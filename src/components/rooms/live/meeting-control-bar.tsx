@@ -1,11 +1,12 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpinnerGap, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
+import { LanguageColumn } from "@/components/rooms/live/language-column";
 import { getLanguageCode, getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { useVoiceCatalogs } from "@/hooks/use-voice-profiles";
+import { voiceLibraryLanguages } from "@/lib/voice/library-languages";
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
 import { VoicePanel } from "@/components/rooms/live/voice-panel";
@@ -27,7 +30,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 // Button, Dialog* and the Fingerprint icon were imported and never used — dead since whatever
 // removed their last call site, and invisible because unused imports are a warning here rather
-// than an error. `Plus` joined them when AddLanguageRow went.
+// than an error. `Plus` joined them when AddLanguageRow went, and came back with WT-709's
+// AddMeetingLanguageColumn.
 import type { VoiceCloneStateDto, VoiceOptionDto } from "@/types/realtime";
 
 import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
@@ -99,6 +103,10 @@ export function MeetingControlBar({
   speakLanguage,
   availableSpeakLanguages,
   allowedTargetLanguages,
+  languagesLimitedToMeeting = false,
+  addableLanguages,
+  addingRoomLanguage = null,
+  onAddRoomLanguage,
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
@@ -181,6 +189,24 @@ export function MeetingControlBar({
    * unrestricted.
    */
   allowedTargetLanguages?: string[] | null;
+  /**
+   * WT-709: the language lists above ARE the meeting's declared languages, and the server holds
+   * every participant to them. True removes the "Other languages" disclosure — every row in it
+   * would be a pick the hub refuses — and puts the way out in its place: the host's add control,
+   * or for everybody else a line saying to ask the host. False (a bridge room, a room with no
+   * declared set) keeps the disclosure, because the server sets no such limit there.
+   */
+  languagesLimitedToMeeting?: boolean;
+  /** WT-709, host-only: workspace-permitted languages the meeting does not declare yet. */
+  addableLanguages?: string[];
+  /** The language whose add request is in flight, so its row can say so. */
+  addingRoomLanguage?: string | null;
+  /**
+   * WT-709, host-only: adds a language to the running meeting for everybody. Omit to hide the
+   * control — the endpoint gates on the room's EFFECTIVE host, so a workspace admin would be
+   * handed a button that answers 403.
+   */
+  onAddRoomLanguage?: (language: string) => void;
   /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
@@ -203,9 +229,9 @@ export function MeetingControlBar({
    */
   dubVoice?: string | null;
   /** This participant's own uploaded voice profiles that have a usable provider voice behind them. */
-  ownVoiceProfiles?: { id: string; name: string; voiceId: string }[];
+  ownVoiceProfiles?: { id: string; name: string; voiceId: string; language?: string | null }[];
   /** Pass null to go back to cloning live from the meeting. Omit to hide the "Your voice" section. */
-  onChangeDubVoice?: (voiceId: string | null) => void;
+  onChangeDubVoice?: (voiceId: string | null, language?: string | null) => void;
   /**
    * WT-B — whether THIS ROOM streams audio to STT while a speaker is still talking ("flash
    * mode"), rather than waiting for the pause that ends their turn.
@@ -288,8 +314,9 @@ export function MeetingControlBar({
   onToggleMuteOnEntry?: (enabled: boolean) => void;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
-  /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
-   * is told by toast either way. Omit to hide the record button. */
+  /** WT-06: starts/stops LiveKit Egress recording for the room. Host only — the caller passes it
+   * for the room host (or a bridge room's capturer) and omits it for everyone else, which hides
+   * the record button. */
   onToggleRecording?: () => void;
   /**
    * WT-605, host-only: opens the transcript panel and then stops/resumes writing it down.
@@ -363,14 +390,33 @@ export function MeetingControlBar({
   });
 
   // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
+  // A library pick can come from any language's catalogue now (the panel filters by language),
+  // so the row looks its name up in those too. Fetched only while such a pick is unexplained by
+  // the profiles and the listen-language catalogue, which share the cache with the panel.
+  const dubVoiceUnnamed = Boolean(
+    dubVoice
+      && !ownVoiceProfiles?.some((profile) => profile.voiceId === dubVoice)
+      && !voiceCatalog?.some((voice) => voice.id === dubVoice),
+  );
+  const libraryCodes = useMemo(
+    () => voiceLibraryLanguages(allowedTargetLanguages).map((language) => language.code),
+    [allowedTargetLanguages],
+  );
+  const libraryCatalogs = useVoiceCatalogs(libraryCodes, dubVoiceUnnamed);
+  const namedCatalog = useMemo(
+    () => [...(voiceCatalog ?? []), ...Object.values(libraryCatalogs.byLanguage).flat()],
+    [voiceCatalog, libraryCatalogs.byLanguage],
+  );
   const voiceSelection = describeVoiceSelection({
-    voiceEnabled,
+    // The listener's switch is gone from meeting rooms (the speaker decides what is heard), so a
+    // stale "off" left in this browser must not turn the row into "Transcript only".
+    voiceEnabled: undefined,
     voiceCloneEnabled,
     // The DUB voice, not voicePreference. This row answers "how do I sound", and voicePreference
     // answers the opposite question — which is why it used to claim listeners heard a speaker in
     // a voice that speaker had only ever chosen for their own listening.
     dubVoice,
-    voiceCatalog,
+    voiceCatalog: namedCatalog,
     ownVoiceProfiles,
     hasAudience: voiceCloneHasAudience,
   });
@@ -435,6 +481,10 @@ export function MeetingControlBar({
             // silently remove options the moment they ever diverge.
             languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
             allowedTargetLanguages={allowedTargetLanguages}
+            languagesLimitedToMeeting={languagesLimitedToMeeting}
+            addableLanguages={addableLanguages}
+            addingRoomLanguage={addingRoomLanguage}
+            onAddRoomLanguage={onAddRoomLanguage}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
             onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
@@ -509,9 +559,8 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      {/* No isHost clause, unlike Host controls above: recording is open to everyone in the
-          meeting (MeetingRoomService.IsInMeetingAsync), and every participant is toasted when it
-          starts or stops. The caller decides who sees this by passing onToggleRecording or not. */}
+      {/* No isHost clause here: the caller decides who sees this by passing onToggleRecording
+          or not, and it passes it for the room host only (isRoomHost is narrower than isHost). */}
       {onToggleRecording ? (
         <MeetControl
           label={
@@ -835,9 +884,9 @@ export function MeetingControlBar({
                 <>
                   <SettingsPanelHeader title={t("settingsMenu.voice.submenuHeader")} onBack={() => setSettingsSection("root")} />
                   {/* The panel itself is shared with the bridge popup — see voice-panel.tsx and
-                      lib/meeting/voice-panel.ts. Room speed stays here: it is the bar's section, not a
-                      voice, and it rides in the panel's footer slot so it keeps its place above the
-                      capture status. */}
+                      lib/meeting/voice-panel.ts. Flash mode stays here: it is the bar's switch, not a
+                      voice, and it rides in the panel's footer slot, which the panel draws at the top
+                      with the clone status — the controls people open this panel to change. */}
                   <VoicePanel
                     mode="meeting"
                     voiceEnabled={voiceEnabled}
@@ -851,24 +900,19 @@ export function MeetingControlBar({
                     dubVoice={dubVoice}
                     ownVoiceProfiles={ownVoiceProfiles}
                     onChangeDubVoice={onChangeDubVoice}
+                    speakLanguage={speakLanguage}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     cloneCapture={cloneCapture}
                     cloneLevels={cloneLevels}
                     onDone={closeSettingsMenu}
                     footer={
                       <>
-                        {/* FLASH MODE — a room setting, kept visually apart from everything above it.
-                            The list above is two questions about VOICE ("how do I sound", "what do I
-                            hear"). This is a third question about SPEED, and it is the only control in
-                            this panel that changes things for other people. Merging it into the list
-                            would repeat the exact mistake this panel was rebuilt to fix, so it gets a
-                            rule, a heading of its own, and a sentence saying who it affects. */}
-                        <div className="my-1 h-[1px] bg-surface-3" />
-                        <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                          {t("roomSpeed.heading")}
-                        </p>
+                        {/* FLASH MODE — a room setting, kept apart from the voice lists below it by a
+                            rule. It is a question about SPEED, and the only control in this panel that
+                            changes things for other people, so its sentence says who it affects. */}
                         <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
                           <span className="min-w-0 text-left">
-                            <span className="block text-[13px] text-ink">{t("roomSpeed.flashMode.label")}</span>
+                            <span className="block text-[13px] font-medium text-ink">{t("roomSpeed.flashMode.label")}</span>
                             <span className="block text-[11px] leading-snug text-ink-subtle">
                               {onChangeFlashMode
                                 ? t("roomSpeed.flashMode.editable")
@@ -1148,9 +1192,66 @@ function languagesNotAlreadyOffered(
   );
 }
 
+/**
+ * WT-709 — the room host's "Add to this meeting" list.
+ *
+ * Not LanguageColumn: those rows are radio items that SELECT the reader's own language, and these
+ * change the meeting for everybody without touching the host's own choice. Drawing them alike
+ * would invite exactly the wrong reading of a click. One request at a time — the server validates
+ * each addition against the plan's language quota, so two in flight could both pass the check.
+ */
+function AddMeetingLanguageColumn({
+  title,
+  hint,
+  addingLabel,
+  options,
+  adding,
+  onAdd,
+}: {
+  title: string;
+  hint: string;
+  addingLabel: string;
+  options: string[];
+  adding: string | null;
+  onAdd: (language: string) => void;
+}) {
+  return (
+    <div role="group" aria-label={title}>
+      <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+        {title}
+      </p>
+      <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
+      <div className="max-h-40 overflow-y-auto">
+        {options.map((language) => {
+          const isAdding = adding === language;
+          return (
+            <button
+              key={language}
+              type="button"
+              role="menuitem"
+              disabled={adding !== null}
+              aria-busy={isAdding || undefined}
+              onClick={() => onAdd(language)}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+            >
+              <span>{getLanguageCode(language)}</span>
+              <span className="flex-1 truncate">{getLanguageName(language)}</span>
+              {isAdding ? (
+                <SpinnerGap className="h-3.5 w-3.5 shrink-0 animate-spin" aria-label={addingLabel} />
+              ) : (
+                <Plus className="h-3.5 w-3.5 shrink-0" weight="bold" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
 // submenus. Those submenus were unreachable and are gone; LanguageColumn is the one row renderer
-// now, and it is the picker's own.
+// now. W4b moved it to language-column.tsx so the bridge popup draws the same picker.
 
 function LayoutOption({
   label,
@@ -1326,6 +1427,10 @@ function LanguagePairPicker({
   listenLanguage,
   languageOptions,
   allowedTargetLanguages,
+  languagesLimitedToMeeting,
+  addableLanguages,
+  addingRoomLanguage,
+  onAddRoomLanguage,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
   onLanguagePicked,
@@ -1333,6 +1438,11 @@ function LanguagePairPicker({
 }: {
   speakLanguage?: string;
   listenLanguage?: string;
+  /** WT-709 — see MeetingControlBar's prop of the same name. */
+  languagesLimitedToMeeting: boolean;
+  addableLanguages?: string[];
+  addingRoomLanguage: string | null;
+  onAddRoomLanguage?: (language: string) => void;
   /**
    * The one list this control offers. It was two — speak options and listen options — which the
    * only call site has always fed from the same array anyway; a single pick cannot honour two
@@ -1377,9 +1487,20 @@ function LanguagePairPicker({
 
   // Every meeting language the room does NOT offer but the workspace still permits, as plain codes
   // so the list below can treat both halves the same way.
-  const otherLanguages = languagesNotAlreadyOffered(languageOptions, allowedTargetLanguages).map(
-    (language) => language.code,
-  );
+  //
+  // WT-709: only where the server sets no meeting-language limit. Where it does, every one of
+  // these is a pick the hub refuses, so offering them is how "I chose Korean and nothing happened"
+  // gets built — the host's add control below is the way in instead.
+  const otherLanguages = languagesLimitedToMeeting
+    ? []
+    : languagesNotAlreadyOffered(languageOptions, allowedTargetLanguages).map(
+        (language) => language.code,
+      );
+  // Whether the room host's "Add a language" section is open. A disclosure for the same reason as
+  // "Other languages": the meeting's own set is the answer for almost every pick, and the host
+  // opens this only when somebody needs something the meeting does not have.
+  const [showAddLanguages, setShowAddLanguages] = useState(false);
+  const canAddLanguages = languagesLimitedToMeeting && Boolean(onAddRoomLanguage);
 
   // Somebody whose current language is not on the room's list is already off-menu — collapsing
   // the section that contains their own selection would hide the state they are in.
@@ -1467,15 +1588,12 @@ function LanguagePairPicker({
             onSelect={pick}
           />
 
-          {/* The room's configuration is what gets OFFERED, not what a person is limited to.
-              Somebody who speaks Korean in a Vietnamese/Japanese room should be able to say so and
-              be understood; the room was configured by whoever booked it, before they knew who
-              would turn up.
-
-              That rule used to live four levels into the settings menu ("Listening in" → "All
-              languages"). Those rows were removed when this picker replaced them and the submenus
-              were left behind — unreachable, because nothing navigated to them any more. The rule
-              is worth keeping, so it moved here rather than being deleted with the dead code. */}
+          {/* Only where the server sets no meeting-language limit (a bridge room, a room with no
+              declared set). Everywhere else WT-709 made the meeting's languages the limit, and
+              the answer to "this meeting does not speak Korean" became "so the host adds Korean"
+              — the add section below — rather than a participant stepping around the rule. The
+              need this disclosure was kept for, somebody the booker did not plan for, is the
+              same; only who opens the door changed. */}
           {otherLanguages.length > 0 ? (
             <>
               <div className="my-1 h-[1px] bg-border" />
@@ -1499,49 +1617,52 @@ function LanguagePairPicker({
               )}
             </>
           ) : null}
+
+          {/* WT-709. The way past the meeting's languages, for the one person who can open it.
+              Adding does NOT change the host's own language: the host adds Korean for the guest
+              who needs it, and the guest picks it — the broadcast grows everyone's list, and the
+              row moves up into "My language" here as soon as the server answers. */}
+          {canAddLanguages && onAddRoomLanguage ? (
+            <>
+              <div className="my-1 h-[1px] bg-border" />
+              {(addableLanguages?.length ?? 0) === 0 ? (
+                <p className="px-2.5 py-1.5 text-[11px] leading-snug text-ink-muted">
+                  {t("languagePicker.addLanguage.none")}
+                </p>
+              ) : showAddLanguages ? (
+                <AddMeetingLanguageColumn
+                  title={t("languagePicker.addLanguage.title")}
+                  hint={t("languagePicker.addLanguage.hint")}
+                  addingLabel={t("languagePicker.addLanguage.adding")}
+                  options={addableLanguages ?? []}
+                  adding={addingRoomLanguage}
+                  onAdd={onAddRoomLanguage}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAddLanguages(true)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <Plus className="h-3 w-3" weight="bold" />
+                  <span>{t("languagePicker.addLanguage.disclosure")}</span>
+                </button>
+              )}
+            </>
+          ) : null}
+
+          {/* Everyone else is told where the limit is and who can lift it, at the moment they are
+              looking for a language that is not there — rather than finding out from a refusal. */}
+          {languagesLimitedToMeeting && !canAddLanguages ? (
+            <>
+              <div className="my-1 h-[1px] bg-border" />
+              <p className="px-2.5 py-1.5 text-[11px] leading-snug text-ink-muted">
+                {t("languagePicker.askHost")}
+              </p>
+            </>
+          ) : null}
         </FlyoutSurface>
       ) : null}
-    </div>
-  );
-}
-
-function LanguageColumn({
-  title,
-  hint,
-  options,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  hint: string;
-  options: string[];
-  selected?: string;
-  onSelect: (language: string) => void;
-}) {
-  return (
-    <div>
-      <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-        {title}
-      </p>
-      <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
-      <div className="max-h-40 overflow-y-auto">
-        {options.map((language) => (
-          <button
-            key={language}
-            type="button"
-            role="menuitemradio"
-            aria-checked={selected === language}
-            onClick={() => onSelect(language)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              selected === language ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-            }`}
-          >
-            <span>{getLanguageCode(language)}</span>
-            <span className="flex-1 truncate">{getLanguageName(language)}</span>
-            {selected === language ? <CheckCircle className="h-3.5 w-3.5" weight="fill" /> : null}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

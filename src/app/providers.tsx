@@ -6,6 +6,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState, type ReactNode } from "react";
 import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
+import { DesktopAuthStateReporter } from "@/components/providers/desktop-auth-state-reporter";
 import { isSessionEnded } from "@/lib/api/client";
 import { getRetryDelayMs, shouldRetryRequest } from "@/lib/api/retry-policy";
 import { registerSessionQueryClient } from "@/lib/auth/session-scoped-state";
@@ -56,6 +57,8 @@ export function Providers({ children }: { children: ReactNode }) {
         >
           <RealtimeNotificationProvider>
             {children}
+            {/* W4a: the desktop shell learns sign-in and sign-out here; a no-op in a browser. */}
+            <DesktopAuthStateReporter />
             <Toaster position="top-right" />
           </RealtimeNotificationProvider>
         </ThemeProvider>

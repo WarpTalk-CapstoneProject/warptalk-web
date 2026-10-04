@@ -78,6 +78,11 @@ export type VoicePanelPlan = {
   dividerAfterSwitch: boolean;
   /** Whether the closing sentence may report transcript-only — only where the switch is on screen. */
   summaryReadsVoiceEnabled: boolean;
+  /**
+   * The first "Your voice" row — choosing no voice of your own. In a bridge room that means a
+   * stand-in voice; in a meeting room it means the room hears you as you actually sound.
+   */
+  automaticOption: { label: string; detail: string };
 };
 
 export function planVoicePanel({
@@ -107,36 +112,36 @@ export function planVoicePanel({
         : null,
       dividerAfterSwitch: false,
       summaryReadsVoiceEnabled: false,
+      automaticOption: {
+        label: "Automatic",
+        // Not "stand-in": in a bridge room that word is the far side's seat (see the test).
+        detail: "An assigned voice, not matched to you",
+      },
     };
   }
 
-  // Meeting: the control bar as it has always been. Undefined counts as on, which is what the
-  // bar's `voiceEnabled !== false` tests have always meant.
+  // Meeting. Two questions, both answered here: how YOU sound (Your voice, always shown) and
+  // whether YOU hear people translated (the switch) — in their clone where they chose one, in a
+  // stand-in voice otherwise. See room-audio-routing. The switch sits at the top with the other
+  // switches, and no longer hides Your voice when it is off. There is no stand-in picker.
   const hearing = voiceEnabled !== false;
   return {
     voiceSwitch: canToggleVoice
       ? {
-          label: "Voice",
+          label: "Hear translated voice",
           detail: hearing
-            ? "On — translations are spoken to you."
-            : "Off — you read translations instead of hearing them.",
+            ? "On — in their cloned voice where they turned it on."
+            : "Off — you hear everyone's original voice.",
           ariaLabel: "Hear translated voice",
         }
       : null,
-    yourVoice: hearing && hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
-    listenVoice: hearing
-      ? {
-          heading: hasYourVoiceControls
-            ? {
-                title: "Stand-in voice",
-                note: "Only applies to people who have not chosen a voice of their own.",
-              }
-            : null,
-          automaticDetail: "Assigned, not matched to your voice",
-          pickWithdrawsConsent: true,
-        }
-      : null,
-    dividerAfterSwitch: hearing,
-    summaryReadsVoiceEnabled: true,
+    yourVoice: hasYourVoiceControls ? { heading: "Your voice", note: null } : null,
+    listenVoice: null,
+    dividerAfterSwitch: Boolean(canToggleVoice),
+    summaryReadsVoiceEnabled: false,
+    automaticOption: {
+      label: "Off",
+      detail: "Listeners hear a stand-in voice",
+    },
   };
 }

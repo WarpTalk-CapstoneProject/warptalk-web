@@ -21,6 +21,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Check,
   Copy,
@@ -63,6 +64,7 @@ export function MinutesShareDialog({
     useMinutesShareActions(roomId);
 
   const [email, setEmail] = useState("");
+  const t = useTranslations("minutes");
   const [copied, setCopied] = useState(false);
 
   const isPublic = share?.accessMode === "ANYONE_WITH_LINK";
@@ -80,14 +82,14 @@ export function MinutesShareDialog({
     } catch {
       // Clipboard access can be refused outright — over plain HTTP, or by permission. The link is
       // in a field the person can select by hand, so this is a note, not a failure.
-      toast.message("Copy the address from the field above.");
+      toast.message(t("shareDialog.copyFallback"));
     }
   }
 
   function choose(mode: MinutesShareMode) {
     if (mode === share?.accessMode && !revoked) return;
     setMode.mutate(mode, {
-      onError: () => toast.error("Could not change who can open this."),
+      onError: () => toast.error(t("shareDialog.modeChangeFailed")),
     });
   }
 
@@ -98,7 +100,7 @@ export function MinutesShareDialog({
 
     addPerson.mutate(value, {
       onSuccess: () => setEmail(""),
-      onError: () => toast.error("Could not add that address."),
+      onError: () => toast.error(t("shareDialog.addFailed")),
     });
   }
 
@@ -106,30 +108,29 @@ export function MinutesShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle className="text-sm">Share these minutes</DialogTitle>
+          <DialogTitle className="text-sm">{t("shareDialog.title")}</DialogTitle>
           <DialogDescription className="text-[12px]">
-            A link opens this document — the minutes and nothing else. It carries no access to the
-            transcript, the recording or the meeting itself.
+            {t("shareDialog.description")}
           </DialogDescription>
         </DialogHeader>
 
         {isLoading || !share ? (
-          <p className="py-6 text-center text-[12px] text-ink-subtle">Loading…</p>
+          <p className="py-6 text-center text-[12px] text-ink-subtle">{t("shareDialog.loading")}</p>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
               <ModeOption
                 selected={!isPublic && !revoked}
                 icon={<Lock size={15} />}
-                title="Only people you add"
-                detail="They sign in, and the address alone is not enough."
+                title={t("shareDialog.modeRestrictedTitle")}
+                detail={t("shareDialog.modeRestrictedDetail")}
                 onSelect={() => choose("INVITED_ONLY")}
               />
               <ModeOption
                 selected={isPublic && !revoked}
                 icon={<Globe size={15} />}
-                title="Anyone with the link"
-                detail="No account needed. Anyone who is sent the address can read and keep the document."
+                title={t("shareDialog.modePublicTitle")}
+                detail={t("shareDialog.modePublicDetail")}
                 onSelect={() => choose("ANYONE_WITH_LINK")}
               />
             </div>
@@ -138,17 +139,14 @@ export function MinutesShareDialog({
               <p className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
                 <Warning size={14} className="mt-px shrink-0" />
                 <span>
-                  This document is public to anyone holding the address. Revoking stops future
-                  reads, but not a copy somebody already took — sharing it is your call to make.
+                  {t("shareDialog.publicWarning")}
                 </span>
               </p>
             ) : null}
 
             {unsigned ? (
               <p className="rounded-md border border-border bg-surface-2 p-2.5 text-[11px] leading-relaxed text-ink-subtle">
-                These minutes are still a draft, so the link does not open for anyone yet — a draft
-                is a machine’s first version and nobody has signed it. Sign the document and the
-                same address starts working; you do not have to share it again.
+                {t("shareDialog.draftWarning")}
               </p>
             ) : null}
 
@@ -156,7 +154,7 @@ export function MinutesShareDialog({
               <div className="flex items-center gap-2">
                 <Input
                   readOnly
-                  value={revoked ? "Link revoked" : share.url}
+                  value={revoked ? t("shareDialog.linkRevoked") : share.url}
                   onFocus={(event) => event.currentTarget.select()}
                   className="h-8 text-[12px]"
                 />
@@ -168,22 +166,21 @@ export function MinutesShareDialog({
                   className="h-8 shrink-0 rounded-md text-[11px] shadow-none"
                 >
                   {copied ? <Check size={13} /> : <Copy size={13} />}
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? t("shareDialog.copied") : t("shareDialog.copy")}
                 </Button>
               </div>
               {revoked ? (
                 <p className="text-[11px] text-ink-subtle">
-                  The address that was sent no longer opens anything. Choosing a mode above issues a
-                  new one — the old address stays dead.
+                  {t("shareDialog.linkRevokedHint")}
                 </p>
               ) : null}
             </div>
 
             <label className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
               <span className="text-[12px]">
-                Let readers download the file
+                {t("shareDialog.letReadersDownload")}
                 <span className="block text-[11px] text-ink-subtle">
-                  Off removes the button. It does not stop somebody copying what they can read.
+                  {t("shareDialog.letReadersDownloadHint")}
                 </span>
               </span>
               <Switch
@@ -198,7 +195,7 @@ export function MinutesShareDialog({
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="name@company.com"
+                  placeholder={t("shareDialog.emailPlaceholder")}
                   className="h-8 text-[12px]"
                 />
                 <Button
@@ -209,14 +206,13 @@ export function MinutesShareDialog({
                   className="h-8 shrink-0 rounded-md text-[11px] shadow-none"
                 >
                   <UserPlus size={13} />
-                  Add
+                  {t("shareDialog.add")}
                 </Button>
               </form>
 
               {share.people.length === 0 ? (
                 <p className="text-[11px] text-ink-subtle">
-                  Nobody has been added yet. The people who were at the meeting can already read
-                  this document.
+                  {t("shareDialog.nobodyAdded")}
                 </p>
               ) : (
                 <ul className="space-y-1">
@@ -230,7 +226,7 @@ export function MinutesShareDialog({
                         type="button"
                         onClick={() => removePerson.mutate(person.email)}
                         className="shrink-0 text-ink-subtle transition-colors hover:text-red-500"
-                        aria-label={`Remove ${person.email}`}
+                        aria-label={t("shareDialog.removeAria", { email: person.email })}
                       >
                         <Trash size={13} />
                       </button>
@@ -246,12 +242,12 @@ export function MinutesShareDialog({
                 variant="ghost"
                 onClick={() =>
                   revoke.mutate(undefined, {
-                    onError: () => toast.error("Could not revoke the link."),
+                    onError: () => toast.error(t("shareDialog.revokeFailed")),
                   })
                 }
                 className="h-8 rounded-md text-[11px] text-red-500 shadow-none hover:text-red-600"
               >
-                Revoke the link
+                {t("shareDialog.revokeLink")}
               </Button>
             ) : null}
           </div>

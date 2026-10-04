@@ -21,7 +21,7 @@
   "stats": {
     "creditsRemaining": {
       "label": "Credits Remaining",
-      "granted": "{total} granted this cycle.",
+      "granted": "{total} available this cycle.",
       "noAllowance": "No allowance on this cycle.",
       "spent": "{used} spent since the cycle began.",
       "cycleEnds": "Cycle ends {date}."
@@ -30,10 +30,12 @@
       "label": "Current Plan",
       "noPlan": "No active plan",
       "pricePerCycle": "{price} per cycle.",
+      "billedMonthly": "Billed monthly.",
+      "billedYearly": "Billed yearly.",
       "noBalance": "Meetings translate against a credit balance.",
       "limits": "{participants} participants · {languages} languages per meeting.",
       "limitsUnavailable": "Plan limits unavailable.",
-      "cancelled": "Cancelled — translation stops {date}. Resubscribe from Manage subscription.",
+      "cancelled": "Auto-renew off — translation stops {date}. Resume it from Manage subscription.",
       "renews": "Renews {date}."
     }
   },
@@ -64,7 +66,19 @@
     "creditsPerCycle": "{credits} credits/cycle",
     "limits": "{participants} participants · {languages} languages",
     "everythingInPlus": "Everything in {name}, plus",
-    "moreCreditsAndLimits": "More credits and higher limits"
+    "moreCreditsAndLimits": "More credits and higher limits",
+    "title": "Plans",
+    "description": "Plans published by WarpTalk. Open a plan to see what it includes.",
+    "yourPlan": "Your plan",
+    "seeMore": "See more",
+    "coreTranslation": "Core live translation",
+    "billedYearly": "Billed yearly: {total}",
+    "interval": {
+      "ariaLabel": "Billing period",
+      "monthly": "Monthly",
+      "yearly": "Yearly · Save {percent}%"
+    },
+    "plusVat": "+ {percent}% VAT · {total} at checkout"
   },
   "planPanel": {
     "currentPlan": "Current plan",
@@ -92,20 +106,20 @@
     "cappedThisCycle": "Capped at {cap} this cycle",
     "nextCreditRefresh": "Next credit refresh",
     "nextBillingDate": "Next billing date",
-    "cancelledNoRenew": "Cancelled — this plan will not renew",
+    "cancelledNoRenew": "Auto-renew is off — this plan will not renew",
     "nextPaymentAmount": "Next payment amount",
     "enableOverages": "Enable overages",
     "recommended": "Recommended",
     "modifyPlan": "Modify plan",
     "changePlan": "Change plan",
-    "reactivating": "Reactivating…",
-    "resubscribe": "Resubscribe",
-    "cancelling": "Cancelling…",
-    "confirmCancel": "Confirm cancel",
-    "cancelPlan": "Cancel plan",
+    "reactivating": "Resuming…",
+    "resubscribe": "Resume auto-renew",
+    "cancelling": "Turning off…",
+    "confirmCancel": "Confirm — stop renewal",
+    "cancelPlan": "Cancel renewal",
     "managePayments": "Manage payments",
     "invoices": "Invoices",
-    "cancelledNotice": "Translation stops for this workspace on {date}. Resubscribe before then to keep it running — the current period is already paid for, so it costs nothing.",
+    "cancelledNotice": "Auto-renew is off, so translation stops for this workspace on {date}. Turn it back on before then to keep the plan running — nothing is charged until the next period starts.",
     "billingCycle": {
       "yearly": "Yearly",
       "semiannual": "Semiannual",
@@ -167,5 +181,35 @@
     "failedTitle": "Payment failed — update your card",
     "failedBadge": "Payment failed",
     "failedDescription": "We could not charge your card for this plan's renewal. Your plan stays active until {date} while we retry. Update your card to keep it."
+  },
+  "meter": {
+    "level": {
+      "ok": "On track",
+      "warn": "Running low",
+      "critical": "Almost out",
+      "full": "Allowance used",
+      "unknown": "No allowance"
+    },
+    "ariaLabel": "Credits used this cycle",
+    "ariaValueText": "{percent}% of this cycle's credits used, {level}",
+    "paceTitle": "Share of the cycle that has passed",
+    "usedPercent": "{percent}% used",
+    "leftAmount": "{left} left",
+    "granted": "{total} available this cycle",
+    "noneGranted": "No credits on this cycle.",
+    "paceDay": "Cycle day {day} of {total} ({percent}% passed).",
+    "paceLasts": "At this pace the allowance lasts past the cycle end.",
+    "paceRunsOut": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, {early, plural, one {# day} other {# days}} before the cycle ends.",
+    "paceRunsOutAtEnd": "At this pace it runs out in about {days, plural, one {# day} other {# days}}, right as the cycle ends.",
+    "paceRunsOutWithinDay": "At this pace it runs out within a day, {early, plural, one {# day} other {# days}} before the cycle ends.",
+    "paceRunsOutWithinDayAtEnd": "At this pace it runs out within a day, right as the cycle ends.",
+    "overageRunning": "Overage is running: {credits} credits beyond the allowance.",
+    "overageRunningNoAmount": "Overage is running.",
+    "allowanceUsedStopped": "The allowance is used up. Meetings stop until credits are added or the cycle renews."
+  },
+  "zone": {
+    "ariaLabel": "Section",
+    "plans": "Plans",
+    "extras": "Credit packs & add-ons"
   }
 }

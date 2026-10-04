@@ -48,7 +48,7 @@ import {
   CaretLeft,
   Check,
   CreditCard,
-  ChartLine,
+  ChartBar,
   Receipt,
   BookOpen,
   FileText,
@@ -71,6 +71,7 @@ import {
   Sliders,
   SquaresFour,
   Star,
+  Toolbox,
   User,
   Users,
   Waveform,
@@ -84,6 +85,7 @@ import {
   LinkSimple,
   Devices,
   IdentificationBadge,
+  IdentificationCard,
   UserGear,
   Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
@@ -324,6 +326,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // MEETINGS, this lists what they wrote down.
     { icon: Files, label: t("nav.artifacts"), href: `/${slug}/artifacts` },
     { icon: Waveform, label: t("nav.voiceProfiles"), href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
+    // My connections sits with the personal rows (owner, 2026-10-02): a connection is a person's
+    // own, for every member, and it is not workspace-shaped — hence the exact match rather than
+    // NavLink's prefix match. It was in the Settings sidebar, then under Workspace; neither is
+    // where a member looks for something that is theirs.
+    {
+      icon: PlugsConnected,
+      label: t("settingsNav.myConnections"),
+      href: "/settings/plugins",
+      exact: true,
+    },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -385,18 +397,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   }, [activeWorkspaceName]);
 
   const workspaceNav: NavItem[] = [];
-  if (isOwnerOrAdmin) {
-    // First, not last. Dashboard is the overview of everything under it, and it was sitting at
-    // the bottom under Settings — the one entry that is not a place in the workspace but a
-    // control panel for it. An overview reads as an overview when it comes before the things it
-    // summarises.
-    workspaceNav.push({
-      icon: SquaresFour,
-      label: t("nav.dashboard"),
-      href: `/${slug}/dashboard`,
-      tourId: "nav-dashboard",
-    });
-  }
   workspaceNav.push(
     { icon: Users, label: t("nav.members"), href: `/${slug}/members`, tourId: "nav-members" },
     { icon: FileText, label: t("nav.documents"), href: `/${slug}/documents`, tourId: "nav-documents" },
@@ -439,9 +439,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // 2026-09-16. Security lives under /settings, so `includes("/settings")` already covers it —
   // but the line had to go WITH the route: left behind it would have matched nothing, and
   // removed without moving the page it would have dropped the reader out of Settings.
+  //
+  // Except the personal /settings/plugins ("My connections"): it is a row of the main nav now, for
+  // every member, so it keeps that chrome. The workspace's own /<slug>/settings/plugins does not
+  // start with "/settings", so it still lands in Settings.
+  //
+  // Insights and Tools live in the Settings sidebar for workspace owners/admins.
   const isSettingsPage =
-    pathname.includes("/settings") ||
-    pathname.includes("/payment");
+    (pathname.includes("/settings") && !pathname.startsWith("/settings/plugins")) ||
+    pathname.includes("/payment") ||
+    /^\/(?!admin\/)[^/]+\/insights(\/|$)/.test(pathname) ||
+    /^\/(?!admin\/)[^/]+\/tools(\/|$)/.test(pathname);
 
   // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
   // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
@@ -539,8 +547,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
           // a SQL job rather than a screen.
           { icon: PlugsConnected, label: t("adminNav.items.plugins"), href: "/admin/plugins" },
+          // Under Plugins, not inside it: its usage counts built-in tools and web search too.
+          { icon: Toolbox, label: t("adminNav.items.warpbotTools"), href: "/admin/warpbot-tools" },
           { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
-          { icon: BookOpen, label: t("adminNav.items.glossaryTemplates"), href: "/admin/glossary-templates" },
         ],
       },
       {
@@ -606,6 +615,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               so the button stands alone — an admin console with no way to sign out is how the
               portal shipped once already. */}
           <div className="flex shrink-0 flex-col items-center gap-1 border-t border-border/30 py-3">
+            <Link
+              href="/admin/account"
+              title={t("adminNav.items.accountSettings")}
+              aria-label={t("adminNav.items.accountSettings")}
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <IdentificationCard size={16} weight="duotone" />
+            </Link>
             {backHref && (
               <Link
                 href={backHref}
@@ -679,6 +696,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
         {user && (
           <div className="group flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+            {/* The staff member's own profile and plugin connections (/admin/account). */}
+            <Link
+              href="/admin/account"
+              title={t("adminNav.items.accountSettings")}
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md -mx-1 px-1 py-0.5 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
             <Avatar className="size-7 rounded-full">
               <AvatarImage src={user.avatarUrl} alt="" />
               <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
@@ -691,6 +714,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </p>
               <p className="truncate text-[11px] text-ink-subtle">{t("adminNav.platformAdmin")}</p>
             </div>
+            </Link>
             {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
                 and a control nobody can see shipped once already as "no way to sign out". */}
             <button
@@ -747,13 +771,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           ? `/${activeWorkspaceSlug}/settings/account/sessions`
           : "/workspace",
       },
-      {
-        // "My connections", not "Plugins": the workspace section below has its own plugin list, and
-        // two rows both called "Plugins" read as the same page twice (owner report, 2026-09-24).
-        icon: PlugsConnected,
-        label: t("settingsNav.myConnections"),
-        href: "/settings/plugins",
-      },
     ];
 
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
@@ -764,6 +781,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         // active for anything below its href, and every settings page is below this one.
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+      settingsItems.push({
+        icon: ChartBar,
+        label: t("settingsNav.insights"),
+        href: `/${activeWorkspaceSlug}/insights`,
+      });
+      settingsItems.push({
+        icon: Toolbox,
+        label: t("settingsNav.tools"),
+        href: `/${activeWorkspaceSlug}/tools`,
       });
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
@@ -782,16 +809,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: CreditCard,
         label: t("settingsNav.billing"),
-        // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
-        // treat-descendants-as-active rule lights Billing up while the reader is on either child,
-        // and two rows in the same group read as selected at once.
+        // Exact because Invoices lives BELOW it. Without this, NavLink's treat-descendants-as-active
+        // rule lights Billing up while the reader is on Invoices, and two rows in the same group
+        // read as selected at once. (Usage used to sit below it too; it is the Usage tab of
+        // Insights now, and its old address forwards in proxy.ts.)
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/billing`,
-      });
-      settingsItems.push({
-        icon: ChartLine,
-        label: t("settingsNav.usage"),
-        href: `/${activeWorkspaceSlug}/settings/billing/usage`,
       });
       settingsItems.push({
         icon: Receipt,
@@ -841,8 +864,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <div
               key={item.href}
               className={cn(
-                // Keyed on the row, not its index, so Personal rows can be added above it.
-                item.href === "/settings/plugins" && "mt-3 border-t border-border/50 pt-3",
+                // Keyed on the row, not its index, so Personal rows can be added above it. The rule
+                // marks where Personal ends and the workspace's own pages begin.
+                item.href === `/${activeWorkspaceSlug}/settings` && "mt-3 border-t border-border/50 pt-3",
               )}
             >
               <NavLink item={item} pathname={pathname} collapsed />
@@ -953,18 +977,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </Link>
             </div>
 
-            <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-              navRowTone(pathname === "/settings/plugins")
-            )}>
-              <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  {t("settingsNav.myConnections")}
-                </span>
-              </Link>
-            </div>
-
             {/* Conditional workspace settings link inside Settings sidebar */}
             {isOwnerOrAdmin && activeWorkspaceSlug && (
               <>
@@ -979,6 +991,34 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.workspaceSettingsExpanded")}
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(
+                    pathname === `/${activeWorkspaceSlug}/insights` ||
+                      pathname.startsWith(`/${activeWorkspaceSlug}/insights/`),
+                  )
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/insights`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ChartBar size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      {t("settingsNav.insights")}
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(
+                    pathname === `/${activeWorkspaceSlug}/tools` ||
+                      pathname.startsWith(`/${activeWorkspaceSlug}/tools/`),
+                  )
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/tools`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Toolbox size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      {t("settingsNav.tools")}
                     </span>
                   </Link>
                 </div>
@@ -1012,9 +1052,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
                     than `===` so the row stays lit while the reader is off buying a plan at
                     /payment/plans, which is where this page's primary action sends them. */}
-                {/* Billing is EXACT now that Usage and Invoices sit below it. `startsWith` would
-                    light this row while the reader is on either child, so two rows in the group
-                    would read as selected at once. `/payment` still counts as Billing: it is where
+                {/* Billing is EXACT because Invoices sits below it. `startsWith` would light this
+                    row while the reader is on Invoices, so two rows in the group would read as
+                    selected at once. `/payment` still counts as Billing: it is where
                     the plan grid sends a buyer, and losing the highlight there is the one moment
                     they most need the way back. */}
                 <div className={cn(
@@ -1028,17 +1068,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       {t("settingsNav.billing")}
-                    </span>
-                  </Link>
-                </div>
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/billing/usage`)
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      {t("settingsNav.usage")}
                     </span>
                   </Link>
                 </div>

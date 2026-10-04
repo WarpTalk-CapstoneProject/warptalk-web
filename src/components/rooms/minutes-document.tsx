@@ -1460,10 +1460,53 @@ function MinutesDocumentStyles() {
   .mdoc-print-root, .mdoc-print-root * { visibility: visible !important; }
   .mdoc-print-root { position: absolute !important; inset: 0 auto auto 0 !important; width: 100% !important; }
 
+  /*
+    WT-652: the three rules above are only the fallback now, for a browser without :has().
+
+    On their own they printed the minutes shifted right and cut off after one page. "absolute"
+    resolves against the nearest POSITIONED ancestor, not the page, and the app shell is relative
+    all the way down (src/app/(app)/layout.tsx: the shell, the main column and the content box).
+    So "inset: 0" meant the content box's corner, which sits right of the sidebar and below the top
+    bar — and visibility:hidden keeps the sidebar's width, so the gap stays on paper. Those same
+    ancestors are viewport-tall and overflow:hidden, so everything past the first screenful was
+    clipped, which is why a long record came out as one page.
+
+    Where :has() exists (every current browser), take the shell out of the picture instead of
+    positioning around it. Everything that neither is, contains, nor sits inside the document
+    takes no space at all; every ancestor becomes a plain static block that neither offsets nor
+    clips nor fixes a height; and the document goes back into normal flow, so it starts at the
+    sheet's top-left and breaks across as many pages as it needs. Same scoping as above: these
+    rules exist only while this panel is mounted, and only on paper.
+  */
+  @supports selector(:has(*)) {
+    html:has(.mdoc-print-root), body:has(.mdoc-print-root) {
+      height: auto !important; min-height: 0 !important; max-height: none !important;
+      margin: 0 !important; padding: 0 !important; overflow: visible !important;
+      background: #ffffff !important;
+    }
+    body *:not(.mdoc-print-root):not(:has(.mdoc-print-root)):not(.mdoc-print-root *) {
+      display: none !important;
+    }
+    body *:has(.mdoc-print-root) {
+      display: block !important; position: static !important; inset: auto !important;
+      float: none !important; transform: none !important;
+      width: auto !important; min-width: 0 !important; max-width: none !important;
+      height: auto !important; min-height: 0 !important; max-height: none !important;
+      margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+      overflow: visible !important; box-shadow: none !important; background: transparent !important;
+    }
+    .mdoc-print-root { position: static !important; inset: auto !important; width: auto !important; }
+  }
+
   /* The payoff of writing every dimension in --mm and --pt: redefining the two units to real
      physical ones prints the same markup at true A4 size, with no second layout. */
   .mdoc-wrap { --mm: 1mm; --pt: 1pt; display: block !important; padding: 0 !important; overflow: visible !important; }
   .mdoc-page { box-shadow: none !important; margin: 0 !important; min-height: 0 !important; }
+  /* WT-652: the page's margins are its padding (@page has none, which keeps the browser's own
+     URL-and-date header off the record), and padding belongs to the box, not to each sheet — so
+     once the minutes can run past page 1, page 2 would start at the paper's very edge. Cloning
+     the box decoration repeats the 20/20/30/20 mm on every page the document breaks across. */
+  .mdoc-page { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .mdoc-guides { display: none !important; }
   .mdoc-cite-button { text-decoration: none !important; }
   .mdoc-field { border-bottom: 0 !important; }

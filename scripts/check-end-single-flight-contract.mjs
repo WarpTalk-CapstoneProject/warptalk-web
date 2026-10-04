@@ -11,7 +11,7 @@
  *
  * Two layers, both required:
  *   - the two end mutations route through singleFlight, so EVERY entry point (the live top bar,
- *     the room page's actions menu, the bridge widget, the session's own exit) shares one request
+ *     the room page's actions menu, the session's own exit) shares one request
  *     per room while it is in flight, and releases it on failure so End can be retried;
  *   - the controls say so: the End for Everyone button is disabled while its request runs, and
  *     the session's exit handler ignores a second call until the first settles.
@@ -39,7 +39,10 @@ assert.match(
 );
 
 const topBar = await read("src/components/rooms/live/meeting-top-bar.tsx");
-const endButton = topBar.slice(topBar.indexOf("End Meeting for All"));
+// The dialog copy moved into the message catalog (i18n), so anchor on its key, not the English text.
+const endAnchor = topBar.indexOf('t("exitControl.endDialogTitle")');
+assert.ok(endAnchor >= 0, "the End for Everyone dialog must still be found in meeting-top-bar.tsx.");
+const endButton = topBar.slice(endAnchor);
 assert.match(
   endButton,
   /disabled=\{endForAll\.isPending\}/,
@@ -54,7 +57,7 @@ assert.match(
 const session = await read("src/components/rooms/live/persistent-meeting-session.tsx");
 assert.match(
   session,
-  /async function handleExit\(action: "leave" \| "end"\) \{\s*(?:\/\/[^\n]*\n\s*)*if \(exitInFlightRef\.current\) return;/,
+  /async function handleExit\(\s*action: "leave" \| "end"[^)]*\)[^{]*(?:\{[^}]*\}[^{]*)*\{\s*(?:\/\/[^\n]*\n\s*)*if \(exitInFlightRef\.current\) return\b/,
   "handleExit must return early while another leave/end is in flight.",
 );
 assert.match(
@@ -67,7 +70,10 @@ const roomPage = await read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx")
 assert.match(roomPage, /endPending=\{endRoomMutation\.isPending\}/, "the room page's End menu item must know the end is in flight.");
 assert.match(roomPage, /disabled=\{endPending\}/, "the room page's End menu item must be disabled while the end is in flight.");
 
-const bridge = await read("src/components/rooms/bridge/widget/end-session.tsx");
-assert.match(bridge, /if \(ending\) return;/, "the bridge widget's End must ignore a press while ending.");
+// The bridge widget (the desktop popup over Google Meet) had an End of its own, held here to the same
+// single-flight rule. It no longer has one at all (PO, 2026-10-01): a bridge room ends when its
+// Google Meet conference ends. check-bridge-overlay-contract.mjs now holds that absence.
+const bridgeEnd = await read("src/components/rooms/bridge/widget/end-session.tsx").catch(() => null);
+assert.equal(bridgeEnd, null, "the bridge widget must not carry an End (end-session.tsx).");
 
 console.log("End single-flight contract passed.");

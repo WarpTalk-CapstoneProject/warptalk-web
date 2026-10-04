@@ -34,7 +34,6 @@ export function ProviderCard({
   provider,
   range,
   granularity,
-  currency,
   tz,
   expanded,
   onToggle,
@@ -42,7 +41,6 @@ export function ProviderCard({
   provider: AdminProviderSummaryDto;
   range: ProviderRangeQuery | null;
   granularity: "day" | "hour";
-  currency: "USD" | "VND";
   tz: string;
   expanded: boolean;
   onToggle: () => void;
@@ -52,7 +50,7 @@ export function ProviderCard({
   const [selected, setSelected] = useState<ProviderMetricKey[]>(() => defaultMetrics(provider.key));
 
   const metrics = useMemo(() => series.data?.metrics ?? [], [series.data]);
-  const offered = visibleMetricKeys(metrics, currency);
+  const offered = visibleMetricKeys(metrics);
   const drawn = selected.filter((key) => offered.includes(key));
   const chart = chartSeries(metrics, drawn);
   // Nothing drawn has a single measured value: say why rather than draw an empty grid.
@@ -64,7 +62,7 @@ export function ProviderCard({
   const toggle = (key: ProviderMetricKey) =>
     setSelected((current) => (current.includes(key) ? current.filter((k) => k !== key) : [...current, key]));
 
-  const cost = currency === "USD" ? provider.today.costUsd : provider.today.costVnd;
+  const cost = provider.today.costUsd;
   const detailId = `provider-detail-${provider.key}`;
 
   return (
@@ -114,7 +112,7 @@ export function ProviderCard({
         />
         <Stat
           label={t("stats.costToday")}
-          value={cost === null ? null : formatMetric(cost, currency === "USD" ? "usd" : "vnd")}
+          value={cost === null ? null : formatMetric(cost, "usd")}
           empty={t("stats.notMeasured")}
           note={provider.today.costNote}
         />
@@ -214,7 +212,7 @@ export function ProviderCard({
 
       {expanded ? (
         <div id={detailId}>
-          <ProviderDetail provider={provider} series={series.data} range={range} currency={currency} tz={tz} />
+          <ProviderDetail provider={provider} series={series.data} range={range} tz={tz} />
         </div>
       ) : null}
     </article>
@@ -223,7 +221,6 @@ export function ProviderCard({
 
 function axisOf(value: number, unit: ProviderMetricUnit | null): string {
   if (unit === "usd") return value >= 1 ? `$${Math.round(value)}` : `$${value.toFixed(2)}`;
-  if (unit === "vnd") return value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`;
   if (unit === "ms") return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${Math.round(value)}`;
   if (unit === "percent") return `${Math.round(value)}%`;
   return value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k` : `${Math.round(value * 10) / 10}`;

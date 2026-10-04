@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
 import { getErrorMessage } from "@/lib/api/errors";
 import {
   useAssistantPlugins,
@@ -42,12 +43,20 @@ import { memberPluginAction, PLUGIN_REQUEST_REASON_MAX } from "@/lib/assistant/p
 import { pluginErrorMessage } from "@/lib/assistant/plugin-errors";
 import {
   formatPluginLabelList,
+  pluginConnectionGroupKey,
   pluginWorkspaceBlock,
   pluginsSharingConnection,
   scopesSatisfied,
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
+import {
+  connectAllRequest,
+  pluginSiblingsToOffer,
+  providerDisplayName,
+  siblingPromptDismissedKey,
+} from "@/lib/assistant/plugin-connect-siblings";
+import { workspaceRuleOf } from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -99,9 +108,16 @@ function pluginActionLabel(plugin: AssistantPluginCatalogItemDto, t: PluginsT) {
 function WorkspaceBlockNotice({
   block,
   className,
+  onAdd,
+  isAdding = false,
+  addLabel,
 }: {
   block: PluginWorkspaceBlock;
   className?: string;
+  /** The Owner's way out of "not added": only passed where adding is possible (block.ownerCanAdd). */
+  onAdd?: () => void;
+  isAdding?: boolean;
+  addLabel?: string;
 }) {
   return (
     <div
@@ -116,6 +132,20 @@ function WorkspaceBlockNotice({
         <p className="text-xs font-medium leading-5 text-ink">{block.reason}</p>
         {block.remedy ? (
           <p className="mt-0.5 text-xs leading-5 text-ink-muted">{block.remedy}</p>
+        ) : null}
+        {onAdd ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7 shadow-none"
+            onClick={onAdd}
+            disabled={isAdding}
+            data-testid="workspace-policy-block-add"
+          >
+            {isAdding ? <Spinner className="animate-spin" size={14} /> : null}
+            {addLabel}
+          </Button>
         ) : null}
       </div>
     </div>
@@ -223,13 +253,17 @@ function ConnectionNotice({
  * An MCP row has an empty tool list until its first successful connect - `tools_json` is a cache
  * of `tools/list` - so there is a real case where this can say nothing, and it says that instead
  * of rendering an empty box.
+ *
+ * A tool the workspace Owner has a rule for (wave 2) carries a lock, "Set by workspace Owner", with
+ * the rule: Blocked, or Ask every time. The member cannot loosen either - WarpBot follows the
+ * stricter of their choice and the Owner's - so the row says so instead of offering a choice.
  */
 function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   const t = useTranslations("pluginsPage");
   const permissions = useMemo(() => {
     const seen = new Set<string>();
     return plugin.tools
-      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect }))
+      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect, rule: workspaceRuleOf(tool) }))
       .filter((permission) => {
         if (seen.has(permission.label)) return false;
         seen.add(permission.label);
@@ -253,9 +287,38 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
       </h3>
       <ul className="flex flex-col gap-2.5">
         {permissions.map((permission) => (
-          <li key={permission.label} className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3">
-            <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
-            <span className="text-sm leading-6 text-ink">{permission.label}</span>
+          <li
+            key={permission.label}
+            className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3"
+            data-workspace-rule={permission.rule ?? undefined}
+          >
+            {permission.rule === "blocked" ? (
+              <Prohibit size={15} weight="bold" className="mt-1 text-destructive" />
+            ) : (
+              <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
+            )}
+            <span className="min-w-0 text-sm leading-6 text-ink">
+              <span className={cn(permission.rule === "blocked" && "text-ink-muted line-through")}>
+                {permission.label}
+              </span>
+              {permission.rule ? (
+                <Tooltip content={t("permissionList.workspaceLockHint")}>
+                  <span
+                    className="mt-0.5 flex w-fit items-center gap-1 text-[11px] leading-4 text-ink-muted"
+                    data-testid="workspace-tool-lock"
+                  >
+                    <Lock size={11} className="shrink-0" />
+                    {t("permissionList.workspaceLock")}
+                    {" · "}
+                    <span className={cn("font-medium", permission.rule === "blocked" ? "text-destructive" : "text-ink")}>
+                      {permission.rule === "blocked"
+                        ? t("permissionList.workspaceBlocked")
+                        : t("permissionList.workspaceApproval")}
+                    </span>
+                  </span>
+                </Tooltip>
+              ) : null}
+            </span>
             <span
               className={cn(
                 "mt-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
@@ -286,6 +349,8 @@ function ConnectPluginDialog({
   onSubmitApiKey,
   onDisconnect,
   onRemove,
+  onAddToWorkspace,
+  isAddingToWorkspace = false,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -318,6 +383,12 @@ function ConnectPluginDialog({
   onSubmitApiKey: (apiKey: string) => Promise<string | null>;
   onDisconnect: () => void;
   onRemove: () => void;
+  /**
+   * The Owner adding a plugin their workspace does not have yet, from inside this dialog. Once it
+   * lands the catalog refetches, the block disappears and Continue enables on the same row.
+   */
+  onAddToWorkspace?: () => void;
+  isAddingToWorkspace?: boolean;
 }) {
   const t = useTranslations("pluginsPage");
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
@@ -414,7 +485,13 @@ function ConnectPluginDialog({
         </div>
 
         {workspaceBlock ? (
-          <WorkspaceBlockNotice block={workspaceBlock} className="mt-6" />
+          <WorkspaceBlockNotice
+            block={workspaceBlock}
+            className="mt-6"
+            onAdd={workspaceBlock.ownerCanAdd ? onAddToWorkspace : undefined}
+            isAdding={isAddingToWorkspace}
+            addLabel={t("addToWorkspace")}
+          />
         ) : null}
 
         {/* Not offered once the plugin is connected: "Continue to ..." beside "Connected as ..."
@@ -582,6 +659,105 @@ function ConnectPluginDialog({
 }
 
 /**
+ * "Connect your other Google plugins too?" (GMCAL1001).
+ *
+ * Connect asks the provider for the clicked plugin's scopes only, so once one Google plugin is
+ * connected this offers the others in one go. Opt-in: nothing is connected until "Connect all".
+ * The rows come from `pluginSiblingsToOffer`, and the caller renders nothing when it is empty.
+ */
+function SiblingConnectPrompt({
+  plugin,
+  siblings,
+  isConnecting,
+  onConnectAll,
+  onDismiss,
+}: {
+  plugin: AssistantPluginCatalogItemDto;
+  siblings: AssistantPluginCatalogItemDto[];
+  isConnecting: boolean;
+  onConnectAll: () => void;
+  onDismiss: () => void;
+}) {
+  const t = useTranslations("pluginsPage");
+  const provider = providerDisplayName(plugin);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plugin-sibling-prompt-title"
+        data-testid="plugin-sibling-prompt"
+        className="relative max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl"
+      >
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t("siblingPrompt.closeAria")}
+          onClick={onDismiss}
+          disabled={isConnecting}
+          className="absolute right-4 top-4"
+        >
+          <X size={16} />
+        </Button>
+
+        <h2 id="plugin-sibling-prompt-title" className="pr-8 text-lg font-semibold leading-snug tracking-tight">
+          {provider
+            ? t("siblingPrompt.title", { provider })
+            : t("siblingPrompt.titleNoProvider")}
+        </h2>
+        <p className="mt-1.5 text-sm text-ink-muted">
+          {t("siblingPrompt.body", { label: plugin.label })}
+        </p>
+
+        <ul className="mt-5 flex flex-col gap-2">
+          {siblings.map((sibling) => (
+            <li
+              key={sibling.key}
+              className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-xl border border-border bg-surface-1 px-3 py-2.5"
+            >
+              <PluginGlyph plugin={sibling} />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-ink">{sibling.label}</div>
+                <div className="truncate text-xs text-ink-muted">{sibling.description}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onDismiss} disabled={isConnecting}>
+            {t("siblingPrompt.notNow")}
+          </Button>
+          <Button type="button" onClick={onConnectAll} disabled={isConnecting}>
+            {isConnecting ? <Spinner className="animate-spin" size={14} /> : null}
+            {t("siblingPrompt.connectAll")}
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Whether "Not now" (or "Connect all") already answered the prompt for this provider this session. */
+function siblingPromptAnswered(groupKey: string): boolean {
+  try {
+    return window.sessionStorage.getItem(siblingPromptDismissedKey(groupKey)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSiblingPromptAnswered(groupKey: string) {
+  try {
+    window.sessionStorage.setItem(siblingPromptDismissedKey(groupKey), "1");
+  } catch {
+    // Storage refused (private mode, blocked site data): the prompt may come back, which is harmless.
+  }
+}
+
+/**
  * Asking the workspace Owner for a plugin the workspace has not added (plugin marketplace,
  * 2026-09-17). The same shape as ConnectPluginDialog on purpose — WarpTalk on one side, the plugin
  * on the other — because it is the same moment for the member: they want this plugin.
@@ -723,6 +899,15 @@ const CONSENT_CALLBACK_ERROR_KEYS = [
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
 
 export default function PluginsPage() {
+  return <PluginsPageView />;
+}
+
+/**
+ * The page body. `personal` is the admin portal's account page (3 Oct 2026): staff connect plugins
+ * for their own account, used by the platform WarpBot, which has no workspace - so nothing here is
+ * read from or sent with the workspace the shell happens to remember.
+ */
+export function PluginsPageView({ personal = false }: { personal?: boolean } = {}) {
   // The catalog is personal — a plugin is installed and connected by a person — but the workspace
   // the user is browsing from decides whether its members may use plugins at all, and only a listing
   // that NAMES that workspace comes back carrying its verdict. Without this the block notice, the
@@ -733,8 +918,10 @@ export default function PluginsPage() {
   // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
   // the shell reads the active workspace on routes like this one.
   const t = useTranslations("pluginsPage");
-  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const storedWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const storedWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const workspaceId = personal ? null : storedWorkspaceId;
+  const workspaceName = personal ? null : storedWorkspaceName;
 
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
@@ -755,6 +942,9 @@ export default function PluginsPage() {
   const [consent, setConsent] = useState<
     { pluginKey: string; url: string; phase: ConsentPhase; openedAt: number } | null
   >(null);
+  // GMCAL1001: the plugin that just connected, whose same-provider siblings are being offered. By
+  // key, so the sibling list below re-derives from the live catalog and empties as they connect.
+  const [siblingPromptKey, setSiblingPromptKey] = useState<string | null>(null);
 
   // One pass over the catalog, so the action label, the connect dialog's "Connected as ..." line
   // and everything below read the same status — see plugin-connection.ts for why a connected
@@ -828,6 +1018,31 @@ export default function PluginsPage() {
     ) ?? null;
   }, [selectedPlugin, plugins]);
 
+  const siblingPromptPlugin = useMemo(
+    () => plugins.find((plugin) => plugin.key === siblingPromptKey) ?? null,
+    [plugins, siblingPromptKey],
+  );
+  const siblingPromptSiblings = useMemo(
+    () => (siblingPromptPlugin ? pluginSiblingsToOffer(siblingPromptPlugin, plugins) : []),
+    [siblingPromptPlugin, plugins],
+  );
+
+  /**
+   * After a plugin connects, offer its provider's other plugins (GMCAL1001) — unless there are none
+   * to offer, or the user already answered the prompt for this provider in this session. Replaces the
+   * connect dialog rather than stacking on it: that dialog has nothing left to do once connected.
+   */
+  const offerSiblings = useCallback(
+    (plugin: AssistantPluginCatalogItemDto, rows: readonly AssistantPluginCatalogItemDto[]) => {
+      const group = pluginConnectionGroupKey(plugin);
+      if (group === null || siblingPromptAnswered(group)) return;
+      if (pluginSiblingsToOffer(plugin, rows).length === 0) return;
+      setSelectedPluginKey(null);
+      setSiblingPromptKey(plugin.key);
+    },
+    [],
+  );
+
   // Purely local: it narrows the catalog already fetched above. There is no marketplace search
   // behind it, and the empty state must not pretend otherwise.
   const filteredPlugins = useMemo(() => {
@@ -874,8 +1089,9 @@ export default function PluginsPage() {
       // The provider's grant already covered this plugin, so the server connected it on the spot.
       // There is no consent round trip to wait for, only a catalog to re-read.
       if (result.connected || !result.url) {
-        await refetch();
+        const { data: rows } = await refetch();
         toast.success(t("toasts.connected", { label: plugin.label }));
+        if (rows) offerSiblings(rows.find((row) => row.key === plugin.key) ?? plugin, rows);
         return;
       }
       // `openProviderConsent` reports a blocked pop-up by returning false, and it is the whole
@@ -944,10 +1160,11 @@ export default function PluginsPage() {
       else {
         settle(null);
         toast.success(t("toasts.connected", { label: row.label }));
+        offerSiblings(row, rows);
       }
       return true;
     },
-    [refetch, t],
+    [offerSiblings, refetch, t],
   );
 
   // Announced once, in the tab the provider redirected. No state: the outcome is read straight
@@ -991,6 +1208,8 @@ export default function PluginsPage() {
       toast.warning(t("toasts.partialPermission", { label }));
     } else {
       toast.success(t("toasts.connected", { label }));
+      // The tab the provider redirected is where the user now is, so the offer is made here too.
+      if (row) offerSiblings(row, plugins);
     }
 
     // Strip it, so a reload does not re-announce an outcome the user has seen and the slug does
@@ -1002,7 +1221,7 @@ export default function PluginsPage() {
     params.delete("client");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [isLoading, plugins, t]);
+  }, [isLoading, offerSiblings, plugins, t]);
 
   // A chat surface sent the user here to paste a key (pluginApiKeyPageHref): open that plugin's
   // dialog once the catalog has it, then strip the hint so a reload does not reopen it.
@@ -1041,6 +1260,77 @@ export default function PluginsPage() {
       document.removeEventListener("visibilitychange", onReturn);
     };
   }, [consent, settleConsent]);
+
+  function dismissSiblingPrompt(plugin: AssistantPluginCatalogItemDto) {
+    const group = pluginConnectionGroupKey(plugin);
+    if (group !== null) markSiblingPromptAnswered(group);
+    setSiblingPromptKey(null);
+  }
+
+  /**
+   * "Connect all": one connect call for the FIRST sibling with the rest in `alsoConnect` — never the
+   * plugin that just connected, which the server would reconnect. A sibling the workspace added but
+   * the user never installed is installed first, exactly as its own Connect button would.
+   */
+  async function connectAllSiblings(
+    plugin: AssistantPluginCatalogItemDto,
+    siblings: AssistantPluginCatalogItemDto[],
+  ) {
+    const request = connectAllRequest(siblings);
+    const labels = formatPluginLabelList(siblings.map((sibling) => sibling.label));
+    if (!request) {
+      setSiblingPromptKey(null);
+      return;
+    }
+    const group = pluginConnectionGroupKey(plugin);
+    if (group !== null) markSiblingPromptAnswered(group);
+
+    try {
+      for (const sibling of siblings) {
+        if (sibling.installationStatus !== "installed") {
+          await installPlugin.mutateAsync({ pluginKey: sibling.key, workspaceId });
+        }
+      }
+      const result = await connectUrl.mutateAsync({
+        pluginKey: request.pluginKey,
+        alsoConnect: request.alsoConnect,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId,
+      });
+      setSiblingPromptKey(null);
+
+      // One consent page covers every sibling the grant did not already cover. Opened after awaits,
+      // so a browser may refuse the pop-up; the notice's "blocked" phase is the way back from that.
+      if (result.url) {
+        const opened = openProviderConsent(result.url);
+        setConsent({
+          pluginKey: request.pluginKey,
+          url: result.url,
+          phase: opened ? "awaiting" : "blocked",
+          openedAt: Date.now(),
+        });
+        return;
+      }
+
+      await refetch();
+      const connectedKeys = new Set(
+        result.connectedPluginKeys ?? (result.connected ? [request.pluginKey] : []),
+      );
+      const connected = siblings.filter((sibling) => connectedKeys.has(sibling.key));
+      if (connected.length) {
+        toast.success(
+          t("siblingPrompt.connected", {
+            labels: formatPluginLabelList(connected.map((sibling) => sibling.label)),
+          }),
+        );
+      } else {
+        toast.error(t("siblingPrompt.couldNotConnect", { labels }));
+      }
+    } catch (error) {
+      // 400 invalid_also_connect / 403 / 404 / 409 arrive as a plain-text sentence from the server.
+      toast.error(pluginErrorMessage(error, t("siblingPrompt.couldNotConnect", { labels })));
+    }
+  }
 
   async function sendPluginRequest(plugin: AssistantPluginCatalogItemDto, reason: string) {
     if (!workspaceId) return;
@@ -1117,11 +1407,8 @@ export default function PluginsPage() {
         />
       ) : null}
 
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
-        <p className="text-xs text-ink-muted">{t("header.subtitle")}</p>
-      </header>
-
+      {/* No title block: this page wears the main chrome now, and there the top bar and the
+          sidebar already name it (see workspace/page-chrome.tsx). */}
       <div className="relative">
         <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" size={16} />
         <Input
@@ -1300,6 +1587,16 @@ export default function PluginsPage() {
         )}
       </section>
 
+      {siblingPromptPlugin && siblingPromptSiblings.length ? (
+        <SiblingConnectPrompt
+          plugin={siblingPromptPlugin}
+          siblings={siblingPromptSiblings}
+          isConnecting={installPlugin.isPending || connectUrl.isPending}
+          onConnectAll={() => void connectAllSiblings(siblingPromptPlugin, siblingPromptSiblings)}
+          onDismiss={() => dismissSiblingPrompt(siblingPromptPlugin)}
+        />
+      ) : null}
+
       {requestPluginRow ? (
         <RequestPluginDialog
           plugin={requestPluginRow}
@@ -1324,6 +1621,8 @@ export default function PluginsPage() {
           onSubmitApiKey={(apiKey) => submitApiKey(selectedPlugin, apiKey)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
+          onAddToWorkspace={() => void addToWorkspace(selectedPlugin)}
+          isAddingToWorkspace={addWorkspacePlugin.isPending}
         />
       ) : null}
     </div>

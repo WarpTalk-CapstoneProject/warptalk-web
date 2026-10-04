@@ -1,0 +1,11 @@
+{
+  "eyebrow": "Tài khoản của bạn",
+  "title": "Cài đặt tài khoản",
+  "description": "Hồ sơ của chính bạn, dùng chung cho mọi workspace.",
+  "connectionsDescription": "Plugin kết nối với tài khoản của bạn. WarpBot trong admin portal dùng được các plugin này; không thuộc workspace nào.",
+  "tabsLabel": "Các mục cài đặt tài khoản",
+  "tabs": {
+    "profile": "Hồ sơ",
+    "connections": "Kết nối của tôi"
+  }
+}

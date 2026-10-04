@@ -28,6 +28,8 @@
       "history": "Lịch sử",
       "artifacts": "Bản ghi",
       "voiceProfiles": "Hồ sơ giọng nói",
+      "tools": "Công cụ",
+      "insights": "Thông tin chi tiết",
       "dashboard": "Bảng điều khiển",
       "members": "Thành viên",
       "documents": "Tài liệu",
@@ -97,6 +99,7 @@
         "team": "Nhân sự"
       },
       "items": {
+        "accountSettings": "Cài đặt tài khoản",
         "insights": "Thông tin chi tiết",
         "inbox": "Hộp việc",
         "workspaces": "Không gian làm việc",
@@ -114,8 +117,8 @@
         "emailTemplates": "Mẫu email",
         "platformSettings": "Cài đặt nền tảng",
         "plugins": "Plugin",
+        "warpbotTools": "Công cụ WarpBot",
         "globalGlossary": "Thuật ngữ toàn cục",
-        "glossaryTemplates": "Mẫu thuật ngữ",
         "staff": "Nhân viên",
         "roles": "Vai trò",
         "packages": "Gói bán thêm"
@@ -136,9 +139,10 @@
       "plugins": "Plugin",
       "workspaceSettingsCollapsed": "Cài đặt không gian làm việc",
       "workspaceSettingsExpanded": "Cài đặt không gian làm việc",
+      "insights": "Thông tin chi tiết",
+      "tools": "Công cụ",
       "pluginActivity": "Hoạt động plugin",
       "billing": "Thanh toán",
-      "usage": "Mức sử dụng",
       "invoices": "Hóa đơn",
       "features": "Tính năng",
       "memberRoles": "Vai trò thành viên",
@@ -218,8 +222,8 @@
         "body": "Ai đang ở trong không gian làm việc này, ai đang chờ tham gia, và mỗi người được phép làm gì."
       },
       "dashboard": {
-        "title": "Bảng điều khiển",
-        "body": "Không gian làm việc này đang tiêu tốn tín dụng nhanh đến mức nào, đang chi cho việc gì, và liệu số dư có đủ đến ngày gia hạn hay không."
+        "title": "Thông tin chi tiết",
+        "body": "Tín dụng, cuộc họp và lượt gọi công cụ của WarpBot trong kỳ bạn chọn, kèm những việc cần bạn xử lý."
       },
       "warpbot": {
         "title": "Hỏi WarpBot",
@@ -247,8 +251,11 @@
     "nextWeek": "Tuần sau"
   },
   "chatbot": {
+    "stopReply": "Dừng",
+    "replyStopped": "Đã dừng",
     "askWarpBot": "Hỏi WarpBot",
     "newChat": "Cuộc trò chuyện mới",
+    "closeChat": "Đóng",
     "chatHistory": "Lịch sử trò chuyện",
     "activePageContext": "Ngữ cảnh trang đang hoạt động",
     "removePageContext": "Xóa ngữ cảnh trang",
@@ -259,6 +266,9 @@
     "attachFiles": "Đính kèm ảnh hoặc tài liệu",
     "offInThisChat": "Đã tắt trong cuộc trò chuyện này",
     "alwaysAllowChanges": "Luôn cho phép thay đổi",
+    "alwaysAllowLocked": "Do Owner của workspace đặt",
+    "alwaysAllowLockedHint": "Owner của workspace đã đặt các thay đổi của plugin này thành luôn hỏi hoặc chặn chúng, nên chúng không thể chạy mà không hỏi.",
+    "alwaysAllowPartlyLocked": "Một số thay đổi do Owner của workspace đặt nên vẫn hỏi hoặc vẫn bị chặn.",
     "pluginPermissionSaveFailed": "Không lưu được quyền của WarpBot cho {label}.",
     "sendMessage": "Gửi tin nhắn",
     "thinking": "Đang suy nghĩ...",
@@ -284,6 +294,8 @@
     "connect": "Kết nối",
     "useInThisChat": "Dùng {label} trong cuộc trò chuyện này",
     "noToolsForPage": "Không có công cụ nào cho trang này. Hãy mở một cuộc họp hoặc tài liệu.",
+    "exploreTools": "Khám phá",
+    "browseAllTools": "Xem các công cụ WarpBot",
     "installPluginsHint": "Cài đặt plugin từ Cài đặt cá nhân.",
     "loadingConversations": "Đang tải cuộc trò chuyện…",
     "loadHistoryFailed": "Không thể tải lịch sử trò chuyện.",
@@ -342,6 +354,9 @@
       "documentDetail": "Tài liệu",
       "documents": "Tài liệu",
       "history": "Lịch sử",
+      "insights": "Thông tin chi tiết",
+      "insightsUsage": "Thông tin chi tiết · Sử dụng",
+      "insightsTools": "Thông tin chi tiết · Công cụ",
       "fallback": "Trang"
     }
   },

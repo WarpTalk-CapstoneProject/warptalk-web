@@ -175,7 +175,7 @@
   --speaker-6: #0b7f97;
 
   /* Usage services — the stacked spend chart and its per-service cards
-     (settings/billing/usage, lib/billing/usage-overview.ts serviceColorSlots). Five, because the
+     (Insights → Usage, lib/billing/usage-overview.ts serviceColorSlots). Five, because the
      chart gives the five largest services a colour each and folds the rest into "Other", which
      draws in --usage-service-other. Picked to stay apart from each other in both themes and to read
      against a hairline grid; slot 1 sits near --primary on purpose, since the largest service is

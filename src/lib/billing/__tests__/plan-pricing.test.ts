@@ -19,6 +19,7 @@ import {
   monthlyDisplayPrice,
   readBillingInterval,
   selectablePlans,
+  yearlySavingPercent,
 } from "../plan-pricing.ts";
 import type { PlanDto } from "../../../types/billing.ts";
 
@@ -83,4 +84,37 @@ test("only active plans are selectable, in the platform's order", () => {
     selectablePlans(plans).map((p) => p.slug),
     ["a", "c"],
   );
+});
+
+test("price breaks a sortOrder tie, as the Billing page's plan grid always did", () => {
+  const plans = [
+    plan({ slug: "dear", sortOrder: 1, price: 50 }),
+    plan({ slug: "cheap", sortOrder: 1, price: 10 }),
+  ];
+
+  assert.deepEqual(
+    selectablePlans(plans).map((p) => p.slug),
+    ["cheap", "dear"],
+  );
+});
+
+test("the yearly tab's saving is derived from the multiplier, and it is 21%", () => {
+  // /workspace/payment/plans (the Stripe cancel URL) said "Save 20%" while charging 79%.
+  assert.equal(yearlySavingPercent(), 21);
+  assert.equal(yearlySavingPercent(YEARLY_PRICE_MULTIPLIER), Math.round((1 - YEARLY_PRICE_MULTIPLIER) * 100));
+  assert.equal(yearlySavingPercent(0.8), 20);
+  assert.equal(yearlySavingPercent(0.75), 25);
+});
+
+test("a multiplier that is not a discount claims no saving", () => {
+  assert.equal(yearlySavingPercent(1), 0);
+  assert.equal(yearlySavingPercent(1.2), 0);
+  assert.equal(yearlySavingPercent(0), 0);
+  assert.equal(yearlySavingPercent(Number.NaN), 0);
+});
+
+test("a purchase with no plan (a credit top-up) is denominated in USD, the accounting currency", async () => {
+  const { checkoutCurrency } = await import("../plan-pricing.ts");
+  assert.equal(checkoutCurrency(null), "usd");
+  assert.equal(checkoutCurrency(undefined), "usd");
 });

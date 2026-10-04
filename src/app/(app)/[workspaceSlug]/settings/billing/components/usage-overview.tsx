@@ -1,13 +1,52 @@
 "use client";
 
 /**
- * The Usage page's surface: every cell of the ruled grid, laid out from data it is handed.
+ * The workspace Usage surface — what this workspace spent, in credits, on what, by whom, in which
+ * meeting — laid out from data it is handed. It is shown by Insights → Usage
+ * (components/workspace/insights/usage-tab.tsx); the stand-alone /settings/billing/usage page that
+ * first rendered it was retired on 2026-10-03 and its address forwards to that tab (proxy.ts).
  *
- * Split from ./usage/page.tsx, which owns the queries, the clock and the role gate, so the whole
- * layout can be rendered against fixtures at /dev/usage-preview in both themes — the billing
- * service is not reachable from a laptop, and a page nobody can look at before it deploys is how
- * the previous one shipped with labels that truncated in every row. Why the page is shaped like
- * this is written at the top of ./usage/page.tsx; the numbers come from lib/billing/usage-overview.
+ * The queries, the clock and the role gate live in hooks/use-workspace-usage-overview.ts, so the
+ * whole layout can be rendered against fixtures at /dev/usage-preview in both themes — the billing
+ * service is not reachable from a laptop, and a page nobody can look at before it deploys is how an
+ * earlier version shipped with labels that truncated in every row.
+ *
+ * WHY IT IS SHAPED LIKE THIS (rebuilt 2026-09-17)
+ *   The owner, on the previous version: "usage đang hiển thị ít thông tin quá, với lại Credits by AI
+ *   service hiển thị không tốt" — too little on the page, and the per-service table read badly. The
+ *   instruction was to follow platform.openai.com/usage, and the approved mock does.
+ *
+ * THE SHAPE, TOP TO BOTTOM
+ *   1. Header row — title, a member filter, the cycle, refresh, CSV export (`embedded` hides the
+ *      title and the cycle pill: the Insights tab states both).
+ *   2. Main row — "Credits spent" with its average and the overage projection, over a bar chart of
+ *      spend per day (or week) STACKED BY SERVICE; beside it a rail of three cells: cycle credits
+ *      (allowance, progress with a pace tick, the figures that add up), settlements, meetings billed.
+ *   3. Bottom row — AI service cards | top-ups & adjustments, and members | meetings ranked lists.
+ *   The mock's "Languages" tab is not built: a credit transaction carries no language.
+ *
+ * ONE RULED SURFACE, NO GROUND
+ *   Cells are split by 1px hairlines edge to edge, the Billing page's framing
+ *   (./billing-primitives GridRow). The surface paints no background — it sits on the shell's panel
+ *   (scripts/check-page-ground.mjs). The service cards are the one bordered element, as in the mock.
+ *
+ * THE BURN-UP IS GONE, ITS MATHS IS NOT
+ *   The cumulative chart answered "when does this start costing extra"; the stacked bars answer
+ *   "on what". The projection survives as text under the number and as the pace note in the rail,
+ *   both from `summariseCycleBurnUp`. The bars' old failure — one day holding nearly the whole
+ *   cycle — is handled on the axis (`stackedChartScale`), not by abandoning bars.
+ *
+ * WHERE THE NUMBERS COME FROM — lib/billing/usage-overview.ts, all tested
+ *   - Granted + carried over (or adjustments) + topped up = available, and Remaining is the
+ *     server's balance. Numbers are formatted through lib/format/currency (fixed locale).
+ *   - Per-service spend reads the settlement's "Aggregated <charge_type>" description; charge types
+ *     and breakdown usage types fold onto one service in lib/billing/usage-labels.ts.
+ *   - The member filter is applied to the ledger before anything is computed. The breakdown
+ *     endpoint cannot be filtered, so with a member picked the cards count uses from the ledger.
+ *   - Members are named from the member directory: the history endpoint sends `userName: null`.
+ *   - Meetings are matched by settlement TIME against room history, because the ledger's reference
+ *     is a transcript segment, not a room. Charges during overlapping meetings, and ones that fall
+ *     outside every meeting, are listed as themselves rather than guessed.
  */
 
 import { CalendarBlank, CaretDown, DownloadSimple, ArrowClockwise, Spinner } from "@phosphor-icons/react";
@@ -77,6 +116,13 @@ export interface UsageOverviewProps {
   isLoading: boolean;
   workspaceSlug: string;
   onRefresh: () => void;
+  /**
+   * Rendered inside another page that already titles the surface and states the cycle (the
+   * Insights → Usage tab, WT-878): hides the "Usage" h1 and the cycle pill, keeps the member
+   * filter, refresh and CSV export. False renders the full header, which is what the
+   * /dev/usage-preview fixtures show.
+   */
+  embedded?: boolean;
 }
 
 export function UsageOverview({
@@ -89,6 +135,7 @@ export function UsageOverview({
   isLoading,
   workspaceSlug,
   onRefresh,
+  embedded = false,
 }: UsageOverviewProps) {
   const t = useTranslations("settingsBillingUsage");
   const [memberKey, setMemberKey] = useState<string | null>(null);
@@ -268,9 +315,13 @@ export function UsageOverview({
     <div className="@container flex min-w-0 flex-col text-ink">
       {/* 1. Header row */}
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-hairline px-4 py-3.5 sm:px-6">
-        <h1 className="mr-auto text-[20px] font-semibold leading-tight tracking-[-0.3px] text-ink">
-          {t("header.title")}
-        </h1>
+        {embedded ? (
+          <div className="mr-auto" aria-hidden />
+        ) : (
+          <h1 className="mr-auto text-[20px] font-semibold leading-tight tracking-[-0.3px] text-ink">
+            {t("header.title")}
+          </h1>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -295,18 +346,20 @@ export function UsageOverview({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-3 text-[13px] font-medium text-ink">
-          <CalendarBlank className="size-3.5 text-ink-muted" />
-          {balance
-            ? t("header.cycleRangeElapsed", {
-                range: `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
-                  new Date(balance.currentPeriodEnd),
-                  "MMM d",
-                )}`,
-                days: cycleDaysElapsed,
-              })
-            : t("header.thisBillingCycle")}
-        </span>
+        {embedded ? null : (
+          <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-3 text-[13px] font-medium text-ink">
+            <CalendarBlank className="size-3.5 text-ink-muted" />
+            {balance
+              ? t("header.cycleRangeElapsed", {
+                  range: `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
+                    new Date(balance.currentPeriodEnd),
+                    "MMM d",
+                  )}`,
+                  days: cycleDaysElapsed,
+                })
+              : t("header.thisBillingCycle")}
+          </span>
+        )}
 
         <IconButton label={t("header.refresh")} onClick={onRefresh}>
           <ArrowClockwise className="size-4" />

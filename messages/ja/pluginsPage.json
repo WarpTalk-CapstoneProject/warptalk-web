@@ -24,6 +24,7 @@
     "filterNote": "これは現在WarpTalkが提供しているプラグインを絞り込みます。より広いマーケットプレイスを検索するものではありません。",
     "clearFilter": "絞り込みを解除"
   },
+  "addToWorkspace": "ワークスペースに追加",
   "actionLabels": {
     "connect": "接続",
     "manage": "管理",
@@ -80,6 +81,10 @@
     "couldNotFinishRemoving": "{label}の削除を完了できませんでした。"
   },
   "permissionList": {
+    "workspaceLock": "ワークスペースのオーナーが設定",
+    "workspaceLockHint": "WarpBot は、あなたの選択とワークスペースの選択のうち、より厳しい方に従います。この設定は緩められません。",
+    "workspaceApproval": "毎回確認",
+    "workspaceBlocked": "ブロック",
     "empty": "このプラグインは接続時に権限を公開します。プロバイダーの同意画面には、承認前に要求している内容が正確に表示されます。",
     "heading": "承認するとこのプラグインが可能になること"
   },
@@ -120,5 +125,15 @@
     "optional": "任意",
     "reasonPlaceholder": "例：会議のアクションアイテムで{label}を使用",
     "sendRequest": "リクエストを送信"
+  },
+  "siblingPrompt": {
+    "title": "ほかの {provider} プラグインも接続しますか？",
+    "titleNoProvider": "関連するプラグインも接続しますか？",
+    "body": "{label} を接続しました。これらのプラグインは同じサインインを使うので、今すぐまとめて接続できます。",
+    "connectAll": "すべて接続",
+    "notNow": "後で",
+    "closeAria": "閉じる",
+    "connected": "{labels} を接続しました",
+    "couldNotConnect": "{labels} を接続できませんでした。"
   }
 }

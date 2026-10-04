@@ -29,10 +29,11 @@ export const ADMIN_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
   "email-templates": "emailTemplates",
   settings: "platformSettings",
   plugins: "plugins",
+  "warpbot-tools": "warpbotTools",
   "global-glossary": "globalGlossary",
-  "glossary-templates": "glossaryTemplates",
   staff: "staff",
   roles: "roles",
+  account: "accountSettings",
 };
 
 /** The label key for an admin path; "insights" only for /admin itself; null when unknown. */

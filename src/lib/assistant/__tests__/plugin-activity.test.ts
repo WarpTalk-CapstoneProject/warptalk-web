@@ -75,14 +75,15 @@ test("plugin and tool labels come from the catalog, falling back to the raw keys
   assert.equal(retired.toolLabel, "old_crm_lookup");
 });
 
-test("a workspace-policy refusal reads as Blocked, not as a failure, and carries an unblock hint", () => {
+test("a workspace-policy refusal reads as Blocked, is the Owner's to fix, and says how", () => {
   const outcome = describePluginActivityOutcome("permission_denied");
   assert.equal(outcome.label, "Blocked");
   assert.equal(outcome.tone, "blocked");
   assert.equal(outcome.code, "permission_denied");
+  assert.equal(outcome.fixer, "owner");
   assert.equal(
     outcome.hint,
-    "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
+    "This workspace doesn't allow this plugin. Add it on the workspace plugin page.",
   );
 });
 
@@ -91,6 +92,7 @@ test("success carries no code; setup gaps and unknown codes are told apart", () 
     label: "Succeeded",
     tone: "success",
     code: null,
+    fixer: null,
   });
   assert.equal(describePluginActivityOutcome("connection_required").label, "Needs setup");
   assert.equal(describePluginActivityOutcome("confirmation_required").tone, "attention");
@@ -98,6 +100,62 @@ test("success carries no code; setup gaps and unknown codes are told apart", () 
   const unknown = describePluginActivityOutcome("something_new");
   assert.equal(unknown.label, "Failed");
   assert.equal(unknown.code, "something_new");
+});
+
+test("every code says who can act on it, and most of them are the member's", () => {
+  const fixer = (code: string) => describePluginActivityOutcome(code).fixer;
+  assert.equal(fixer("permission_denied"), "owner");
+  assert.equal(fixer("workspace_tool_blocked"), "owner");
+  for (const code of [
+    "plugin_not_installed",
+    "connection_required",
+    "missing_scope",
+    "provider_account_mismatch",
+    "api_key_required",
+    "invalid_api_key",
+    "tool_blocked",
+    "confirmation_required",
+  ]) {
+    assert.equal(fixer(code), "member", code);
+  }
+  assert.equal(fixer("provider_configuration"), "platform");
+  assert.equal(fixer("provider_unavailable"), "nobody");
+  assert.equal(fixer("provider_rate_limited"), "nobody");
+  assert.equal(fixer("tool_error"), "nobody");
+  assert.equal(fixer("access_denied"), null);
+});
+
+test("a member's own switch and a cancelled consent are decisions, not failures", () => {
+  const off = describePluginActivityOutcome("tool_blocked");
+  assert.equal(off.tone, "blocked");
+  assert.equal(off.label, "Turned off by member");
+  const declined = describePluginActivityOutcome("access_denied");
+  assert.equal(declined.tone, "blocked");
+  assert.equal(declined.label, "Declined");
+});
+
+test("a tool the workspace Owner blocked is a refusal the Owner lifts, told apart from the member's switch", () => {
+  const outcome = describePluginActivityOutcome("workspace_tool_blocked");
+  assert.equal(outcome.label, "Blocked by workspace");
+  assert.equal(outcome.tone, "blocked");
+  assert.equal(outcome.code, "workspace_tool_blocked");
+  assert.equal(outcome.fixer, "owner");
+  assert.match(outcome.hint ?? "", /Owner/);
+  assert.notEqual(outcome.label, describePluginActivityOutcome("tool_blocked").label);
+  // Case and stray whitespace from the audit row do not change the reading.
+  assert.equal(describePluginActivityOutcome(" WORKSPACE_TOOL_BLOCKED ").fixer, "owner");
+});
+
+test("rows carry the workspace-block outcome through the join", () => {
+  const [row] = toPluginActivityRows([audit({ resultStatus: "workspace_tool_blocked" })], MEMBERS, PLUGINS);
+  assert.equal(row.outcome.label, "Blocked by workspace");
+  assert.equal(row.outcome.fixer, "owner");
+});
+
+test("an API key the member has not pasted, or pasted wrong, is setup rather than a failure", () => {
+  assert.equal(describePluginActivityOutcome("api_key_required").label, "Needs setup");
+  assert.equal(describePluginActivityOutcome("invalid_api_key").tone, "attention");
+  assert.equal(describePluginActivityOutcome("tool_error").label, "Tool error");
 });
 
 test("only a full page suggests another one", () => {

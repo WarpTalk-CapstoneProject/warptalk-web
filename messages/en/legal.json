@@ -1,16 +1,317 @@
 {
   "brand": "WarpTalk",
+  "document": {
+    "effective": "Effective {date}",
+    "contents": "Contents",
+    "questions": "Questions about this document? Contact us at",
+    "backToHome": "Back to home",
+    "backToSignIn": "Back to sign in"
+  },
   "terms": {
     "title": "Terms of use",
-    "summary": "The terms that will govern your use of WarpTalk — accounts, workspaces, meetings, and the translation and voice features."
+    "summary": "These terms govern your use of WarpTalk — your account, the workspaces you join, the meetings you hold, and the translation, transcription, AI and voice features that run in them. Please read them carefully: by creating an account or using WarpTalk, you agree to them.",
+    "sections": {
+      "acceptance": {
+        "heading": "1. Acceptance of these terms",
+        "body": [
+          "WarpTalk (\"WarpTalk\", \"we\", \"us\") provides a real-time multilingual meeting platform through our website, web application, desktop application and related services (together, the \"Service\"). These Terms of Use (\"Terms\") form a binding agreement between you and WarpTalk.",
+          "By creating an account, joining a meeting, or otherwise using the Service, you confirm that you have read, understood and agree to these Terms and to our Privacy Policy. If you use the Service on behalf of an organisation, you confirm that you are authorised to accept these Terms for that organisation, and \"you\" includes that organisation.",
+          "If you do not agree to these Terms, do not use the Service."
+        ]
+      },
+      "eligibility": {
+        "heading": "2. Eligibility and accounts",
+        "body": [
+          "You must be at least 16 years old to create an account. If you are under the age of majority where you live, you may use the Service only with the consent of a parent or legal guardian.",
+          "You agree to provide accurate information when you register and to keep it up to date. You are responsible for keeping your password and sign-in methods secure, and for all activity that happens under your account. Tell us promptly at {email} if you believe your account has been accessed without your permission.",
+          "You may not share your account with others, create an account for someone else without their permission, or create a new account after we have suspended or terminated yours."
+        ]
+      },
+      "workspaces": {
+        "heading": "3. Workspaces and roles",
+        "body": [
+          "Meetings, transcripts, documents and other content in WarpTalk are organised into workspaces. The person or organisation that creates a workspace (the \"Workspace Owner\") controls who can join it, which roles and permissions members have, which features are enabled, and how long its content is kept.",
+          "If you join a workspace that belongs to someone else — for example, your employer — the Workspace Owner and the administrators they appoint can view, manage, export and delete content in that workspace, and can remove your access. Your use of that workspace may also be subject to the Workspace Owner's own policies.",
+          "The Workspace Owner is responsible for the workspace's subscription, for the members it invites, and for making sure the workspace is used in accordance with these Terms."
+        ]
+      },
+      "service": {
+        "heading": "4. The Service",
+        "body": [
+          "WarpTalk lets you hold online meetings with live speech recognition, real-time translation, subtitles, translated voice (dubbing), recordings, transcripts, AI-generated summaries and minutes, an AI assistant (WarpBot), and integrations with third-party tools. Some features are available only on certain plans.",
+          "We continuously improve the Service and may add, change or remove features. If we remove a feature that is material to a paid plan you have already purchased, we will give you reasonable notice and, where appropriate, a pro-rata remedy.",
+          "We aim to keep the Service available at all times, but we do not guarantee that it will be uninterrupted or error-free. Planned maintenance, network conditions, and third-party providers may affect availability."
+        ]
+      },
+      "aiOutput": {
+        "heading": "5. AI-generated output",
+        "body": [
+          "Transcripts, translations, subtitles, translated voice, summaries, minutes, action items and assistant answers are produced automatically by machine-learning systems. They can be incomplete, inaccurate, or miss nuance, names, numbers and technical terms.",
+          "You are responsible for reviewing AI-generated output before relying on it. Do not use WarpTalk as the sole basis for decisions with legal, medical, financial, safety or other significant consequences, and do not treat an automatic translation as a certified translation.",
+          "As between you and WarpTalk, output generated from your content belongs to you on the same terms as your content (see section 9)."
+        ]
+      },
+      "recording": {
+        "heading": "6. Recording, transcription and consent",
+        "body": [
+          "Speech in a WarpTalk meeting is processed in real time to provide captions and translation, and meetings may be recorded, transcribed and summarised. WarpTalk shows participants when recording or transcription is active.",
+          "If you host a meeting, start a recording, or capture audio from another application with the WarpTalk desktop app, you are responsible for informing every participant and obtaining any consent required by the law that applies to you and to them before you do so.",
+          "You must not use WarpTalk to record or transcribe any conversation that you are not lawfully entitled to record."
+        ]
+      },
+      "voice": {
+        "heading": "7. Voice profiles and voice cloning",
+        "body": [
+          "WarpTalk can create a voice profile from recordings you provide so that translated speech sounds like you. By creating a voice profile, you confirm that the recordings are of your own voice, or that you have the express, documented permission of the person whose voice it is.",
+          "You must not use voice features to impersonate any person, to mislead listeners about who is speaking, to commit fraud, or to create content that is defamatory, harassing or otherwise unlawful.",
+          "You can delete a voice profile at any time. Once deleted, it can no longer be used to generate speech. We may disable any voice profile that we reasonably believe was created or used in breach of these Terms."
+        ]
+      },
+      "acceptableUse": {
+        "heading": "8. Acceptable use",
+        "body": [
+          "You agree not to, and not to allow anyone else to:",
+          "- break any law, or infringe anyone's intellectual property, privacy, publicity or other rights;",
+          "- upload or share content that is unlawful, harmful, threatening, abusive, harassing, hateful, sexually exploitative, or that you do not have the right to share;",
+          "- send spam or unsolicited communications, or invite people to meetings for that purpose;",
+          "- upload viruses or malicious code, or probe, scan or test the vulnerability of the Service without our written permission;",
+          "- interfere with or disrupt the Service or the infrastructure it runs on, or circumvent usage limits, credit limits or access controls;",
+          "- access the Service by automated means other than through features and interfaces we provide, or scrape it;",
+          "- reverse engineer, decompile or disassemble the Service, except where the law expressly allows it;",
+          "- resell, sublicense or provide the Service to third parties except as permitted by your plan;",
+          "- use the Service or its output to develop a competing product or to train machine-learning models.",
+          "We may investigate suspected violations and take any action we consider appropriate, including removing content and suspending accounts or workspaces."
+        ]
+      },
+      "content": {
+        "heading": "9. Your content",
+        "body": [
+          "\"Your content\" means everything you or your workspace put into the Service — audio, video, chat messages, documents, glossaries, voice samples — and the transcripts, translations, recordings and AI output generated from it. You keep all ownership rights in your content.",
+          "You grant WarpTalk a worldwide, non-exclusive, royalty-free licence to host, store, process, transmit, reproduce and display your content solely to provide, secure and support the Service for you and your workspace, and as described in our Privacy Policy. This licence ends when your content is deleted from the Service, except for copies kept in backups for a limited period or as required by law.",
+          "We do not use your meeting content or voice samples to train general-purpose AI models.",
+          "You are responsible for your content and confirm that you have all rights needed to use it with the Service."
+        ]
+      },
+      "payment": {
+        "heading": "10. Plans, payment and credits",
+        "body": [
+          "Some features require a paid plan or usage credits. Prices, included usage and plan limits are shown in the Service at the time of purchase. Payments are processed by our payment provider, Stripe; we do not store your full card details.",
+          "Subscriptions renew automatically at the end of each billing period at the then-current price until cancelled. We will notify you before a subscription renews. You can cancel at any time from the workspace billing settings; cancellation takes effect at the end of the current billing period, and you keep access until then.",
+          "Usage credits (for example, translation minutes) are consumed as you use the relevant features, are tied to the workspace that purchased them, and are not transferable or redeemable for cash. Unused credits may expire as stated at the time of purchase.",
+          "Except where required by law — including your rights as a consumer — or expressly stated otherwise, payments are non-refundable. Prices exclude applicable taxes, which you are responsible for paying. If a payment fails, we may limit paid features until it is resolved.",
+          "We may change prices with at least 30 days' notice. A price change takes effect at the start of your next billing period. If you do not accept the new price, you may cancel before it takes effect without any penalty."
+        ]
+      },
+      "thirdParty": {
+        "heading": "11. Third-party services and integrations",
+        "body": [
+          "WarpTalk lets you connect third-party services, such as calendars, storage and productivity tools, and uses third-party providers to deliver some features. When you connect a third-party service, you authorise WarpTalk to exchange data with it on your behalf, and your use of that service is governed by its own terms and privacy policy.",
+          "We are not responsible for third-party services, their availability, or what they do with data you choose to send them."
+        ]
+      },
+      "ip": {
+        "heading": "12. Our intellectual property",
+        "body": [
+          "The Service, including its software, design, text, graphics, logos and the WarpTalk name, is owned by WarpTalk and its licensors and is protected by intellectual property laws. These Terms grant you a limited, revocable, non-exclusive, non-transferable right to use the Service in accordance with them; they do not transfer any ownership to you.",
+          "If you send us feedback or suggestions, we may use them without restriction or obligation to you."
+        ]
+      },
+      "termination": {
+        "heading": "13. Suspension and termination",
+        "body": [
+          "You may stop using the Service and delete your account at any time from your account settings or by contacting us.",
+          "We may suspend or terminate your access to the Service, or to a workspace, if you materially breach these Terms, if required by law, or if your use creates a security or legal risk for WarpTalk, other users or third parties. Where reasonable, we will notify you in advance and give you an opportunity to fix the issue.",
+          "When an account or workspace is terminated, the related content is deleted as described in our Privacy Policy. Sections that by their nature should survive termination — including sections 9, 12, 14, 15, 16 and 18 — survive."
+        ]
+      },
+      "disclaimer": {
+        "heading": "14. Disclaimers",
+        "body": [
+          "To the maximum extent permitted by law, the Service and all AI output are provided \"as is\" and \"as available\", without warranties of any kind, whether express or implied, including warranties of merchantability, fitness for a particular purpose, accuracy and non-infringement.",
+          "Nothing in these Terms excludes or limits any warranty or right that cannot be excluded or limited under applicable consumer protection law."
+        ]
+      },
+      "liability": {
+        "heading": "15. Limitation of liability",
+        "body": [
+          "To the maximum extent permitted by law, WarpTalk will not be liable for any indirect, incidental, special, consequential or punitive damages, or for any loss of profits, revenue, data, goodwill or business opportunity, arising out of or related to the Service or these Terms.",
+          "If you use the Service for business purposes, to the maximum extent permitted by law, WarpTalk's total liability for all claims arising out of or related to the Service or these Terms is limited to the greater of the amounts you paid to WarpTalk for the Service in the 12 months before the event giving rise to the claim, or 40 USD.",
+          "If you are a consumer, nothing in these Terms limits or excludes WarpTalk's liability to you under the Law on Protection of Consumer Rights or other law. These limitations also do not apply to liability that cannot be limited by law, including liability for death or personal injury caused by negligence, or for fraud."
+        ]
+      },
+      "indemnity": {
+        "heading": "16. Indemnity",
+        "body": [
+          "You agree to indemnify and hold harmless WarpTalk from any claims, damages, losses and expenses (including reasonable legal fees) brought by a third party and arising from your content, your breach of these Terms, or your violation of any law or third-party right, including recording or cloning the voice of a person without the required consent."
+        ]
+      },
+      "changes": {
+        "heading": "17. Changes to these terms",
+        "body": [
+          "We may update these Terms from time to time. We will post the updated version on this page and change the effective date above. If a change is material, we will give you at least 30 days' notice by email or in the Service before it takes effect.",
+          "If you do not agree with a change, you may stop using the Service and terminate these Terms before it takes effect; if you have prepaid for a period that has not yet ended, we will refund the unused portion. If you continue to use the Service after the updated Terms take effect, you accept them."
+        ]
+      },
+      "law": {
+        "heading": "18. Governing law and disputes",
+        "body": [
+          "These Terms are governed by the laws of the Socialist Republic of Vietnam.",
+          "If a dispute arises, please contact us first at {email} so that we can try to resolve it informally. If it cannot be resolved by negotiation within 30 days, it will be submitted to the competent court of Vietnam. Nothing in these Terms limits your right as a consumer to complain to a consumer protection authority or to bring a lawsuit as permitted by law.",
+          "If any provision of these Terms is found unenforceable, the remaining provisions stay in full effect. Our failure to enforce a provision is not a waiver of it. You may not assign these Terms without our consent; we may assign them in connection with a merger, acquisition or sale of assets.",
+          "If a provision of these Terms can be understood in more than one way, it will be interpreted in the way most favourable to you as a consumer. These Terms are published in Vietnamese, English and Japanese; if the versions differ, the Vietnamese version prevails."
+        ]
+      },
+      "contact": {
+        "heading": "19. Contact",
+        "body": [
+          "If you have any questions about these Terms, contact us at {email}."
+        ]
+      }
+    }
   },
   "privacy": {
     "title": "Privacy policy",
-    "summary": "What WarpTalk collects, how long it keeps it, and what happens to the audio, transcripts, and voice models produced by a meeting."
-  },
-  "placeholder": {
-    "disclaimer": "This document has not been published yet. Until it is, no version of it is in force, and nothing on this page should be read as an agreement. For questions about how WarpTalk handles your account, your recordings, or your voice data, contact the team before creating an account.",
-    "backToHome": "Back to home",
-    "backToSignIn": "Back to sign in"
+    "summary": "This policy explains what personal data WarpTalk collects, why we collect it, how long we keep it, who we share it with, and the choices and rights you have — including for the audio, transcripts and voice profiles produced when you use WarpTalk.",
+    "sections": {
+      "scope": {
+        "heading": "1. Who we are and what this policy covers",
+        "body": [
+          "WarpTalk (\"WarpTalk\", \"we\", \"us\") provides a real-time multilingual meeting platform through our website, web application, desktop application and related services (the \"Service\"). This policy describes how we process personal data when you visit our website, create an account, join a workspace or meeting, or otherwise use the Service.",
+          "We process personal data in accordance with applicable data protection law, including Vietnam's Law on Personal Data Protection No. 91/2025/QH15 and Decree No. 356/2025/ND-CP guiding it, and, where it applies to you, other laws such as the EU General Data Protection Regulation."
+        ]
+      },
+      "roles": {
+        "heading": "2. Our role and your workspace's role",
+        "body": [
+          "For your account information, billing, and our website, WarpTalk decides how and why your personal data is processed.",
+          "Content inside a workspace — meetings, recordings, transcripts, chat, documents and AI output — is controlled by the Workspace Owner, who decides who can access it and how long it is kept. When your workspace belongs to an organisation, such as your employer, we process that content on the organisation's behalf and in accordance with its instructions, and requests about it may need to be directed to the organisation."
+        ]
+      },
+      "collect": {
+        "heading": "3. Information we collect",
+        "body": [
+          "Information you give us:",
+          "- Account information: your name, email address, password (stored only as a secure hash), profile photo, preferred languages, time zone and interface preferences. If you sign in with Google or Microsoft, we receive your name, email address and profile photo from that provider.",
+          "- Workspace information: workspaces you create or join, your role, invitations you send, and settings such as glossaries and language policies.",
+          "- Meeting content: audio and video you share in a meeting, chat messages, files and documents you upload, and meeting details such as titles, agendas and schedules.",
+          "- Voice samples: recordings you provide to create a voice profile.",
+          "- Communications: messages you send us, feedback, and survey responses.",
+          "Information generated when you use the Service:",
+          "- Transcripts, translations, subtitles, translated voice, recordings (when a host records a meeting), summaries, minutes, action items and assistant conversations.",
+          "- Voice profiles derived from your voice samples.",
+          "- Usage and device data: pages and features you use, meeting participation (join and leave times, duration, languages), translation minutes consumed, IP address, browser and device type, operating system, and diagnostic and error logs.",
+          "- Session data: sign-in sessions, the devices they are on, and security events such as password changes.",
+          "Information from third parties:",
+          "- Payment information from Stripe, such as billing name, billing address, card brand, the last four digits of your card and payment status. We never receive or store your full card number.",
+          "- Data from third-party services you choose to connect, such as calendar events or files, limited to what you authorise."
+        ]
+      },
+      "use": {
+        "heading": "4. How we use your information",
+        "body": [
+          "We use personal data to:",
+          "- create and manage your account and workspaces, and authenticate you;",
+          "- run meetings and provide real-time speech recognition, translation, subtitles, translated voice, recordings, transcripts, summaries and the WarpBot assistant;",
+          "- process payments, manage subscriptions and credits, and issue invoices;",
+          "- send you service messages, such as meeting invitations, security alerts, billing notices and changes to our terms;",
+          "- provide support and respond to your requests;",
+          "- keep the Service secure, prevent fraud and abuse, and enforce our Terms of Use;",
+          "- monitor performance, fix problems and improve the Service using usage and diagnostic data;",
+          "- comply with our legal obligations.",
+          "We process personal data with your consent, or without consent where the law allows it — for example, to perform our contract with you, to comply with a legal obligation, or to protect life, health or property. For sensitive personal data, such as voice profiles, we always ask for your separate, explicit consent. Where we rely on consent, you can withdraw it at any time; this does not affect processing already carried out."
+        ]
+      },
+      "ai": {
+        "heading": "5. AI processing of meeting content",
+        "body": [
+          "To provide captions, translation, translated voice, summaries and assistant answers, meeting audio and text are sent to speech recognition, translation, large language model and speech synthesis providers that process them on our behalf.",
+          "These providers may process your content only to deliver the requested feature to you. We choose providers whose terms do not permit them to use your content to train their models, and we do not use your meeting content or voice samples to train general-purpose AI models ourselves.",
+          "Live audio used only for real-time captions and translation is not stored unless a recording or transcript is being kept for that meeting."
+        ]
+      },
+      "voice": {
+        "heading": "6. Voice profiles",
+        "body": [
+          "Voice samples and voice profiles are biometric data, which is sensitive personal data under Vietnamese law. A voice profile is created only when you choose to create one and give separate, explicit consent after being told that this data is sensitive. We use your voice samples and the resulting voice profile only to generate translated speech in your voice within the Service, as you direct, and we protect them with enhanced security measures.",
+          "You can play back, replace or delete your voice profile at any time from the Voice Profiles page. When you delete it, we delete the voice samples and the voice profile, and ask our voice provider to delete the copies it holds, within 30 days.",
+          "We do not use your voice to identify you (for example, for voice biometrics or authentication), and we do not sell or share your voice profile with anyone except the provider that generates speech for you."
+        ]
+      },
+      "share": {
+        "heading": "7. How we share information",
+        "body": [
+          "We do not sell your personal data, and we do not share it for targeted advertising. We share personal data only in the following cases:",
+          "- Within your workspace: other members and meeting participants can see your name, profile photo and what you say or share in meetings, and — depending on workspace permissions — the transcripts, recordings, summaries and documents from meetings you attend.",
+          "- Service providers: companies that process data on our behalf under contracts that require them to protect it, including cloud hosting, real-time audio and video infrastructure, speech, translation, AI and voice providers, payment processing (Stripe), and email delivery.",
+          "- Integrations you connect: data you choose to send to a third-party service.",
+          "- Legal reasons: when required by law, court order or a competent authority, or when necessary to protect the rights, safety and security of our users, the public or WarpTalk.",
+          "- Business transfers: in connection with a merger, acquisition or sale of assets, subject to this policy continuing to protect your data."
+        ]
+      },
+      "transfers": {
+        "heading": "8. International transfers",
+        "body": [
+          "Our service providers may process data in countries other than the one you live in, including outside Vietnam. When we transfer personal data internationally, we do so in accordance with applicable law, including by completing the transfer impact assessments required by Vietnamese law and by using contractual safeguards with our providers."
+        ]
+      },
+      "retention": {
+        "heading": "9. How long we keep information",
+        "body": [
+          "We keep personal data only for as long as necessary for the purposes described in this policy:",
+          "- Meeting content (recordings, transcripts, summaries, chat and documents) is kept according to the retention period set by the Workspace Owner, until it is deleted by an authorised member, or until the workspace is deleted.",
+          "- Account information is kept for as long as your account is active. When you delete your account, we delete or anonymise your personal data within 30 days.",
+          "- Voice profiles are kept until you delete them or delete your account.",
+          "- Backups are overwritten on a rolling basis, and deleted data is removed from them within 90 days.",
+          "- Billing and transaction records are kept for as long as required by accounting and tax law.",
+          "- Security and diagnostic logs are kept for up to 12 months."
+        ]
+      },
+      "security": {
+        "heading": "10. Security",
+        "body": [
+          "We use technical and organisational measures to protect personal data, including encryption in transit (TLS), access controls based on roles and least privilege, hashed passwords, session management that lets you sign out other devices, and audit logs of sensitive actions.",
+          "No system is completely secure. Processing personal data online carries risks such as unauthorised access, loss or disclosure. If a personal data breach occurs, we will notify the competent authority as required by law, and will notify affected users — within 72 hours of discovery where the incident involves biometric data such as voice profiles."
+        ]
+      },
+      "rights": {
+        "heading": "11. Your rights and choices",
+        "body": [
+          "Subject to applicable law, you have the right to:",
+          "- be informed about how your personal data is processed;",
+          "- access your personal data and obtain a copy of it;",
+          "- correct inaccurate or incomplete data;",
+          "- delete your data, or request that we delete it;",
+          "- withdraw your consent, or restrict or object to processing;",
+          "- receive your data in a portable format;",
+          "- lodge a complaint with a data protection authority.",
+          "You can update your profile, manage sessions, delete voice profiles and delete your account directly in the Service. For other requests, contact us at {email}. We will respond within the time required by law, and may need to verify your identity first. Withdrawing consent or deleting data may mean that some features, such as translated voice, no longer work. Requests about content in a workspace owned by an organisation may be forwarded to that organisation."
+        ]
+      },
+      "cookies": {
+        "heading": "12. Cookies and local storage",
+        "body": [
+          "We use cookies and similar browser storage that are necessary for the Service to work: keeping you signed in, remembering your active workspace, your interface language and your device preferences, and protecting against fraud.",
+          "We do not use advertising cookies or third-party tracking for advertising. You can clear or block cookies in your browser settings, but parts of the Service, such as signing in, will not work without them."
+        ]
+      },
+      "children": {
+        "heading": "13. Children",
+        "body": [
+          "The Service is not directed to children under 16, and we do not knowingly collect personal data from them. If you believe a child has provided us with personal data, contact us and we will delete it."
+        ]
+      },
+      "changes": {
+        "heading": "14. Changes to this policy",
+        "body": [
+          "We may update this policy from time to time. We will post the updated version on this page and change the effective date above. If a change is material, we will notify you by email or in the Service before it takes effect."
+        ]
+      },
+      "contact": {
+        "heading": "15. Contact",
+        "body": [
+          "If you have any questions about this policy or how we handle your personal data, or want to exercise your rights, contact us at {email}."
+        ]
+      }
+    }
   }
 }

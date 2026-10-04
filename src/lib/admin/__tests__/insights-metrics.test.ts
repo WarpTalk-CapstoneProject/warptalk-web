@@ -92,7 +92,9 @@ test("the chip's colour follows higherIsBetter, not the sign", () => {
 // ── values ───────────────────────────────────────────────────────────────────
 
 test("values render in English with a spelled-out currency, and null is a dash", () => {
-  assert.equal(formatInsightValue(48_900_000, "money"), "48,900,000 VND");
+  assert.equal(formatInsightValue(48_900_000, "money"), "48,900,000.00 USD");
+  // Cents are kept (USD has a minor unit) and never rounded away to a whole dollar.
+  assert.equal(formatInsightValue(1.2, "money"), "1.20 USD");
   assert.equal(formatInsightValue(412.25, "hours"), "412.3 h");
   assert.equal(formatInsightValue(8_420_000, "credits"), "8,420,000");
   assert.equal(formatInsightValue(1.79, "percent"), "1.8%");
@@ -165,7 +167,7 @@ test("the export has every card, then the extra metrics, with empty cells where 
     ]),
   });
   assert.deepEqual(rows[0], ["Metric", "This period", "Previous period", "Change", "Unit"]);
-  assert.deepEqual(rows[1], ["Revenue", 48_900_000, 39_150_000, "24.9%", "VND"]);
+  assert.deepEqual(rows[1], ["Revenue", 48_900_000, 39_150_000, "24.9%", "USD"]);
   assert.deepEqual(rows[4], ["Cancelled", 3, 5, "-40.0%", "count"]);
   assert.deepEqual(rows[5], ["New users", "", "", "", "count"], "an unanswered source is still a row");
   assert.equal(rows.length, 1 + PERIOD_CARDS.length + 1);
@@ -175,7 +177,7 @@ test("the export has every card, then the extra metrics, with empty cells where 
 test("the CSV text is RFC 4180 with CRLF", () => {
   const text = insightsCsv({});
   assert.ok(text.startsWith("Metric,This period,Previous period,Change,Unit\r\n"));
-  assert.ok(text.includes("Revenue minus AI cost,,,,VND\r\n"));
+  assert.ok(text.includes("Revenue minus AI cost,,,,USD\r\n"));
 });
 
 // ── needs attention ──────────────────────────────────────────────────────────
@@ -349,7 +351,7 @@ test("a null revenue today renders a dash with the server's note, not 0", () => 
 test("a null MRR says why; with no note it still does not read as a number", () => {
   assert.equal(formatInsightValue(null, "money"), "—");
   assert.equal(mrrSub({ mrr: null, mrrNote: "excludes 3 EUR rows" }), "excludes 3 EUR rows");
-  assert.equal(mrrSub({ mrr: null, mrrNote: null }), "Cannot be totalled in VND");
+  assert.equal(mrrSub({ mrr: null, mrrNote: null }), "Cannot be totalled in USD");
   assert.equal(mrrSub({ mrr: 1, mrrNote: null }), "Monthly recurring revenue");
 });
 
@@ -367,7 +369,7 @@ test("a null outstanding amount is a dash plus its note, in the card and in Need
 
   const open = assembleNeedsAttention({ snapshot: snapshot({ outstandingInvoices: invoices }), links });
   assert.equal(open.items[0].detail, "Amount not totalled (excludes 2 EUR rows), none past due");
-  assert.doesNotMatch(open.items[0].detail, /0 ₫|₫0|\b0 VND/);
+  assert.doesNotMatch(open.items[0].detail, /0 ₫|₫0|\b0 VND|\b0(\.00)? USD/);
 
   const pastDue = assembleNeedsAttention({
     snapshot: snapshot({ outstandingInvoices: { ...invoices, pastDueCount: 1, oldestPastDueDays: 4, oldestPastDueWorkspace: null } }),

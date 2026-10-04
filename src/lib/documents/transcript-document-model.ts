@@ -26,6 +26,7 @@ import {
   splitSegmentsAroundPauseGaps,
   type TranscriptPauseGap,
 } from "../transcript/transcript-display.ts";
+import type { SpeakerLabels } from "../transcript/speaker-identity.ts";
 import {
   resolveTranscriptLine,
   type SegmentTranslationIndex,
@@ -69,6 +70,7 @@ export function buildTranscriptDocumentModel<T extends TranscriptDocumentSegment
   meetingEnded,
   formatClock,
   sessionDividerLabel,
+  speakerLabels,
 }: {
   meta: RecordDocumentMeta;
   blocks: readonly TranscriptDocumentBlock<T>[];
@@ -96,6 +98,12 @@ export function buildTranscriptDocumentModel<T extends TranscriptDocumentSegment
    * same rule `showSessionLabels` applies on screen.
    */
   sessionDividerLabel?: (block: TranscriptDocumentBlock<T>) => string;
+  /**
+   * The reader's words for a turn with no name — "Unknown speaker", and the Google Meet side's
+   * "Google Meet participants" when the gateway could not tell which Meet person spoke. Injected
+   * for the same reason as the divider: translated. Omitted, the English defaults.
+   */
+  speakerLabels?: SpeakerLabels;
 }): TranscriptDocumentModel {
   const entries: TranscriptDocumentEntry[] = [];
   const showSessionLabels = blocks.length > 1;
@@ -125,7 +133,7 @@ export function buildTranscriptDocumentModel<T extends TranscriptDocumentSegment
         });
       }
 
-      for (const turn of groupIntoSpeakerTurns(run.segments)) {
+      for (const turn of groupIntoSpeakerTurns(run.segments, speakerLabels)) {
         const lines: TranscriptDocumentLine[] = turn.lines.map((line) => {
           const resolved = resolveTranscriptLine(line, translationIndex, displayLanguage);
           const mark: LanguageMark = {

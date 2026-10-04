@@ -9,7 +9,16 @@
  *
  * Deliberately NOT a plan picker. Choosing a different plan is a purchase and goes through
  * Stripe Checkout on the plans page; this modal offers the state changes that do not: overages
- * on/off, cancel, and the read-only terms of the current cycle.
+ * on/off, stopping or resuming renewal, and the read-only terms of the current cycle.
+ *
+ * WT-878 — "CANCEL" IS AUTO-RENEW OFF.
+ *   Cancel used to call `DELETE /subscriptions/workspace/{id}` and resume `POST …/reactivate`.
+ *   The first sets the row to cancelled at once, so entitlements dropped mid-period for a period
+ *   already paid for, and it could take add-on Stripe subscriptions down with it; the second never
+ *   told Stripe, so a "resumed" card plan still would not charge. Both now go through
+ *   `PUT /auto-renew` — the same call as the Auto-renew row on the page, with the same toasts and
+ *   the same query keys — so the plan always runs to its period end and Stripe's
+ *   cancel_at_period_end moves with it.
  *
  * No shadow anywhere — see billing-primitives. `DialogContent` ships its own, so it is overridden
  * explicitly rather than merely left unset.
@@ -20,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -31,12 +41,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { billingService } from "@/services/billing.service";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 
+import { useRecurringBilling } from "./auto-renew-section";
 import { BillingButton, Pill, Row, RowGroup, Section } from "./billing-primitives";
+
+/** The server's answer when auto-renew cannot go on without a card — see auto-renew-section. */
+const AUTO_RENEW_REQUIRES_CHECKOUT = "BILLING_AUTO_RENEW_REQUIRES_CHECKOUT";
 
 function formatDay(value: string | Date | null | undefined): string {
   if (!value) return "—";
@@ -72,7 +86,9 @@ export function ManageSubscriptionModal({
   plan: PlanDto | null;
 }) {
   const t = useTranslations("settingsBilling");
+  const tAutoRenew = useTranslations("settingsBilling.autoRenew");
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const { data: overage, isLoading: isOverageLoading } = useQuery({
@@ -99,42 +115,48 @@ export function ManageSubscriptionModal({
       toast.error(getErrorMessage(error, t("manageModal.toasts.overageFailed"))),
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: () => billingService.cancelSubscription(workspaceId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["billing"] });
-      setConfirmingCancel(false);
-      onOpenChange(false);
-      toast.success(t("manageModal.toasts.cancelled"));
-    },
-    onError: (error) =>
-      toast.error(getErrorMessage(error, t("manageModal.toasts.cancelFailed"))),
-  });
+  const { data: recurring } = useRecurringBilling(workspaceId || undefined);
+  const plansHref = `/${workspaceSlug}/payment/plans`;
 
   /**
-   * WT-471: the way back into a plan.
+   * Stop or resume renewal — never end the paid period. Same call, toasts and invalidation as
+   * `AutoRenewRow`, so the two controls cannot disagree about what "off" means.
    *
-   * There was none. Cancel existed, auto-renew was deliberately never built, and nothing reversed
-   * a cancellation — so every cancelled workspace was a dead end inside the product. Two
-   * reasonable decisions that together made a trap.
-   *
-   * This is not a purchase: the period is already paid for, so it restores renewal on the row that
-   * is still live. A workspace whose period has already ended is refused by the server and told to
-   * choose a plan, which is the Checkout flow.
+   * WT-471 still holds: a plan that will not renew has a way back from here. When the server says
+   * that way needs a card (a plan paid once), the reader is sent to the plans page to choose it
+   * again with auto-renew on.
    */
-  const reactivateMutation = useMutation({
-    mutationFn: () => billingService.reactivateSubscription(workspaceId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["billing"] });
-      toast.success(t("manageModal.toasts.reactivated"));
+  const renewalMutation = useMutation({
+    mutationFn: (autoRenew: boolean) => billingService.setAutoRenew(workspaceId, autoRenew),
+    onSuccess: (_, autoRenew) => {
+      setConfirmingCancel(false);
+      toast.success(
+        autoRenew
+          ? tAutoRenew("turnedOn")
+          : tAutoRenew("turnedOff", {
+              date: formatDay(recurring?.currentPeriodEnd ?? subscription?.currentPeriodEnd),
+            }),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
+      if (!autoRenew) onOpenChange(false);
     },
-    // The server's own words matter here: "period has already ended" sends the reader somewhere
-    // else entirely than "not cancelled" does.
-    onError: (error) =>
-      toast.error(getErrorMessage(error, t("manageModal.toasts.reactivateFailed"))),
+    onError: (error) => {
+      if (apiErrorCode(error) === AUTO_RENEW_REQUIRES_CHECKOUT) {
+        toast.error(tAutoRenew("requiresCheckout"));
+        onOpenChange(false);
+        router.push(plansHref);
+        return;
+      }
+      toast.error(tAutoRenew("toggleFailed"));
+    },
   });
 
-  const cancelling = subscription?.cancelAtPeriodEnd === true;
+  // Renewal state from the same query the Auto-renew row reads; the subscription's own flags only
+  // until that answers.
+  const cancelling = recurring
+    ? !recurring.autoRenew
+    : subscription?.cancelAtPeriodEnd === true || subscription?.autoRenew === false;
+  const resumeNeedsCheckout = cancelling && recurring?.autoRenewRequiresCheckout === true;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -204,7 +226,7 @@ export function ManageSubscriptionModal({
             <div className="flex items-center justify-between gap-4 py-3.5">
               <span className="text-[13px] text-ink">{t("manageModal.modifyPlan")}</span>
               <div className="flex items-center gap-2">
-                <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
+                <Link href={plansHref} className="shrink-0">
                   <BillingButton tone="outline" className="w-auto">
                     {t("manageModal.changePlan")}
                     <CaretDown className="h-3 w-3" />
@@ -212,25 +234,32 @@ export function ManageSubscriptionModal({
                 </Link>
                 {/* Cancel asks twice, in place. A confirm dialog stacked on a dialog is worse:
                     the thing being cancelled leaves the screen at the moment of decision. */}
-                {/* A cancelled plan offers the reverse, not a dead "Cancelled" label. That label
-                    was the whole problem: it stated the state and gave no way out of it. */}
-                {cancelling ? (
+                {/* A plan that will not renew offers the reverse, not a dead "Cancelled" label.
+                    That label was the whole problem: it stated the state and gave no way out. */}
+                {/* A plan paid once has no card to renew with: resuming it is a new checkout. */}
+                {resumeNeedsCheckout ? (
+                  <Link href={plansHref} className="shrink-0" onClick={() => onOpenChange(false)}>
+                    <BillingButton tone="primary" className="w-auto">
+                      {tAutoRenew("choosePlan")}
+                    </BillingButton>
+                  </Link>
+                ) : cancelling ? (
                   <BillingButton
                     tone="primary"
                     className="w-auto"
-                    disabled={reactivateMutation.isPending}
-                    onClick={() => reactivateMutation.mutate()}
+                    disabled={renewalMutation.isPending || !subscription}
+                    onClick={() => renewalMutation.mutate(true)}
                   >
-                    {reactivateMutation.isPending ? t("manageModal.reactivating") : t("manageModal.resubscribe")}
+                    {renewalMutation.isPending ? t("manageModal.reactivating") : t("manageModal.resubscribe")}
                   </BillingButton>
                 ) : confirmingCancel ? (
                   <BillingButton
                     tone="outline"
                     className="w-auto border-destructive/40 text-destructive hover:bg-destructive/5"
-                    disabled={cancelMutation.isPending}
-                    onClick={() => cancelMutation.mutate()}
+                    disabled={renewalMutation.isPending}
+                    onClick={() => renewalMutation.mutate(false)}
                   >
-                    {cancelMutation.isPending ? t("manageModal.cancelling") : t("manageModal.confirmCancel")}
+                    {renewalMutation.isPending ? t("manageModal.cancelling") : t("manageModal.confirmCancel")}
                   </BillingButton>
                 ) : (
                   <BillingButton
@@ -260,7 +289,9 @@ export function ManageSubscriptionModal({
 
           {cancelling && subscription ? (
             <p className="mt-4 text-[12px] text-amber-500">
-              {t("manageModal.cancelledNotice", { date: formatDay(subscription.currentPeriodEnd) })}
+              {t("manageModal.cancelledNotice", {
+                date: formatDay(recurring?.currentPeriodEnd ?? subscription.currentPeriodEnd),
+              })}
             </p>
           ) : null}
         </div>

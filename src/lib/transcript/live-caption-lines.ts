@@ -1,13 +1,12 @@
 /**
- * What the live caption lane shows: the current caption, and nothing to scroll back through.
+ * What the live caption lane shows.
  *
- * WHY THERE IS NO HISTORY HERE ANY MORE (WT-873)
- *   The lane used to keep five hundred utterances rendered and open them as an "Earlier
- *   captions" panel when the reader scrolled up in it. That panel grew UPWARD over the camera
- *   view, so reading back through captions meant covering the faces of the people speaking — and
- *   it did the same job as the Transcript side panel, which is the record (every line, the
- *   original beside the translation, timestamps). Captions are for reading the room live; the
- *   panel is for reading back. The lane keeps a corner button into the panel instead.
+ * HISTORY IS BACK, INSIDE THE LANE (4 Oct 2026, product owner)
+ *   WT-873 cut the lane to the last two lines because its history opened as a panel that grew
+ *   UPWARD over the camera view. Readers then had no way to glance back at a sentence they
+ *   missed short of opening the transcript panel. The history now scrolls INSIDE the lane's own
+ *   box — it never grows over the video — and the corner control collapses the lane to the one
+ *   line being spoken, or opens it again. LIVE_CAPTION_HISTORY_LINES bounds what is rendered.
  *
  * WHY THE SPEAKER IS NOT ON EVERY LINE
  *   Each line used to carry avatar + name, left-aligned like a chat thread, which read as a chat
@@ -18,8 +17,32 @@
  * Pure and dependency-free: node-run contract tests import it without a bundler.
  */
 
-/** How many utterances the lane shows at once: the one being spoken and the one before it. */
-export const LIVE_CAPTION_VISIBLE_LINES = 2;
+/** How many utterances the open lane keeps to scroll back through. Bounded: it is live DOM. */
+export const LIVE_CAPTION_HISTORY_LINES = 200;
+
+/** The collapsed lane: the line being spoken, nothing else. */
+export const LIVE_CAPTION_COLLAPSED_LINES = 1;
+
+function languageBase(language: string | null | undefined): string {
+  return (language ?? "").trim().toLowerCase().split(/[-_]/)[0] ?? "";
+}
+
+/**
+ * Whether live text (the words of a turn still being spoken) belongs in THIS reader's lane.
+ *
+ * Only when the speaker talks the reader's language. Live text is the original, unpunctuated and
+ * still changing; for a reader in another language it put a foreign half-sentence in the lane,
+ * which the translation then replaced a second later — the "fast but wrong" the owner saw on
+ * 4 Oct. A reader whose language is not resolved yet sees it: a cold lane reads as broken.
+ */
+export function isLiveTextForReader(
+  liveLanguage: string | null | undefined,
+  readerLanguage: string | null | undefined,
+): boolean {
+  const reader = languageBase(readerLanguage);
+  if (!reader) return true;
+  return languageBase(liveLanguage) === reader;
+}
 
 export type LiveCaptionLine<T> = {
   line: T;
@@ -38,7 +61,7 @@ function speakerKey(speaker: string | null | undefined): string {
 export function liveCaptionLines<T>(
   lines: readonly T[],
   speakerOf: (line: T) => string | null | undefined,
-  limit: number = LIVE_CAPTION_VISIBLE_LINES,
+  limit: number = LIVE_CAPTION_HISTORY_LINES,
 ): LiveCaptionLine<T>[] {
   if (limit <= 0 || lines.length === 0) return [];
   const visible = lines.slice(-limit);

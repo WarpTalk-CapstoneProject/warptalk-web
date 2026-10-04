@@ -72,8 +72,25 @@
     "editConfiguration": "設定を編集",
     "refresh": "更新",
     "filterLabel": "価格ビュー",
+    "preview": {
+      "note": "購入者が 設定 → 請求 で見る画面と同じコンポーネントです。鉛筆でプランを調整、＋でプランを追加します。ここでは「選択」「アップグレード」は動作しません。",
+      "includeHidden": "非表示のプランも表示 ({count})",
+      "hidden": "非表示",
+      "adjust": "{name} を調整",
+      "addPlan": "プランを追加",
+      "error": "プランを読み込めませんでした。",
+      "retry": "再試行",
+      "active": "公開中",
+      "activeToggle": "{name} を購入者に表示",
+      "moveLeft": "{name} を前へ",
+      "moveRight": "{name} を後ろへ",
+      "dragHint": "カードを別のカードにドラッグすると購入者に見える順番が変わります。‹ › でも移動できます。カードのスイッチで表示・非表示を切り替えます。",
+      "reorderError": "新しい順番を保存できませんでした。再読み込みすると保持されている順番が表示されます。",
+      "toggleError": "{name} の表示を切り替えられませんでした。"
+    },
     "tabs": {
       "plans": "プラン",
+      "preview": "プレビュー",
       "rateCards": "料金カード",
       "configuration": "設定"
     },
@@ -136,6 +153,8 @@
     "billingPolicyHeading": "課金ポリシー",
     "pricingEconomicsHeading": "価格エコノミクス",
     "pricingEconomicsSubnote": "プラン検証と料金カードの利益率算出が参照するのと同じ設定です。プランと価格ページからもアクセスできます。顧客向け価格は Stripe が管理するため、クレジット単価とクレジットあたりの最低価格はここでは編集できません。変更はマイグレーションで行います。",
+    "meetingCreditRatesHeading": "会議のクレジット単価",
+    "meetingCreditRatesSubnote": "会議で1秒あたりに消費されるクレジット。変更は次の課金から適用され、精算済みの利用分は当時の単価のままです。",
     "languageCatalogHeading": "言語カタログ",
     "voiceConsentHeading": "音声クローン同意",
     "voiceConsentCount": "{count} 件の決定を記録済み",
@@ -155,6 +174,28 @@
       "saveSuccessToast": "課金ポリシーを保存しました。",
       "saveErrorToast": "課金ポリシーを保存できませんでした。",
       "errorWhat": "課金ポリシー"
+    },
+    "meetingCreditRates": {
+      "labels": {
+        "TRANSLATION": "翻訳",
+        "AUDIO_DUBBING_STANDARD": "吹き替え(標準音声)",
+        "AUDIO_DUBBING_VOICE_CLONE": "吹き替え(クローン音声)"
+      },
+      "hints": {
+        "TRANSLATION": "元の発話1秒あたり、翻訳先の言語ごとに課金されます。",
+        "AUDIO_DUBBING_STANDARD": "カタログ音声で生成した音声1秒あたり。",
+        "AUDIO_DUBBING_VOICE_CLONE": "話者のクローン音声で生成した音声1秒あたり。"
+      },
+      "unit": "クレジット / 秒",
+      "perMinute": "≈ 1分あたり {credits} クレジット",
+      "ariaLabel": "{label}、1秒あたりのクレジット",
+      "missing": "有効なレートカードがありません",
+      "invalid": "0 より大きく {max} 以下、小数点以下6桁までで入力してください。",
+      "save": "保存",
+      "saving": "保存中…",
+      "saveSuccessToast": "{label} は1秒あたり {price} クレジットになりました。",
+      "saveErrorToast": "単価を保存できませんでした。",
+      "errorWhat": "会議のクレジット単価"
     },
     "pricingEconomics": {
       "errorWhat": "価格設定",
@@ -179,7 +220,7 @@
       "cartesiaUsdPerCreditValue": "1 クレジットあたり ${price}",
       "minimumContractPriceLabel": "最低契約価格",
       "minimumContractPriceHint": "プランが有効と判定される前の、1サイクルあたりの金額。",
-      "minimumContractPriceValue": "{vnd} ₫ ・ {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "デフォルトの請求書支払期限",
       "defaultInvoiceTermsHint": "個別に設定していないプランに適用される、支払までの日数とその後の猶予期間。",
       "defaultInvoiceTermsValue": "{days} 日・猶予 {hours} 時間",
@@ -309,7 +350,11 @@
         "glossary": "用語集",
         "dedicatedGpu": "専用GPU",
         "features": "機能",
-        "featuresHint": "価格ページが読み取るJSONデータです。配列またはオブジェクトを指定します。"
+        "featuresHint": "価格ページが読み取るJSONデータです。配列またはオブジェクトを指定します。",
+        "overagePriceHint": "枠を使い切った後の1クレジットの価格（{currency}）。",
+        "rolloverCapHint": "次のサイクルに繰り越す未使用クレジット。",
+        "invoiceTermsHint": "請求書の支払期限。",
+        "invoiceGraceHint": "支払いが遅れた後もプランが使える期間。"
       },
       "editDialog": {
         "title": "プランを編集",
@@ -322,7 +367,45 @@
       "cancel": "キャンセル",
       "save": "プランを保存",
       "saving": "保存中…",
-      "saveError": "プランを保存できませんでした。"
+      "saveError": "プランを保存できませんでした。",
+      "vat": {
+        "charged": "購入者は Stripe で {total} を支払います（{percent}% VAT 込み）。",
+        "hint": "税抜価格を入力してください。VAT 率は Platform settings で設定します。",
+        "off": "VAT はオフです（Platform settings で 0%）。購入者はこの価格をそのまま支払います。"
+      },
+      "presets": {
+        "custom": "カスタム…",
+        "customValue": "{label} のカスタム値",
+        "overageCapNone": "超過なし — 枠で停止",
+        "overageCapShare": "最大 {percent}% まで超過 — {credits} クレジット",
+        "overagePriceSame": "プラン内のクレジット単価と同じ",
+        "overagePriceMultiple": "プラン内単価の {multiple} 倍",
+        "lowBalanceOff": "残高警告なし",
+        "lowBalanceShare": "残り {percent}% で警告 — {credits} クレジット",
+        "rolloverNone": "繰り越しなし",
+        "rolloverShare": "最大 {percent}% 繰り越し — {credits} クレジット",
+        "termsOnReceipt": "受領時に支払い",
+        "termsDays": "{days} 日",
+        "graceNone": "猶予なし — 即停止",
+        "graceDays": "{days} 日",
+        "participants": "{count} 人",
+        "languages": "{count} 言語",
+        "voiceCloneUnlimited": "無制限",
+        "voiceCloneMinutes": "1サイクル {minutes} 分"
+      },
+      "featureControls": {
+        "googleMeet": "Google Meet ブリッジ",
+        "googleMeetHint": "Google Meet の通話を WarpTalk で翻訳します。",
+        "contractBilling": "契約請求",
+        "contractBillingHint": "契約で請求し、上限を超えた分は請求書で精算します。",
+        "voiceCloneLimit": "ボイスクローン上限",
+        "voiceCloneLimitUnset": "未設定",
+        "highlights": "料金ページに表示",
+        "highlightsHint": "このプランの下に表示する行を選ぶか、独自の行を追加します。",
+        "addHighlight": "行を追加",
+        "add": "追加",
+        "keptKeys": "そのまま保持: {keys}"
+      }
     },
     "rateCard": {
       "editDialog": {
@@ -350,8 +433,7 @@
         "customerPrice": "顧客価格",
         "providerCost": "プロバイダーコスト",
         "margin": "利益率",
-        "formulaLine": "{formula} ・ 為替 {fx} ・ クレジット単価 {credit} VND",
-        "vndSuffix": "（VND）"
+        "formulaLine": "{formula} ・ クレジット単価 {credit} USD"
       },
       "errors": {
         "previewStale": "プレビュー後にコストまたはマークアップが変更されました。保存する前にもう一度プレビューしてください。",
@@ -395,17 +477,38 @@
         "description": "プラットフォーム全体に適用されます。すべてのプランはこれらの下限値・レートに基づいて検証され、すべての見積もりもここから作成されるため、ここでの変更によって既存プランが次回編集時に無効になる可能性があります。"
       },
       "fields": {
-        "fxRateUsdVnd": { "label": "為替レート USD→VND", "hint": "USD建てのプロバイダーコストをVNDとして読み取る際に使用します。" },
-        "minimumContractPriceVnd": { "label": "最低契約価格（VND）" },
-        "minimumContractPriceUsd": { "label": "最低契約価格（USD）" },
-        "salesUsageWeight": { "label": "販売ウェイト・利用量" },
-        "salesMembersWeight": { "label": "販売ウェイト・メンバー数" },
-        "salesLanguagesWeight": { "label": "販売ウェイト・言語数" },
-        "salesAiServicesWeight": { "label": "販売ウェイト・AIサービス" },
-        "defaultOverageCapRatio": { "label": "デフォルトの超過上限比率" },
-        "defaultInvoiceTermsDays": { "label": "デフォルトの請求書支払期限（日）" },
-        "defaultInvoiceGraceHours": { "label": "デフォルトの請求書猶予期間（時間）" },
-        "cartesiaUsdPerCredit": { "label": "Cartesia 1 クレジットあたりの USD", "hint": "計測された Cartesia クレジット × この値 × 為替レートが Insights の吹き替えコストになります。空欄の場合は現在の値を維持します。" }
+        "fxRateUsdVnd": {
+          "label": "為替レート USD→VND",
+          "hint": "USD建てのプロバイダーコストをVNDとして読み取る際に使用します。"
+        },
+        "minimumContractPriceUsd": {
+          "label": "最低契約価格（USD）"
+        },
+        "salesUsageWeight": {
+          "label": "販売ウェイト・利用量"
+        },
+        "salesMembersWeight": {
+          "label": "販売ウェイト・メンバー数"
+        },
+        "salesLanguagesWeight": {
+          "label": "販売ウェイト・言語数"
+        },
+        "salesAiServicesWeight": {
+          "label": "販売ウェイト・AIサービス"
+        },
+        "defaultOverageCapRatio": {
+          "label": "デフォルトの超過上限比率"
+        },
+        "defaultInvoiceTermsDays": {
+          "label": "デフォルトの請求書支払期限（日）"
+        },
+        "defaultInvoiceGraceHours": {
+          "label": "デフォルトの請求書猶予期間（時間）"
+        },
+        "cartesiaUsdPerCredit": {
+          "label": "Cartesia 1 クレジットあたりの USD",
+          "hint": "計測された Cartesia クレジット × この値 × 為替レートが Insights の吹き替えコストになります。空欄の場合は現在の値を維持します。"
+        }
       },
       "cancel": "キャンセル",
       "save": "設定を保存",

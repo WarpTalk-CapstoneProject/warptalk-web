@@ -9,6 +9,7 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -585,4 +586,48 @@ test("translation languages come back in a stable order", () => {
     translationLanguagesOf({ attendance: emptyAttendance(), sections: [], votes: [] }),
     [],
   );
+});
+
+/**
+ * WT-652: Ctrl+P on the minutes came out shifted right and cut off after one page.
+ *
+ * The print root was `position: absolute; inset: 0`, and absolute resolves against the nearest
+ * POSITIONED ancestor — the app shell's `relative` content box, right of a sidebar that
+ * `visibility: hidden` leaves at full width. The same viewport-tall, `overflow: hidden` ancestors
+ * clipped everything past the first screen. None of this shows on screen, and no typecheck or
+ * build notices it; the stylesheet text is the only thing a test here can hold on to.
+ */
+test("WT-652: printing takes the app shell out of the way instead of positioning around it", () => {
+  const source = readFileSync(
+    new URL("../../../components/rooms/minutes-document.tsx", import.meta.url),
+    "utf8",
+  );
+  const print = source.slice(source.indexOf("@media print {"));
+  const modern = print.slice(print.indexOf("@supports selector(:has(*))"));
+  assert.ok(print.includes("@supports selector(:has(*))"), "the :has() print path is gone");
+
+  // Everything that is not the document, inside it, or one of its ancestors takes no space.
+  assert.match(
+    modern,
+    /body \*:not\(\.mdoc-print-root\):not\(:has\(\.mdoc-print-root\)\):not\(\.mdoc-print-root \*\)\s*\{\s*display: none !important;/,
+  );
+  // Every ancestor stops offsetting and clipping.
+  const ancestors = modern.slice(modern.indexOf("body *:has(.mdoc-print-root) {"));
+  for (const declaration of [
+    "position: static !important",
+    "overflow: visible !important",
+    "height: auto !important",
+    "max-height: none !important",
+    "margin: 0 !important",
+    "padding: 0 !important",
+  ]) {
+    assert.ok(ancestors.slice(0, ancestors.indexOf("}")).includes(declaration), declaration);
+  }
+  // And the document itself is back in normal flow, so it starts at the sheet's corner and breaks
+  // across pages like any other block.
+  assert.match(modern, /\.mdoc-print-root \{ position: static !important;/);
+
+  // Page 2 onward keeps the template's margins: @page has none, so the page box carries them.
+  assert.match(print, /@page \{ size: A4; margin: 0; \}/);
+  assert.match(print, /\.mdoc-page \{[^}]*box-decoration-break: clone;/);
 });

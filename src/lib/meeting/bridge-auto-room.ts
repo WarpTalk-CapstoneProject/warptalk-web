@@ -1,5 +1,18 @@
 /**
- * What to do when the desktop app sees a Google Meet call that no WarpTalk room accounts for.
+ * What to do when the desktop app sees a Google Meet call: CLAIM it (W4b part 1, WT-868).
+ *
+ * W4b: THE CLAIM REPLACES THE CREATE
+ *   This used to create a room (`POST /translation-rooms`) unless the shell's room list already had
+ *   one for the call. That gave every WarpTalk user in the same Meet call their own room, each
+ *   capturing the far side. The backend now owns "one room per Meet code per workspace":
+ *   `POST /translation-rooms/bridge/claim` finds or creates it, seats the caller, and says whether
+ *   this desktop is the CAPTURER (publishes the far side) or a MEMBER (its own mic only) — see
+ *   lib/meeting/bridge-capturer. So the client no longer decides reuse-vs-create, and no longer
+ *   refuses on `canCreateMeetings`: a member may JOIN a call's room without the create permission,
+ *   and when there is nothing to join the server refuses the create in its own words.
+ *
+ *   The language planning below is unchanged. It is the claim body: used to CREATE when nobody has,
+ *   and `sourceLanguage` is also this user's own language when joining.
  *
  * THE FLOW THIS REPLACES
  *   It used to open a separate window asking "Translate this call with WarpTalk?" with a language
@@ -33,26 +46,13 @@
  * Pure, so every rule above is testable without a desktop build.
  */
 
-import { extractMeetCodeFromUrl } from "./bridge-trigger.ts";
-import { isExternalBridge, EXTERNAL_BRIDGE_TYPE } from "./meeting-types.ts";
 import { suggestLanguageProfile, normalizeLanguage } from "../language/language-profile.ts";
 import { planBridgeRoomLanguages } from "./bridge-far-side-language.ts";
+import type { BridgeTriggerState } from "./bridge-trigger.ts";
 
-export interface BridgeAutoRoomCandidate {
-  id: string;
-  translationRoomType?: string | null;
-  externalMeetingUrl?: string | null;
-  /** Whether the room can still be joined; a finished room is not reused. */
-  joinable: boolean;
-}
-
-export interface BridgeAutoRoomInput {
+export interface BridgeClaimPlanInput {
   /** The room code the desktop sensor read off the browser's address bar. */
   meetCode?: string | null;
-  /** The workspace's rooms the shell already has. */
-  rooms: readonly BridgeAutoRoomCandidate[];
-  /** This member's flag in the active workspace; null means not known, which is not a refusal. */
-  canCreateMeetings: boolean | null;
   /** The workspace's allowed languages. Empty means unrestricted. */
   allowedLanguages: readonly string[];
   settingsSpeak?: string | null;
@@ -60,53 +60,35 @@ export interface BridgeAutoRoomInput {
   locales?: readonly string[];
 }
 
-export interface BridgeAutoRoomRequest {
-  title: string;
-  translationRoomType: typeof EXTERNAL_BRIDGE_TYPE;
+/** The body of `POST /translation-rooms/bridge/claim`, minus the workspace (the caller adds it). */
+export interface BridgeClaimBody {
+  /** The bare, lower-case Meet code. The server also accepts a link; the code is what is keyed on. */
+  meetCode: string;
+  /** This user's language: the room's source when creating, their speak/listen when joining. */
   sourceLanguage: string;
   /** The far side's language first, so a server that predates `externalMeetingLanguage` agrees. */
   targetLanguages: string[];
   /** What the other side of the call speaks: the stand-in participant's language. */
   externalMeetingLanguage: string;
-  externalProvider: "GOOGLE_MEET";
-  externalMeetingUrl: string;
 }
 
-export type BridgeAutoRoomPlan =
+export type BridgeClaimPlan =
   | { kind: "wait" }
-  | { kind: "reuse"; roomId: string }
   | {
-      kind: "create";
-      request: BridgeAutoRoomRequest;
+      kind: "claim";
+      body: BridgeClaimBody;
       /**
-       * False when the workspace allows only the host's language, so both seats share it and the
-       * room will translate nothing. The room is still made; the popup says why.
+       * False when the workspace allows only the host's language, so both seats share it and a
+       * room created from this will translate nothing. Still claimed; the popup says why.
        */
       translatable: boolean;
-    }
-  | { kind: "refuse"; reason: string };
+    };
 
 const MEET_CODE = /^[a-z]{3,4}-[a-z]{3,4}-[a-z]{3,4}$/;
 
-export const NO_CREATE_PERMISSION_REASON =
-  "You do not have permission to create meetings in this workspace. Ask a workspace admin to turn it on.";
-
-export function planBridgeAutoRoom(input: BridgeAutoRoomInput): BridgeAutoRoomPlan {
+export function planBridgeClaim(input: BridgeClaimPlanInput): BridgeClaimPlan {
   const meetCode = input.meetCode?.trim().toLowerCase();
   if (!meetCode || !MEET_CODE.test(meetCode)) return { kind: "wait" };
-
-  // A room the user already has for this exact call wins over making another one - including one
-  // created a minute ago by this very function and not yet back from the list refetch.
-  const existing = input.rooms.find(
-    (room) =>
-      room.joinable &&
-      isExternalBridge(room.translationRoomType) &&
-      extractMeetCodeFromUrl(room.externalMeetingUrl) === meetCode,
-  );
-  if (existing) return { kind: "reuse", roomId: existing.id };
-
-  // Known to be off: say so rather than send a request the server is certain to refuse.
-  if (input.canCreateMeetings === false) return { kind: "refuse", reason: NO_CREATE_PERMISSION_REASON };
 
   const allowed = input.allowedLanguages
     .map((language) => normalizeLanguage(language))
@@ -130,16 +112,41 @@ export function planBridgeAutoRoom(input: BridgeAutoRoomInput): BridgeAutoRoomPl
   const languages = planBridgeRoomLanguages({ speak, allowedLanguages: allowed });
 
   return {
-    kind: "create",
+    kind: "claim",
     translatable: languages.translatable,
-    request: {
-      title: "Google Meet call",
-      translationRoomType: EXTERNAL_BRIDGE_TYPE,
+    body: {
+      meetCode,
       sourceLanguage: languages.sourceLanguage,
       targetLanguages: languages.targetLanguages,
       externalMeetingLanguage: languages.externalMeetingLanguage,
-      externalProvider: "GOOGLE_MEET",
-      externalMeetingUrl: `https://meet.google.com/${meetCode}`,
     },
   };
+}
+
+/**
+ * The Meet code already claimed (or refused) in this stretch of `offer`, after the trigger moved.
+ *
+ * `use-bridge-auto-room` keeps one key so a call gets one claim while the trigger sits in `offer`
+ * for several renders, and a refusal is toasted once rather than every three seconds. The key used
+ * to live forever, which made re-opening the SAME Meet link after its room had ended a dead end:
+ * the trigger answered `offer` again, the key still said "done", and nothing was claimed - the
+ * same symptom as the stale-room incident (prod, 2026-10-03), from the other side.
+ *
+ * WHEN IT RESETS
+ *   On `upcoming`, `ready` or `running`: a room took the trigger, so the claim's job is over and the
+ *   next `offer` for that code is a new call (or the same link after its room ended).
+ *
+ *   NOT on `idle`. The trigger falls to idle every time the user leaves the Meet tab for longer
+ *   than the offer's grace, and comes back to `offer` when they return. A claim that FAILED never
+ *   reaches `ready`, so resetting on idle would re-try - and re-toast, and re-notify - each time
+ *   the user glanced back at the call. One refusal per call is the contract; a new room or a
+ *   different code is what earns another attempt.
+ */
+export function claimKeyAfterTrigger(
+  handledMeetCode: string | null,
+  triggerState: BridgeTriggerState,
+): string | null {
+  return triggerState === "upcoming" || triggerState === "ready" || triggerState === "running"
+    ? null
+    : handledMeetCode;
 }

@@ -21,12 +21,14 @@
  */
 
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
-import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
+import { useTranscriptSpeakerIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { getLanguageName } from "@/lib/language/languages";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
+import { localizeFarSideSpeakerName } from "@/lib/transcript/speaker-identity";
 import {
   transcriptBubbleLines,
   type CleanTranscriptView,
@@ -69,10 +71,17 @@ export function WidgetTranscriptBubble({
   /** WT-716: the Clean view these bubbles were grouped from, or null in Verbatim. */
   cleanView: CleanTranscriptView<TranscriptSegmentDto> | null;
 }) {
+  const t = useTranslations("meetingTranscript");
   // The far side's name is the segment's: in a bridge room it is the stand-in participant, which
-  // has no account, no roster row in this window and no face — only the name the server saved.
-  const speakerName = segment.speakerName || "Speaker";
-  const person = useMeetingIdentity(segment.speakerId, speakerName);
+  // has no account and no face — only the Meet person the server put on the line, or its "nobody
+  // identified" fallback, swapped here for the reader's own label (speaker-identity.ts). The face
+  // is drawn from that name too, never from the stand-in's shared "External Meeting" seat.
+  const speakerName = localizeFarSideSpeakerName(
+    segment.speakerId,
+    segment.speakerName || "Speaker",
+    t("speaker.googleMeetParticipants"),
+  );
+  const person = useTranscriptSpeakerIdentity(segment.speakerId, speakerName);
   const translation = resolveSegmentTranslation(segment, readerLanguage);
   const confidence = confidencePercent(segment.confidence);
 

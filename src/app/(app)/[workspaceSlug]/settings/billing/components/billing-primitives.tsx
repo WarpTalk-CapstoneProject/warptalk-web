@@ -126,6 +126,10 @@ export function StatCell({
   value,
   lines,
   tone = "default",
+  valueTone = "default",
+  badge,
+  meter,
+  actions,
   className,
 }: {
   label: string;
@@ -133,23 +137,43 @@ export function StatCell({
   /** Short factual lines under the number. Pricing, not prose. */
   lines?: ReactNode[];
   tone?: "default" | "warn";
+  /**
+   * Colours the headline number itself. Separate from `tone` (which only tints the little status
+   * square) so the pages that already pass `tone="warn"` keep looking exactly as they did.
+   */
+  valueTone?: "default" | "warn" | "bad";
+  /** A text status next to the label. When given it replaces the colour-only square. */
+  badge?: ReactNode;
+  /** A gauge under the number (see ./credit-meter). Optional and additive. */
+  meter?: ReactNode;
+  /** Buttons at the foot of the cell. */
+  actions?: ReactNode;
   className?: string;
 }) {
   return (
     <GridRow className={className}>
       <div className="flex items-center gap-2">
         <span className="text-[13px] text-ink-muted">{label}</span>
-        <span
-          aria-hidden
-          className={cn(
-            "size-[7px] rounded-[1px]",
-            tone === "warn" ? "bg-amber-500" : "bg-emerald-500",
-          )}
-        />
+        {badge ?? (
+          <span
+            aria-hidden
+            className={cn(
+              "size-[7px] rounded-[1px]",
+              tone === "warn" ? "bg-amber-500" : "bg-emerald-500",
+            )}
+          />
+        )}
       </div>
-      <p className="mt-2 text-[28px] font-semibold leading-none tabular-nums text-ink">
+      <p
+        className={cn(
+          "mt-2 text-[28px] font-semibold leading-none tabular-nums text-ink",
+          valueTone === "warn" && "text-amber-600 dark:text-amber-500",
+          valueTone === "bad" && "text-destructive",
+        )}
+      >
         {value}
       </p>
+      {meter}
       {lines?.length ? (
         <div className="mt-3 space-y-1">
           {lines.map((line, index) => (
@@ -159,6 +183,7 @@ export function StatCell({
           ))}
         </div>
       ) : null}
+      {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
     </GridRow>
   );
 }
@@ -200,15 +225,17 @@ export function Pill({
   tone = "muted",
 }: {
   children: ReactNode;
-  tone?: "muted" | "accent";
+  tone?: "muted" | "accent" | "ok" | "warn" | "bad";
 }) {
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium leading-none",
-        tone === "accent"
-          ? "bg-primary/10 text-primary"
-          : "bg-surface-2 text-ink-muted",
+        tone === "accent" && "bg-primary/10 text-primary",
+        tone === "muted" && "bg-surface-2 text-ink-muted",
+        tone === "ok" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+        tone === "warn" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+        tone === "bad" && "bg-destructive/10 text-destructive",
       )}
     >
       {children}
@@ -246,11 +273,11 @@ export function BillingButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "inline-flex h-[32px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium shadow-none transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-[32px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium shadow-none outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-150 motion-safe:active:translate-y-px",
         tone === "primary" &&
           "bg-primary text-primary-foreground hover:bg-primary/90",
         tone === "outline" &&
-          "border border-border bg-surface-1 text-ink hover:bg-surface-2",
+          "border border-border bg-surface-1 text-ink hover:border-primary/40 hover:bg-surface-2",
         tone === "ghost" && "text-ink-muted hover:bg-surface-2 hover:text-ink",
         tone === "quiet" && "bg-surface-2 text-ink-subtle",
         className,

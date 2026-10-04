@@ -224,11 +224,11 @@ export function compactAxisNumber(value: number): string {
 const moneyFormatters = new Map<string, Intl.NumberFormat>();
 
 /**
- * Axis money: "₫20M", "$1.5K". The full amount belongs in the tooltip and the headline figure; an
+ * Axis money: "$1.5K", "₫20M". The full amount belongs in the tooltip and the headline figure; an
  * axis only has to say which order of magnitude a gridline is. An unknown currency code falls back
  * to "20M XYZ" rather than throwing.
  */
-export function compactMoney(value: number, currency = "VND"): string {
+export function compactMoney(value: number, currency = "USD"): string {
   if (!Number.isFinite(value)) return "—";
   const code = currency.toUpperCase();
   let formatter = moneyFormatters.get(code);

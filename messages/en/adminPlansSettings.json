@@ -72,8 +72,25 @@
     "editConfiguration": "Edit configuration",
     "refresh": "Refresh",
     "filterLabel": "Pricing view",
+    "preview": {
+      "note": "What a buyer sees on Settings → Billing, built from the same component. Pencil adjusts a plan, + adds one. Choose and Upgrade do nothing here.",
+      "includeHidden": "Include hidden plans ({count})",
+      "hidden": "Hidden",
+      "adjust": "Adjust {name}",
+      "addPlan": "Add plan",
+      "error": "The plans could not be loaded.",
+      "retry": "Try again",
+      "active": "Active",
+      "activeToggle": "Show {name} to buyers",
+      "moveLeft": "Move {name} earlier",
+      "moveRight": "Move {name} later",
+      "dragHint": "Drag a card onto another to change the order buyers see, or use ‹ ›. The switch on a card shows or hides it.",
+      "reorderError": "The new order could not be saved. Refresh to see the order that was kept.",
+      "toggleError": "{name} could not be shown or hidden."
+    },
     "tabs": {
       "plans": "Plans",
+      "preview": "Preview",
       "rateCards": "Rate cards",
       "configuration": "Configuration"
     },
@@ -136,6 +153,8 @@
     "billingPolicyHeading": "Billing policy",
     "pricingEconomicsHeading": "Pricing economics",
     "pricingEconomicsSubnote": "The same configuration the plan validator and the rate-card margin reader consult — also reachable from Plans & pricing. Customer prices live in Stripe, so the credit value and the per-credit price floor are no longer edited here; they change by migration.",
+    "meetingCreditRatesHeading": "Meeting credit rates",
+    "meetingCreditRatesSubnote": "What a meeting is charged per second. A change applies to the very next charge; usage already settled keeps the price it was charged at.",
     "languageCatalogHeading": "Language catalog",
     "voiceConsentHeading": "Voice clone consent",
     "voiceConsentCount": "{count, plural, one {# decision recorded} other {# decisions recorded}}",
@@ -155,6 +174,28 @@
       "saveSuccessToast": "Billing policy saved.",
       "saveErrorToast": "The billing policy could not be saved.",
       "errorWhat": "The billing policy"
+    },
+    "meetingCreditRates": {
+      "labels": {
+        "TRANSLATION": "Translation",
+        "AUDIO_DUBBING_STANDARD": "Dubbing, standard voice",
+        "AUDIO_DUBBING_VOICE_CLONE": "Dubbing, cloned voice"
+      },
+      "hints": {
+        "TRANSLATION": "Per second of source speech, for each language it is translated into.",
+        "AUDIO_DUBBING_STANDARD": "Per second of audio rendered with a catalog voice.",
+        "AUDIO_DUBBING_VOICE_CLONE": "Per second of audio rendered with the speaker's cloned voice."
+      },
+      "unit": "credits / second",
+      "perMinute": "≈ {credits} credits per minute",
+      "ariaLabel": "{label}, credits per second",
+      "missing": "No rate card in force",
+      "invalid": "Enter a price above 0, up to {max}, with at most 6 decimals.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saveSuccessToast": "{label} is now {price} credits per second.",
+      "saveErrorToast": "The rate could not be saved.",
+      "errorWhat": "The meeting credit rates"
     },
     "pricingEconomics": {
       "errorWhat": "The pricing configuration",
@@ -179,7 +220,7 @@
       "cartesiaUsdPerCreditValue": "${price} per credit",
       "minimumContractPriceLabel": "Minimum contract price",
       "minimumContractPriceHint": "Per cycle, before a plan is valid.",
-      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "Default invoice terms",
       "defaultInvoiceTermsHint": "Days to pay, and the grace window after that, for plans that do not override them.",
       "defaultInvoiceTermsValue": "{days} days · {hours} h grace",
@@ -309,7 +350,11 @@
         "glossary": "Glossary",
         "dedicatedGpu": "Dedicated GPU",
         "features": "Features",
-        "featuresHint": "The JSON blob the pricing page reads. An array or an object."
+        "featuresHint": "The JSON blob the pricing page reads. An array or an object.",
+        "overagePriceHint": "What one credit costs once the allowance is used up, in {currency}.",
+        "rolloverCapHint": "Unused credits that carry over to the next cycle.",
+        "invoiceTermsHint": "How long an invoice may stay unpaid.",
+        "invoiceGraceHint": "How long the plan keeps working after a missed payment."
       },
       "editDialog": {
         "title": "Edit plan",
@@ -322,7 +367,45 @@
       "cancel": "Cancel",
       "save": "Save plan",
       "saving": "Saving…",
-      "saveError": "The plan could not be saved."
+      "saveError": "The plan could not be saved.",
+      "vat": {
+        "charged": "Buyers pay {total} on Stripe ({percent}% VAT added).",
+        "hint": "Enter the price without VAT. The VAT rate is set in Platform settings.",
+        "off": "VAT is off (0% in Platform settings): buyers pay exactly this price."
+      },
+      "presets": {
+        "custom": "Custom…",
+        "customValue": "Custom value for {label}",
+        "overageCapNone": "No overage — stop at the allowance",
+        "overageCapShare": "Up to {percent}% extra — {credits} credits",
+        "overagePriceSame": "Same as the in-plan credit price",
+        "overagePriceMultiple": "{multiple}× the in-plan credit price",
+        "lowBalanceOff": "No low-balance warning",
+        "lowBalanceShare": "Warn when {percent}% is left — {credits} credits",
+        "rolloverNone": "Nothing carries over",
+        "rolloverShare": "Carry over up to {percent}% — {credits} credits",
+        "termsOnReceipt": "Due on receipt",
+        "termsDays": "{days} days",
+        "graceNone": "No grace — stop at once",
+        "graceDays": "{days, plural, one {# day} other {# days}}",
+        "participants": "{count} participants",
+        "languages": "{count, plural, one {# language} other {# languages}}",
+        "voiceCloneUnlimited": "Unlimited",
+        "voiceCloneMinutes": "{minutes} minutes per cycle"
+      },
+      "featureControls": {
+        "googleMeet": "Google Meet bridge",
+        "googleMeetHint": "Translate Google Meet calls through WarpTalk.",
+        "contractBilling": "Contract billing",
+        "contractBillingHint": "Billed by contract; usage past the cap is invoiced.",
+        "voiceCloneLimit": "Voice-clone limit",
+        "voiceCloneLimitUnset": "Not set",
+        "highlights": "Shown on the pricing page",
+        "highlightsHint": "Tick the lines to list under this plan, or add your own.",
+        "addHighlight": "Add a line",
+        "add": "Add",
+        "keptKeys": "Also kept as they are: {keys}"
+      }
     },
     "rateCard": {
       "editDialog": {
@@ -350,8 +433,7 @@
         "customerPrice": "Customer price",
         "providerCost": "Provider cost",
         "margin": "Margin",
-        "formulaLine": "{formula} · FX {fx} · credit {credit} VND",
-        "vndSuffix": "(VND)"
+        "formulaLine": "{formula} · credit {credit} USD"
       },
       "errors": {
         "previewStale": "Cost or markup changed since the preview. Preview again before saving.",
@@ -395,17 +477,38 @@
         "description": "Platform-wide. These are the floors and rates every plan is validated against and every quote is built from, so a change here can make an existing plan invalid on its next edit."
       },
       "fields": {
-        "fxRateUsdVnd": { "label": "FX rate USD→VND", "hint": "How a USD provider cost is read in VND." },
-        "minimumContractPriceVnd": { "label": "Minimum contract price (VND)" },
-        "minimumContractPriceUsd": { "label": "Minimum contract price (USD)" },
-        "salesUsageWeight": { "label": "Sales weight · usage" },
-        "salesMembersWeight": { "label": "Sales weight · members" },
-        "salesLanguagesWeight": { "label": "Sales weight · languages" },
-        "salesAiServicesWeight": { "label": "Sales weight · AI services" },
-        "defaultOverageCapRatio": { "label": "Default overage cap ratio" },
-        "defaultInvoiceTermsDays": { "label": "Default invoice terms (days)" },
-        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" },
-        "cartesiaUsdPerCredit": { "label": "Cartesia USD per credit", "hint": "Measured Cartesia credits × this × FX is the dubbing cost in Insights. Leave blank to keep the stored value." }
+        "fxRateUsdVnd": {
+          "label": "FX rate USD→VND",
+          "hint": "How a USD provider cost is read in VND."
+        },
+        "minimumContractPriceUsd": {
+          "label": "Minimum contract price (USD)"
+        },
+        "salesUsageWeight": {
+          "label": "Sales weight · usage"
+        },
+        "salesMembersWeight": {
+          "label": "Sales weight · members"
+        },
+        "salesLanguagesWeight": {
+          "label": "Sales weight · languages"
+        },
+        "salesAiServicesWeight": {
+          "label": "Sales weight · AI services"
+        },
+        "defaultOverageCapRatio": {
+          "label": "Default overage cap ratio"
+        },
+        "defaultInvoiceTermsDays": {
+          "label": "Default invoice terms (days)"
+        },
+        "defaultInvoiceGraceHours": {
+          "label": "Default invoice grace (hours)"
+        },
+        "cartesiaUsdPerCredit": {
+          "label": "Cartesia USD per credit",
+          "hint": "Measured Cartesia credits × this × FX is the dubbing cost in Insights. Leave blank to keep the stored value."
+        }
       },
       "cancel": "Cancel",
       "save": "Save configuration",

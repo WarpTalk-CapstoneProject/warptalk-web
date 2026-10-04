@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The workspace Usage page, rendered against fixtures.
+ * The workspace Usage surface (Insights → Usage), rendered against fixtures.
  *
  * The page needs a live billing service, a member directory and room history, none of which a
  * laptop can reach, so this is the only place its layout can be looked at before it deploys. It

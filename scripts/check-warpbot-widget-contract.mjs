@@ -184,6 +184,14 @@ const checks = [
     /useRegisterAssistantContext\(/.test(recordPage) &&
       /entityId: group\.roomId,/.test(recordPage),
   ],
+  [
+    // 8. #591 put overflow-hidden on the composer box to round the permission form's corners. The
+    //    "/" and "@" menus are absolutely positioned ABOVE that box, inside it, so both were
+    //    clipped away entirely: typing "@" opened a menu nobody could see (3 Oct).
+    "the composer box does not clip the @ and / menus",
+    /className=\{`\$\{contextInputShellClassName\} relative z-10`\}/.test(widget) &&
+      !/\$\{contextInputShellClassName\}[^`]*overflow-hidden/.test(widget),
+  ],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

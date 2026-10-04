@@ -68,21 +68,31 @@ export function checkoutTotal(plan: PlanDto, interval: BillingInterval): number 
  * It lives beside `checkoutTotal` for the same reason that function exists: an amount and its
  * denomination are one decision, and splitting them across two files is how they drifted.
  *
- * Defaults to VND when there is no plan, which is correct rather than merely safe — the only
- * plan-less purchase is a credit top-up, priced server-side against `credit_value_vnd`.
+ * Defaults to USD (the accounting currency) when there is no plan, which is correct rather than
+ * merely safe — the only plan-less purchase is a credit top-up, priced server-side in USD against
+ * `credit_value_usd`.
  *
  * The server has always handled the rest: `StripePaymentService` passes VND through as a
  * zero-decimal currency and multiplies everything else by 100. It was simply never asked to.
  */
 export function checkoutCurrency(plan?: PlanDto | null): string {
-  return (plan?.currency ?? "vnd").toLowerCase();
+  return (plan?.currency ?? "usd").toLowerCase();
 }
 
-/** The plans a buyer may choose from, in the order the platform wants them shown. */
-export function selectablePlans(plans: PlanDto[]): PlanDto[] {
-  return plans
-    .filter((plan) => plan.isActive !== false)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+/**
+ * The plans a buyer may choose from, in the order the platform wants them shown.
+ *
+ * Price breaks a sortOrder tie, which is what the Billing page's plan grid always did with its own
+ * copy of this filter. One function now, because Admin → Plans → Preview has to show exactly the
+ * ladder a buyer sees, and two copies of "which plans, in what order" is how they stop agreeing.
+ */
+export function selectablePlans(plans: readonly PlanDto[]): PlanDto[] {
+  return plans.filter((plan) => plan.isActive !== false).sort(comparePlans);
+}
+
+/** The ladder's order: sortOrder, then price. Exported for a preview that also shows hidden plans. */
+export function comparePlans(a: PlanDto, b: PlanDto): number {
+  return a.sortOrder - b.sortOrder || a.price - b.price;
 }
 
 /**
@@ -96,4 +106,17 @@ export function readBillingInterval(
   params: Pick<URLSearchParams, "get"> | null | undefined,
 ): BillingInterval {
   return params?.get("billingCycle")?.trim().toLowerCase() === "yearly" ? "yearly" : "monthly";
+}
+
+/**
+ * The yearly discount as the whole percent a buyer reads on the "Yearly" tab — 21 today.
+ *
+ * Derived from `YEARLY_PRICE_MULTIPLIER` rather than written beside it. The two plans pages each
+ * carried their own literal ("save 21%" on one, "Save 20%" on the Stripe cancel page), and the
+ * second one was simply wrong: it promised a discount the checkout did not give. Rounded, because
+ * `1 - 0.79` is 0.20999… in floating point.
+ */
+export function yearlySavingPercent(multiplier: number = YEARLY_PRICE_MULTIPLIER): number {
+  if (!Number.isFinite(multiplier) || multiplier <= 0 || multiplier >= 1) return 0;
+  return Math.round((1 - multiplier) * 100);
 }

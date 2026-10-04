@@ -24,6 +24,7 @@
  */
 
 import type { BridgeInboundSource } from "./bridge-inbound-connection.ts";
+import type { InboundHealth } from "./bridge-inbound-health.ts";
 
 /** Original at full level: nothing is being played over it. */
 export const FAR_SIDE_MONITOR_FULL = 1;
@@ -49,9 +50,51 @@ export function farSideMonitorGain(
   return voiceEnabled ? clampMeetingAudioLevel(underDub) : FAR_SIDE_MONITOR_FULL;
 }
 
-/** Only a device source took the meeting's audio away from the host's own speakers. */
-export function shouldMonitorFarSide(kind: BridgeInboundSource["kind"]): boolean {
-  return kind === "device";
+/**
+ * Whether the far side is played to the host.
+ *
+ * Only a device source took the meeting's audio away from the host's own speakers.
+ *
+ * WT-900: and while the cable is only standing in for an unanswered loopback question
+ * (`device-while-asking`), only once it demonstrably carries Meet. On that path the host may well
+ * have left Meet's Speakers on their headphones — the wizard told loopback users to — and then Meet
+ * is already in their ears; a copy from the cable on top would be the same voice twice. A cable that
+ * is "listening" is proof Meet plays into it and not to the host, so that is when the copy is due.
+ * Called without `inbound` it answers for the source kind alone, as it always did.
+ */
+export function shouldMonitorFarSide(
+  kind: BridgeInboundSource["kind"],
+  inbound?: { reason?: string | null; health?: InboundHealth | null },
+): boolean {
+  if (kind !== "device") return false;
+  if (inbound?.reason === "device-while-asking") return inbound.health === "listening";
+  return true;
+}
+
+/**
+ * Said once per room to a host whose meeting now listens to the browser but who still has Hi-Fi
+ * Cable installed (WT-898 review).
+ *
+ * Before WT-898 the wizard told every Hi-Fi user to set Meet's Speakers to "Hi-Fi Cable Input",
+ * and WarpTalk played the call back to them through the monitor above. Loopback now wins wherever
+ * it can run, and the monitor only runs on the device path — so a host who followed the old advice
+ * has Meet rendering into a cable nobody plays back, and hears nothing at all. Per-process loopback
+ * may in theory still pick up Meet's render stream on any endpoint, but the host's ears are not
+ * worth that bet. WarpTalk cannot see or change Meet's speaker choice, so all it can do is say so.
+ */
+export const MEET_SPEAKER_RESET_NOTICE =
+  "If you set Google Meet's Speakers to Hi-Fi Cable Input before, set them back to your headphones or speakers — WarpTalk now listens to the browser directly.";
+
+/**
+ * Whether that notice applies: listening to the browser, with the cable the old advice named still
+ * installed. Without the cable the old advice could never have been followed, so there is nothing
+ * to undo; on the device path the monitor plays the call back and the old advice is still right.
+ */
+export function shouldShowMeetSpeakerResetNotice(
+  inboundPath: "device" | "loopback" | null,
+  hasInboundDevice: boolean,
+): boolean {
+  return inboundPath === "loopback" && hasInboundDevice;
 }
 
 export interface FarSideMonitor {

@@ -197,10 +197,10 @@ export function statusTone(status: PackageStatus): Tone {
   return status === "active" ? "positive" : status === "archived" ? "neutral" : "warning";
 }
 
-/** "20%" or "50,000 VND" — the discount as a customer reads it. */
+/** "20%" or "5.00 USD" — the discount as a customer reads it. */
 export function describeDiscount(coupon: Pick<CouponRequest, "discountType" | "percentOff" | "amountOff" | "amountOffCurrency">): string {
   if (coupon.discountType === "percent") return `${coupon.percentOff ?? 0}%`;
-  const currency = (coupon.amountOffCurrency ?? "vnd").toUpperCase();
+  const currency = (coupon.amountOffCurrency ?? "usd").toUpperCase();
   const amount = coupon.amountOff ?? 0;
   return `${currency === "VND" ? Math.round(amount).toLocaleString("en-US") : amount.toFixed(2)} ${currency}`;
 }

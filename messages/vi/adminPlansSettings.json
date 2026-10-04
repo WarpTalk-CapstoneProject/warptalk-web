@@ -72,8 +72,25 @@
     "editConfiguration": "Chỉnh sửa cấu hình",
     "refresh": "Làm mới",
     "filterLabel": "Chế độ xem giá",
+    "preview": {
+      "note": "Đúng giao diện người mua thấy ở Cài đặt → Thanh toán, dùng chung component. Bút chì để chỉnh gói, + để thêm gói. Nút Chọn và Nâng cấp ở đây không có tác dụng.",
+      "includeHidden": "Hiện cả gói đang ẩn ({count})",
+      "hidden": "Đang ẩn",
+      "adjust": "Chỉnh {name}",
+      "addPlan": "Thêm gói",
+      "error": "Không tải được danh sách gói.",
+      "retry": "Thử lại",
+      "active": "Đang bán",
+      "activeToggle": "Hiển thị {name} cho người mua",
+      "moveLeft": "Đưa {name} lên trước",
+      "moveRight": "Đưa {name} ra sau",
+      "dragHint": "Kéo một card thả lên card khác để đổi thứ tự người mua thấy, hoặc dùng ‹ ›. Công tắc trên card để hiện hoặc ẩn plan.",
+      "reorderError": "Không lưu được thứ tự mới. Tải lại trang để xem thứ tự đang được giữ.",
+      "toggleError": "Không hiện/ẩn được {name}."
+    },
     "tabs": {
       "plans": "Gói",
+      "preview": "Xem trước",
       "rateCards": "Bảng giá đơn vị",
       "configuration": "Cấu hình"
     },
@@ -136,6 +153,8 @@
     "billingPolicyHeading": "Chính sách thanh toán",
     "pricingEconomicsHeading": "Cấu trúc giá",
     "pricingEconomicsSubnote": "Cùng một cấu hình mà bộ kiểm tra gói và bộ đọc biên lợi nhuận bảng giá tham chiếu — cũng có thể truy cập từ Gói & bảng giá. Giá bán cho khách hàng do Stripe quản lý, nên giá trị 1 credit và giá sàn mỗi credit không còn được chỉnh ở đây; chúng chỉ thay đổi qua migration.",
+    "meetingCreditRatesHeading": "Mức trừ credit của cuộc họp",
+    "meetingCreditRatesSubnote": "Số credit một cuộc họp bị trừ cho mỗi giây. Thay đổi có hiệu lực từ lần trừ kế tiếp; phần đã trừ giữ nguyên mức giá cũ.",
     "languageCatalogHeading": "Danh mục ngôn ngữ",
     "voiceConsentHeading": "Đồng ý nhân bản giọng nói",
     "voiceConsentCount": "{count, plural, other {# quyết định đã ghi nhận}}",
@@ -155,6 +174,28 @@
       "saveSuccessToast": "Đã lưu chính sách thanh toán.",
       "saveErrorToast": "Không thể lưu chính sách thanh toán.",
       "errorWhat": "chính sách thanh toán"
+    },
+    "meetingCreditRates": {
+      "labels": {
+        "TRANSLATION": "Dịch",
+        "AUDIO_DUBBING_STANDARD": "Lồng tiếng, giọng tiêu chuẩn",
+        "AUDIO_DUBBING_VOICE_CLONE": "Lồng tiếng, giọng clone"
+      },
+      "hints": {
+        "TRANSLATION": "Mỗi giây lời nói gốc, tính cho từng ngôn ngữ được dịch sang.",
+        "AUDIO_DUBBING_STANDARD": "Mỗi giây âm thanh tạo bằng giọng trong danh mục.",
+        "AUDIO_DUBBING_VOICE_CLONE": "Mỗi giây âm thanh tạo bằng giọng clone của người nói."
+      },
+      "unit": "credit / giây",
+      "perMinute": "≈ {credits} credit mỗi phút",
+      "ariaLabel": "{label}, credit mỗi giây",
+      "missing": "Chưa có rate card đang áp dụng",
+      "invalid": "Nhập mức giá lớn hơn 0, tối đa {max}, không quá 6 chữ số thập phân.",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "saveSuccessToast": "{label} hiện là {price} credit mỗi giây.",
+      "saveErrorToast": "Không lưu được mức giá.",
+      "errorWhat": "Mức trừ credit của cuộc họp"
     },
     "pricingEconomics": {
       "errorWhat": "cấu hình giá",
@@ -179,7 +220,7 @@
       "cartesiaUsdPerCreditValue": "${price} mỗi credit",
       "minimumContractPriceLabel": "Giá hợp đồng tối thiểu",
       "minimumContractPriceHint": "Theo mỗi chu kỳ, trước khi một gói được coi là hợp lệ.",
-      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "minimumContractPriceValue": "${usd}",
       "defaultInvoiceTermsLabel": "Thời hạn thanh toán hóa đơn mặc định",
       "defaultInvoiceTermsHint": "Số ngày để thanh toán, và khoảng thời gian gia hạn sau đó, cho các gói không đặt riêng giá trị này.",
       "defaultInvoiceTermsValue": "{days} ngày · gia hạn {hours} giờ",
@@ -309,7 +350,11 @@
         "glossary": "Bảng thuật ngữ",
         "dedicatedGpu": "GPU riêng",
         "features": "Tính năng",
-        "featuresHint": "Khối JSON mà trang bảng giá đọc. Có thể là mảng hoặc object."
+        "featuresHint": "Khối JSON mà trang bảng giá đọc. Có thể là mảng hoặc object.",
+        "overagePriceHint": "Giá một credit khi đã dùng hết hạn mức, tính bằng {currency}.",
+        "rolloverCapHint": "Credit chưa dùng được chuyển sang kỳ sau.",
+        "invoiceTermsHint": "Hoá đơn được để chưa thanh toán trong bao lâu.",
+        "invoiceGraceHint": "Plan còn chạy bao lâu sau khi lỡ một lần thanh toán."
       },
       "editDialog": {
         "title": "Chỉnh sửa gói",
@@ -322,7 +367,45 @@
       "cancel": "Hủy",
       "save": "Lưu gói",
       "saving": "Đang lưu…",
-      "saveError": "Không thể lưu gói."
+      "saveError": "Không thể lưu gói.",
+      "vat": {
+        "charged": "Người mua trả {total} trên Stripe (đã cộng {percent}% VAT).",
+        "hint": "Nhập giá CHƯA gồm VAT. Mức VAT chỉnh trong Platform settings.",
+        "off": "VAT đang tắt (0% trong Platform settings): người mua trả đúng giá này."
+      },
+      "presets": {
+        "custom": "Tuỳ chỉnh…",
+        "customValue": "Giá trị tuỳ chỉnh cho {label}",
+        "overageCapNone": "Không cho vượt — dừng khi hết hạn mức",
+        "overageCapShare": "Vượt tối đa {percent}% — {credits} credit",
+        "overagePriceSame": "Bằng giá credit trong plan",
+        "overagePriceMultiple": "Gấp {multiple} lần giá credit trong plan",
+        "lowBalanceOff": "Không cảnh báo sắp hết",
+        "lowBalanceShare": "Cảnh báo khi còn {percent}% — {credits} credit",
+        "rolloverNone": "Không chuyển sang kỳ sau",
+        "rolloverShare": "Chuyển tối đa {percent}% — {credits} credit",
+        "termsOnReceipt": "Thanh toán ngay khi nhận",
+        "termsDays": "{days} ngày",
+        "graceNone": "Không gia hạn — dừng ngay",
+        "graceDays": "{days} ngày",
+        "participants": "{count} người",
+        "languages": "{count} ngôn ngữ",
+        "voiceCloneUnlimited": "Không giới hạn",
+        "voiceCloneMinutes": "{minutes} phút mỗi kỳ"
+      },
+      "featureControls": {
+        "googleMeet": "Cầu nối Google Meet",
+        "googleMeetHint": "Dịch cuộc gọi Google Meet qua WarpTalk.",
+        "contractBilling": "Tính tiền theo hợp đồng",
+        "contractBillingHint": "Thanh toán theo hợp đồng; phần dùng vượt hạn mức được xuất hoá đơn.",
+        "voiceCloneLimit": "Giới hạn clone giọng",
+        "voiceCloneLimitUnset": "Chưa đặt",
+        "highlights": "Hiển thị trên trang bảng giá",
+        "highlightsHint": "Tick các dòng muốn liệt kê dưới plan này, hoặc thêm dòng riêng.",
+        "addHighlight": "Thêm một dòng",
+        "add": "Thêm",
+        "keptKeys": "Được giữ nguyên: {keys}"
+      }
     },
     "rateCard": {
       "editDialog": {
@@ -350,8 +433,7 @@
         "customerPrice": "Giá bán cho khách",
         "providerCost": "Chi phí nhà cung cấp",
         "margin": "Biên lợi nhuận",
-        "formulaLine": "{formula} · Tỷ giá {fx} · credit {credit} VND",
-        "vndSuffix": "(VND)"
+        "formulaLine": "{formula} · credit {credit} USD"
       },
       "errors": {
         "previewStale": "Chi phí hoặc markup đã thay đổi kể từ lần xem trước. Hãy xem trước lại trước khi lưu.",
@@ -395,17 +477,38 @@
         "description": "Áp dụng toàn nền tảng. Đây là các mức sàn và tỷ lệ mà mọi gói được kiểm tra dựa vào và mọi báo giá được xây dựng từ đó, nên một thay đổi ở đây có thể khiến một gói hiện có trở nên không hợp lệ ở lần chỉnh sửa tiếp theo."
       },
       "fields": {
-        "fxRateUsdVnd": { "label": "Tỷ giá USD→VND", "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND." },
-        "minimumContractPriceVnd": { "label": "Giá hợp đồng tối thiểu (VND)" },
-        "minimumContractPriceUsd": { "label": "Giá hợp đồng tối thiểu (USD)" },
-        "salesUsageWeight": { "label": "Trọng số bán hàng · mức sử dụng" },
-        "salesMembersWeight": { "label": "Trọng số bán hàng · thành viên" },
-        "salesLanguagesWeight": { "label": "Trọng số bán hàng · ngôn ngữ" },
-        "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
-        "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
-        "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
-        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
-        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
+        "fxRateUsdVnd": {
+          "label": "Tỷ giá USD→VND",
+          "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND."
+        },
+        "minimumContractPriceUsd": {
+          "label": "Giá hợp đồng tối thiểu (USD)"
+        },
+        "salesUsageWeight": {
+          "label": "Trọng số bán hàng · mức sử dụng"
+        },
+        "salesMembersWeight": {
+          "label": "Trọng số bán hàng · thành viên"
+        },
+        "salesLanguagesWeight": {
+          "label": "Trọng số bán hàng · ngôn ngữ"
+        },
+        "salesAiServicesWeight": {
+          "label": "Trọng số bán hàng · dịch vụ AI"
+        },
+        "defaultOverageCapRatio": {
+          "label": "Tỷ lệ trần vượt mức mặc định"
+        },
+        "defaultInvoiceTermsDays": {
+          "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)"
+        },
+        "defaultInvoiceGraceHours": {
+          "label": "Thời gian gia hạn hóa đơn mặc định (giờ)"
+        },
+        "cartesiaUsdPerCredit": {
+          "label": "Giá USD mỗi credit Cartesia",
+          "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại."
+        }
       },
       "cancel": "Hủy",
       "save": "Lưu cấu hình",

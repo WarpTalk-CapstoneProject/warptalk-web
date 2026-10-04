@@ -291,6 +291,7 @@
       "rate_card_upserted": "Rate card published",
       "rate_card_deactivated": "Rate card retired",
       "rate_card_provider_cost_set": "Provider cost set",
+      "rate_card_credit_price_set": "Meeting credit rate changed",
       "pricing_config_updated": "Pricing settings changed",
       "billing_policy_updated": "Billing policy changed",
       "subscription_contract_created": "Contract created",
@@ -360,7 +361,9 @@
       "setting_reset": "Platform setting reset",
       "setting_reverted": "Platform setting reverted",
       "setting_imported": "Platform settings imported",
-      "settings_exported": "Platform settings exported"
+      "settings_exported": "Platform settings exported",
+      "glossary_template_updated": "Glossary import template saved",
+      "glossary_template_reset": "Glossary import template reset"
     },
     "entities": {
       "workspace": "Workspace",
@@ -393,7 +396,8 @@
       "credit_pack": "Credit pack",
       "addon": "Add-on",
       "coupon": "Coupon",
-      "platform_setting": "Platform setting"
+      "platform_setting": "Platform setting",
+      "glossary_import_template": "Glossary import template"
     },
     "sources": {
       "workspace_service": "Workspace",

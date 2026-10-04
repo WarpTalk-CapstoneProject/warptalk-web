@@ -12,8 +12,18 @@
  *   positioned against.
  *
  * WHAT IS HERE, AND WHAT IS NOT
+ *   Microphone ›         voice mode only: the microphone WarpTalk records, since Meet's own stays
+ *                        on the cable (settings/mic-device-panel.tsx, PO 2026-10-03)
  *   Mic noise filter ›   the caller's own STT denoising (settings/mic-noise-filter-panel.tsx)
- *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx)
+ *   Voice ›              a slot for the shared VoicePanel (settings/voice-panel-slot.tsx), then,
+ *                        for the room host, Voice clone mode: whose voice on the Meet side may
+ *                        be cloned (settings/voice-clone-mode-block.tsx, WT-933)
+ *   Meet hears you ›     text-only bridge: Translated voice (VB-CABLE) or Your own voice (real mic,
+ *                        text only). Once live only voice → text is offered (audio-mode-choice.tsx).
+ *   Device settings      opens the bridge setup wizard IN THE MAIN WINDOW (relay `open-setup`).
+ *                        WT-868 removes the main window's own bridge widget, which was the only
+ *                        way back into the wizard after the first device check; this is now that
+ *                        way. Disabled, saying why, with no main window to ask.
  *   Flash mode           room speed; the host flips it, everyone else reads it
  *
  *   Not "Noise suppression": in a bridge room nobody hears the raw mic, so Krisp only affects
@@ -28,25 +38,38 @@
  */
 
 import { useEffect, useId, useRef, useState } from "react";
-import { GearSix, Lightning, Microphone, SpeakerHigh } from "@phosphor-icons/react/dist/ssr";
+import {
+  GearSix,
+  Headset,
+  Lightning,
+  Microphone,
+  MicrophoneStage,
+  SlidersHorizontal,
+  SpeakerHigh,
+} from "@phosphor-icons/react/dist/ssr";
 import { AnimatePresence, motion } from "motion/react";
+import { useTranslations } from "next-intl";
 
 import { noiseReductionLabel } from "@/lib/meeting/noise-reduction";
 import { cn } from "@/lib/utils";
 
+import { BridgeAudioModeChoice } from "./audio-mode-choice";
 import { DockIconButton } from "./dock-icon-button";
 import { FlashModeRow } from "./settings/flash-mode-row";
+import { MicDeviceOptions, useBridgeMicDevices, useBridgeMicSummary } from "./settings/mic-device-panel";
 import { MicNoiseFilterOptions, useMicNoiseFilterMode } from "./settings/mic-noise-filter-panel";
 import { SettingsPanelHeader, SettingsRow } from "./settings/settings-rows";
+import { VoiceCloneModeBlock } from "./settings/voice-clone-mode-block";
 import { VoicePanelSlot } from "./settings/voice-panel-slot";
 import { useBridgeWidget } from "./widget-context";
 
-type SettingsSection = "root" | "microphone" | "voice";
+type SettingsSection = "root" | "micDevice" | "microphone" | "voice" | "audioMode";
 
 const FLYOUT_LABEL = "Voice & translation settings";
 
 export function SettingsFlyout() {
-  const { roomId, isHost } = useBridgeWidget();
+  const tWidget = useTranslations("rooms.bridgeWidget");
+  const { roomId, isHost, relay, relayConnected, audioMode } = useBridgeWidget();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("root");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +80,9 @@ export function SettingsFlyout() {
 
   // Read here rather than inside the sub-panel so the root row can name the current mode.
   const noiseReductionMode = useMicNoiseFilterMode(roomId);
+  // The same for the microphone, voice mode only; listed only while the flyout is open.
+  const micDevices = useBridgeMicDevices(open && audioMode === "voice");
+  const micSummary = useBridgeMicSummary(micDevices);
 
   function close({ returnFocus = false } = {}) {
     setOpen(false);
@@ -152,6 +178,16 @@ export function SettingsFlyout() {
           >
             {section === "root" ? (
               <>
+                {audioMode === "voice" ? (
+                  <SettingsRow
+                    label={tWidget("micDevice.settingsRow")}
+                    icon={<Headset className="h-4 w-4" />}
+                    value={micSummary.label ?? tWidget("micDevice.unknown")}
+                    hint={micSummary.virtual ? tWidget("micDevice.virtual", { label: micSummary.label ?? "" }) : undefined}
+                    onClick={() => setSection("micDevice")}
+                    hasSubmenu
+                  />
+                ) : null}
                 <SettingsRow
                   label="Mic noise filter"
                   icon={<Microphone className="h-4 w-4" />}
@@ -165,6 +201,24 @@ export function SettingsFlyout() {
                   onClick={() => setSection("voice")}
                   hasSubmenu
                 />
+                {audioMode ? (
+                  <SettingsRow
+                    label={tWidget("audioMode.settingsRow")}
+                    icon={<MicrophoneStage className="h-4 w-4" />}
+                    value={tWidget(`audioMode.${audioMode}`)}
+                    onClick={() => setSection("audioMode")}
+                    hasSubmenu
+                  />
+                ) : null}
+                <SettingsRow
+                  label="Device settings"
+                  icon={<SlidersHorizontal className="h-4 w-4" />}
+                  disabled={!relayConnected}
+                  hint={relayConnected ? tWidget("devices.hint") : tWidget("relay.noHost")}
+                  onClick={() => {
+                    if (relay.openSetup()) close();
+                  }}
+                />
                 {/* Apart from the rows above, with its own heading, as in the meeting: those are
                     about this user; this one changes the room for everybody in it. */}
                 <div className="my-1 h-[1px] bg-surface-3" />
@@ -173,6 +227,17 @@ export function SettingsFlyout() {
                   Room speed
                 </p>
                 <FlashModeRow roomId={roomId} isHost={isHost} />
+              </>
+            ) : null}
+
+            {section === "micDevice" ? (
+              <>
+                <SettingsPanelHeader
+                  ref={backRef}
+                  title={tWidget("micDevice.title")}
+                  onBack={() => setSection("root")}
+                />
+                <MicDeviceOptions devices={micDevices} onPicked={() => close({ returnFocus: true })} />
               </>
             ) : null}
 
@@ -191,10 +256,24 @@ export function SettingsFlyout() {
               </>
             ) : null}
 
+            {section === "audioMode" ? (
+              <>
+                <SettingsPanelHeader
+                  ref={backRef}
+                  title={tWidget("audioMode.label")}
+                  onBack={() => setSection("root")}
+                />
+                <BridgeAudioModeChoice compact />
+              </>
+            ) : null}
+
             {section === "voice" ? (
               <>
                 <SettingsPanelHeader ref={backRef} title="Voice" onBack={() => setSection("root")} />
                 <VoicePanelSlot />
+                {/* WT-933: the host records which Meet-side people agreed to voice cloning. Draws
+                    nothing for anyone else. */}
+                <VoiceCloneModeBlock />
               </>
             ) : null}
           </motion.div>

@@ -133,3 +133,21 @@ Tests: `npm run test:mention-trigger`, `npm run test:message-mentions`.
 
 Known limitation: only the global WarpBot widget has the namespaces; the Meet-popup pane and the
 in-meeting chat keep their own mention menus.
+
+## GMCAL1001 — a Google Meet card without a Calendar event
+
+Google Meet is now created through the Meet REST API, not as a Calendar event. When the user has
+not connected Google Calendar, the marker carries only `url`, `code` (and `title`); `start`, `end`
+and `calendarUrl` are absent. When Calendar is connected the worker merges the event in, and the
+card looks as before.
+
+- `extractMeetingLinks` accepts such a marker; empty or `null` start/end/calendarUrl read as absent.
+- The card then has **no time line** (`formatMeetingWhen` returns `""` without a usable start, even
+  when an end is given, so there is never a lone "– 16:10" or "Invalid Date") and **no "Open in
+  Calendar"**. Join Google Meet, Copy link and the code's Copy stay.
+- Calendar page: the Week card's Google Meet pill now reads `schedules.chip.googleMeet` instead of
+  hardcoded English. `isGoogleMeetMeeting` moved to `src/lib/meeting/google-meet-meeting.ts`
+  (re-exported from `components/meeting/google-meet-mark.tsx`) so it can be unit-tested.
+
+Tests: `npm run test:meeting-links`; `npm run test:agenda-sections` also runs
+`src/lib/meeting/__tests__/google-meet-meeting.test.ts`.

@@ -13,6 +13,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Archive,
   ArrowCounterClockwise,
+  ArrowDown,
+  ArrowUp,
+  Check,
   Brain,
   CaretDown,
   Eye,
@@ -55,6 +58,7 @@ import {
 } from "@/components/ui/dialog";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import {
   useApproveWorkspaceDocument,
@@ -78,11 +82,26 @@ import {
   DOCUMENT_TAB,
   DUPLICATE_STRATEGY,
   documentMatchesTab,
+  hasPendingRevision,
   parseDuplicateConflict,
   type DocumentTab,
   type DuplicateConflict,
   type DuplicateStrategy,
 } from "@/lib/documents/document-review";
+import {
+  DEFAULT_DOCUMENT_DISPLAY,
+  DOCUMENT_FILE_KINDS,
+  DOCUMENT_SORT_FIELDS,
+  EMPTY_DOCUMENT_FILTERS,
+  activeDocumentFilterCount,
+  isDefaultDocumentDisplay,
+  matchesDocumentFilters,
+  sortDocuments,
+  toggleDocumentFileKind,
+  type DocumentDisplayOptions,
+  type DocumentListFilters,
+  type DocumentSortField,
+} from "@/lib/documents/document-list-options";
 
 /**
  * WT-666: the name is trimmed before it is measured, and 255 is the column width.
@@ -142,6 +161,9 @@ export default function WorkspaceDocumentsPage() {
   const [page, setPage] = useState(1);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  // WT-895: what the Filter and Display buttons open. Both were icon buttons with no handler.
+  const [listFilters, setListFilters] = useState<DocumentListFilters>(EMPTY_DOCUMENT_FILTERS);
+  const [display, setDisplay] = useState<DocumentDisplayOptions>(DEFAULT_DOCUMENT_DISPLAY);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -408,7 +430,7 @@ export default function WorkspaceDocumentsPage() {
   // count here — the API filters the list per caller — so the chip hides at zero like Rejected.
   const privateCount = countIn(DOCUMENT_TAB.PRIVATE);
 
-  const filteredDocs = rawDocsList.filter((doc) => {
+  const categoryDocs = rawDocsList.filter((doc) => {
     if (isStatusTab(activeCategory)) {
       return documentMatchesTab(doc, activeCategory);
     }
@@ -431,6 +453,20 @@ export default function WorkspaceDocumentsPage() {
     }
     return true; // "all"
   });
+  // WT-895: the Filter popover narrows within the chip's slice, and Display orders what is left.
+  const filteredDocs = sortDocuments(
+    categoryDocs.filter((doc) => matchesDocumentFilters(doc, listFilters, currentUser?.id)),
+    display,
+    locale,
+  );
+  const filterCount = activeDocumentFilterCount(listFilters);
+  const sortLabels: Record<DocumentSortField, string> = {
+    modified: t("listOptions.sort.modified"),
+    name: t("listOptions.sort.name"),
+    size: t("listOptions.sort.size"),
+  };
+  const menuItemClass =
+    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-ink transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none";
 
   return (
     <div className="flex h-full flex-col bg-panel px-4 pb-12 text-ink">
@@ -524,22 +560,159 @@ export default function WorkspaceDocumentsPage() {
             clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
             inputClassName="h-[26px] text-[12px]"
           />
-          <button
-            className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={t("filterOptions")}
-          >
-            <Funnel className="h-3.5 w-3.5" />
-            {activeCategory !== "all" && (
-              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
-            )}
-          </button>
+          <Popover>
+            <PopoverTrigger
+              className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground data-popup-open:bg-surface-2 data-popup-open:text-foreground"
+              title={t("filterOptions")}
+              aria-label={t("filterOptions")}
+            >
+              <Funnel className="h-3.5 w-3.5" />
+              {activeCategory !== "all" || filterCount > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              ) : null}
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 gap-1 p-1.5">
+              <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+                {t("listOptions.fileType")}
+              </p>
+              {DOCUMENT_FILE_KINDS.map((kind) => {
+                const checked = listFilters.fileKinds.includes(kind);
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={checked}
+                    onClick={() => setListFilters((current) => toggleDocumentFileKind(current, kind))}
+                    className={menuItemClass}
+                  >
+                    <span className="grid size-4 place-items-center">
+                      {checked ? <Check className="size-3.5 text-primary" /> : null}
+                    </span>
+                    {t(`listOptions.kinds.${kind}`)}
+                  </button>
+                );
+              })}
+              <div className="my-1 h-px bg-hairline/60" />
+              <label className="flex items-center justify-between gap-3 px-2 py-1.5 text-[13px] text-ink">
+                {t("listOptions.mineOnly")}
+                <Switch
+                  checked={listFilters.mineOnly}
+                  onCheckedChange={(mineOnly) =>
+                    setListFilters((current) => ({ ...current, mineOnly: Boolean(mineOnly) }))
+                  }
+                />
+              </label>
+              {filterCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setListFilters(EMPTY_DOCUMENT_FILTERS)}
+                  className={`${menuItemClass} justify-center text-ink-muted`}
+                >
+                  {t("listOptions.clearFilters")}
+                </button>
+              ) : null}
+            </PopoverContent>
+          </Popover>
 
-          <button
-            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={t("displayOptions")}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-          </button>
+          <Popover>
+            <PopoverTrigger
+              className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground data-popup-open:bg-surface-2 data-popup-open:text-foreground"
+              title={t("displayOptions")}
+              aria-label={t("displayOptions")}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {isDefaultDocumentDisplay(display) ? null : (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              )}
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 gap-1 p-1.5">
+              <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+                {t("listOptions.layout")}
+              </p>
+              <div className="grid grid-cols-2 gap-1 px-1" role="radiogroup" aria-label={t("listOptions.layout")}>
+                {(["list", "grid"] as const).map((mode) => {
+                  const Icon = mode === "list" ? List : SquaresFour;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="radio"
+                      aria-checked={viewMode === mode}
+                      onClick={() => setViewMode(mode)}
+                      className={`flex items-center justify-center gap-1.5 rounded-md border py-1.5 text-[12px] transition-colors ${
+                        viewMode === mode
+                          ? "border-border bg-surface-2 font-medium text-ink"
+                          : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {mode === "list" ? t("listView") : t("gridView")}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="my-1 h-px bg-hairline/60" />
+              <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+                {t("listOptions.orderBy")}
+              </p>
+              {DOCUMENT_SORT_FIELDS.map((field) => {
+                const selected = display.sortField === field;
+                return (
+                  <button
+                    key={field}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() =>
+                      setDisplay((current) =>
+                        current.sortField === field
+                          ? current
+                          : // Names read A→Z; dates and sizes read biggest/newest first.
+                            { sortField: field, sortDirection: field === "name" ? "asc" : "desc" },
+                      )
+                    }
+                    className={menuItemClass}
+                  >
+                    <span className="grid size-4 place-items-center">
+                      {selected ? <Check className="size-3.5 text-primary" /> : null}
+                    </span>
+                    {sortLabels[field]}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() =>
+                  setDisplay((current) => ({
+                    ...current,
+                    sortDirection: current.sortDirection === "asc" ? "desc" : "asc",
+                  }))
+                }
+                className={menuItemClass}
+              >
+                <span className="grid size-4 place-items-center">
+                  {display.sortDirection === "asc" ? (
+                    <ArrowUp className="size-3.5" />
+                  ) : (
+                    <ArrowDown className="size-3.5" />
+                  )}
+                </span>
+                {display.sortDirection === "asc"
+                  ? t("listOptions.ascending")
+                  : t("listOptions.descending")}
+              </button>
+              {isDefaultDocumentDisplay(display) ? null : (
+                <button
+                  type="button"
+                  onClick={() => setDisplay(DEFAULT_DOCUMENT_DISPLAY)}
+                  className={`${menuItemClass} justify-center text-ink-muted`}
+                >
+                  {t("listOptions.resetDisplay")}
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
 
           <div className="h-4 w-px bg-hairline/50 mx-1" />
 
@@ -713,6 +886,13 @@ export default function WorkspaceDocumentsPage() {
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
                           <Info className="h-3 w-3 text-amber-500" />
                           <span>{t("status.pendingApproval")}</span>
+                        </span>
+                      ) : hasPendingRevision(doc) ? (
+                        // WT-854 — still published (readers keep the approved file), but a
+                        // corrected version is waiting for a reviewer.
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                          <Info className="h-3 w-3 text-amber-500" />
+                          <span>{t("status.revisionPending")}</span>
                         </span>
                       ) : !doc.isAiAllowed ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">

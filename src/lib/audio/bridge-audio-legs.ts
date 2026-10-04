@@ -38,7 +38,9 @@ export interface BridgeLegHandles {
 }
 
 /**
- * Sends `track` to a specific output device instead of the default one.
+ * Sends a LOCAL `track` — the host's own microphone — to a specific output device instead of the
+ * default one. Never a track that arrived over WebRTC: that is `playRemoteTrackToDevice` below,
+ * and the difference is not cosmetic.
  *
  * Returns the element it created: the audio keeps playing only while that element is alive, so a
  * caller that drops it silently loses the leg.
@@ -62,6 +64,104 @@ export async function playTrackToDevice(
   await element.setSinkId(outputDeviceId);
   await element.play();
   return element;
+}
+
+/** A leg that is playing into a device. */
+export interface DevicePlayback {
+  /** Stops the leg and releases everything it opened. Safe to call more than once. */
+  stop: () => void;
+}
+
+/** AudioContext output selection (Chromium 110+), which lib.dom does not describe yet. */
+type SinkSelectingAudioContext = AudioContext & { setSinkId: (sinkId: string) => Promise<void> };
+type SinkSelectingAudioContextCtor = {
+  new (options?: { sinkId?: string | { type: "none" } }): SinkSelectingAudioContext;
+  prototype: { setSinkId?: unknown };
+};
+
+/** How long the output may take to start before the leg is reported as failed rather than left silent. */
+const REMOTE_PLAYBACK_START_TIMEOUT_MS = 2_000;
+
+/**
+ * Sends a REMOTE track — a dub LiveKit delivered over WebRTC — to a specific output device, and
+ * leaves every other remote track in the page where it was.
+ *
+ * WHY THIS IS NOT playTrackToDevice (production, 2026-10-03: "they hear my dub, I hear none of theirs")
+ *   Chromium renders every remote WebRTC audio track in a page through ONE shared output. An
+ *   <audio> element playing such a track is only a volume on that mix, and `setSinkId` on any one
+ *   of them moves the whole mix. So giving the host's outbound dub the cable as its sink sent
+ *   everything else there too: the far side's dub, meant for the host's own speakers, played into
+ *   Meet's microphone instead — and stayed there after the dub's element was gone, for as long as
+ *   any remote track was still attached. Measured on the desktop's own Electron (42.11.3): two
+ *   remote tracks, one element given the cable and one left on the default device — the default
+ *   device's session goes inactive and the second track's signal shows up on the cable.
+ *
+ * WHAT IT DOES INSTEAD
+ *   The track never gets a sink of its own. WebAudio carries it: an AudioContext whose output IS
+ *   the device reads the track and plays it, which is a separate output stream and leaves the
+ *   shared one alone.
+ *
+ *   The muted element is not decoration. A remote track yields samples to WebAudio only while
+ *   some element is playing it (measured: without one the context runs and the device receives
+ *   digital silence), and in the usual bridge call nothing else is: the host is on Text and hears
+ *   no dub at all. Muted, it adds nothing to the host's speakers.
+ *
+ *   The context starts on no device and is moved to the cable before anything is connected, so
+ *   the dub can never reach the default output on the way, and a device that has gone rejects
+ *   here (`setSinkId` → NotFoundError) instead of leaving a context that silently never starts.
+ */
+export async function playRemoteTrackToDevice(
+  track: MediaStreamTrack,
+  outputDeviceId: string,
+): Promise<DevicePlayback> {
+  const AudioContextCtor = (typeof AudioContext === "undefined" ? undefined : AudioContext) as
+    | SinkSelectingAudioContextCtor
+    | undefined;
+  if (!AudioContextCtor || typeof AudioContextCtor.prototype.setSinkId !== "function") {
+    throw new Error(
+      "This browser cannot choose an audio output device, so the meeting cannot be bridged.",
+    );
+  }
+
+  const keepAlive = new Audio();
+  keepAlive.muted = true;
+  keepAlive.srcObject = new MediaStream([track]);
+
+  let context: SinkSelectingAudioContext | null = null;
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    keepAlive.pause();
+    keepAlive.srcObject = null;
+    // Closing releases the device; a context left open keeps the cable busy for the next leg.
+    void context?.close().catch(() => undefined);
+  };
+
+  try {
+    await keepAlive.play();
+    context = new AudioContextCtor({ sinkId: { type: "none" } });
+    await context.setSinkId(outputDeviceId);
+    context.createMediaStreamSource(new MediaStream([track])).connect(context.destination);
+    // A context the browser will not start plays nothing and says nothing: `resume()` simply
+    // never settles. Bounded, so that is an error the caller can show rather than a silent leg.
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      context.resume(),
+      new Promise<void>((resolve) => {
+        startTimer = setTimeout(resolve, REMOTE_PLAYBACK_START_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(startTimer);
+    if (context.state !== "running") {
+      throw new Error("The audio output for your meeting's microphone did not start.");
+    }
+  } catch (error) {
+    stop();
+    throw error;
+  }
+
+  return { stop };
 }
 
 /**
@@ -89,48 +189,6 @@ export async function captureFarSideAudio(inputDeviceId: string): Promise<MediaS
   return track;
 }
 
-/** What an outbound-only bridge hands back. There is deliberately no track on it. */
-export interface OutboundOnlyLegHandle {
-  /** Stops the playback element. Safe to call more than once. */
-  stop: () => void;
-}
-
-/**
- * Rung 3 of the fallback ladder: the dub goes into the meeting, and nothing comes back.
- *
- * A machine with one free virtual cable can carry the user's translated voice into Google Meet and
- * nothing else. That is a real, useful meeting — the user speaks a language the room does not —
- * and before this it was unreachable: the bridge either ran both legs or ran nothing.
- *
- * WHAT IT DOES NOT DO
- *   There is no capture here and no `inboundTrack` on the handle, because there is no second
- *   device to capture from. That absence is the type's job: a caller cannot accidentally treat
- *   this as a full bridge and then wonder why the far side is never transcribed. It is also why
- *   this is a separate function rather than `openBridgeLegs` with an optional inbound device —
- *   an optional field gets defaulted, a missing field gets noticed.
- *
- *   Publishing a far-side track would be blocked anyway; see the NOT SUFFICIENT ON ITS OWN note
- *   at the top of this file. Nothing here works around it.
- */
-export async function openOutboundLegOnly(options: {
-  /** Dub meant for the far side, as delivered by the meeting session. */
-  farSideDubTrack: MediaStreamTrack;
-  /** Virtual device the meeting app uses as its MICROPHONE. */
-  outboundDeviceId: string;
-}): Promise<OutboundOnlyLegHandle> {
-  const playback = await playTrackToDevice(options.farSideDubTrack, options.outboundDeviceId);
-
-  let stopped = false;
-  return {
-    stop: () => {
-      if (stopped) return;
-      stopped = true;
-      playback.pause();
-      playback.srcObject = null;
-    },
-  };
-}
-
 /**
  * Wires both bridge-only legs and returns what the caller needs to publish and to tear down.
  *
@@ -148,9 +206,10 @@ export async function openBridgeLegs(options: {
 }): Promise<BridgeLegHandles> {
   const inboundTrack = await captureFarSideAudio(options.inboundDeviceId);
 
-  let playback: HTMLAudioElement;
+  // The dub is a remote track: it must not be given a sink of its own (playRemoteTrackToDevice).
+  let playback: DevicePlayback;
   try {
-    playback = await playTrackToDevice(options.farSideDubTrack, options.outboundDeviceId);
+    playback = await playRemoteTrackToDevice(options.farSideDubTrack, options.outboundDeviceId);
   } catch (error) {
     inboundTrack.stop();
     throw error;
@@ -163,8 +222,7 @@ export async function openBridgeLegs(options: {
       if (stopped) return;
       stopped = true;
       inboundTrack.stop();
-      playback.pause();
-      playback.srcObject = null;
+      playback.stop();
     },
   };
 }

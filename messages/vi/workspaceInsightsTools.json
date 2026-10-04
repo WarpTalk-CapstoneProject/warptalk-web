@@ -1,0 +1,81 @@
+{
+  "title": "Công cụ",
+  "notAvailable": "Chưa có dữ liệu",
+  "retry": "Thử lại",
+  "sources": {
+    "builtin": "Có sẵn",
+    "webSearch": "Tìm kiếm web",
+    "plugin": "Plugin",
+    "other": "Khác"
+  },
+  "notices": {
+    "recordingSince": "Bắt đầu ghi nhận từ {date}. Các lượt gọi công cụ WarpBot trước đó không được ghi lại, nên những ngày trước đó không có lượt gọi.",
+    "clamped": "Mỗi lần chỉ đọc được tối đa {days} ngày lượt gọi công cụ, nên tab này hiển thị {from} – {to}."
+  },
+  "summary": {
+    "label": "Công cụ WarpBot",
+    "status": {
+      "idle": "Chưa có lượt gọi",
+      "healthy": "Ổn định",
+      "attention": "Cần xử lý"
+    },
+    "idleHint": "Không có lượt gọi công cụ WarpBot nào trong kỳ này.",
+    "calls": "{count, plural, other {# lượt gọi}}",
+    "successRate": "{rate} thành công",
+    "blocked": "{count} bị chặn theo chính sách",
+    "needsSetup": "{count, plural, other {# cần thiết lập}}",
+    "failed": "{count} thất bại",
+    "medianDuration": "trung vị {duration}",
+    "lastCall": "lần gọi gần nhất {time}",
+    "pluginsLink": "Plugin"
+  },
+  "perDay": {
+    "title": "Lượt gọi theo ngày",
+    "aria": "Lượt gọi công cụ WarpBot mỗi ngày theo nguồn, kèm tỷ lệ thành công",
+    "empty": "Không có lượt gọi công cụ nào trong kỳ này",
+    "figure": "{count, plural, other {# lượt gọi}}",
+    "previous": "{count, plural, other {# lượt gọi}} ở kỳ trước",
+    "successRate": "Tỷ lệ thành công",
+    "dayTotal": "{count, plural, other {# lượt gọi}} trong ngày",
+    "stillToCome": "Chưa tới",
+    "noCalls": "Không có lượt gọi",
+    "utcNote": "Ngày tính theo giờ UTC"
+  },
+  "outcomes": {
+    "title": "Kết quả",
+    "aria": "Lượt gọi công cụ WarpBot theo kết quả",
+    "empty": "Không có kết quả công cụ nào trong kỳ này",
+    "figure": "{rate} thành công",
+    "medianCaption": "Thời gian gọi trung vị {duration}",
+    "noMedian": "Chưa đo được thời gian gọi",
+    "callsSegment": "Lượt gọi",
+    "ok": "Thành công",
+    "error": "Thất bại",
+    "needsSetup": "Cần thiết lập",
+    "blocked": "Bị chặn theo chính sách",
+    "declined": "Bị từ chối",
+    "confirmationRequired": "Chờ xác nhận"
+  },
+  "table": {
+    "title": "Tất cả công cụ",
+    "subtitle": "Mọi công cụ WarpBot đã gọi trong kỳ này: có sẵn, tìm kiếm web và plugin",
+    "chipsLabel": "Lọc theo nguồn",
+    "all": "Tất cả",
+    "empty": "Không có lượt gọi công cụ nào trong kỳ này",
+    "columns": {
+      "tool": "Công cụ",
+      "source": "Nguồn",
+      "calls": "Lượt gọi",
+      "success": "Thành công",
+      "needsSetup": "Cần thiết lập",
+      "blocked": "Bị chặn",
+      "failed": "Thất bại",
+      "median": "Thời gian trung vị",
+      "lastCall": "Lần gọi gần nhất"
+    },
+    "fixMember": "Thành viên tự xử lý các lượt gọi cần thiết lập trong Kết nối của tôi.",
+    "fixOwner": "Bị chặn bởi chính sách của workspace. Owner có thể cho phép lại trên trang plugin.",
+    "whoToFix": "Xem ai trong Hoạt động plugin",
+    "openActivity": "Hoạt động plugin"
+  }
+}

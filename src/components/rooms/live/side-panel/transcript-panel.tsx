@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRef, useEffect, useMemo, useState } from "react";
 import { ClosedCaptioning, PauseCircle } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
@@ -25,6 +26,7 @@ import {
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
+import { localizeFarSideSpeakerName } from "@/lib/transcript/speaker-identity";
 import {
   buildCleanTranscriptView,
   mergeCleanSentences,
@@ -37,7 +39,7 @@ import {
   TranscriptViewModeToggle,
 } from "@/components/rooms/transcript-clean-controls";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
-import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
+import { useTranscriptSpeakerIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import {
   SuggestionBadge,
@@ -57,6 +59,7 @@ import {
 } from "@/hooks/use-transcripts";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { orderedLiveLines } from "@/lib/transcript/live-text";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
 
 /** Within this many pixels of the end counts as "following the live transcript". */
@@ -126,6 +129,7 @@ export function TranscriptPanel({
    */
   transcriptPause?: { paused: boolean; since: string | null };
 }) {
+  const t = useTranslations("meetingLive");
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const hasRestoredRef = useRef(false);
@@ -136,6 +140,12 @@ export function TranscriptPanel({
   // routes them to captions only. What the placeholder counts now that the render filter below
   // rarely has anything left to drop.
   const withheldWhilePaused = useTranslationRoomStore((state) => state.withheldWhilePaused);
+  // Live text: the words of a turn still being spoken, shown under the record while the transcript
+  // is running and replaced by the speaker's final line. See lib/transcript/live-text.ts.
+  const liveLines = useTranslationRoomStore((state) => state.liveLines);
+  // The panel's own pause answer — the one its "Transcript paused" banner draws from — so the
+  // banner and a live line can never disagree about whether words are being written down.
+  const shownLiveLines = transcriptPause?.paused ? [] : orderedLiveLines(liveLines);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
@@ -323,7 +333,7 @@ export function TranscriptPanel({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {pausedNotice}
-        <EmptyPanel text="Start WarpTalk to see live translation here." />
+        <EmptyPanel text={t("transcriptPanel.empty")} />
       </div>
     );
   }
@@ -385,6 +395,9 @@ export function TranscriptPanel({
           </div>
         ))}
       </AnimatePresence>
+      {shownLiveLines.map((live) => (
+        <LiveTextLine key={`live-${live.speakerId}`} speakerName={live.speakerName} text={live.text} />
+      ))}
       {/* Once something has actually been dropped — or once the filter is known to be unable to
           drop anything while the transcript is paused. The banner above already says the
           transcript is paused; this says the different, sharper thing — that the list you are
@@ -398,6 +411,19 @@ export function TranscriptPanel({
           them stranded in the middle of an hour of talking with the newest line somewhere below
           and nothing saying so. */}
       <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
+    </div>
+  );
+}
+
+/**
+ * The words of a turn still being spoken — drawn muted, without a timestamp, because it is not a
+ * line of the record yet. The speaker's final line replaces it.
+ */
+function LiveTextLine({ speakerName, text }: { speakerName: string; text: string }) {
+  return (
+    <div aria-live="polite" className="px-1 py-1.5">
+      <p className="text-[11px] font-medium text-ink-subtle">{speakerName}</p>
+      <p className="text-[13px] leading-snug text-ink-muted">{text}</p>
     </div>
   );
 }
@@ -541,12 +567,20 @@ function TranscriptBubble({
   suggestion?: AiSuggestionDto;
   onDismissSuggestion: (segmentId: string) => void;
 }) {
-  const speakerName = segment.speakerName || "Speaker";
+  const t = useTranslations("meetingTranscript");
+  // A Google Meet line keeps its Meet person's name; only the gateway's "nobody identified"
+  // fallback is swapped for the reader's own label (speaker-identity.ts).
+  const speakerName = localizeFarSideSpeakerName(
+    segment.speakerId,
+    segment.speakerName || "Speaker",
+    t("speaker.googleMeetParticipants"),
+  );
   // The face and the language, from the one map the whole meeting resolves against. The NAME
   // still comes from the segment: resolveTranscriptSpeakerName already guarded it against a
   // roster that hands back a UUID as somebody's display name, and that guard must not be lost
-  // by preferring the roster copy here.
-  const person = useMeetingIdentity(segment.speakerId, speakerName);
+  // by preferring the roster copy here. The transcript variant draws the Google Meet stand-in as
+  // the person on the line, not as its shared "External Meeting" seat.
+  const person = useTranscriptSpeakerIdentity(segment.speakerId, speakerName);
   const translation = resolveSegmentTranslation(segment, readerLanguage);
   // Closed by default. The hint was not asked for, so it announces itself with a badge and
   // waits to be opened rather than pushing the line somebody actually said out of the way.

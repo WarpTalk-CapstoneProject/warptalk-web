@@ -1,6 +1,12 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { roomHistoryService, ROOM_HISTORY_PAGE_SIZE } from "@/services/room-history.service";
 import { shouldPollRoomHistory } from "@/lib/meeting/room-history-mapping";
+import {
+  endedRecordRefetchInterval,
+  finalizingDeadlineDelayMs,
+  ROOM_HISTORY_POLL_MS,
+} from "@/lib/meeting/record-finalizing-poll";
 import type { RoomArtifactStatus, RoomHistoryLoadState } from "@/types/roomHistory";
 
 /**
@@ -8,7 +14,7 @@ import type { RoomArtifactStatus, RoomHistoryLoadState } from "@/types/roomHisto
  * roughly 40s after a meeting ends, so a 10s poll surfaces it without a manual reload while
  * staying cheap. Stops as soon as nothing is generating — see shouldPollRoomHistory.
  */
-const POLL_INTERVAL_MS = 10_000;
+const POLL_INTERVAL_MS = ROOM_HISTORY_POLL_MS;
 
 type RoomHistoryOptions = {
   state?: Exclude<RoomHistoryLoadState, "loading">;
@@ -81,14 +87,49 @@ export function useRoomHistory(workspaceId: string | null, options?: RoomHistory
  * Returns null rather than undefined once the list has loaded and the room is not in it,
  * which is the ordinary case for a meeting that has not ended yet. The caller can then tell
  * "still loading" from "there is nothing here".
+ *
+ * `room` is the room's OWN status and end time (from the room lookup). B4: while the room is
+ * finalizing (WT-930), this view of the query polls every few seconds even when the room is not
+ * in the list — the shared list rule only sees rooms that are in it, so a cached or first answer
+ * without the just-ended room used to stop all polling and leave the finalizing screen up forever.
+ * The poll is the observer's own, so it stops when the page unmounts and once the record resolves.
  */
 export function useEndedRoomRecord(
   workspaceId: string | null,
   roomId: string | null | undefined,
+  room?: { status?: string | null; endedAt?: string | null } | null,
 ) {
+  const status = room?.status ?? null;
+  const endedAt = room?.endedAt ?? null;
   return useQuery({
     ...roomHistoryQuery(workspaceId),
     enabled: Boolean(workspaceId && roomId),
-    select: (data) => data.rooms.find((room) => room.id === roomId) ?? null,
+    select: (data) => data.rooms.find((item) => item.id === roomId) ?? null,
+    refetchInterval: (query: {
+      state: { data?: Awaited<ReturnType<typeof roomHistoryService.listEndedRooms>> };
+    }) => endedRecordRefetchInterval({ rooms: query.state.data?.rooms, roomId, status, endedAt }),
   });
+}
+
+/**
+ * B4: re-renders the caller once the WT-930 finalizing window closes.
+ *
+ * isRecordFinalizing's five-minute cap is evaluated on render, and a page with nothing
+ * re-rendering it never re-evaluated it. One timer to the end of the window makes the screen
+ * resolve on its own. Re-armed after it fires (a client clock behind the server's can need a
+ * second leg), cleared on unmount or when the room's status or end time changes.
+ */
+export function useFinalizingDeadline(room?: { status?: string | null; endedAt?: string | null } | null) {
+  const status = room?.status ?? null;
+  const endedAt = room?.endedAt ?? null;
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const delay = finalizingDeadlineDelayMs({ status, endedAt });
+    if (delay === null) return;
+    const timer = setTimeout(() => setTick((value) => value + 1), delay);
+    return () => clearTimeout(timer);
+  }, [status, endedAt, tick]);
+
+  return tick;
 }

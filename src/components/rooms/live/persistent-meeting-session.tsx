@@ -1,7 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   LiveKitRoom,
@@ -45,14 +52,31 @@ import {
   useSetNoiseReduction,
   useSetVoiceCloneConsent,
   useTranslationRoom,
+  translationRoomQueryKey,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
   useJoinLanguagePolicy,
   useTranslationRoomSessions,
+  useAddRoomLanguage,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { getLanguageName } from "@/lib/language/languages";
 import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import {
+  applyRoomLanguages,
+  parseRoomLanguages,
+} from "@/lib/meeting/room-languages-changed";
+import {
+  classifyLanguageRefusal,
+  describeLanguageRefusal,
+  languageAfterRefusal,
+  languagesHostCanAdd,
+  meetingDeclaredLanguages,
+  meetingPickerLanguages,
+  refusedSides,
+  type LanguageRefusal,
+} from "@/lib/meeting/meeting-language-limit";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -86,13 +110,29 @@ import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
-import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import {
+  useDubVoice,
+  useGrantVoiceConsent,
+  useSetDubVoice,
+  useVoiceConsent,
+  useVoiceProfiles,
+} from "@/hooks/use-voice-profiles";
+import {
+  shouldPromptVoiceClone,
+  voiceClonePromptDismissKey,
+} from "@/lib/meeting/voice-clone-prompt";
+import { VoiceCloneConsentPrompt } from "@/components/rooms/live/voice-clone-consent-prompt";
+import { meetingVoiceProfiles } from "@/lib/voice/profile-status";
+import { LIVE_LINE_MAX_AGE_MS } from "@/lib/transcript/live-text";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
   TranscriptCleanSentenceEventDto,
+  TranscriptInterimDto,
   TranscriptSegmentDto,
+  TranscriptSegmentSpeakerNamedDto,
   TranslationRoomStateDto,
   TranslationTextDto,
   VoiceOptionDto,
@@ -116,10 +156,9 @@ import {
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { MeetingReadyCard } from "@/components/rooms/live/meeting-ready-card";
 import { consumeInstantMeetingStart } from "@/lib/meeting/instant-meeting-handoff";
-import { ExternalBridgeWidget } from "@/components/rooms/live/external-bridge-widget";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
-import { findBridgeDeviceIds, currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
+import { findBridgeDeviceIds, bridgeDeviceLabelsFor } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
 import {
@@ -130,30 +169,125 @@ import {
   startFarSideMonitor,
   type FarSideMonitor,
 } from "@/lib/audio/bridge-far-side-monitor";
+import {
+  createInboundHealthState,
+  reduceInboundHealth,
+  type InboundCapturePath,
+  type InboundHealth,
+} from "@/lib/audio/bridge-inbound-health";
+import { startInboundLevelProbe } from "@/lib/audio/bridge-inbound-level-probe";
 import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
+import { useBridgeMeetFollow } from "@/hooks/use-bridge-meet-follow";
+import { useSupervisedPublish } from "@/hooks/use-supervised-publish";
+import {
+  describeOutboundLegChange,
+  isVirtualMicrophoneLabel,
+  type BridgeOutboundLeg,
+} from "@/lib/meeting/bridge-mic-device";
+import type { BridgeWidgetOutboundSnapshot } from "@/lib/meeting/bridge-widget-relay";
+import { LocalMicSupervisor } from "./local-mic-supervisor";
+import {
+  meetLeaveFailureRetryable,
+  meetLeaveOutcome,
+  meetLeavePrompt,
+} from "@/lib/meeting/bridge-meet-follow";
+import { useBridgeCapturerLease } from "@/hooks/use-bridge-capturer-lease";
+import { useFarSpeakerHints } from "@/hooks/use-far-speaker-hints";
+import { canControlBridge } from "@/lib/meeting/bridge-capturer";
 import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
-import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
+import { bridgeMeetingConnection } from "@/lib/meeting/bridge-meeting-connection";
+import {
+  browserCaptureAnswerStorage,
+  browserCaptureConsentState,
+  mayCaptureBrowser,
+  readStoredBrowserCaptureAnswer,
+  shouldForgetBrowserCaptureAnswer,
+  writeStoredBrowserCaptureAnswer,
+} from "@/lib/audio/browser-capture-consent";
 import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
 import { BridgeSetupDialog } from "@/components/rooms/bridge/bridge-setup-dialog";
 import {
+  armMeetWindowCapture,
   canOpenTranscriptWindow,
   closeTranscriptWindow,
+  hasMeetCallSensor,
   listWindowsLoopbackSources,
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
+  showDesktopMainWindow,
+  type MeetCallState,
+  type MeetWindowGeometry,
+  type VirtualAudioStatus,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
-import { bridgeConsentSurface } from "@/lib/meeting/bridge-capture-consent-relay";
+import {
+  bridgeAudioModeChange,
+  bridgeAudioModeFailure,
+  bridgeLoopbackCaptureMode,
+  bridgeModeSupport,
+  bridgeOutboundSinkDeviceId,
+  missingCableIsAProblem,
+  resolveBridgeAudioMode,
+  type BridgeAudioMode,
+} from "@/lib/meeting/bridge-audio-mode";
+import { useBridgeAudioModeStore } from "@/stores/bridge-audio-mode-store";
+import {
+  bridgeConsentSurface,
+  isBridgeMeetCallOnScreen,
+  isCompactConsentAsk,
+} from "@/lib/meeting/bridge-capture-consent-relay";
 import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
-import { selectBridgeTier } from "@/lib/desktop/bridge-tiers";
+import { useBridgeRecordingHost } from "@/hooks/use-bridge-recording-relay";
+import {
+  bridgeAutoRecordingDecision,
+  bridgeRecordingFailurePlan,
+  describeMeetWindowCaptureFailure,
+  MEET_TAB_RETURN_HOLD_MS,
+  mayCaptureMeetWindowAtStart,
+  meetWindowOnTab,
+  meetWindowNeedsRearm,
+  meetWindowTabReading,
+  nextBridgeRecordChoice,
+  shouldKeepBridgeRecordingRetry,
+  shouldPublishMeetWindow,
+  shouldRepublishMeetWindow,
+  shouldSuperviseMeetWindow,
+  type BridgeAutoRecordingInput,
+  type BridgeRecordChoice,
+  type BridgeRecordingRetry,
+} from "@/lib/meeting/bridge-recording";
+import { hydrateFromJoin, readJoinHostState } from "@/lib/meeting/join-host-state";
+import { MEET_WINDOW_TRACK_NAME } from "@/lib/meeting/egress-participants";
+import { meetAudioLocalVoiceOn, shouldPublishMeetAudio } from "@/lib/meeting/meet-audio-track";
+import { BridgeMeetAudioPublisher, type MeetAudioControl } from "./bridge-meet-audio-publisher";
+import {
+  MEET_WINDOW_CAPTURE_CONSTRAINTS,
+  MEET_WINDOW_PUBLISH_OPTIONS,
+  steadyFrameTrack,
+} from "@/lib/meeting/meet-window-track";
+import {
+  describeMeetWindowCrop,
+  meetWindowVisibleRect,
+  nextMeetWindowCropGeometry,
+} from "@/lib/meeting/meet-window-crop";
+import {
+  canCaptureBrowserLoopback,
+  describeLoopbackFailure,
+  decideBridgeInbound,
+  isLoopbackFallbackActive,
+  type BridgeLoopbackFallback,
+} from "@/lib/desktop/bridge-tiers";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
 } from "@/hooks/use-track-processors";
 import {
   JOIN_PREVIEW_KEY,
+  availableDeviceIds,
+  meetingDeviceRoomOptions,
   readMeetingJoinState,
   readMeetingMediaPreferences,
+  rememberSelectedMicrophone,
 } from "@/lib/meeting/meeting-join-state";
 import {
   isResolvedSpeakLanguage,
@@ -168,6 +302,9 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   lastSignOfLife,
+  leaveFailureMeansAlreadyOut,
+  ROOM_STATUS_POLL_MS,
+  roomEndedUnderSession,
   shouldConnectMeeting,
   type MeetSensorReading,
 } from "@/lib/meeting/meeting-session-lifecycle";
@@ -186,6 +323,12 @@ import {
   type FloatingReaction,
 } from "@/components/rooms/live/reaction-overlay";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
+import {
+  isDisplacedConnectionError,
+  isDisplacedHubReason,
+  isDuplicateIdentityDisconnect,
+} from "@/lib/meeting/session-displacement";
+import { DisplacedSessionNotice } from "@/components/rooms/live/displaced-session-notice";
 import { TranscriptPauseConfirmDialog } from "@/components/rooms/live/transcript-pause-confirm-dialog";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
@@ -196,8 +339,17 @@ import {
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
+import {
+  boundedText,
+  canAutoRetryConnect,
+  CONNECT_RETRY_AFTER_ERROR_MS,
+  CONNECT_SLOW_MS,
+  connectFailureCode,
+  type MeetingClientEvent,
+  shouldReportDisconnect,
+} from "@/lib/meeting/livekit-connect-watchdog";
 import { translationRoomService } from "@/services/translation-room.service";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import {
   type TranslationCreditsTranslator,
@@ -222,9 +374,26 @@ const MINI_MEETING_IDLE_POLL_MS = 5 * 1000;
  */
 type LocalMediaControl = {
   setMicrophoneEnabled: (enabled: boolean) => void;
+  /** Moves the live microphone to this input (LiveKit's switchActiveDevice). Rejects on failure. */
+  switchMicrophone: (deviceId: string) => Promise<void>;
   setCameraEnabled: (enabled: boolean) => void;
   /** Resolves to what the share ended up as, so the caller can reflect a cancelled prompt. */
   setScreenShareEnabled: (enabled: boolean) => Promise<boolean>;
+};
+
+/**
+ * WT-910. The parent's handle on <BridgeMeetWindowPublisher>: "published", or why not, in words
+ * for a log line. Null whenever the provider tree is not mounted.
+ */
+type MeetWindowControl = {
+  /** Arms the desktop capture of the Meet window and publishes it. Safe to call again after an unpublish. */
+  publishMeetWindow: (roomId: string) => Promise<string>;
+  /**
+   * Takes the `meet-window` track off the wire and stops the capture; the recording carries on
+   * audio-only. The seam for "Meet left its tab" (Picture-in-Picture): unpublish on the way out,
+   * `publishMeetWindow` again on the way back, so the recording never shows another tab.
+   */
+  unpublishMeetWindow: () => void;
 };
 
 const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
@@ -264,6 +433,7 @@ export function PersistentMeetingSession({
   compact,
   meetSensor = null,
   onMeetingClosed,
+  onBridgeMeetingEnded,
 }: {
   roomId: string;
   compact: boolean;
@@ -273,6 +443,12 @@ export function PersistentMeetingSession({
    */
   meetSensor?: MeetSensorReading | null;
   onMeetingClosed: () => void;
+  /**
+   * W4a: an EXTERNAL_BRIDGE room ended while this session ran it. Called just before
+   * `onMeetingClosed`, so the app shell can keep answering the popup on this room once the session
+   * (and its relay host) is gone — see use-bridge-ended-relay-host.
+   */
+  onBridgeMeetingEnded?: (roomId: string) => void;
 }) {
   const router = useRouter();
   const activeWorkspaceSlug = useWorkspaceStore(
@@ -314,7 +490,9 @@ export function PersistentMeetingSession({
   // strength of not knowing.
   const [wasConnectable, setWasConnectable] = useState(false);
 
-  const roomQuery = useTranslationRoom(roomId);
+  // WT-899: polled, so an end this client was never told about over the hub still reaches it.
+  // See ROOM_STATUS_POLL_MS for who that is.
+  const roomQuery = useTranslationRoom(roomId, ROOM_STATUS_POLL_MS);
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
@@ -353,13 +531,44 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
-  /** Windows only: the far side can be captured from the browser even with no inbound device. */
-  const [bridgeInboundLoopback, setBridgeInboundLoopback] = useState(false);
+  /** The latest inbound device, for a desktop capture-stopped event that arrives long after the start. */
+  const bridgeInboundDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    bridgeInboundDeviceIdRef.current = bridgeInboundDeviceId;
+  }, [bridgeInboundDeviceId]);
+  /**
+   * The desktop's device report, as last read. Windows only: the far side can be captured from the
+   * browser itself — WT-898: the FIRST choice, cable or no cable (see decideBridgeInbound).
+   * Kept whole rather than as the one boolean it used to be, because whether loopback can run now
+   * depends on this user's bridge audio mode too (text-only needs no cable; bridgeInboundLoopback
+   * below), and that mode is only known further down.
+   */
+  const [bridgeVirtualAudioStatus, setBridgeVirtualAudioStatus] = useState<VirtualAudioStatus | null>(null);
+  /** The same reading, for the capture effect's error copy, which must not re-run when it changes. */
+  const bridgeVirtualAudioStatusRef = useRef<VirtualAudioStatus | null>(null);
+  /**
+   * Text-only bridge: read inside the device effect below, which is written once per room and must
+   * not re-run (and re-toast) every time the mode is learned. Set from `bridgeAudioMode` further down.
+   */
+  const bridgeAudioModeRef = useRef<BridgeAudioMode>("voice");
+  /**
+   * WT-898. A loopback start that failed in this room, so the inbound leg runs on the Hi-Fi Cable
+   * instead of staying silent. Stamped with the room and the inbound device of the moment (see
+   * isLoopbackFallbackActive): the same room on the same devices stays on the cable rather than
+   * flapping back into a loopback that has already refused once.
+   */
+  const [bridgeLoopbackFallback, setBridgeLoopbackFallback] = useState<BridgeLoopbackFallback | null>(
+    null,
+  );
   /**
    * What the user said about listening to their browser, for THIS meeting.
    *
    * Not remembered across meetings on purpose: what gets captured depends on which tabs they have
-   * open, so a permanent yes would be a promise made for sittings they have not seen yet.
+   * open, so a permanent yes would be a promise made for sittings they have not seen yet. WT-900:
+   * it IS remembered across a reload of the same meeting (sessionStorage, keyed by room, dropped
+   * when the room ends — see browser-capture-consent.ts), because asking again mid-meeting for
+   * the same sitting is a question the host has already answered. `granted: null` is "asked to be
+   * asked again", which must not fall back to the stored answer it just forgot.
    */
   // Stamped with the room it was given for, rather than cleared by an effect when the room
   // changes. A different meeting is a different set of open tabs, so the previous answer says
@@ -367,8 +576,36 @@ export function PersistentMeetingSession({
   // cascading render, and an answer that belongs to another room is simply not this room's answer.
   const [browserCaptureAnswer, setBrowserCaptureAnswer] = useState<{
     roomId: string;
-    granted: boolean;
+    granted: boolean | null;
   } | null>(null);
+  /**
+   * WT-910. What the "Record this meeting" checkbox beside that question said, for THIS meeting
+   * (lib/meeting/bridge-recording). Null until somebody is shown the checkbox and answers: a room
+   * where nobody was asked is not recorded for them. Stamped with its room like the answer above,
+   * and not remembered across a reload — by then the recording it started is the server's fact,
+   * and starting a second one from a remembered checkbox is the mistake the token exists to stop.
+   */
+  const [bridgeRecordChoice, setBridgeRecordChoice] = useState<BridgeRecordChoice | null>(null);
+  /**
+   * WT-910. The room whose inbound leg last came up, or null once it dropped or failed. "Capture
+   * has started" as React state, because the leg itself lives in a ref and the recording has to
+   * start when the capture does. Set from the capture effect's async paths only; whether the leg is
+   * still WANTED is derived beside the recording effect, not stored here.
+   */
+  const [bridgeInboundOpenRoomId, setBridgeInboundOpenRoomId] = useState<string | null>(null);
+  /**
+   * The inbound leg's capture of Meet's playback while it is up, for the recording's `meet-audio`
+   * mix (BridgeMeetAudioPublisher). Borrowed: the leg owns and stops it.
+   */
+  const [bridgeInboundTrack, setBridgeInboundTrack] = useState<MediaStreamTrack | null>(null);
+  /**
+   * Whether anything is reaching WarpTalk from Meet (lib/audio/bridge-inbound-health). Measured on
+   * the published track, because an open, published leg carrying digital silence looks exactly
+   * like a working one to everything else in the app. Back to "unknown" whenever the capture is
+   * released, so a new capture is judged on its own samples and never inherits the last one's.
+   * Declared up here because the consent relay reads it too (WT-900's compact ask).
+   */
+  const [inboundHealth, setInboundHealth] = useState<InboundHealth>("unknown");
   const [loopbackSources, setLoopbackSources] = useState<WindowsLoopbackSource[]>([]);
   const [loopbackSourcesLoading, setLoopbackSourcesLoading] = useState(false);
   const [loopbackSourceSelection, setLoopbackSourceSelection] = useState<{
@@ -426,44 +663,104 @@ export function PersistentMeetingSession({
     // difference — a cascading render to reach a state nothing can see.
     if (!isBridgeRoom) return;
     let cancelled = false;
-    void (async () => {
+    // Whether this effect run has resolved successfully once. A later re-resolve that throws
+    // keeps what the first one found: a transient enumerateDevices failure on a devicechange must
+    // not tear down a capture that is working.
+    let resolvedOnce = false;
+    // Serialises runs. devicechange fires in bursts (Windows reports each endpoint of a cable
+    // separately), and two resolves racing each other could land in either order.
+    let latest = 0;
+
+    // A function rather than a one-shot, because the answer changes while the room is open. The
+    // device list is read once on entry, and until now that was the only read: a user who plugged
+    // the cable in, installed it from the wizard, or granted microphone permission after entering
+    // kept the answer from before — no inbound leg, and a wizard telling them to install a device
+    // they had just installed.
+    const resolve = async () => {
+      const run = ++latest;
       try {
-        const { outboundDeviceId, inboundDeviceId } = await findBridgeDeviceIds();
-        if (cancelled) return;
+        // The desktop's status first: it names the endpoints to look for (endpointLabels), so the
+        // device ids below are found by the desktop's labels rather than a table of our own.
+        // WT-898: loopback is asked as a capability of this status, NOT through the tier picker —
+        // the picker answers "full-bridge" on any machine with both cables, and reading loopback
+        // off that answer is what hid the loopback path from the users best placed to run it.
+        const status = await readVirtualAudioStatus();
+        if (cancelled || run !== latest) return;
+        const { outboundDeviceId, inboundDeviceId, needsPermission } = await findBridgeDeviceIds(status);
+        if (cancelled || run !== latest) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
-
-        // Windows has a second way in. Where there is no second virtual device, process loopback
-        // pulls the far side out of the browser itself — so the absence of an inbound device id is
-        // no longer the same thing as no inbound leg. Asked through the tier picker rather than by
-        // re-deriving the rules here: it already owns the question of what this machine can run.
-        const status = await readVirtualAudioStatus();
-        if (cancelled) return;
-        setBridgeInboundLoopback(selectBridgeTier(status)?.id === "loopback-bridge");
-        if (!outboundDeviceId) {
+        setBridgeVirtualAudioStatus(status);
+        bridgeVirtualAudioStatusRef.current = status;
+        resolvedOnce = true;
+        // Empty labels mean the browser has not been given microphone permission yet, so every
+        // device reads as absent. That is not a missing cable, and telling the user it is sends
+        // them to reinstall a driver that is already there. The permission listener below
+        // resolves again once they allow it, and the real answer is given then.
+        if (needsPermission) return;
+        // Text-only bridge: no cable is needed in text mode, nor on a machine that starts in it
+        // because it has none (claimAudioModeFor). "Cannot reach Google Meet" would be untrue there.
+        if (
+          !missingCableIsAProblem({
+            audioMode: bridgeAudioModeRef.current,
+            support: bridgeModeSupport(status),
+          })
+        ) {
+          return;
+        }
+        // Once per room, the toast as well as the wizard. The resolve now reruns on every
+        // devicechange, and a toast that fired on each of those would repeat every time a headset
+        // was plugged in for as long as the cable is missing.
+        if (!outboundDeviceId && bridgeSetupPromptedRef.current !== roomId) {
+          bridgeSetupPromptedRef.current = roomId;
           toast.error("This meeting cannot reach Google Meet yet.", {
             // Named for THIS platform. It used to be the macOS constant unconditionally, so a
             // Windows user missing VB-CABLE was told to install BlackHole — a device that does
             // not exist for their machine, sending them off to fix the wrong thing.
-            description: `${currentBridgeDeviceLabels().outboundSink} is not installed, so the far side will not hear the translation.`,
+            description: `${bridgeDeviceLabelsFor(status).outboundSink} is not installed, so the far side will not hear the translation.`,
           });
           // WT-578: and then the wizard, which is the part that was missing. The toast alone named
           // a device and vanished; it never said where to get one, and the only screen that does
           // was reachable from nowhere in the product.
-          if (bridgeSetupPromptedRef.current !== roomId) {
-            bridgeSetupPromptedRef.current = roomId;
-            setBridgeSetupOpen(true);
-          }
+          setBridgeSetupOpen(true);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && run === latest && !resolvedOnce) {
           setBridgeOutboundDeviceId(null);
           setBridgeInboundDeviceId(null);
         }
       }
+    };
+
+    void resolve();
+
+    const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    const onDeviceChange = () => void resolve();
+    mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
+
+    // Granting the microphone does not fire devicechange, yet it is exactly what turns empty
+    // labels into names. `permissions.query({ name: "microphone" })` is not in every browser (and
+    // not in every TS lib's PermissionName), so both the call and the result are guarded; where it
+    // is missing, devicechange and the next room entry are the fallbacks.
+    let permission: PermissionStatus | null = null;
+    const onPermissionChange = () => {
+      if (permission?.state === "granted") void resolve();
+    };
+    void (async () => {
+      try {
+        const status = await navigator.permissions?.query({ name: "microphone" as PermissionName });
+        if (!status || cancelled) return;
+        permission = status;
+        status.addEventListener("change", onPermissionChange);
+      } catch {
+        // Unsupported permission name. Nothing to listen to.
+      }
     })();
+
     return () => {
       cancelled = true;
+      mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
+      permission?.removeEventListener("change", onPermissionChange);
     };
     // `roomId` is here because the wizard prompt above is remembered per room: a device that is
     // missing is missing for this meeting and for the next one, and the reader of that ref has to
@@ -505,6 +802,9 @@ export function PersistentMeetingSession({
   // only by the room host, which is what the server enforces too.
   const { data: flashMode } = useFlashMode(roomId);
   const setFlashMode = useSetFlashMode(roomId);
+  // WT-709: the room host widens the meeting's languages mid-call. Written only by the room host,
+  // which is what the server enforces too.
+  const addRoomLanguage = useAddRoomLanguage(roomId);
   // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
   // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
   // IMicrophoneNoiseReductionService for why gating it would be the bug.
@@ -530,6 +830,29 @@ export function PersistentMeetingSession({
   const localMediaControlRef = useRef<LocalMediaControl | null>(null);
 
   const [meetingError, setMeetingError] = useState<string | null>(null);
+  // W4a: the popup is the only bridge UI (WT-868), so these two facts, which the main window only
+  // ever said with a toast or a status line, are mirrored to it over the relay.
+  //   - LiveKit's own Connected / Disconnected, for the popup's connection note;
+  //   - the WT-699 credits stop: null until the hub has said either way.
+  const [liveKitConnected, setLiveKitConnected] = useState(false);
+  const [creditsSuspension, setCreditsSuspension] = useState<{
+    suspended: boolean;
+    reason: string | null;
+  } | null>(null);
+  // The same account joined this meeting from another device or tab, and this session was the one
+  // evicted (LiveKit DUPLICATE_IDENTITY, or the hub's "joined from another device" kick). Terminal
+  // until the person takes over: it gates <LiveKitRoom connect> and every hub rejoin, because
+  // reconnecting evicts the other device and the two then evict each other forever. The ref is
+  // what the hub's long-lived handlers read. See @/lib/meeting/session-displacement.
+  const [sessionDisplaced, setSessionDisplaced] = useState(false);
+  const sessionDisplacedRef = useRef(false);
+  const markSessionDisplaced = useCallback(() => {
+    if (sessionDisplacedRef.current) return;
+    sessionDisplacedRef.current = true;
+    setSessionDisplaced(true);
+    // Whatever the stage was saying ("Could not reach the media server") was about this.
+    setMeetingError(null);
+  }, []);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
   // "Your meeting's ready": shown only to whoever just started an instant meeting in this tab,
@@ -547,6 +870,9 @@ export function PersistentMeetingSession({
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  // The caption lane's caret: hidden gives the lane's whole height back to the camera view and
+  // leaves only an up caret; open, the lane scrolls back through earlier captions.
+  const [captionLaneCollapsed, setCaptionLaneCollapsed] = useState(false);
   // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   // Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged.
@@ -590,8 +916,17 @@ export function PersistentMeetingSession({
 
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
+  // The devices to use, carried from the pre-join pickers ("" = the browser's default) and checked
+  // against the devices that exist right now — see meetingDeviceRoomOptions. Read ONCE and
+  // deliberately never set again: it seeds the LiveKit Room's construction options, and
+  // <LiveKitRoom> builds a brand-new Room whenever those options change — a mid-meeting switch
+  // written back here would tear the call down. LiveKit carries a mid-meeting switch itself, and
+  // media-device-menu.tsx records it for the next page load.
+  const [deviceRoomOptions, setDeviceRoomOptions] =
+    useState<ReturnType<typeof meetingDeviceRoomOptions>>(undefined);
 
   useEffect(() => {
+    let cancelled = false;
     const preferences = readMeetingMediaPreferences(
       window.sessionStorage,
       roomId,
@@ -602,8 +937,40 @@ export function PersistentMeetingSession({
     setMicrophoneEnabled(preferences.microphoneEnabled);
     setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
     setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
-    setMediaPreferencesHydrated(true);
+
+    const choice = {
+      microphoneId: preferences.selectedMicrophoneId,
+      speakerId: preferences.selectedSpeakerId,
+    };
+    if (!choice.microphoneId && !choice.speakerId) {
+      setMediaPreferencesHydrated(true);
+      return;
+    }
+    // The device list before the Room is built, so a device unplugged since the pick is left out
+    // instead of pinned. Connecting waits on this (mediaPreferencesHydrated); a browser that
+    // cannot enumerate joins on the defaults, as every meeting did before.
+    (navigator.mediaDevices?.enumerateDevices?.() ?? Promise.resolve([] as MediaDeviceInfo[]))
+      .then((devices) => {
+        if (cancelled) return;
+        setDeviceRoomOptions(meetingDeviceRoomOptions(choice, availableDeviceIds(devices)));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setMediaPreferencesHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [roomId]);
+  // Memoised on its content. <LiveKitRoom> keys its Room on JSON.stringify(options), so equal
+  // content is already stable, but a fresh object every render is one refactor away from not
+  // being.
+  const deviceRoomOptionsKey = JSON.stringify(deviceRoomOptions ?? null);
+  const liveKitRoomOptions = useMemo(
+    () => deviceRoomOptions,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deviceRoomOptionsKey],
+  );
 
   // Same shape as the media preferences above, and for the same reason: sessionStorage is an
   // external browser source and must be read after hydration, never during render.
@@ -810,44 +1177,203 @@ export function PersistentMeetingSession({
   // rule the caption lane and the transcript follow (TRANSCRIPT_CLOSED_STATUSES above). It used to
   // wait for Start Translation, which kept every word the far side said before Start out of the
   // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
-  const bridgeListening = Boolean(room) && transcriptOpen;
+  //
+  // WT-912 / WT-913: a bridge follows its Google Meet call (use-bridge-meet-follow). The WarpTalk
+  // mic is Meet's mute button, and once the user has LEFT the call this desktop stops listening to
+  // Meet altogether, far side included: what the browser plays after the call is not the meeting,
+  // and a member still in the call can then take the capture over (the lease stops being renewed).
+  // Rejoining brings it all back. A native meeting gets `enabled: false` and is untouched.
+  const finishMeetLeaveRef = useRef<() => void>(() => {});
+  const meetFollow = useBridgeMeetFollow({
+    roomId,
+    enabled: isBridgeRoom,
+    roomMeetCode: extractMeetCodeFromUrl(room?.externalMeetingUrl),
+    liveKitConnected,
+    microphoneEnabled,
+    localMediaControlRef,
+    setMicrophoneIntent: setMicrophoneEnabled,
+    onLeaveDeadline: () => finishMeetLeaveRef.current(),
+  });
+  const bridgeListening = Boolean(room) && transcriptOpen && !meetFollow.leftCall;
+  // For the hub's ForceMuted handler, which is installed once per connection.
+  const isBridgeRoomRef = useRef(isBridgeRoom);
+  const meetFollowSetManualMicRef = useRef(meetFollow.setManualMic);
+  useEffect(() => {
+    isBridgeRoomRef.current = isBridgeRoom;
+    meetFollowSetManualMicRef.current = meetFollow.setManualMic;
+  });
+  /**
+   * W4b (bridge claim): only the CAPTURER's desktop opens the far side — the stand-in token, the
+   * loopback or cable leg, and the capture consent that comes before them. A MEMBER publishes its
+   * own mic only: two capturers would play the far side twice. A legacy room (no capturer) keeps
+   * the booker doing it, which is the servers' rule too (IsBridgeAudioOwner). The lease hook also
+   * renews the lease while the meeting is open here, and is what the popup's takeover reaches.
+   */
+  const bridgeLease = useBridgeCapturerLease({
+    roomId,
+    enabled: isBridgeRoom,
+    live: bridgeListening && !meetingIsIdleReaped,
+    userId: user?.id,
+    bridgeCapturerUserId: room?.bridgeCapturerUserId,
+    isLegacyOwner: Boolean(room?.isHost || (user?.id && room?.hostId === user.id)),
+    participants: apiParticipants,
+  });
+  const bridgeAudioOwner = isBridgeRoom && bridgeLease.bridgeRole === "capturer";
+  /**
+   * Text-only bridge (PO, 2026-10-01): how Meet hears THIS user — "voice" (VB-CABLE carries their
+   * dub) or "text" (Meet keeps their real mic; nothing is played into a cable). What the server last
+   * told this window (the claim, a switch) first, then this user's participant row, then voice
+   * (lib/meeting/bridge-audio-mode). Per participant: a member has a mode as well as the capturer.
+   */
+  const knownBridgeAudioMode = useBridgeAudioModeStore((state) => state.byRoomId[roomId] ?? null);
+  const setKnownBridgeAudioMode = useBridgeAudioModeStore((state) => state.setMode);
+  const bridgeSelfUserId = user?.id;
+  const myBridgeParticipant = useMemo(
+    () =>
+      bridgeSelfUserId
+        ? apiParticipants.find((participant) => sameUserId(participant.userId, bridgeSelfUserId))
+        : undefined,
+    [apiParticipants, bridgeSelfUserId],
+  );
+  const bridgeAudioMode: BridgeAudioMode = resolveBridgeAudioMode({
+    known: knownBridgeAudioMode,
+    isBridgeTextOnly: myBridgeParticipant?.isBridgeTextOnly,
+  });
+  useEffect(() => {
+    bridgeAudioModeRef.current = bridgeAudioMode;
+  }, [bridgeAudioMode]);
+  // Whether the far side can be captured from the browser right now. Text mode asks the desktop for
+  // a "text-only" capture, which needs no cable (desktop #45); voice mode keeps the cable condition.
+  const bridgeInboundLoopback = canCaptureBrowserLoopback(bridgeVirtualAudioStatus, {
+    textOnly: bridgeAudioMode === "text",
+  });
+  const loopbackFallbackActive = isLoopbackFallbackActive(bridgeLoopbackFallback, {
+    roomId,
+    inboundDeviceId: bridgeInboundDeviceId,
+  });
+  // Loopback is still the plan: the machine can capture the browser and it has not already
+  // failed to in this room. Only then is there anything to ask about.
+  const inboundLoopbackWanted = bridgeInboundLoopback && !loopbackFallbackActive;
+  // WT-900: what this room's answer was before a reload. Read once per room; every answer given
+  // since lands in state first, so this is only ever the starting point.
+  const storedBrowserCaptureAnswer = useMemo(
+    () => readStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId),
+    [roomId],
+  );
+  const browserCaptureAnswerForRoom =
+    browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : storedBrowserCaptureAnswer;
+  /** Every answer goes through here, so state and the per-room memory cannot disagree. */
+  const answerBrowserCapture = useCallback(
+    (granted: boolean | null) => {
+      setBrowserCaptureAnswer({ roomId, granted });
+      writeStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId, granted);
+    },
+    [roomId],
+  );
+  // A room that is over will not be listened to again: its remembered answer goes with it.
+  const roomStatusForAnswer = room?.status;
+  useEffect(() => {
+    if (shouldForgetBrowserCaptureAnswer(roomStatusForAnswer)) {
+      writeStoredBrowserCaptureAnswer(browserCaptureAnswerStorage(), roomId, null);
+    }
+  }, [roomStatusForAnswer, roomId]);
   // Placed here, below `isHost` and `bridgeListening`, because it reads both. The state it
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
     isBridgeRoom,
-    isHost,
+    isHost: bridgeAudioOwner,
     meetingOpen: bridgeListening,
-    hasInboundDevice: Boolean(bridgeInboundDeviceId),
-    loopbackAvailable: bridgeInboundLoopback,
-    answer: browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null,
+    // WT-898: an installed Hi-Fi Cable no longer silences the ask. Loopback comes first, so the
+    // device only counts here where loopback is not wanted at all — and there
+    // `loopbackAvailable` is false and nothing is asked anyway. A "no" still lands on the cable,
+    // through decideBridgeInbound below, and stays "declined" so it can be asked again.
+    hasInboundDevice: !inboundLoopbackWanted && Boolean(bridgeInboundDeviceId),
+    loopbackAvailable: inboundLoopbackWanted,
+    answer: browserCaptureAnswerForRoom,
   });
   const selectedLoopbackSourceId =
     loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
-  // Where the host is actually asked. Reading the desktop bridge during render is safe here only
-  // because consent is never "required" during SSR — it needs a loaded room, which no server
-  // render has — so this is "none" on the server either way and cannot mismatch on hydration.
-  const consentSurface = bridgeConsentSurface({
-    consent: consentState,
-    popupAvailable: isBridgeRoom && canOpenTranscriptWindow(),
+  /**
+   * WT-898 — the one answer to "where does the far side come in from". The capture effect, the
+   * widget's "Meet audio to WarpTalk" row, the health probe's path and the wizard's Speakers line
+   * all read it, so none of them can drift back to "the cable wins" on its own.
+   */
+  // decideBridgeInbound: the same function, with the same inputs, the setup wizard calls (it is
+  // passed bridgeInboundDeviceId below). Its loopbackCapable equals bridgeInboundLoopback above:
+  // both are canCaptureBrowserLoopback of this status and this mode.
+  const bridgeInbound = decideBridgeInbound({
+    status: bridgeVirtualAudioStatus,
+    audioMode: bridgeAudioMode,
+    loopbackFailed: loopbackFallbackActive,
+    inboundDeviceId: bridgeInboundDeviceId,
+    consentAnswer: browserCaptureAnswerForRoom,
+    hasLoopbackSource: Boolean(selectedLoopbackSourceId),
+  });
+  const bridgeInboundPath = bridgeInbound.path;
+  const bridgeInboundStartable = bridgeInbound.startable;
+  // Reading the desktop bridge during render is safe here only because consent is never
+  // "required" during SSR — it needs a loaded room, which no server render has — so the surface is
+  // "none" on the server either way and cannot mismatch on hydration.
+  const consentPopupAvailable = isBridgeRoom && canOpenTranscriptWindow();
+  // popspam1002: the popup is never raised over a Meet call that is not on screen (left, closed,
+  // another tab). No sensor reading is "unknown", which keeps raising as before.
+  const consentMeetOnScreen = isBridgeMeetCallOnScreen({
+    sensor: meetSensor,
+    roomMeetCode: extractMeetCodeFromUrl(room?.externalMeetingUrl),
+    // WT-911 call state where the desktop has it; "left" also covers the 30 s before WT-913 ends it.
+    callPhase: meetFollow.leftCall ? "left" : meetFollow.callPhase,
   });
 
   // The relay to the popup. Main stays the one source of truth: it publishes this state and
   // applies only the intents it has re-checked against it (lib/meeting/bridge-capture-consent-relay).
-  useBridgeConsentHost({
-    enabled: isBridgeRoom && isHost,
+  // WT-900: it also keeps raising a popup that was closed or minimised without an answer, and
+  // says when to give up on it — the question then moves to this window's modal.
+  const consentFallbackToMain = useBridgeConsentHost({
+    enabled: bridgeAudioOwner,
     roomId,
     consent: consentState,
     sources: loopbackSources,
     selectedSourceId: selectedLoopbackSourceId,
     loadingSources: loopbackSourcesLoading,
-    surface: consentSurface,
+    popupAvailable: consentPopupAvailable,
+    meetOnScreen: consentMeetOnScreen,
+    inboundPath: bridgeInbound.path,
+    inboundReason: bridgeInbound.reason,
+    inboundHealth,
+    // WT-910: with a cable installed, "Stop listening" moves the far side onto it rather than
+    // silencing it, and the popup's wording has to say which of the two the press will do.
+    cableAvailable: Boolean(bridgeInboundDeviceId),
     onSelectSource: (sourceId) => setLoopbackSourceSelection({ roomId, sourceId }),
-    onAnswer: (granted) => setBrowserCaptureAnswer({ roomId, granted }),
-    onReask: () => setBrowserCaptureAnswer(null),
+    onAnswer: (granted, record) => {
+      answerBrowserCapture(granted);
+      // WT-910: the recording checkbox rides on the same press. Present only on an answer to the
+      // open question (resolveBridgeConsentIntent drops it anywhere else), and every answer is a
+      // new token — see bridge-recording.ts for why a re-answer may start a recording again while
+      // a re-render or a reconnect may not.
+      if (typeof record === "boolean") {
+        setBridgeRecordChoice((current) => nextBridgeRecordChoice(current, { roomId, record }));
+      }
+    },
+    onReask: () => answerBrowserCapture(null),
   });
 
+  // Where the host is actually asked.
+  const consentSurface = bridgeConsentSurface({
+    consent: consentState,
+    popupAvailable: consentPopupAvailable && !consentFallbackToMain,
+  });
+  // WT-900: the same quiet/prominent choice the popup makes, for the modal fallback.
+  const consentAskCompact = isCompactConsentAsk({
+    inboundReason: bridgeInbound.reason,
+    inboundHealth,
+  });
+
+  // WT-900: also for a yes remembered across a reload. The selection is not remembered (window ids
+  // do not survive one), and without it a granted loopback waits on "awaiting-source" for ever.
+  const needsLoopbackSources =
+    consentState === "required" || (consentState === "granted" && !selectedLoopbackSourceId);
   useEffect(() => {
-    if (consentState !== "required") return;
+    if (!needsLoopbackSources) return;
 
     let cancelled = false;
     setLoopbackSourcesLoading(true);
@@ -870,7 +1396,7 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [consentState, roomId, selectedLoopbackSourceId]);
+  }, [needsLoopbackSources, roomId, selectedLoopbackSourceId]);
 
   const isHostRef = useRef(isHost);
   useEffect(() => {
@@ -890,29 +1416,78 @@ export function PersistentMeetingSession({
   //
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
-  const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  // `key` names what this capture was opened on — "device:<id>" or "loopback" — so a re-resolve
+  // that lands on a different device, or a decision that moves between the two paths (WT-898: a
+  // loopback that failed and fell back to the cable), can tell the running capture is the wrong one.
+  const bridgeInboundRef = useRef<{ stop: () => Promise<void>; key: string } | null>(null);
+  /**
+   * The run of the capture effect that is still connecting, if any.
+   *
+   * Every run connects under the same stand-in identity, and LiveKit evicts the older of two
+   * connections with one identity. Deps changing while run A is still connecting used to start run
+   * B in parallel: one of the two got evicted, the WRONG one's onDisconnected raised "the external
+   * call was disconnected", and the room was left with no leg at all. So a run first waits for the
+   * previous one to finish — including releasing what it opened if it was cancelled — and only
+   * then connects.
+   */
+  const bridgeInboundRunRef = useRef<Promise<void> | null>(null);
+  /**
+   * Bumped to force the inbound capture to reopen on the SAME device, which the capture key alone
+   * cannot express: `device:<id>` is unchanged when the device under it changed.
+   *
+   * Two things do that. Fixing the Hi-Fi Cable format from the wizard reconfigures the endpoint, and
+   * the getUserMedia track opened on the old format ends or goes silent while its id stays the
+   * same — the leg kept publishing nothing until the room was reopened. And a track can end on its
+   * own (driver restart, endpoint reset); that is a reopen, not a dead leg.
+   */
+  const [bridgeCaptureGeneration, setBridgeCaptureGeneration] = useState(0);
+  /** When the last few `ended`-driven reopens happened, so a track that ends on open cannot spin. */
+  const bridgeReopenTimesRef = useRef<number[]>([]);
   // The host's own ear on the far side, on the virtual-device path only: once Meet's speaker points
   // at a cable, Meet plays nothing to the host. The gain lives in a ref because `voiceEnabled` is
   // declared far below this effect; see the effect beside it.
   const farSideMonitorRef = useRef<FarSideMonitor | null>(null);
   const farSideMonitorGainRef = useRef(farSideMonitorGain(false));
+  /** Whether a monitor is running on the current capture. Not the same as audible; see below. */
+  const [farSideMonitorRunning, setFarSideMonitorRunning] = useState(false);
+  /**
+   * WT-900: whether the far side may be played to the host right now. While the cable only stands
+   * in for an unanswered loopback question, Meet may still be on the host's own speakers, so the
+   * copy waits until the cable demonstrably carries Meet (shouldMonitorFarSide). The monitor is
+   * opened with the capture as before and held at zero gain until then — starting and stopping an
+   * audio graph on every health change would be a second lifecycle for the same track.
+   */
+  const farSideMonitorAllowed = shouldMonitorFarSide("device", {
+    reason: bridgeInbound.reason,
+    health: inboundHealth,
+  });
+  const farSideMonitorAllowedRef = useRef(farSideMonitorAllowed);
   /** Whether WarpTalk is playing the far side to the host right now — the popup's Meeting audio row. */
-  const [farSideMonitoring, setFarSideMonitoring] = useState(false);
+  const farSideMonitoring = farSideMonitorRunning && farSideMonitorAllowed;
   /** How loud the original sits under a translation, chosen in the popup's Voice panel. */
   const [farSideMonitorLevel, setFarSideMonitorLevel] = useState(FAR_SIDE_MONITOR_UNDER_DUB);
 
   useEffect(() => {
-    // A device endpoint may start straight away; the loopback path may not start until the user has
-    // actually said yes. `mayCaptureBrowser` is checked rather than "not declined" because on the
-    // render before the answer arrives those two differ, and one of them starts listening.
+    // WT-898: which path is decideBridgeInbound's call, not this effect's. A device endpoint
+    // may start straight away; the loopback path may not start until the user has actually said
+    // yes. `mayCaptureBrowser` is checked on top of the decision rather than trusted from it,
+    // because on the render before the answer arrives those two can differ, and one of them starts
+    // listening to the whole browser.
+    const inboundPath = bridgeInboundPath;
+    const inboundDeviceId = inboundPath === "device" ? bridgeInboundDeviceId : null;
     const hasInboundSource =
-      Boolean(bridgeInboundDeviceId) ||
-      (bridgeInboundLoopback && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
+      bridgeInboundStartable &&
+      (inboundPath === "device"
+        ? Boolean(inboundDeviceId)
+        : inboundPath === "loopback" && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
+    // The generation is part of the key so that a reopen on the same device or path is a different
+    // capture to the check below (see bridgeCaptureGeneration).
+    const captureKey = `${inboundPath === "device" ? `device:${inboundDeviceId}` : "loopback"}#${bridgeCaptureGeneration}`;
     // Not while idle-reaped. This is a SECOND LiveKit connection, which `connect` on <LiveKitRoom>
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
     const wanted =
-      isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
+      bridgeAudioOwner && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
     if (!wanted) {
       // Covers Stop Translation, an idle reap and leaving the room. Not awaited: teardown is
       // fire-and-forget by nature and an effect cleanup cannot await anyway.
@@ -920,11 +1495,30 @@ export function PersistentMeetingSession({
       bridgeInboundRef.current = null;
       return;
     }
-    if (bridgeInboundRef.current) return;
+    // A capture already running on the path the decision names is left alone. One running on a
+    // DIFFERENT device, or on the other path, is replaced: the lookup reruns on devicechange and on
+    // the microphone permission being granted, so the device can change under a live capture, and
+    // a failed loopback moves the leg onto the cable. Keeping the old capture would leave the leg
+    // somewhere the decision no longer names, which is how a bridge ends up publishing silence
+    // while every row says it is fine. A cable plugged in under a running LOOPBACK capture changes
+    // nothing: loopback still wins, and the key says so.
+    const running = bridgeInboundRef.current;
+    if (running && running.key === captureKey) return;
+    bridgeInboundRef.current = null;
 
     let cancelled = false;
-    void (async () => {
+    const previousRun = bridgeInboundRunRef.current;
+    const thisRun = (async () => {
+      // A run still connecting holds the stand-in identity too (see bridgeInboundRunRef). It has
+      // been cancelled by now — this effect's cleanup ran before this body — so waiting for it is
+      // waiting for it to release what it opened, never for a leg that will stay up.
+      if (previousRun) await previousRun.catch(() => undefined);
       try {
+        // Awaited, unlike the teardown above: the replacement connects under the same stand-in
+        // identity, and LiveKit evicts the older of two connections with one identity — which
+        // would be the new one if the old one were still finishing its disconnect.
+        if (running) await running.stop();
+        if (cancelled) return;
         const { data } = await meetingService.bridgeToken(roomId);
         // Before the cancellation check and before publishing: which identity is the far side is a
         // fact about the room, and it has to be in place before the first frame of that track can
@@ -936,29 +1530,88 @@ export function PersistentMeetingSession({
         );
         if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
 
-        // A device id wins when there is one: it is the path both platforms share, and the one the
-        // user can point at in a settings dialog. Loopback is the answer only where no second
-        // virtual device exists.
-        const inbound = bridgeInboundDeviceId
-          ? deviceInboundSource(bridgeInboundDeviceId)
-          : await openLoopbackInboundSource({
+        // WT-898: loopback first, the cable only as the way back — decided by
+        // decideBridgeInbound above. The loopback start is the one that can refuse (no
+        // window, a desktop build that is not wired, an OS that says no), and a refusal is not the
+        // end of the leg when a cable exists: it is remembered for this room and devices, and the
+        // decision moves to the device on the next render instead of leaving the far side silent.
+        let inbound;
+        if (inboundPath === "device" && inboundDeviceId) {
+          inbound = deviceInboundSource(inboundDeviceId);
+        } else {
+          try {
+            inbound = await openLoopbackInboundSource({
               consentGranted: true,
               sourceId: selectedLoopbackSourceId ?? undefined,
+              // Text-only bridge: the desktop skips its VB-CABLE gate only when asked for
+              // "text-only". Read from the ref, not a dependency: a voice → text switch must not
+              // tear down a working capture just to restart it under a different name.
+              mode: bridgeLoopbackCaptureMode(bridgeAudioModeRef.current),
+              // The desktop aims at the browser behind its own Meet sighting when it can (a URL,
+              // not a page-written title), and the picked window above is the fallback. It also
+              // stops that capture once Meet has been gone for its grace — handled like a failed
+              // start: remembered for this room, and the leg moves to the cable if there is one.
+              preferMeetSighting: true,
+              onCaptureStopped: (stopReason) => {
+                const deviceId = bridgeInboundDeviceIdRef.current;
+                console.warn(
+                  `[bridge] The desktop stopped listening to the browser (${stopReason}); ${
+                    deviceId ? "falling back to the virtual speaker" : "no virtual speaker to fall back to"
+                  }.`,
+                );
+                setBridgeLoopbackFallback({ roomId, inboundDeviceId: deviceId, reason: stopReason });
+              },
             });
+          } catch (loopbackError) {
+            if (cancelled) return;
+            const reason = describeLoopbackFailure(loopbackError);
+            if (bridgeInboundDeviceId) {
+              // Logged, not toasted: the leg is about to come back up on the cable, and a red
+              // "cannot hear the external call" for a leg that is working a second later is the
+              // cry-wolf toast people learn to ignore. The reason is kept for whoever debugs it.
+              console.warn(
+                `[bridge] Listening to the browser failed (${reason}); falling back to the virtual speaker.`,
+              );
+              setBridgeLoopbackFallback({ roomId, inboundDeviceId: bridgeInboundDeviceId, reason });
+              return;
+            }
+            console.warn(`[bridge] Listening to the browser failed (${reason}); no virtual speaker to fall back to.`);
+            // Remembered even with nothing to fall back to, so the effect does not retry a refused
+            // start on every render. A device appearing later clears it (see
+            // isLoopbackFallbackActive), and that is the moment worth one more try.
+            setBridgeLoopbackFallback({ roomId, inboundDeviceId: null, reason });
+            throw loopbackError;
+          }
+        }
         if (cancelled) {
           await inbound.dispose();
           return;
         }
 
+        // Set once `release` has started. room.disconnect() raises the same Disconnected event a
+        // dropped connection does, and a deliberate release — now including a device switch —
+        // must not be announced to the user as the call having dropped.
+        let released = false;
+        let stopProbe: (() => void) | null = null;
         const handles = await openBridgeInbound({
           serverUrl,
           token: data.token,
           source: inbound.source,
           onDisconnected: () => {
+            if (released) return;
             bridgeInboundRef.current = null;
+            // WT-910: the leg is gone for good until something reopens it, and so is the reason to
+            // keep sending the Meet window. A deliberate release (re-key, device switch) is NOT
+            // this: the replacement is already on its way, and the recording's picture must not
+            // blink off across it.
+            setBridgeInboundOpenRoomId(null);
+            setBridgeInboundTrack((current) => (current === handles.track ? null : current));
+            stopProbe?.();
+            stopProbe = null;
+            setInboundHealth("unknown");
             void farSideMonitorRef.current?.stop();
             farSideMonitorRef.current = null;
-            setFarSideMonitoring(false);
+            setFarSideMonitorRunning(false);
             void inbound.dispose();
             toast.error("The external call was disconnected.", {
               description: "WarpTalk has stopped hearing the other side of the meeting.",
@@ -976,15 +1629,67 @@ export function PersistentMeetingSession({
         let monitor: FarSideMonitor | null = null;
         if (shouldMonitorFarSide(inbound.source.kind)) {
           try {
-            monitor = startFarSideMonitor(handles.track, farSideMonitorGainRef.current);
+            monitor = startFarSideMonitor(
+              handles.track,
+              farSideMonitorAllowedRef.current ? farSideMonitorGainRef.current : 0,
+            );
           } catch {
             monitor = null;
           }
         }
 
+        // Health is metered on both paths but judged differently: on the loopback path exact zeros
+        // are what "nothing is playing" looks like, so only the device path can report no-signal
+        // (see lib/audio/bridge-inbound-health). Best effort like the monitor: a meter that cannot
+        // start leaves the health "unknown", never the bridge down.
+        const healthPath: InboundCapturePath =
+          inbound.source.kind === "device" ? "device" : "loopback";
+        // Its clock starts at the first sample the probe takes, not here: a context the browser
+        // holds suspended reports nothing, and that wait must not count as zeros heard.
+        let health = createInboundHealthState();
+        setInboundHealth(health.health);
+        try {
+          stopProbe = startInboundLevelProbe(handles.track, (sample) => {
+            health = reduceInboundHealth(health, sample, Date.now(), { path: healthPath });
+            // Same value bails out of the render, so four calls a second cost nothing while the
+            // state holds.
+            setInboundHealth(health.health);
+          });
+        } catch {
+          stopProbe = null;
+        }
+
+        // A track that ends under a live leg — the format fix reconfiguring the cable, a driver
+        // restart — is reopened rather than left publishing nothing. At most three times a minute:
+        // a device that ends its track as soon as it is opened would otherwise reconnect the
+        // stand-in in a tight loop, and past that it is a broken device for the wizard, not this.
+        const onTrackEnded = () => {
+          // Not `cancelled`: a capture outlives the effect run that opened it whenever a later run
+          // finds the same key, so only its own release says it is no longer wanted.
+          if (released) return;
+          const now = Date.now();
+          const recent = bridgeReopenTimesRef.current.filter((at) => now - at < 60_000);
+          if (recent.length >= 3) {
+            bridgeReopenTimesRef.current = recent;
+            console.warn("[bridge] The inbound track keeps ending; not reopening it again for now.");
+            return;
+          }
+          bridgeReopenTimesRef.current = [...recent, now];
+          setBridgeCaptureGeneration((generation) => generation + 1);
+        };
+        handles.track.addEventListener("ended", onTrackEnded);
+        // `ended` does not fire for a track that was already dead when the listener went on.
+        if (handles.track.readyState === "ended") onTrackEnded();
+
         const release = async () => {
+          released = true;
+          handles.track.removeEventListener("ended", onTrackEnded);
+          setBridgeInboundTrack((current) => (current === handles.track ? null : current));
+          stopProbe?.();
+          stopProbe = null;
+          setInboundHealth("unknown");
           if (farSideMonitorRef.current === monitor) farSideMonitorRef.current = null;
-          if (monitor) setFarSideMonitoring(false);
+          if (monitor) setFarSideMonitorRunning(false);
           await monitor?.stop();
           await handles.stop();
           await inbound.dispose();
@@ -992,16 +1697,24 @@ export function PersistentMeetingSession({
 
         // The effect can be torn down while connect() is in flight. Without this the handles
         // would be unreachable and the second connection would stay in the room, publishing a
-        // device nobody is releasing.
+        // device nobody is releasing. Awaited: the next run waits on this one (bridgeInboundRunRef)
+        // precisely so it does not connect before this connection is gone.
         if (cancelled) {
-          void release();
+          await release();
           return;
         }
-        bridgeInboundRef.current = { stop: release };
+        bridgeInboundRef.current = { stop: release, key: captureKey };
+        // WT-910: capture has started. This is the moment a bridge recording starts (not Start
+        // Translation) — see the recording effect further down.
+        setBridgeInboundOpenRoomId(roomId);
+        // The recording's `meet-audio` hears the far side through this same track.
+        setBridgeInboundTrack(handles.track);
         farSideMonitorRef.current = monitor;
-        if (monitor) setFarSideMonitoring(true);
+        if (monitor) setFarSideMonitorRunning(true);
       } catch (error) {
         if (cancelled) return;
+        // Nothing came up, and whatever ran before this attempt was stopped to make room for it.
+        setBridgeInboundOpenRoomId(null);
         // Said out loud rather than logged: with the outbound leg working, the far side can hear
         // the user perfectly while the user hears nothing back — which reads as the other person
         // having gone quiet, not as a broken bridge.
@@ -1009,31 +1722,39 @@ export function PersistentMeetingSession({
         // second virtual device carries it there is a device to name; where process loopback does,
         // there is no device at all and naming one would send the user hunting for a picker entry
         // that is not there.
-        const { inboundCapture } = currentBridgeDeviceLabels();
+        // Keyed on the path that actually failed (WT-898): with loopback first, a machine that has
+        // the cable installed can still fail on the loopback path, and naming the cable then would
+        // send the user to fix a device that was never in use.
+        const { inboundCapture } = bridgeDeviceLabelsFor(bridgeVirtualAudioStatusRef.current);
         toast.error("WarpTalk cannot hear the external call.", {
           description: getErrorMessage(
             error,
-            inboundCapture
+            inboundCapture && inboundPath === "device"
               ? `${inboundCapture} could not be opened, so the other side will not be translated.`
               : "WarpTalk could not capture the meeting's audio from your browser, so the other side will not be translated.",
           ),
         });
       }
     })();
+    bridgeInboundRunRef.current = thisRun;
+    void thisRun.finally(() => {
+      if (bridgeInboundRunRef.current === thisRun) bridgeInboundRunRef.current = null;
+    });
 
     return () => {
       cancelled = true;
     };
   }, [
-    isBridgeRoom,
-    isHost,
+    bridgeAudioOwner,
     bridgeListening,
     bridgeInboundDeviceId,
-    bridgeInboundLoopback,
+    bridgeInboundPath,
+    bridgeInboundStartable,
     consentState,
     roomId,
     selectedLoopbackSourceId,
     meetingIsIdleReaped,
+    bridgeCaptureGeneration,
   ]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
@@ -1055,8 +1776,57 @@ export function PersistentMeetingSession({
 
   // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
   // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
-  const [isRoomLocked, setIsRoomLocked] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  //
+  // WT-935 — AND READ ON JOIN. A broadcast announces a transition and is not replayed, so on its
+  // own it left both at `false` after every reload or late join: the Record button drew idle in a
+  // meeting that was being recorded (and the host's next press sent `start` for a recording
+  // already running), and a locked room opened as "unlocked". The join response has carried both
+  // all along (`locked` WT-282, `recording` WT-283); hydrateHostStateFromJoin below reads them at
+  // both places a session is received. Rules and reasons: lib/meeting/join-host-state.
+  //
+  // `setIsRoomLocked` / `setIsRecording` are what the SERVER SAID LIVE — a broadcast, or the answer
+  // to this client's own request. Each call is counted, so a join response that was in flight
+  // while one landed can tell it is the older fact and stand down. Hydration itself goes through
+  // the raw setters and is not counted: it is a snapshot, not a statement about a change.
+  //
+  // LiveKit's `room.isRecording` was considered as the source and deliberately not used: it would
+  // be a third voice whose lag behind the egress request cannot be bounded from here, and the join
+  // response is the meeting service's own row — the same fact the Record endpoint acts on.
+  const [isRoomLocked, setRoomLockedState] = useState(false);
+  const [isRecording, setRecordingState] = useState(false);
+  const hostStateToldRef = useRef({ locked: 0, recording: 0 });
+  const setIsRoomLocked = useCallback((next: SetStateAction<boolean>) => {
+    hostStateToldRef.current.locked += 1;
+    setRoomLockedState(next);
+  }, []);
+  const setIsRecording = useCallback((next: SetStateAction<boolean>) => {
+    hostStateToldRef.current.recording += 1;
+    setRecordingState(next);
+  }, []);
+  /**
+   * Applies a join response's `locked` / `recording`. `asked` is hostStateToldRef as it stood when
+   * the join request was sent. Silent on purpose — no toast for a state that was already true when
+   * this client arrived; the standing REC chip is what tells a joiner the meeting is recorded.
+   */
+  const hydrateHostStateFromJoin = useCallback(
+    (session: JoinMeetingResponseDto, asked: { locked: number; recording: number }) => {
+      const joined = readJoinHostState(session);
+      const told = hostStateToldRef.current;
+      const lockToldWhileJoining = told.locked !== asked.locked;
+      const recordingToldWhileJoining = told.recording !== asked.recording;
+      setRoomLockedState((current) =>
+        hydrateFromJoin({ current, joined: joined.locked, toldWhileJoining: lockToldWhileJoining }),
+      );
+      setRecordingState((current) =>
+        hydrateFromJoin({
+          current,
+          joined: joined.recording,
+          toldWhileJoining: recordingToldWhileJoining,
+        }),
+      );
+    },
+    [],
+  );
   /**
    * WT-605 — the last TranscriptPaused/TranscriptResumed broadcast, or null.
    *
@@ -1085,9 +1855,9 @@ export function PersistentMeetingSession({
   // had and visibly did nothing. Derived rather than synced in an effect so there is no
   // cascading render.
   //
-  // There is no equivalent field for the lock — see the PR's BACKEND note: JoinMeetingResponse
-  // does not report it, so `isRoomLocked` can still only be learned from a RoomLockChanged
-  // broadcast that fires after somebody toggles it.
+  // WT-935: the lock is read from the join response too now (`locked`, WT-282) — see
+  // hydrateHostStateFromJoin above. It is state rather than derived like this one because the
+  // RoomLockChanged broadcast keeps moving it afterwards.
   const [muteOnEntryOverride, setMuteOnEntryOverride] = useState<boolean | null>(
     null,
   );
@@ -1096,9 +1866,8 @@ export function PersistentMeetingSession({
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
-  // Unlike the room lock a few lines up — whose own comment records that it "can only be learned
-  // from a RoomLockChanged broadcast that fires after somebody toggles it" — the transcript pause
-  // HAS a read, so somebody who joins mid-pause is not left believing it is running.
+  // The transcript pause has its own read, so somebody who joins mid-pause is not left believing it
+  // is running. (The lock and the recording are read from the join response instead — WT-935.)
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
   const setTranscriptPausedMutation = useSetTranscriptPaused(roomId);
   const transcriptPause: TranscriptPauseState = resolveTranscriptPause({
@@ -1228,10 +1997,14 @@ export function PersistentMeetingSession({
   // rule and the reasons, including why a running translation is NOT one of them, are
   // lastSignOfLife's. Read through a ref so a new sensor reading does not restart the poll.
   const roomMeetCode = extractMeetCodeFromUrl(room?.externalMeetingUrl);
-  const reaperEvidenceRef = useRef({ isBridgeRoom, meetSensor, roomMeetCode });
+  // WT-912: and from the desktop's read of Meet's own buttons (in the call) and a far side the
+  // capture can hear, which is what still works while the user's own mic is muted.
+  const meetCallPhase = meetFollow.callPhase;
+  const farSideHeard = isBridgeRoom && inboundHealth === "listening";
+  const reaperEvidenceRef = useRef({ isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard });
   useEffect(() => {
-    reaperEvidenceRef.current = { isBridgeRoom, meetSensor, roomMeetCode };
-  }, [isBridgeRoom, meetSensor, roomMeetCode]);
+    reaperEvidenceRef.current = { isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard };
+  }, [isBridgeRoom, meetSensor, roomMeetCode, meetCallPhase, farSideHeard]);
 
   // Returning to the full meeting surface is itself an unambiguous "I am here": clear the idle
   // disconnect so <LiveKitRoom> reconnects, and never reap while the meeting owns the screen.
@@ -1273,6 +2046,8 @@ export function PersistentMeetingSession({
         meetSensor: evidence.meetSensor,
         roomMeetCode: evidence.roomMeetCode,
         lastSpeechAt: lastSpeechAtRef.current,
+        meetCallPhase: evidence.meetCallPhase,
+        farSideHeard: evidence.farSideHeard,
       });
       if (signOfLife > lastInteractionRef.current) {
         lastInteractionRef.current = signOfLife;
@@ -1323,17 +2098,65 @@ export function PersistentMeetingSession({
 
   // WT-306: `activeRoomId` now survives a reload, so it can name a room that has since ended,
   // been cancelled, or that this account can no longer read. A restored id must not mount a
-  // mini window onto a dead room — retire the session instead.
+  // mini window onto a dead room — retire the session instead. Only when the SERVER says so: a
+  // timeout here used to retire a live bridge session mid-call (prod, 2026-10-03), the same
+  // "absence is not evidence" mistake canConnectMeeting above was fixed for.
   const meetingRoomIsGone = isRestoredMeetingStale({
     compact,
     roomLoadFailed: roomQuery.isError,
+    roomLoadErrorStatus: (roomQuery.error as { response?: { status?: number } } | null)?.response
+      ?.status,
     hasRoom: Boolean(roomQuery.data),
     canConnectRoom: canConnectMeeting,
   });
+  // W4a: whether this session has held a live room. A bridge room seen ENDED by a refetch after
+  // that — the TranslationRoomEnded broadcast missed while the hub was reconnecting — ended in
+  // front of us and lands where the broadcast would have sent it; a room restored already ended
+  // (a reload, the next day) is still retired silently, as above.
+  const heldLiveRoomRef = useRef(false);
+  // Filled in below the relay host, whose announceEnded it calls.
+  const handOffEndedBridgeRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (canConnectMeeting && meetingSession?.token) heldLiveRoomRef.current = true;
+  }, [canConnectMeeting, meetingSession?.token]);
   useEffect(() => {
     if (!meetingRoomIsGone) return;
+    if (isBridgeRoom && roomQuery.data?.status === "ended" && heldLiveRoomRef.current) {
+      handOffEndedBridgeRef.current();
+      onMeetingClosed();
+      router.replace(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+      return;
+    }
     onMeetingClosed();
-  }, [meetingRoomIsGone, onMeetingClosed]);
+  }, [meetingRoomIsGone, onMeetingClosed, isBridgeRoom, roomQuery.data?.status, router, activeWorkspaceSlug, roomId]);
+
+  /**
+   * WT-899 — the same exit as the TranslationRoomEnded handler, for a client the broadcast never
+   * reaches.
+   *
+   * A participant on an EXTERNAL_BRIDGE room whose registration was refused (two seats: the host
+   * and the Google Meet stand-in) is never admitted to the hub's room group, so when the host ended
+   * the call they stayed on /live behind the bridge wizard indefinitely. The polled room status
+   * closes the session — which unmounts the wizard and the Leave dialog with it — and lands them
+   * where everyone else lands.
+   */
+  const roomStatusForEnd = room?.status;
+  const sawRoomJoinableRef = useRef(false);
+  useEffect(() => {
+    if (canConnectMeeting && roomStatusForEnd) sawRoomJoinableRef.current = true;
+    if (
+      !roomEndedUnderSession({
+        status: roomStatusForEnd,
+        sawJoinable: sawRoomJoinableRef.current,
+        exiting: endedByMeRef.current || exitInFlightRef.current,
+      })
+    ) {
+      return;
+    }
+    toast.info("This meeting has ended.");
+    onMeetingClosed();
+    router.replace(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+  }, [roomStatusForEnd, canConnectMeeting, onMeetingClosed, router, activeWorkspaceSlug, roomId]);
 
   const displayName =
     savedJoinConfig.displayName ||
@@ -1480,6 +2303,9 @@ export function PersistentMeetingSession({
   const translationConnectionRef = useRef<
     import("@microsoft/signalr").HubConnection | null
   >(null);
+  // The current connection's JoinTranslationRoom (with its retries), for a take-over after this
+  // session was displaced. Set and cleared by the SignalR effect below.
+  const rejoinTranslationRoomRef = useRef<(() => Promise<void>) | null>(null);
 
   /**
    * Bumped every time the translation hub becomes usable — the initial start AND every
@@ -1504,6 +2330,32 @@ export function PersistentMeetingSession({
    */
   const [hubGeneration, setHubGeneration] = useState(0);
 
+  // Live Meet speaker names (desktop #44 -> hub ReportFarSpeakerHints, backend #499): the
+  // capturer's desktop reads Meet's CC and this window forwards the names on its hub connection.
+  // Same gate as the far side's capture itself: a bridge room, open, this desktop the capturer.
+  const { meetCaptionsOff } = useFarSpeakerHints({
+    roomId,
+    meetCode: roomMeetCode,
+    enabled: bridgeAudioOwner && bridgeListening && !meetingIsIdleReaped,
+    connectionRef: translationConnectionRef,
+    hubGeneration,
+  });
+
+  // "Use this device". Clearing the flag re-enables <LiveKitRoom connect>, and the LiveKit join
+  // evicts the other device; the hub rejoin kicks the other device's hub connection. Each eviction
+  // is what shows the OTHER side this same notice, so the hand-over happens exactly once.
+  const takeOverDisplacedSession = useCallback(() => {
+    sessionDisplacedRef.current = false;
+    setSessionDisplaced(false);
+    const rejoin = rejoinTranslationRoomRef.current;
+    if (!rejoin) return;
+    void rejoin().then(() => {
+      // Same reason as startAndJoin: re-run the language/voice sync effects against a hub that
+      // is in the room again.
+      setHubGeneration((generation) => generation + 1);
+    });
+  }, []);
+
   // Publish the REAL mic state to the roster, whenever it changes and however it changed.
   //
   // Keyed on `microphoneEnabled` on purpose: LocalMediaController mirrors that state from the
@@ -1526,6 +2378,31 @@ export function PersistentMeetingSession({
   // ref a record of intent rather than of what the server holds, so a call that never went
   // out still marked the value as applied and the equality guard above swallowed every retry.
   const appliedListenLanguageRef = useRef<string | null>(null);
+
+  /**
+   * WT-709 — what to do when the hub REFUSES a language rather than failing to deliver it.
+   *
+   * backend#512 holds every participant to the meeting's declared languages (and, as before, the
+   * workspace's whitelist) on JoinTranslationRoom and both Set*Language methods, and throws a
+   * HubException whose sentence says which limit refused. The catch blocks below used to print
+   * "Could not update the language you hear." for that and leave the refused pick in state — the
+   * control bar went on naming a language the server never accepted, which is WT-528's silent
+   * drop arriving by a new road. This puts the side back on what the hub last confirmed (or the
+   * meeting's source language), rewrites the remembered pick so a reload does not resurrect it,
+   * and says which limit refused and who can lift it. Returns the language it moved to, or null.
+   *
+   * A ref, filled in further down once the state it needs exists, so the sync effects and the
+   * hub's join loop — registered once — always call the current one without depending on it.
+   */
+  const languageRefusedRef = useRef<
+    | ((side: "speak" | "listen", refused: string, refusal: LanguageRefusal) => string | null)
+    | null
+  >(null);
+  /** The same, for a refused JoinTranslationRoom — which does not say which half it refused. */
+  const joinLanguageRefusedRef = useRef<
+    | ((refusal: LanguageRefusal, sent: { speak: string; listen: string }) => void)
+    | null
+  >(null);
 
   useEffect(() => {
     if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage)
@@ -1559,7 +2436,13 @@ export function PersistentMeetingSession({
       try {
         await connection.invoke("SetListenLanguage", roomId, listenLanguage);
         if (!cancelled) appliedListenLanguageRef.current = listenLanguage;
-      } catch {
+      } catch (error) {
+        // WT-709: a refusal is the server's answer, not a delivery failure — revert and explain.
+        const refusal = classifyLanguageRefusal(error);
+        if (refusal) {
+          if (!cancelled) languageRefusedRef.current?.("listen", listenLanguage, refusal);
+          return;
+        }
         toast.error("Could not update the language you hear.");
       }
     })();
@@ -1615,7 +2498,13 @@ export function PersistentMeetingSession({
       try {
         await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
         if (!cancelled) appliedSpeakLanguageRef.current = sourceLanguage;
-      } catch {
+      } catch (error) {
+        // WT-709: see the listen effect above.
+        const refusal = classifyLanguageRefusal(error);
+        if (refusal) {
+          if (!cancelled) languageRefusedRef.current?.("speak", sourceLanguage, refusal);
+          return;
+        }
         toast.error("Could not update the language you speak.");
       }
     })();
@@ -1734,50 +2623,46 @@ export function PersistentMeetingSession({
     };
   }, [voicePreference, roomId, hubGeneration]);
 
-  // Choices for the media bar's language dropdown: the room's spoken language plus every
-  // configured target — always includes whatever is currently selected so a value coming
-  // from an older/ad-hoc join config never renders as a dropdown option with no match.
-  // Languages this participant added themselves, beyond the ones the room was configured
-  // with. The room's configuration is what gets OFFERED, not a limit on who may speak: it
-  // was chosen by whoever booked the meeting, before they knew who would turn up. Somebody
-  // who speaks Korean in a Vietnamese/Japanese room adds Korean and is understood.
+  // Languages this participant added themselves, beyond the ones the room was configured with —
+  // kept so a language stays in the menu after they switch off it.
   //
-  // Kept here rather than only in the current selection, so a language stays in the menu
-  // after they switch off it — otherwise adding one, trying another, and going back would
-  // mean finding it in the full list again every time.
+  // WT-709: only consulted where the server sets no meeting-language limit (a bridge room, a room
+  // with no declared set). Everywhere else the meeting's declared languages ARE the menu, because
+  // the hub refuses anything outside them; meetingPickerLanguages ignores this list there.
   const [addedLanguages, setAddedLanguages] = useState<string[]>([]);
 
-  const availableListenLanguages = useMemo(() => {
-    const codes = new Set<string>();
-    if (room?.sourceLanguage)
-      codes.add(normalizeLanguageCode(room.sourceLanguage));
-    room?.targetLanguages?.forEach((language) =>
-      codes.add(normalizeLanguageCode(language)),
-    );
-    addedLanguages.forEach((language) => codes.add(language));
-    codes.add(normalizeLanguageCode(targetLanguage));
+  /**
+   * The meeting's declared languages (L2) as bare codes, or null where the server places no such
+   * limit. Non-null is what turns the bar's "Other languages" disclosure into "ask the host" — and,
+   * for the room host, into the control that adds one.
+   */
+  const declaredLanguages = useMemo(() => meetingDeclaredLanguages(room), [room]);
 
-    // WT-497: the workspace's language policy applies to the menu, not only to room creation.
-    //
-    // These codes come from the room, and a room's languages were checked against the policy
-    // ON THE DAY IT WAS CREATED (WT-271). Tighten the policy afterwards and every existing room
-    // keeps offering what it was created with — the menu was faithfully reflecting the room and
-    // quietly contradicting the workspace. A recurring series makes it worse: the rule outlives
-    // any single policy change.
-    //
-    // Empty means unrestricted, matching the server's own whitelist check — so an absent or
-    // still-loading settings response must NOT be read as "nothing is allowed", or the picker
-    // would empty itself while the query is in flight.
-    const allowed = allowedTargetLanguages;
-    if (!allowed || allowed.length === 0) return Array.from(codes);
+  // Choices for the media bar's language picker, the join-time language modal and the remembered-
+  // profile suggestion — one list, so none of them can offer what the hub would refuse.
+  //
+  // WT-709: the meeting's declared languages, not every language the WORKSPACE allows. WT-497's
+  // rule still holds inside that: the workspace policy narrows the menu too (a room's languages
+  // were checked against it only on the day it was created), an empty or still-loading policy is
+  // unrestricted, and the language this participant is on stays listed even if the policy now
+  // forbids it. See lib/meeting/meeting-language-limit.ts.
+  const availableListenLanguages = useMemo(
+    () =>
+      meetingPickerLanguages({
+        room,
+        allowedTargetLanguages,
+        current: targetLanguage,
+        added: addedLanguages,
+      }),
+    [room, targetLanguage, addedLanguages, allowedTargetLanguages],
+  );
 
-    const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
-    // The language this participant is CURRENTLY on stays, even if the policy now forbids it.
-    // Removing the selected option from its own menu makes the control render blank and gives
-    // them no way to move off it — the policy is enforced by what they can move TO.
-    const current = normalizeLanguageCode(targetLanguage);
-    return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
+  // WT-709: what the room host may add mid-meeting. isRoomHost, not isHost — the endpoint gates on
+  // the room's EFFECTIVE host, and a workspace admin would be offered rows that all answer 403.
+  const addableRoomLanguages = useMemo(
+    () => (isRoomHost ? languagesHostCanAdd({ room, allowedTargetLanguages }) : []),
+    [isRoomHost, room, allowedTargetLanguages],
+  );
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -1890,6 +2775,88 @@ export function PersistentMeetingSession({
     rememberJoinPreference({ speakLanguage: normalizedLanguage });
   }, [rememberJoinPreference, rememberAddedLanguage]);
 
+  // WT-709 — see languageRefusedRef where it is declared. Assigned in an effect, not during render.
+  useEffect(() => {
+    languageRefusedRef.current = (side, refused, refusal) => {
+      const confirmed =
+        side === "speak" ? appliedSpeakLanguageRef.current : appliedListenLanguageRef.current;
+      const revertedTo = languageAfterRefusal({ refused, confirmed, room });
+
+      if (revertedTo) {
+        // Back to what the server holds — the button then names it — and the remembered pick
+        // with it, or the resolver would hand the refused value straight back on the next render.
+        if (side === "speak") {
+          setSpeakLanguageState(revertedTo);
+          rememberJoinPreference({ speakLanguage: revertedTo });
+        } else {
+          setListenLanguageState(revertedTo);
+          rememberJoinPreference({ listenLanguage: revertedTo });
+        }
+      }
+
+      const message = describeLanguageRefusal({
+        kind: refusal,
+        language: refused,
+        revertedTo,
+        canAddLanguages: isRoomHost && declaredLanguages !== null,
+      });
+      // One toast per refused language. A single pick writes BOTH sides, and both are refused,
+      // so the second call replaces the first instead of stacking a duplicate under it.
+      toast.error(message.title, {
+        id: `language-refused:${normalizeLanguageCode(refused)}`,
+        description: message.description,
+        duration: 10000,
+      });
+      return revertedTo;
+    };
+
+    joinLanguageRefusedRef.current = (refusal, sent) => {
+      const sides = refusedSides({
+        refusal,
+        speak: sent.speak,
+        listen: sent.listen,
+        room,
+        allowedTargetLanguages,
+      });
+      for (const side of sides) {
+        const refused = side === "speak" ? sent.speak : sent.listen;
+        const revertedTo = languageRefusedRef.current?.(side, refused, refusal);
+        if (!revertedTo) continue;
+        // Written straight into the refs the join reads, not left for the next render: the next
+        // attempt is a second away and must carry the pair the hub will accept.
+        if (side === "speak") sourceLanguageRef.current = revertedTo;
+        else targetLanguageRef.current = revertedTo;
+      }
+    };
+  }, [room, isRoomHost, declaredLanguages, rememberJoinPreference, allowedTargetLanguages]);
+
+  /**
+   * WT-709, room host only: add a language to the meeting for everybody.
+   *
+   * Does not change the host's OWN language. The host adds Korean for the guest who needs it; the
+   * guest picks it. The answer patches the room query (useAddRoomLanguage), so the row moves up
+   * into the host's own list at once, and RoomLanguagesChanged grows everyone else's.
+   *
+   * The server's sentence on failure, never a generic one: a 400 here says whether the workspace
+   * forbids the language or the plan's language quota is spent, and those have different owners.
+   */
+  function handleAddRoomLanguage(language: string) {
+    const code = normalizeLanguageCode(language);
+    if (!code || addRoomLanguage.isPending) return;
+    addRoomLanguage.mutate(code, {
+      onSuccess: () => {
+        toast.success(`${getLanguageName(code)} added to the meeting.`, {
+          description: "Everyone in the meeting can pick it now.",
+        });
+      },
+      onError: (error) => {
+        toast.error(`Could not add ${getLanguageName(code)} to the meeting.`, {
+          description: getErrorMessage(error, "Try again in a moment."),
+        });
+      },
+    });
+  }
+
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
     setVoiceSelection({
@@ -1918,17 +2885,7 @@ export function PersistentMeetingSession({
   // Only profiles with a provider voice behind them. An uploaded recording has none until it has
   // been cloned, and offering it would let somebody pick a voice that cannot be used — the same
   // silent nothing WT-396 exists to remove.
-  const ownVoiceProfiles = useMemo(
-    () =>
-      (savedVoiceProfiles ?? [])
-        .filter((profile) => profile.providerVoiceId && profile.isActive)
-        .map((profile) => ({
-          id: profile.id,
-          name: profile.displayName || "My voice",
-          voiceId: profile.providerVoiceId!,
-        })),
-    [savedVoiceProfiles],
-  );
+  const ownVoiceProfiles = useMemo(() => meetingVoiceProfiles(savedVoiceProfiles), [savedVoiceProfiles]);
 
   /**
    * Pick the voice this participant is dubbed in, or null to be cloned live in the meeting.
@@ -1939,15 +2896,16 @@ export function PersistentMeetingSession({
    * everywhere except the meeting the person is standing in, until somebody joins or translation
    * is restarted and a publish happens for some unrelated reason.
    */
-  function handleChangeDubVoice(voiceId: string | null) {
+  function handleChangeDubVoice(voiceId: string | null, pickedLanguage?: string | null) {
     setDubVoice.mutate(
       // A voice of your own is accepted without a language; a catalogue pick is validated
       // against one — see VoiceProfileService.IsVoiceChoosableByAsync.
       {
         voiceId,
+        // The panel's library spans languages, so a pick names the catalogue it came from.
         language: ownVoiceProfiles.some((profile) => profile.voiceId === voiceId)
           ? null
-          : sourceLanguage,
+          : pickedLanguage || sourceLanguage,
       },
       {
         onSuccess: async () => {
@@ -1966,12 +2924,70 @@ export function PersistentMeetingSession({
     );
   }
 
+  // Asked in the meeting, at the moment it matters: the pipeline has just said this speaker is
+  // being dubbed in a library voice (`not_opted_in`). See lib/meeting/voice-clone-prompt.ts.
+  const voiceConsentT = useTranslations("voiceProfiles.consent");
+  const { data: voiceConsent } = useVoiceConsent();
+  const grantVoiceConsent = useGrantVoiceConsent();
+  const [voiceClonePromptDismissed, setVoiceClonePromptDismissed] = useState<boolean>(() => {
+    try {
+      return window.sessionStorage.getItem(voiceClonePromptDismissKey(roomId)) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [voiceClonePromptPending, setVoiceClonePromptPending] = useState(false);
+  const showVoiceClonePrompt = shouldPromptVoiceClone({
+    cloneReason: cloneCaptureState?.reason,
+    dubVoiceId: dubVoice,
+    dismissed: voiceClonePromptDismissed,
+  });
+
+  function dismissVoiceClonePrompt() {
+    setVoiceClonePromptDismissed(true);
+    try {
+      window.sessionStorage.setItem(voiceClonePromptDismissKey(roomId), "1");
+    } catch {
+      // Non-critical: the worst case is being asked once more after a reload.
+    }
+  }
+
+  async function handleAllowVoiceCloneFromPrompt() {
+    setVoiceClonePromptPending(true);
+    try {
+      // Both gates, in order. The room switch is refused (403) without the account consent, and
+      // the account consent alone does not reach routes this meeting already built.
+      if (!voiceConsent?.isGranted) {
+        await grantVoiceConsent.mutateAsync();
+      }
+      await setVoiceCloneConsent.mutateAsync(true);
+      setVoiceCloneEnabled(true);
+      // Hidden for the rest of the meeting even before the pipeline's next state arrives.
+      setVoiceClonePromptDismissed(true);
+      toast.success(voiceConsentT("prompt.enabled"));
+    } catch {
+      toast.error(voiceConsentT("prompt.failed"));
+    } finally {
+      setVoiceClonePromptPending(false);
+    }
+  }
+
   function handleChangeVoiceCloneConsent(enabled: boolean) {
     const previous = voiceCloneEnabled;
     setVoiceCloneEnabled(enabled); // optimistic
     setVoiceCloneConsent.mutate(enabled, {
-      onError: () => {
+      // Both outcomes go to main.log in a bridge room: "I picked My voice and was never dubbed in
+      // it" was unanswerable afterwards, and the toast below is in a window nobody is looking at.
+      onSuccess: () => {
+        if (isBridgeRoom) console.warn(`[bridge] own-voice clone for this room turned ${enabled ? "on" : "off"}`);
+      },
+      onError: (error) => {
         setVoiceCloneEnabled(previous);
+        if (isBridgeRoom) {
+          console.warn(
+            `[bridge] own-voice clone could not be turned ${enabled ? "on" : "off"}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
         toast.error("Could not update voice clone consent.");
       },
     });
@@ -2011,11 +3027,13 @@ export function PersistentMeetingSession({
   // The far side's original sits under the translation while this host hears dubs, and returns to
   // full level when they do not. Written to the ref too, so a monitor started later begins at the
   // current level instead of jumping to it. See lib/audio/bridge-far-side-monitor.
+  // WT-900: held at zero while the monitor is not allowed (see farSideMonitorAllowed).
   useEffect(() => {
     const gain = farSideMonitorGain(voiceEnabled, farSideMonitorLevel);
     farSideMonitorGainRef.current = gain;
-    farSideMonitorRef.current?.setGain(gain);
-  }, [voiceEnabled, farSideMonitorLevel]);
+    farSideMonitorAllowedRef.current = farSideMonitorAllowed;
+    farSideMonitorRef.current?.setGain(farSideMonitorAllowed ? gain : 0);
+  }, [voiceEnabled, farSideMonitorLevel, farSideMonitorAllowed]);
 
   useRegisterAssistantContext(
     room && !compact
@@ -2038,10 +3056,15 @@ export function PersistentMeetingSession({
     meetingJoinedRef.current = true;
     setMeetingSession(null);
 
+    const hostStateAsked = { ...hostStateToldRef.current };
     void joinMeetingAsync({ translationRoomId: room.id, displayName })
       .then((session) => {
         setMeetingError(null);
         setMeetingSession(session);
+        // WT-935: the lock and the recording as they are now. In the same batch as the session, so
+        // nothing that waits for the join (the bridge's automatic recording start) ever sees a
+        // joined room that is "not recording" while it is.
+        hydrateHostStateFromJoin(session, hostStateAsked);
         // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
         if (session.muteOnEntry) setMicrophoneEnabled(false);
       })
@@ -2056,6 +3079,7 @@ export function PersistentMeetingSession({
   }, [
     canConnectMeeting,
     displayName,
+    hydrateHostStateFromJoin,
     joinMeetingAsync,
     room,
     setMicrophoneEnabled,
@@ -2072,10 +3096,13 @@ export function PersistentMeetingSession({
 
     const translationRoomId = room.id;
     queueMicrotask(() => {
+      const hostStateAsked = { ...hostStateToldRef.current };
       void joinMeetingAsync({ translationRoomId, displayName })
         .then((session) => {
           setMeetingError(null);
           setMeetingSession(session);
+          // WT-935: see retryMeetingConnection above — the same read, for the first join.
+          hydrateHostStateFromJoin(session, hostStateAsked);
           // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
           if (session.muteOnEntry) setMicrophoneEnabled(false);
         })
@@ -2088,7 +3115,7 @@ export function PersistentMeetingSession({
           );
         });
     });
-  }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
+  }, [canConnectMeeting, displayName, hydrateHostStateFromJoin, joinMeetingAsync, room?.id]);
 
   /**
    * Make sure this person exists as a PARTICIPANT of the translation room, not only as a
@@ -2287,13 +3314,435 @@ export function PersistentMeetingSession({
   // WT-525: the popup over Google Meet changes this meeting only through here. It sends intents;
   // these are the same handlers the control bar calls, and the snapshot is what this window holds.
   // See lib/meeting/bridge-widget-relay for why the popup may not change any of it itself.
-  useBridgeWidgetRelayHost({
+  //
+  // W4a: and the meeting itself (WT-901), now that the popup is the only bridge UI. Every control
+  // the popup offers is dispatched to the handler the native meeting uses for it — stop, the WT-605
+  // transcript pause, rejoin after the idle reaper, the device wizard, the room's record — so the
+  // host check, the toasts and the wizard are the native ones.
+  const bridgeCanControl = canControlBridge({ isRoomHost, bridgeRole: bridgeLease.bridgeRole });
+
+  /**
+   * Text-only bridge: the popup's mode chooser lands here. Any participant, for their OWN row — no
+   * host check, as on the server. The one-way rule is checked before the server is asked (never
+   * text → voice while translation runs); the server still has the last word, and a 409
+   * BRIDGE_AUDIO_MODE_LOCKED there means this user IS text-only, whatever this window thought.
+   */
+  const bridgeAudioModeInFlightRef = useRef(false);
+  const handleSetBridgeAudioMode = useCallback(
+    async (next: BridgeAudioMode) => {
+      if (!isBridgeRoom || bridgeAudioModeInFlightRef.current) return;
+      const change = bridgeAudioModeChange({
+        current: bridgeAudioMode,
+        next,
+        translationActive: translationStarted,
+      });
+      if (change !== "allowed") return;
+      bridgeAudioModeInFlightRef.current = true;
+      try {
+        const result = await translationRoomService.setBridgeAudioMode(roomId, next);
+        setKnownBridgeAudioMode(roomId, result.mode);
+      } catch (error) {
+        if (bridgeAudioModeFailure({ status: getErrorStatus(error), code: apiErrorCode(error) }) === "locked") {
+          setKnownBridgeAudioMode(roomId, "text");
+        } else {
+          toast.error("Could not change how Google Meet hears you.", {
+            description: getErrorMessage(error, "Try again in a moment."),
+          });
+        }
+      } finally {
+        bridgeAudioModeInFlightRef.current = false;
+        void refetchParticipants();
+      }
+    },
+    [isBridgeRoom, bridgeAudioMode, translationStarted, roomId, setKnownBridgeAudioMode, refetchParticipants],
+  );
+
+  // WT-910 — A BRIDGED MEET CALL IS RECORDED BY DEFAULT. THE ONE EXCEPTION TO "RECORDING IS NEVER
+  // STARTED FOR YOU" (the rule and its reasons are further down, above handleToggleRecording, and
+  // they stand unchanged for every native meeting).
+  //
+  // PO decision, 2026-10-01: Google Meet refuses its own recording, so WarpTalk records the call.
+  // Default ON, opt-out. What makes this not the thing that rule forbids:
+  //   - it is bridge rooms only (bridgeAutoRecordingDecision says "not-bridge" for anything else);
+  //   - somebody WAS asked: the "Record this meeting" checkbox sits in the popup's listening
+  //     prompt, checked, and its value arrives with their press. A room where nobody was shown it
+  //     (`bridgeRecordChoice` null) is not recorded;
+  //   - only the room host or the capturer can cause it, the same people the server accepts;
+  //   - it is announced as it happens: the RecordingStateChanged toast to every WarpTalk
+  //     participant, and the standing REC chip in every participant's popup (useBridgeRecordingHost
+  //     below), with Stop on it for host and capturer.
+  //
+  // BOUND TO CAPTURE START, not to Start Translation: the recording begins when the inbound leg —
+  // the far side of the call — comes up. Once per answer (the choice's token): a re-render, a
+  // reconnect of the leg, or a host who stopped the recording by hand never start it again; only
+  // answering the question again does. All of that is bridge-recording.ts, which is pure and tested.
+  //
+  // The leg counts as open while it last came up in THIS room and is still wanted. Derived here
+  // rather than cleared from the capture effect's "not wanted" branch: that would be a synchronous
+  // setState in an effect, and a stale "open" from before an idle reap or a Stop listening must not
+  // keep the Meet window on the wire.
+  //
+  // Only once this window has JOINED the meeting (WT-916). The meeting service creates its
+  // MeetingRoom row in the join call and nowhere else, and the recording endpoint answers 404
+  // without that row. The inbound leg does not wait for the join (it connects with its own bridge
+  // token), so a join that is still in flight or has failed could otherwise spend this answer's
+  // one automatic start on a 404. Waiting here means the start happens when the join lands.
+  const bridgeInboundOpen =
+    isBridgeRoom &&
+    Boolean(meetingSession) &&
+    bridgeInboundOpenRoomId === roomId &&
+    bridgeAudioOwner &&
+    bridgeListening &&
+    bridgeInboundStartable &&
+    !meetingIsIdleReaped;
+  /** An automatic start is in flight: the window is being captured, or the server is being asked. */
+  const [bridgeRecordingStarting, setBridgeRecordingStarting] = useState(false);
+  /**
+   * The answer an automatic start was last attempted for, and how many starts its current chain has
+   * made (WT-916). A ref: it only ever gates the effect.
+   */
+  const bridgeRecordHandledRef = useRef<{ roomId: string; token: number; attempts: number } | null>(null);
+  // WT-916 — a failed start that says "not now" is retried for the same answer on a bounded
+  // schedule (bridgeRecordingFailurePlan). The ref is the scheduled retry (cleared = cancelled);
+  // the state is the retry whose timer fired, so the effect below re-runs and re-decides.
+  const bridgeRecordRetryRef = useRef<{
+    retry: BridgeRecordingRetry;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const [bridgeRecordRetryDue, setBridgeRecordRetryDue] = useState<BridgeRecordingRetry | null>(null);
+  /** The automatic start gave up for this answer: the sentence that was toasted. */
+  const [bridgeRecordFailure, setBridgeRecordFailure] = useState<
+    { roomId: string; token: number; reason: string } | null
+  >(null);
+  /** The room this window is running, for an attempt that settles after it left. */
+  const bridgeRecordRoomRef = useRef<string | null>(null);
+  useEffect(() => {
+    bridgeRecordRoomRef.current = roomId;
+    return () => {
+      bridgeRecordRoomRef.current = null;
+      const scheduled = bridgeRecordRetryRef.current;
+      if (scheduled?.timer) clearTimeout(scheduled.timer);
+      bridgeRecordRetryRef.current = null;
+    };
+  }, [roomId]);
+  /** Published by <BridgeMeetWindowPublisher>, which is inside <LiveKitRoom> and can reach the Room. */
+  const meetWindowControlRef = useRef<MeetWindowControl | null>(null);
+  /** Published by <BridgeMeetAudioPublisher>: the call's sound for the recording. */
+  const meetAudioControlRef = useRef<MeetAudioControl | null>(null);
+  const startRecordingRef = useRef(setRecordingMutation.mutateAsync);
+  useEffect(() => {
+    startRecordingRef.current = setRecordingMutation.mutateAsync;
+  });
+
+  // B18: the recording's picture follows the Meet tab (rules in lib/meeting/bridge-recording).
+  // Leaving the tab (PiP, another tab) counts at once; coming back only after it held for a second.
+  const meetTabReading = meetWindowTabReading({
+    sensorAvailable: isBridgeRoom && hasMeetCallSensor(),
+    call: meetFollow.call,
+    roomMeetCode,
+  });
+  const [meetTabSettled, setMeetTabSettled] = useState(false);
+  useEffect(() => {
+    const onTab = meetTabReading === "on-tab";
+    const timer = window.setTimeout(() => setMeetTabSettled(onTab), onTab ? MEET_TAB_RETURN_HOLD_MS : 0);
+    return () => window.clearTimeout(timer);
+  }, [meetTabReading]);
+  const meetOnTab = meetWindowOnTab(meetTabReading, meetTabSettled);
+  const meetOnTabRef = useRef(meetOnTab);
+  useEffect(() => {
+    meetOnTabRef.current = meetOnTab;
+  });
+
+  useEffect(() => {
+    const decisionInput: BridgeAutoRecordingInput = {
+      roomId,
+      isBridgeRoom,
+      inboundOpen: bridgeInboundOpen,
+      canControl: bridgeCanControl,
+      choice: bridgeRecordChoice,
+      recording: isRecording,
+      starting: bridgeRecordingStarting,
+      handledToken: bridgeRecordHandledRef.current,
+    };
+    // WT-916: a waiting retry is dropped the moment it may no longer fire (recording on, answer
+    // changed or opted out, capture closed, control lost). For good: reopening does not revive it.
+    const scheduled = bridgeRecordRetryRef.current;
+    if (scheduled && !shouldKeepBridgeRecordingRetry(decisionInput, scheduled.retry)) {
+      if (scheduled.timer) clearTimeout(scheduled.timer);
+      bridgeRecordRetryRef.current = null;
+    }
+    // Only the retry still scheduled, and only once its timer has fired, opens the handled gate.
+    const live = bridgeRecordRetryRef.current;
+    const retryDue = live && live.timer === null && live.retry === bridgeRecordRetryDue ? live.retry : null;
+    const decision = bridgeAutoRecordingDecision({ ...decisionInput, retryDue });
+    if (decision.type !== "start") return;
+    // Before anything asynchronous, so no later render can decide "start" for the same attempt.
+    bridgeRecordHandledRef.current = { roomId, token: decision.token, attempts: decision.attempt };
+    bridgeRecordRetryRef.current = null;
+    setBridgeRecordingStarting(true);
+    const { token, attempt } = decision;
+
+    void (async () => {
+      try {
+        // 1 + 2. The picture first, so the file's first frame already has the Meet window: the
+        // desktop arms a capture of it, getDisplayMedia then resolves with no picker, and the
+        // track is published as `meet-window` for the egress template to fill the frame with.
+        // Best effort — an older desktop build, a Meet window that cannot be found, a refused
+        // publish — and never a reason not to record: the recording is then audio-only.
+        // B18: off the Meet tab it starts audio-only; the picture follows when Meet is back.
+        // 2b. In parallel, the call's sound, so the file's first second already has it
+        // (meet-audio-track.ts). Best effort like the picture: without it the template mixes
+        // WarpTalk's own tracks. Settled, never thrown: neither may stop the recording.
+        const [videoResult, audioResult] = await Promise.allSettled([
+          !mayCaptureMeetWindowAtStart(meetOnTabRef.current)
+            ? Promise.resolve("Google Meet is not on its tab")
+            : (meetWindowControlRef.current?.publishMeetWindow(roomId) ?? Promise.resolve("no-publisher")),
+          meetAudioControlRef.current?.publishMeetAudio() ?? Promise.resolve("no-publisher"),
+        ]);
+        const video = videoResult.status === "fulfilled" ? videoResult.value : String(videoResult.reason);
+        const audio = audioResult.status === "fulfilled" ? audioResult.value : String(audioResult.reason);
+        if (video !== "published") {
+          console.warn(`[bridge] Recording without the Meet window: ${video}.`);
+        }
+        if (audio !== "published") {
+          console.warn(`[bridge] Recording without the Meet call audio: ${audio}.`);
+        }
+        // 3. The same endpoint the native button calls.
+        const state = await startRecordingRef.current("start");
+        setIsRecording(state.recording);
+        setBridgeRecordFailure(null);
+        // Not silent, even for the person whose checkbox caused it: this window is hidden behind
+        // Meet, and the desktop shell surfaces its toasts.
+        if (state.recording) toast.info("This meeting is now being recorded.");
+      } catch (error) {
+        if (bridgeRecordRoomRef.current !== roomId) return;
+        const plan = bridgeRecordingFailurePlan(
+          { status: getErrorStatus(error), code: apiErrorCode(error) },
+          attempt,
+        );
+        if (plan.type === "retry") {
+          // "Not now" (WT-916): quiet, and on a timer. The effect re-decides when it fires.
+          const retry: BridgeRecordingRetry = { roomId, token, attempt: plan.attempt };
+          const next: { retry: BridgeRecordingRetry; timer: ReturnType<typeof setTimeout> | null } = {
+            retry,
+            timer: null,
+          };
+          next.timer = setTimeout(() => {
+            if (bridgeRecordRetryRef.current !== next) return;
+            next.timer = null;
+            setBridgeRecordRetryDue(retry);
+          }, plan.delayMs);
+          bridgeRecordRetryRef.current = next;
+          console.warn(`[bridge] Recording did not start (attempt ${attempt}); retrying in ${plan.delayMs} ms.`);
+          return;
+        }
+        // Refused, or still failing after the retries: told once, here and in the popup. The
+        // server's reason first (quota, a 403), as handleToggleRecording does.
+        const reason = getErrorMessage(error, "Could not start recording.");
+        toast.error(reason);
+        setBridgeRecordFailure({ roomId, token, reason });
+      } finally {
+        setBridgeRecordingStarting(false);
+      }
+    })();
+  }, [
+    roomId,
+    isBridgeRoom,
+    bridgeInboundOpen,
+    bridgeCanControl,
+    bridgeRecordChoice,
+    isRecording,
+    bridgeRecordingStarting,
+    bridgeRecordRetryDue,
+    setIsRecording,
+  ]);
+
+  // WT-916: the give-up, shown in the popup only while it is still the truth and still actionable:
+  // the same answer, nothing recording, capture open, this user in control.
+  const bridgeRecordFailed =
+    bridgeRecordFailure &&
+    bridgeRecordFailure.roomId === roomId &&
+    bridgeRecordChoice?.roomId === roomId &&
+    bridgeRecordChoice.record &&
+    bridgeRecordChoice.token === bridgeRecordFailure.token &&
+    !isRecording &&
+    bridgeInboundOpen &&
+    bridgeCanControl
+      ? { reason: bridgeRecordFailure.reason }
+      : null;
+  /** "Try again" from the popup, already checked by the relay. A fresh chain for the same answer. */
+  const handleBridgeRecordRetry = () => {
+    const failure = bridgeRecordFailure;
+    const handled = bridgeRecordHandledRef.current;
+    if (!bridgeRecordFailed || !failure || !handled) return;
+    if (handled.roomId !== roomId || handled.token !== failure.token) return;
+    const previous = bridgeRecordRetryRef.current;
+    if (previous?.timer) clearTimeout(previous.timer);
+    const retry: BridgeRecordingRetry = { roomId, token: failure.token, attempt: 1 };
+    bridgeRecordHandledRef.current = { ...handled, attempts: 0 };
+    bridgeRecordRetryRef.current = { retry, timer: null };
+    setBridgeRecordFailure(null);
+    setBridgeRecordRetryDue(retry);
+  };
+
+  // The Meet window stays on the wire only while there is a recording to put it in and the call is
+  // still being captured. Stopping the recording by hand, Stop listening with no cable, an idle
+  // reap and the meeting ending all take it down (BridgeMeetWindowPublisher reacts to this flag).
+  const meetWindowWanted = shouldPublishMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
+  // The call's sound (meet-audio) for the same recording. Not tied to the Meet tab: the call keeps
+  // sounding in PiP or behind another tab.
+  const meetAudioWanted = shouldPublishMeetAudio({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+  });
+  // This user's voice in it follows MEET's mute button, not WarpTalk's microphone (which the
+  // bridge starts off, mute-on-entry and the half-duplex gate also hold down).
+  const meetAudioLocalVoice = meetAudioLocalVoiceOn({
+    believed: meetFollow.state.believed,
+    meetMuted: meetFollow.state.meetMuted,
+    warptalkMicrophoneEnabled: microphoneEnabled,
+  });
+  // The Meet window stays up for as long as the recording wants it, whatever took it down: the
+  // capture ending, a dropped connection, a re-arm the desktop refused once, an older desktop with
+  // no tab sensor (shouldSuperviseMeetWindow). The supervisor is the ONLY re-publisher: B18's "Meet
+  // is back on its tab" (shouldRepublishMeetWindow) no longer has an effect of its own racing it on
+  // publishMeetWindow; it kicks the supervisor into an immediate attempt instead.
+  const meetWindowSupervised = shouldSuperviseMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
+  const meetWindowRepublish = shouldRepublishMeetWindow({
+    isBridgeRoom,
+    inboundOpen: bridgeInboundOpen,
+    recording: isRecording,
+    starting: bridgeRecordingStarting,
+    meetOnTab,
+  });
+  const kickMeetWindowSupervisor = useSupervisedPublish({
+    enabled: meetWindowSupervised,
+    kick: meetWindowRepublish,
+    publish: () => meetWindowControlRef.current?.publishMeetWindow(roomId) ?? null,
+    label: "Meet window",
+  });
+  // The Meet tab was dragged into another browser window: the desktop names a new window for the
+  // call. The publisher drops the capture of the old one as soon as it sees that (it would record
+  // whatever tab is left there); this kicks the supervisor - still the only re-publisher - into an
+  // immediate attempt rather than its next check. publishMeetWindow re-arms only when the windows
+  // really differ (meetWindowNeedsRearm); a kick during an attempt in flight runs one more after it.
+  const meetCallWindowHandle = meetFollow.call?.windowHandle ?? null;
+  const lastMeetCallWindowHandleRef = useRef<number | null>(null);
+  useEffect(() => {
+    // Readings without a window (PiP, no surface) neither trigger nor forget: tab -> PiP -> the same
+    // tab is no change, tab -> PiP -> a tab in another window is one.
+    if (meetCallWindowHandle === null) return;
+    const previous = lastMeetCallWindowHandleRef.current;
+    lastMeetCallWindowHandleRef.current = meetCallWindowHandle;
+    // Only a CHANGE of window: the first sighting and the supervisor's own start need nothing here.
+    if (!meetWindowSupervised || previous === null || previous === meetCallWindowHandle) return;
+    kickMeetWindowSupervisor();
+  }, [kickMeetWindowSupervisor, meetCallWindowHandle, meetWindowSupervised]);
+
+  // The popup's REC chip, and its Stop. Every bridge participant's main window publishes the state
+  // (a member is being recorded too and has to see it); only host and capturer are offered Stop,
+  // and the press is re-checked against this window's own state before anything is called.
+  useBridgeRecordingHost({
+    roomId,
+    enabled: isBridgeRoom,
+    recording: isRecording,
+    canStop: bridgeCanControl,
+    failed: bridgeRecordFailed,
+    onRetry: handleBridgeRecordRetry,
+    onStop: () => {
+      setRecordingMutation.mutate("stop", {
+        onSuccess: (state) => {
+          setIsRecording(state.recording);
+          if (!state.recording) toast.success("Recording stopped.");
+        },
+        onError: (error) => toast.error(getErrorMessage(error, "Could not stop recording.")),
+      });
+    },
+  });
+
+  // Translated-voice bridge (PO, 2026-10-03): the microphone WarpTalk records is picked in the
+  // popup, because Meet's own microphone stays on the cable. `activeMicrophoneId` is LiveKit's
+  // active audioinput, reported by <LocalMicSupervisor>; the popup ticks it.
+  const [activeMicrophoneId, setActiveMicrophoneId] = useState<string | null>(null);
+  const handleSetBridgeMicDevice = useCallback(
+    async (deviceId: string) => {
+      const control = localMediaControlRef.current;
+      if (!control) {
+        console.warn("[bridge] Microphone pick from the popup ignored: the meeting is not connected");
+        return;
+      }
+      // Never a virtual cable: its capture side is what WarpTalk itself plays to Meet, so recording
+      // it would transcribe WarpTalk's own output (lib/meeting/bridge-mic-device). The popup does
+      // not offer one; this refuses a stale or forged pick too.
+      let label = "";
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        label = devices.find((d) => d.kind === "audioinput" && d.deviceId === deviceId)?.label ?? "";
+      } catch {
+        // No list: the pick is still applied; the device line in main.log names what it became.
+      }
+      if (isVirtualMicrophoneLabel(label)) {
+        console.warn(`[bridge] Microphone pick refused: "${label}" is a virtual cable, not a microphone`);
+        return;
+      }
+      try {
+        await control.switchMicrophone(deviceId);
+        rememberSelectedMicrophone(window.sessionStorage, roomId, deviceId);
+        console.warn(`[bridge] WarpTalk mic switched from the popup to "${label || deviceId}"`);
+      } catch (error) {
+        console.warn(
+          `[bridge] WarpTalk mic switch to "${label || deviceId}" failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        toast.error("Could not switch your microphone. It may have been unplugged or be in use by another app.");
+      }
+    },
+    [roomId],
+  );
+  // What Meet hears from this person (the dub, the raw mic, nothing) and since when, from
+  // <FilteredRoomAudio>. Every change goes to main.log: "Meet heard me untranslated" is otherwise
+  // unanswerable after the fact.
+  const [bridgeOutbound, setBridgeOutbound] = useState<BridgeWidgetOutboundSnapshot | undefined>(undefined);
+  const handleBridgeOutboundLegChange = useCallback(
+    (leg: BridgeOutboundLeg, outboundIdentity: string | null) => {
+      if (!isBridgeRoom) return;
+      console.warn(describeOutboundLegChange(leg, outboundIdentity));
+      setBridgeOutbound({ leg, sinceMs: Date.now() });
+    },
+    [isBridgeRoom],
+  );
+  // The other direction, to main.log for the same reason: whether the Meet side's dub is being
+  // played to this person, and why not when it is not ("they hear my dub, I hear none of theirs").
+  const handleBridgeInboundDubChange = useCallback(
+    (line: string) => {
+      if (isBridgeRoom) console.warn(line);
+    },
+    [isBridgeRoom],
+  );
+
+  const { announceEnded: announceBridgeRoomEnded } = useBridgeWidgetRelayHost({
     roomId,
     enabled: isBridgeRoom,
     // "auto" is not a language the popup can show, and a snapshot carrying it is rejected whole.
     speakLanguage: isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : null,
     listenLanguage: targetLanguage,
     voiceEnabled,
+    micDeviceId: isBridgeRoom ? activeMicrophoneId : null,
+    onSetMicDevice: isBridgeRoom ? (deviceId) => void handleSetBridgeMicDevice(deviceId) : undefined,
+    outbound: isBridgeRoom ? bridgeOutbound : undefined,
     browserCaptureState: consentState,
     selectedLoopbackSourceId,
     voice: {
@@ -2304,6 +3753,7 @@ export function PersistentMeetingSession({
       cloneCapture: cloneCaptureState,
       meetingAudioLevel: farSideMonitoring ? farSideMonitorLevel : null,
     },
+    inboundHealth,
     onSetLanguage: (language) =>
       applyRelayedLanguagePick(language, {
         onChangeSpeakLanguage: handleChangeSpeakLanguage,
@@ -2315,6 +3765,122 @@ export function PersistentMeetingSession({
     onSetDubVoice: handleChangeDubVoice,
     onSetVoiceCloneConsent: handleChangeVoiceCloneConsent,
     onSetMeetingAudioLevel: (level) => setFarSideMonitorLevel(clampMeetingAudioLevel(level)),
+    translation: { started: translationStarted },
+    // WT-605: the same resolved state the Transcript panel draws (CC keeps running; only the
+    // written transcript is paused). Not the AI workers' `_paused_rooms`, which is a ROOM pause.
+    transcriptPause,
+    creditsSuspended: creditsSuspension?.suspended,
+    creditsSuspendedReason: creditsSuspension?.reason ?? null,
+    meetingError,
+    idleReaped: meetingIsIdleReaped,
+    connection: bridgeMeetingConnection({
+      hasToken: Boolean(meetingSession?.token),
+      canConnectRoom: canConnectMeeting,
+      idleReaped: meetingIsIdleReaped,
+      displaced: sessionDisplaced,
+      reconnecting: isReconnecting,
+      connected: liveKitConnected,
+    }),
+    isRoomHost,
+    // W4b: this desktop's role in the shared room, and whether the capturer looks gone — which is
+    // when a member's popup offers "Capture audio on this device".
+    bridgeRole: isBridgeRoom ? bridgeLease.bridgeRole : undefined,
+    bridgeCapturerAway: bridgeLease.capturerAway ?? undefined,
+    onTakeOverCapture: isBridgeRoom ? () => void bridgeLease.takeOver() : undefined,
+    // Meet's CC looks off on the call this desktop captures (useFarSpeakerHints, capturer only):
+    // the popup asks the user to turn it on, since this window is hidden while bridging.
+    meetCaptionsOff: isBridgeRoom ? meetCaptionsOff : undefined,
+    // Text-only bridge: how Meet hears this user, and the popup's switch (any participant).
+    audioMode: isBridgeRoom ? bridgeAudioMode : undefined,
+    onSetAudioMode: isBridgeRoom ? (mode) => void handleSetBridgeAudioMode(mode) : undefined,
+    // web #646: another login of this account took the meeting over, and this window stopped
+    // connecting. The main window's own "Use this device" card went with the in-window bridge
+    // widget (WT-868), so the popup carries the offer, and this is the native take-over behind it.
+    sessionDisplaced,
+    onTakeOverSession: takeOverDisplacedSession,
+    // The native Stop, for the room host or the bridge capturer (PO, 2026-10-01: canControlBridge).
+    // Absent for anybody else, and the hook then answers the popup with a snapshot instead.
+    onStopTranslation: bridgeCanControl ? handleStopWarptalk : undefined,
+    // commitTranscriptPause, not handleToggleTranscriptPause: the popup has already asked "are you
+    // sure" before a pause, and the native confirmation would be a second one, in a window the
+    // host is not looking at. Host-only, as the panel's switch is (TranscriptRecordingService 403s
+    // anybody else).
+    onSetTranscriptPaused: bridgeCanControl ? (paused) => commitTranscriptPause(paused) : undefined,
+    // The idle reaper's way back, exactly as the reaped compact view's Rejoin does it.
+    onRejoin: () => {
+      markMeetingInteraction();
+      setIdleDisconnected(false);
+    },
+    // The device wizard (WT-578) is a dialog in THIS window, which sits behind Google Meet: bring
+    // the window up with it, or the popup's "Device settings" opens something nobody can see.
+    onOpenSetup: () => {
+      setBridgeSetupOpen(true);
+      void showDesktopMainWindow();
+    },
+    // While the meeting still runs: the room's page in this window, with the meeting kept going
+    // underneath it (the session is mounted by the shell, not by the page).
+    onOpenRoomRecord: () => {
+      router.push(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
+      void showDesktopMainWindow();
+    },
+    // WT-912: the WarpTalk mic follows Meet's mute button. The popup always shows it while the user
+    // is in the call; its press lands here, as an override while following Meet (2026-10-03).
+    mic: isBridgeRoom
+      ? {
+          enabled: microphoneEnabled,
+          control: meetFollow.micControl,
+          ...(meetFollow.micOverridden ? { override: true } : {}),
+        }
+      : undefined,
+    onSetMicEnabled: isBridgeRoom ? meetFollow.setManualMic : undefined,
+    // WT-913: the user left the Meet call. Asked only of whoever may end the room (the server takes
+    // an End from the room's host alone); "End now" is the same exit the countdown runs out into.
+    meetLeave: isBridgeRoom ? meetLeavePrompt(meetFollow.state, { mayEndRoom: isRoomHost }) : undefined,
+    onAnswerMeetLeft: isBridgeRoom
+      ? (end) => (end ? finishMeetLeaveRef.current() : meetFollow.keepOpen())
+      : undefined,
+  });
+
+  // WT-913: the countdown ran out, or "End now". The room's host ends the room through the native
+  // End (handleExit, which tells the popup and finalizes the meeting as any End does); anybody
+  // else only leaves it on their side, and the room stays for the others.
+  //
+  // The leave is resolved only once the exit LANDS (prod, 2026-10-03). It used to be cleared
+  // before the request was sent, so an End that failed against a hung backend left an open room
+  // with nothing left to end it. A failure now goes back to the reducer, which moves the deadline
+  // out and re-arms the hook's timer (bridge-meet-follow: AN END THAT FAILS IS TRIED AGAIN). Only
+  // the first failure is toasted: the retries are the wait the popup already shows. An exit that
+  // is already in flight (another press, or the user's own Leave) is not doubled; it is retried
+  // after the backoff, by which time that exit has either closed this session or failed too.
+  useEffect(() => {
+    finishMeetLeaveRef.current = () => {
+      if (!isBridgeRoom) return;
+      if (exitInFlightRef.current) {
+        meetFollow.leaveFailed(true);
+        return;
+      }
+      const action = meetLeaveOutcome({ mayEndRoom: isRoomHost }) === "end-room" ? "end" : "leave";
+      const quiet = Boolean(meetFollow.state.leave?.failures);
+      void handleExit(action, { quiet }).then((result) => {
+        if (result.kind === "done") meetFollow.resolveLeave();
+        else if (result.kind === "failed") meetFollow.leaveFailed(meetLeaveFailureRetryable(result.status));
+        else meetFollow.leaveFailed(true);
+      });
+    };
+  });
+
+  // W4a: what a bridge session does as its room ENDS (the Google Meet conference ended and
+  // MeetConferenceEndWorker closed the room). Read through a ref by the hub handler, which is
+  // registered once per connection. The navigation itself stays where the native one is.
+  useEffect(() => {
+    handOffEndedBridgeRef.current = () => {
+      if (!isBridgeRoom) return;
+      // Before the unmount: the popup hears "ended" now, and then the shell's ended host.
+      announceBridgeRoomEnded();
+      onBridgeMeetingEnded?.(roomId);
+      // The room's record is about to be on screen in a window that sits behind Meet.
+      void showDesktopMainWindow();
+    };
   });
 
   useEffect(() => {
@@ -2370,12 +3936,14 @@ export function PersistentMeetingSession({
     // translation_worker has stopped translating this room. Said to everyone — every listener
     // loses their dub, not just the host — and in words that name the actual reason.
     connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
+      setCreditsSuspension({ suspended: true, reason: reason || null });
       toast.error(translationSuspendedNotice(reason, translateCreditsNoticeRef.current), {
         duration: 15000,
       });
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     connection.on("TranslationCreditsRestored", () => {
+      setCreditsSuspension({ suspended: false, reason: null });
       toast.success(translationRestoredNotice(translateCreditsNoticeRef.current));
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
@@ -2420,6 +3988,45 @@ export function PersistentMeetingSession({
             participantsRef.current,
           ),
         });
+      },
+    );
+    // The late far-speaker name: a Meet-side line that went out as "Google Meet participants"
+    // because Meet's captions named the speaker a second after their words, named in place once
+    // the ai worker has seen them. Not behind the transcript gate: it adds nothing, it only names
+    // a line one of the lanes already holds, and an id neither holds is ignored (the store's rule,
+    // applyLateFarSpeakerName). An older backend never sends it; the line then keeps the fallback,
+    // as it always did.
+    // Live text: the words of a turn still being spoken. A preview the speaker's final line
+    // replaces (see lib/transcript/live-text.ts); expired here if no final line ever comes.
+    connection.on(
+      "TranscriptInterimReceived",
+      (interim: TranscriptInterimDto) => {
+        if (!transcriptOpenRef.current) return;
+        const receivedAt = Date.now();
+        const store = useTranslationRoomStore.getState();
+        store.upsertLiveLine(
+          {
+            speakerId: interim.speakerId,
+            speakerName: resolveTranscriptSpeakerName(
+              { speakerId: interim.speakerId, speakerName: interim.speakerName } as TranscriptSegmentDto,
+              participantsRef.current,
+            ),
+            itemId: interim.itemId,
+            text: interim.text,
+            language: interim.language,
+          },
+          receivedAt,
+        );
+        window.setTimeout(
+          () => useTranslationRoomStore.getState().expireLiveLine(interim.speakerId, receivedAt),
+          LIVE_LINE_MAX_AGE_MS,
+        );
+      },
+    );
+    connection.on(
+      "TranscriptSegmentSpeakerNamed",
+      (late: TranscriptSegmentSpeakerNamedDto) => {
+        useTranslationRoomStore.getState().nameTranscriptSegmentSpeaker(late);
       },
     );
     // WT-716 tier 2. `cleanText`/`cleanFlags` on TranscriptSegmentReceived above need no handling
@@ -2473,6 +4080,9 @@ export function PersistentMeetingSession({
       // navigation happened to resolve second.
       if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
+      // W4a: a bridge room tells its popup (EndedView), hands the room to the shell's ended host
+      // and brings this window up. A no-op for every other room.
+      handOffEndedBridgeRef.current();
       onMeetingClosed();
       // WT-449: the same place the host lands, not the rooms list.
       //
@@ -2527,6 +4137,27 @@ export function PersistentMeetingSession({
         });
       },
     );
+
+    // WT-709: the host added a language to the running meeting. The picker's options come from the
+    // room query, and the hub now refuses any language outside the meeting's set — so without this
+    // the new language is one the server would accept and the menu does not offer until the next
+    // room fetch. Patched into the cache rather than refetched: the payload is the whole set.
+    //
+    // Reaches the lobby too (the Gateway sends it to both groups, and a knocking connection sits in
+    // the lobby one), so somebody still at the door sees it before they are let in.
+    connection.on("RoomLanguagesChanged", (payload: unknown) => {
+      const languages = parseRoomLanguages(payload);
+      if (!languages) {
+        // Not the shape the backend sends. Never write that over the room's languages — ask for
+        // the room again instead, which is what would have shown the change anyway.
+        void queryClient.invalidateQueries({ queryKey: translationRoomQueryKey(roomId) });
+        return;
+      }
+      queryClient.setQueryData<TranslationRoomDto>(
+        translationRoomQueryKey(roomId),
+        (current) => (current ? applyRoomLanguages(current, languages) : current),
+      );
+    });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
@@ -2608,6 +4239,9 @@ export function PersistentMeetingSession({
       // "host muted you" that only repainted an icon was the same lie WT-303 reports.
       localMediaControlRef.current?.setMicrophoneEnabled(false);
       setMicrophoneEnabled(false);
+      // A bridge mic follows Meet: record the mute as the popup's override, so the self-heal does
+      // not turn it back on and the next change of Meet's button hands control back to Meet.
+      if (isBridgeRoomRef.current) meetFollowSetManualMicRef.current(false);
       toast.error("You were muted by the host.");
     });
     // WT-06
@@ -2663,6 +4297,14 @@ export function PersistentMeetingSession({
 
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
+      // The same account joined from another device or tab. That is not "the room is closed":
+      // leaving the meeting here only sent people back in to evict the other device in turn. Stop
+      // and say so; DisplacedSessionNotice offers the take-over. Ignored on a connection this
+      // effect has already torn down — its successor is the one in the room.
+      if (isDisplacedHubReason(reason)) {
+        if (translationConnectionRef.current === connection) markSessionDisplaced();
+        return;
+      }
       toast.error(
         reason ||
           "This room has been forcibly closed or you were disconnected from another device.",
@@ -2705,42 +4347,52 @@ export function PersistentMeetingSession({
     const joinRetryDelaysMs = [0, 1000, 2500, 5000];
     const joinCurrentRoom = async () => {
       for (const delay of joinRetryDelaysMs) {
-        if (cancelled) return;
+        // Displaced: joining would kick the other device's hub connection. Only a take-over may.
+        if (cancelled || sessionDisplacedRef.current) return;
         if (delay) await wait(delay);
+        const languages = joinLanguages();
         try {
-          await invokeJoinTranslationRoom();
+          await invokeJoinTranslationRoom(languages);
           return;
-        } catch {
+        } catch (error) {
           // Refused or transport hiccup; the next attempt decides.
+          //
+          // WT-709: except a LANGUAGE refusal, which is a verdict rather than a race. The same
+          // pair is refused on every attempt, and the hub refuses BEFORE it adds this connection
+          // to the room group — so a loop that only retried would leave this person in the
+          // meeting receiving none of it, with nothing on screen saying why. Moving the refused
+          // side onto a meeting language (and saying so) lets the next attempt land.
+          const refusal = classifyLanguageRefusal(error);
+          if (refusal) joinLanguageRefusedRef.current?.(refusal, languages);
         }
       }
     };
-    const invokeJoinTranslationRoom = () =>
-      // targetLanguageRef.current (not the closed-over targetLanguage) so a language
-      // picked via the dropdown before a reconnect (e.g. after a network drop) is what
-      // gets rejoined with, and so this effect's dependency array below doesn't need
-      // targetLanguage — including it there would tear down and recreate this whole
-      // connection (wiping transcriptSegments/chat via resetLiveRoom()) on every language
-      // change instead of just calling SetListenLanguage.
-      connection
-        .invoke(
-          "JoinTranslationRoom",
-          roomId,
-          displayName,
-          // Never the "auto" sentinel. The hub writes this straight into
-          // translationRoom:{id}:speak_languages, where a literal "auto" makes
-          // _language_hint_for_stt return None and lets STT free-run — which is how a
-          // Vietnamese speaker's transcript came back tagged "en". "auto" is not a choice
-          // anyone can make (neither the picker modal nor the media bar offers it), so
-          // sending it asserted a decision the user never took. When nothing is known yet
-          // we send "" — the same "no hint" STT already understands, but without the fake
-          // decision — and the SetSpeakLanguage effect above reconciles the instant a real
-          // language resolves.
-          isResolvedSpeakLanguage(sourceLanguageRef.current)
-            ? sourceLanguageRef.current
-            : "",
-          targetLanguageRef.current,
-        );
+    // targetLanguageRef.current (not the closed-over targetLanguage) so a language picked via the
+    // dropdown before a reconnect (e.g. after a network drop) is what gets rejoined with, and so
+    // this effect's dependency array below doesn't need targetLanguage — including it there would
+    // tear down and recreate this whole connection (wiping transcriptSegments/chat via
+    // resetLiveRoom()) on every language change instead of just calling SetListenLanguage.
+    const joinLanguages = () => ({
+      // Never the "auto" sentinel. The hub writes this straight into
+      // translationRoom:{id}:speak_languages, where a literal "auto" makes
+      // _language_hint_for_stt return None and lets STT free-run — which is how a Vietnamese
+      // speaker's transcript came back tagged "en". "auto" is not a choice anyone can make
+      // (neither the picker modal nor the media bar offers it), so sending it asserted a decision
+      // the user never took. When nothing is known yet we send "" — the same "no hint" STT
+      // already understands, but without the fake decision — and the SetSpeakLanguage effect
+      // above reconciles the instant a real language resolves.
+      speak: isResolvedSpeakLanguage(sourceLanguageRef.current) ? sourceLanguageRef.current : "",
+      listen: targetLanguageRef.current,
+    });
+    const invokeJoinTranslationRoom = (languages: { speak: string; listen: string }) =>
+      connection.invoke(
+        "JoinTranslationRoom",
+        roomId,
+        displayName,
+        languages.speak,
+        languages.listen,
+      );
+    rejoinTranslationRoomRef.current = joinCurrentRoom;
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
@@ -2781,6 +4433,9 @@ export function PersistentMeetingSession({
       setTranscriptPauseEvent(null);
       void pauseWindowsQuery.refetch();
       void (async () => {
+        // Displaced: the replays below are keyed by user, not connection, so they would overwrite
+        // the languages of the device that is actually in the meeting.
+        if (sessionDisplacedRef.current) return;
         await joinCurrentRoom();
 
         const currentListenLanguage = appliedListenLanguageRef.current;
@@ -2839,6 +4494,9 @@ export function PersistentMeetingSession({
       if (translationConnectionRef.current === connection) {
         translationConnectionRef.current = null;
       }
+      if (rejoinTranslationRoomRef.current === joinCurrentRoom) {
+        rejoinTranslationRoomRef.current = null;
+      }
       resetLiveRoom();
     };
     // targetLanguage/sourceLanguage intentionally excluded — see joinCurrentRoom's comment
@@ -2862,6 +4520,7 @@ export function PersistentMeetingSession({
     updateParticipantSpeakLanguage,
     user?.id,
     onMeetingClosed,
+    markSessionDisplaced,
   ]);
 
   // WT-248 removed the auto-start that used to live here. WT-183 had added it because a room
@@ -3086,12 +4745,27 @@ export function PersistentMeetingSession({
     toast.success(`${label} copied.`);
   }
 
-  async function handleExit(action: "leave" | "end") {
+  /**
+   * The native Leave / End. Resolves with what happened rather than throwing, so the bridge's
+   * Meet-left countdown can retry an End that did not land (see finishMeetLeaveRef). `quiet`
+   * drops the failure toast for those retries; every other caller ignores both.
+   */
+  async function handleExit(
+    action: "leave" | "end",
+    { quiet = false }: { quiet?: boolean } = {},
+  ): Promise<{ kind: "done" } | { kind: "busy" } | { kind: "failed"; status?: number }> {
     // Single-flight: an exit already under way owns the redirect and the toast; a second call
     // (another press, or the end dialog racing the leave menu) is ignored until it settles.
-    if (exitInFlightRef.current) return;
+    if (exitInFlightRef.current) return { kind: "busy" };
     exitInFlightRef.current = true;
     try {
+      // Displaced: this account is still in the meeting on the other device, and the leave is
+      // keyed by user, so sending it would take THAT session out. Closing this window is all of it.
+      if (action === "leave" && sessionDisplacedRef.current) {
+        onMeetingClosed();
+        router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+        return { kind: "done" };
+      }
       if (action === "end") {
         // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
         // Redis inside EndTranslationRoomAsync, so the TranslationRoomEnded broadcast can reach
@@ -3101,10 +4775,19 @@ export function PersistentMeetingSession({
         if (room?.status !== "ended" && room?.status !== "cancelled") {
           await endRoom.mutateAsync(roomId);
         }
+        // WT-913: this client ignores its own TranslationRoomEnded (endedByMeRef), so a bridge's
+        // popup must hear "ended" from here. A no-op for every other room.
+        handOffEndedBridgeRef.current();
         toast.success("Room ended.");
       } else {
         if (room?.status !== "ended" && room?.status !== "cancelled") {
-          await leaveRoom.mutateAsync();
+          try {
+            await leaveRoom.mutateAsync();
+          } catch (error) {
+            // WT-899: NOT_FOUND means this person has no seat to give up — the server already
+            // considers them out. Refusing the exit over it trapped them behind the Leave dialog.
+            if (!leaveFailureMeansAlreadyOut(apiErrorCode(error))) throw error;
+          }
         }
         toast.success("You left the room.");
       }
@@ -3120,13 +4803,20 @@ export function PersistentMeetingSession({
           ? roomDetailPath(activeWorkspaceSlug || "workspace", roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
       );
+      return { kind: "done" };
     } catch (error) {
       // The end never landed, so this client is not the one that ended the room after all —
       // let a later TranslationRoomEnded broadcast redirect it like any other participant.
       endedByMeRef.current = false;
-      toast.error(
-        error instanceof Error ? error.message : "Could not leave the room.",
-      );
+      if (!quiet) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not leave the room.",
+        );
+      }
+      return {
+        kind: "failed",
+        status: (error as { response?: { status?: number } } | null)?.response?.status,
+      };
     } finally {
       exitInFlightRef.current = false;
     }
@@ -3295,6 +4985,25 @@ export function PersistentMeetingSession({
   // The button in the host controls is now the only way a recording starts (handleToggleRecording
   // below). Do not reintroduce an effect here: an automatic start is indistinguishable, from the
   // outside, from a deliberate one.
+  //
+  // BRIDGE-ONLY EXCEPTION (WT-910; PO decision 2026-10-01). A room bridged to Google Meet IS
+  // recorded by default, opt-out — Meet refuses its own recording, so WarpTalk's is the only one.
+  // It is not the automatic start described above: the user is shown a "Record this meeting"
+  // checkbox (checked) in the popup's listening prompt and the recording follows THEIR press; it is
+  // bound to capture start (the inbound leg opening), not to Start Translation; and everyone on the
+  // WarpTalk side is told — the RecordingStateChanged toast, and a standing REC chip in the popup
+  // with Stop for host and capturer. The effect lives with the other bridge wiring ("A BRIDGED
+  // MEET CALL IS RECORDED BY DEFAULT", above useBridgeWidgetRelayHost) and its rules in
+  // lib/meeting/bridge-recording.ts. Nothing about it applies to a native meeting.
+  //
+  // WT-916 (decision): the exception is exactly as wide as the checkbox. A default recording is
+  // never started for someone who was not shown the opt-out, so the two ways a bridge capture can
+  // start WITHOUT the popup's ask do not record: the main-window fallback modal
+  // (BrowserCaptureConsentModal below calls answerBrowserCapture directly and has no checkbox) and
+  // the direct device path (a cable with no loopback asks nothing at all). Neither can set
+  // `bridgeRecordChoice` — only useBridgeConsentHost's onAnswer does, and only with a `record` the
+  // popup sent — and with no choice bridgeAutoRecordingDecision answers "no-choice" (pinned by a
+  // unit test). Do not give either path a default: add the checkbox there first.
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
@@ -3392,6 +5101,62 @@ export function PersistentMeetingSession({
     });
   }
 
+  // LiveKit connect watchdog + report. See lib/meeting/livekit-connect-watchdog.ts.
+  const connectStartedAtRef = useRef<number | null>(null);
+  const autoConnectRetriesRef = useRef(0);
+  const reportConnectEvent = useCallback(
+    (event: Omit<MeetingClientEvent, "userAgent" | "attempt">) => {
+      if (!roomId) return;
+      void meetingService.reportClientEvent(roomId, {
+        ...event,
+        attempt: autoConnectRetriesRef.current,
+        userAgent: typeof navigator !== "undefined" ? boundedText(navigator.userAgent) : null,
+      });
+    },
+    [roomId],
+  );
+  const autoRetryConnect = useCallback(
+    (reason: string) => {
+      if (
+        !canAutoRetryConnect({
+          autoRetries: autoConnectRetriesRef.current,
+          displaced: sessionDisplacedRef.current,
+        })
+      ) {
+        return;
+      }
+      autoConnectRetriesRef.current += 1;
+      reportConnectEvent({ kind: "connect_retry", code: reason });
+      // The same thing a reload did for Tuấn: drop the session, take a fresh token, connect.
+      retryMeetingConnectionRef.current();
+    },
+    [reportConnectEvent],
+  );
+  // Declared above the early returns below (hooks), so the connect gate is asked here too —
+  // the same pure function, the same inputs as `shouldConnectLiveKit` further down.
+  const awaitingLiveKit =
+    shouldConnectMeeting({
+      hasToken: Boolean(meetingSession?.token),
+      canConnectRoom: canConnectMeeting,
+      idleReaped: meetingIsIdleReaped,
+      displaced: sessionDisplaced,
+    }) && !liveKitConnected;
+  useEffect(() => {
+    if (!awaitingLiveKit) {
+      connectStartedAtRef.current = null;
+      return;
+    }
+    connectStartedAtRef.current = Date.now();
+    const timer = window.setTimeout(() => {
+      reportConnectEvent({ kind: "connect_slow", elapsedMs: CONNECT_SLOW_MS });
+      autoRetryConnect("connect_slow");
+    }, CONNECT_SLOW_MS);
+    return () => window.clearTimeout(timer);
+    // Re-armed for each token: a retry hands out a new one and the clock starts again.
+  }, [awaitingLiveKit, meetingSession?.token, reportConnectEvent, autoRetryConnect]);
+  const connectElapsedMs = () =>
+    connectStartedAtRef.current == null ? null : Date.now() - connectStartedAtRef.current;
+
   if (roomQuery.isLoading) {
     return (
       <StatePanel
@@ -3405,7 +5170,13 @@ export function PersistentMeetingSession({
     return <WaitingRoomView onRetry={retryMeetingConnection} />;
   }
 
-  if (roomQuery.isError || !room) {
+  // `!room`, not `roomQuery.isError || !room`. React Query keeps the last good room through a failed
+  // REFETCH, and the old test swapped a running meeting for this panel on any one of them - which
+  // unmounts LiveKit, the bridge popup's relay and the leave countdown exactly as the stale-session
+  // retire above used to (prod, 2026-10-03: a backend hang). A room that is really gone is retired
+  // by meetingRoomIsGone / canConnectMeeting on the server's answer; a lookup that never produced a
+  // room still lands here.
+  if (!room) {
     return (
       <StatePanel
         icon={<WarningCircle className="h-8 w-8" />}
@@ -3436,7 +5207,9 @@ export function PersistentMeetingSession({
     hasToken: Boolean(meetingSession?.token),
     canConnectRoom: canConnectMeeting,
     idleReaped: meetingIsIdleReaped,
+    displaced: sessionDisplaced,
   });
+
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
@@ -3444,6 +5217,12 @@ export function PersistentMeetingSession({
           same map as the full room — the two used to draw the same person differently. */}
       <MeetingIdentityProvider identities={participantIdentities}>
       <LiveKitRoom
+        // WT-631. Without this LiveKit captures from whatever the OS calls the default input —
+        // on a demo laptop with VB-Cable installed that is often the loopback, which carries
+        // every other browser tab — instead of the microphone the participant picked (and
+        // watched a level meter confirm) on the pre-join screen. On the Room, not on `audio`
+        // below: see meetingDeviceRoomOptions for why the prop alone misses muted joiners.
+        options={liveKitRoomOptions}
         video={cameraEnabled}
         audio={
           microphoneEnabled
@@ -3468,8 +5247,38 @@ export function PersistentMeetingSession({
         // nothing ever called setMeetingError. So every failure to connect rendered as
         // "Waiting for LiveKit" with no message and no retry, indistinguishable from a slow
         // join. This is the wire that was missing.
-        onError={(error) => setMeetingError(describeLiveKitError(error))}
-        onConnected={() => setMeetingError(null)}
+        onError={(error) => {
+          // Refused because this account joined elsewhere mid-connect: not a failure to report,
+          // and not one to retry (see session-displacement.ts).
+          if (isDisplacedConnectionError(error)) {
+            markSessionDisplaced();
+            return;
+          }
+          setMeetingError(describeLiveKitError(error));
+          reportConnectEvent({
+            kind: "connect_error",
+            code: connectFailureCode(error),
+            message: boundedText(error),
+            elapsedMs: connectElapsedMs(),
+          });
+          // Failed outright rather than hanging: no reason to wait out the slow-connect timer.
+          window.setTimeout(() => autoRetryConnect("connect_error"), CONNECT_RETRY_AFTER_ERROR_MS);
+        }}
+        onConnected={() => {
+          setMeetingError(null);
+          setLiveKitConnected(true);
+          reportConnectEvent({ kind: "connected", elapsedMs: connectElapsedMs() });
+          autoConnectRetriesRef.current = 0;
+        }}
+        // The other device joined with this identity and LiveKit evicted this connection. Without
+        // this, the next render re-ran room.connect() and evicted the other device back.
+        onDisconnected={(reason) => {
+          if (isDuplicateIdentityDisconnect(reason)) markSessionDisplaced();
+          if (shouldReportDisconnect(reason)) {
+            reportConnectEvent({ kind: "disconnected", code: reason == null ? null : String(reason) });
+          }
+          setLiveKitConnected(false);
+        }}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-1 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
@@ -3482,7 +5291,37 @@ export function PersistentMeetingSession({
           controlRef={localMediaControlRef}
           onCameraEnabledChange={setCameraEnabled}
           onMicrophoneEnabledChange={setMicrophoneEnabled}
+          avatarUrl={user?.avatarUrl}
         />
+
+        {/* Field evidence 2026-10-03: the host's mic was lost from the wire by a LiveKit full
+            reconnect and nothing noticed. Bridge rooms only: see local-mic-supervisor.tsx. */}
+        {isBridgeRoom ? (
+          <LocalMicSupervisor
+            intentRef={meetFollow.micIntentRef}
+            onActiveMicrophoneChange={setActiveMicrophoneId}
+          />
+        ) : null}
+
+        {/* WT-910: the Google Meet window, published for a bridge recording. Bridge rooms only. */}
+        {isBridgeRoom ? (
+          <BridgeMeetWindowPublisher
+            controlRef={meetWindowControlRef}
+            wanted={meetWindowWanted}
+            meetCall={meetFollow.call}
+            roomMeetCode={roomMeetCode}
+          />
+        ) : null}
+        {/* The Google Meet call's sound, published for a bridge recording. Bridge rooms only. */}
+        {isBridgeRoom ? (
+          <BridgeMeetAudioPublisher
+            controlRef={meetAudioControlRef}
+            wanted={meetAudioWanted}
+            farSideTrack={bridgeInboundTrack}
+            localVoiceOn={meetAudioLocalVoice}
+            selectedMicrophoneId={deviceRoomOptions?.audioCaptureDefaults?.deviceId.exact ?? ""}
+          />
+        ) : null}
 
         <FilteredRoomAudio
           targetLanguageNormalized={targetLanguageNormalized}
@@ -3494,9 +5333,22 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
-          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          // Only the host feeds the cable: they are the one sitting in the Meet call with it as
+          // their microphone. Anyone else in the room playing dubs or their own mic into a device of
+          // the same name would be feeding a cable no Meet of theirs is listening to — or, on a
+          // shared machine, a second voice into the same call.
+          // Text-only bridge: NOTHING goes into the cable in text mode — Meet hears the real mic
+          // (bridgeOutboundSinkDeviceId). Null also drops the user's own dub from their ears.
+          bridgeOutboundDeviceId={bridgeOutboundSinkDeviceId({
+            isBridgeRoom,
+            isHost,
+            audioMode: bridgeAudioMode,
+            deviceId: bridgeOutboundDeviceId,
+          })}
           bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
+          onBridgeOutboundLegChange={handleBridgeOutboundLegChange}
+          onBridgeInboundDubChange={handleBridgeInboundDubChange}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}
@@ -3519,28 +5371,11 @@ export function PersistentMeetingSession({
             screen. Consent is a moment, not a permanent state: people are told once, by toast,
             when recording starts, and the badge is the standing reminder. */}
 
-        {isBridgeRoom ? (
-          <ExternalBridgeWidget
-            room={room}
-            isHost={isRoomHost}
-            isConnecting={isMeetingJoining || !meetingSession}
-            meetingError={meetingError}
-            microphoneEnabled={microphoneEnabled}
-            translationStarted={translationStarted}
-            bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
-            bridgeInboundLoopback={bridgeInboundLoopback}
-            idleDisconnected={meetingIsIdleReaped}
-            onRejoin={() => {
-              markMeetingInteraction();
-              setIdleDisconnected(false);
-            }}
-            onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
-            onStartTranslation={() => void handleStartWarptalk()}
-            onStopTranslation={handleStopWarptalk}
-            onOpenDeviceSetup={() => setBridgeSetupOpen(true)}
-            onExit={handleExit}
-          />
-        ) : compact ? (
+        {/* An EXTERNAL_BRIDGE meeting draws nothing here (WT-868, W4a). It runs headless in this window
+            — LiveKit, the dub, both bridge legs — and the popup over Google Meet is its only UI,
+            reached through the relay host above. The shell hides the dock around it; the device
+            wizard and the consent fallback below are dialogs and still open from here. */}
+        {isBridgeRoom ? null : compact ? (
           // The whole window drags, not just a strip across the top. That strip existed
           // because it had to: it was the only thing carrying [data-mini-drag-handle], so it
           // could never be hidden or the window could never be moved again. The dock now
@@ -3619,6 +5454,13 @@ export function PersistentMeetingSession({
                   variant="compact"
                 />
               </div>
+            ) : null}
+
+            {sessionDisplaced ? (
+              <DisplacedSessionNotice
+                variant="compact-overlay"
+                onTakeOver={takeOverDisplacedSession}
+              />
             ) : null}
 
             {idleDisconnected ? (
@@ -3783,6 +5625,9 @@ export function PersistentMeetingSession({
                   reactions={reactions}
                   onReactionExpired={handleReactionExpired}
                 />
+                {sessionDisplaced ? (
+                  <DisplacedSessionNotice variant="overlay" onTakeOver={takeOverDisplacedSession} />
+                ) : null}
               </div>
             </section>
 
@@ -3795,9 +5640,10 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                // WT-873: the lane is a fixed box that clips its own content — it no longer opens
-                // a history panel over the camera view, so nothing here may grow past it.
-                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
+                // A fixed box that clips its own content: the history scrolls INSIDE it and never
+                // grows over the camera view (WT-873). Hidden, only the up caret's row is left.
+                data-collapsed={captionLaneCollapsed ? "" : undefined}
+                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden transition-[height] duration-200 data-[collapsed]:h-8"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -3815,14 +5661,18 @@ export function PersistentMeetingSession({
                   // ...but only once there IS another language. Before Start Translation the
                   // captions are the transcript and nothing else.
                   translationActive={translationStarted}
-                  // The lane shows the current caption only; the panel is where to read back.
-                  // Both calls, in this order — the panel only renders while the sidebar is open.
-                  onOpenTranscript={() => {
-                    setSidePanelMode("transcript");
-                    setRightSidebarOpen(true);
-                  }}
+                  collapsed={captionLaneCollapsed}
+                  onToggleCollapsed={() => setCaptionLaneCollapsed((value) => !value)}
                 />
               </div>
+            ) : null}
+
+            {showVoiceClonePrompt ? (
+              <VoiceCloneConsentPrompt
+                pending={voiceClonePromptPending}
+                onAllow={() => void handleAllowVoiceCloneFromPrompt()}
+                onDismiss={dismissVoiceClonePrompt}
+              />
             ) : null}
 
             <div
@@ -3852,6 +5702,16 @@ export function PersistentMeetingSession({
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
                     allowedTargetLanguages={allowedTargetLanguages}
+                    // WT-709: the lists above are the meeting's own languages, and the hub holds
+                    // everyone to them — so the bar offers nothing outside them, and says who can.
+                    languagesLimitedToMeeting={declaredLanguages !== null}
+                    addableLanguages={addableRoomLanguages}
+                    addingRoomLanguage={
+                      addRoomLanguage.isPending ? (addRoomLanguage.variables ?? null) : null
+                    }
+                    // isRoomHost, not isHost, for the reason flash mode below gives: the endpoint
+                    // gates on the room's EFFECTIVE host.
+                    onAddRoomLanguage={isRoomHost ? handleAddRoomLanguage : undefined}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
@@ -3931,15 +5791,13 @@ export function PersistentMeetingSession({
                       isHost ? handleToggleMuteOnEntry : undefined
                     }
                     onMuteAll={isHost ? handleMuteAll : undefined}
-                    // Not gated on isHost, unlike the three host controls above it.
-                    //
-                    // Recording belongs to the room rather than to whoever booked it: the person
-                    // who needs the transcript timestamped is usually not the person who created
-                    // the meeting. MeetingRoomService.SetRecordingAsync accepts any participant
-                    // (IsInMeetingAsync), and every participant is told the moment it starts or
-                    // stops by the RecordingStateChanged toast above — that notice, not the
-                    // permission check, is what makes this safe to open up.
-                    onToggleRecording={handleToggleRecording}
+                    // Host only (owner decision, 2026-10-02). isRoomHost, not isHost: the server
+                    // gate (MeetingRoomService.SetRecordingAsync → IsHostAsync) is the room's
+                    // booker or its active host, so a workspace admin — host-like elsewhere in
+                    // this bar — would be handed a button that answers 403. In a Google Meet
+                    // bridge room the current capturer may too (WT-910), which is bridgeCanControl.
+                    // Everyone is still told when it starts or stops (RecordingStateChanged toast).
+                    onToggleRecording={isRoomHost || bridgeCanControl ? handleToggleRecording : undefined}
                     // isRoomHost, not isHost, for the reason the flash-mode and Stop Translation
                     // props above give: TranscriptRecordingService gates on IsRoomHostAsync, so a
                     // workspace admin — host-like everywhere else in this bar — would be handed a
@@ -4049,6 +5907,7 @@ export function PersistentMeetingSession({
       */}
       <BrowserCaptureConsentModal
         open={consentSurface === "main"}
+        compact={consentAskCompact}
         sources={loopbackSources}
         selectedSourceId={selectedLoopbackSourceId}
         loadingSources={loopbackSourcesLoading}
@@ -4056,8 +5915,10 @@ export function PersistentMeetingSession({
           setLoopbackSourceSelection({ roomId, sourceId });
         }}
         onDecision={(granted) => {
-          setBrowserCaptureAnswer({ roomId, granted });
-          if (!granted) {
+          answerBrowserCapture(granted);
+          // WT-900: a "no" with the cable standing in keeps the far side on the cable, so it IS
+          // still translated; the notice below is only true where nothing else carries it.
+          if (!granted && bridgeInbound.path !== "device") {
             // Not an error, and not silence either: the far side simply will not be translated,
             // and the meeting continues. The bridge panel's captions button is the way back.
             toast.info("WarpTalk will not listen to your browser.", {
@@ -4079,6 +5940,15 @@ export function PersistentMeetingSession({
           open={bridgeSetupOpen}
           onOpenChange={setBridgeSetupOpen}
           translationStarted={translationStarted}
+          audioMode={bridgeAudioMode}
+          loopbackFailed={loopbackFallbackActive}
+          browserCaptureAnswer={browserCaptureAnswerForRoom}
+          inboundDeviceId={bridgeInboundDeviceId}
+          onFormatAligned={() => {
+            // The cable was reconfigured under a running capture, whose track is now dead or silent
+            // on the old format. Only the device path rides the cable; a loopback leg is untouched.
+            if (bridgeInboundPath === "device") setBridgeCaptureGeneration((generation) => generation + 1);
+          }}
           onReady={() => {
             // Finishing the wizard before translation starts IS the start: the user has just
             // confirmed every leg works, and sending them back to press one more button is how a
@@ -4141,12 +6011,33 @@ function LocalMediaController({
   controlRef,
   onCameraEnabledChange,
   onMicrophoneEnabledChange,
+  avatarUrl,
 }: {
   controlRef: React.RefObject<LocalMediaControl | null>;
   onCameraEnabledChange: (enabled: boolean) => void;
   onMicrophoneEnabledChange: (enabled: boolean) => void;
+  avatarUrl?: string | null;
 }) {
   const room = useRoomContext();
+
+  /* The recorder (/egress/composite) is a headless Chrome with no session and sees only the LiveKit
+     room, so a camera-off tile in the recording can show a face only if the face is published
+     there. Needs `canUpdateOwnMetadata` on the join token. Cosmetic: a refusal leaves initials. */
+  useEffect(() => {
+    const publish = () => {
+      if (room.state !== ConnectionState.Connected) return;
+      const url = resolveAvatarUrl(avatarUrl);
+      if (!url?.startsWith("https://")) return;
+      void room.localParticipant
+        .setMetadata(JSON.stringify({ avatarUrl: url }))
+        .catch(() => {});
+    };
+    publish();
+    room.on(RoomEvent.Connected, publish);
+    return () => {
+      room.off(RoomEvent.Connected, publish);
+    };
+  }, [room, avatarUrl]);
 
   useEffect(() => {
     const localParticipant = room.localParticipant;
@@ -4179,6 +6070,13 @@ function LocalMediaController({
           toast.error("Could not change your camera.");
         });
       },
+      // Exact, as media-device-menu.tsx switches: see its WT-631 note for why not a soft match.
+      // Also what LiveKit captures from on the next publish (it updates audioCaptureDefaults), so a
+      // mic re-published by the self-heal stays on the picked device.
+      switchMicrophone: async (deviceId) => {
+        const switched = await room.switchActiveDevice("audioinput", deviceId, true);
+        if (switched === false) throw new Error("LiveKit could not switch the microphone");
+      },
     };
 
     const mirror = () => {
@@ -4188,8 +6086,12 @@ function LocalMediaController({
     };
 
     mirror();
+    // Reconnected too: LiveKit re-publishes every local track after a full reconnect while the room
+    // is NOT Connected, so those events are skipped above, and a re-publish that failed (field
+    // evidence 2026-10-03) left this mirror saying "on" over a microphone that was gone.
     room
       .on(RoomEvent.Connected, mirror)
+      .on(RoomEvent.Reconnected, mirror)
       .on(RoomEvent.LocalTrackPublished, mirror)
       .on(RoomEvent.LocalTrackUnpublished, mirror)
       .on(RoomEvent.TrackMuted, mirror)
@@ -4198,6 +6100,7 @@ function LocalMediaController({
     return () => {
       room
         .off(RoomEvent.Connected, mirror)
+        .off(RoomEvent.Reconnected, mirror)
         .off(RoomEvent.LocalTrackPublished, mirror)
         .off(RoomEvent.LocalTrackUnpublished, mirror)
         .off(RoomEvent.TrackMuted, mirror)
@@ -4205,6 +6108,226 @@ function LocalMediaController({
       controlRef.current = null;
     };
   }, [room, controlRef, onCameraEnabledChange, onMicrophoneEnabledChange]);
+
+  return null;
+}
+
+/**
+ * WT-910: publishes the Google Meet window into the room, for a bridge recording to show.
+ *
+ * WHY THIS CONNECTION AND NOT THE STAND-IN'S
+ *   The far side's audio goes out on a second LiveKit connection under the stand-in identity, and
+ *   the picture of the call would sit naturally beside it. But that connection is thrown away and
+ *   rebuilt on every re-key of the inbound leg (a device switch, a cable format fix, a track that
+ *   ended), and its token is minted to publish that one audio track. The user's own connection is
+ *   the stable one, and it is the one native screen sharing already publishes on (a token that
+ *   refuses it lands in "publish-failed" and the recording is audio-only). So it goes out here, as a
+ *   screen-share track NAMED `meet-window` — the name, not the source, is what the egress template
+ *   keys on (lib/meeting/egress-participants), so an ordinary screen share is untouched.
+ *
+ * NO PICKER, EVER
+ *   getDisplayMedia is called only after the desktop app has armed a capture of the Meet window
+ *   (`armMeetWindowCapture`), which makes that one call resolve to it with no dialog. Without the
+ *   arm — an older desktop build, a browser tab, any refusal — it is not called at all: a picker
+ *   opening in a window hidden behind Meet is a question nobody can see, and "pick a window" is not
+ *   something the user asked for.
+ *
+ * WHEN IT COMES DOWN
+ *   `wanted` going false (the recording stopped, the inbound leg closed for good, the meeting
+ *   ended), the track ending (the Meet window was closed), the room disconnecting, and unmount. The
+ *   recording itself is not touched by any of them: it carries on audio-only.
+ *   Also the Meet tab moving to ANOTHER browser window (the desktop's call state names a window
+ *   other than the one armed): the old capture comes down at once and the session kicks its publish
+ *   supervisor, which re-arms on the new window.
+ *
+ * CROPPED TO THE PAGE
+ *   The frames are cropped to the page's content area — no tab strip, address bar or bookmarks bar —
+ *   from the layout the desktop sends with the call state (lib/meeting/meet-window-crop). No layout,
+ *   or one that does not fit the frames, sends the window whole, as before.
+ *
+ * Same reason LocalMediaController exists: PersistentMeetingSession RENDERS <LiveKitRoom>, so it
+ * cannot call useRoomContext() itself.
+ */
+function BridgeMeetWindowPublisher({
+  controlRef,
+  wanted,
+  meetCall,
+  roomMeetCode,
+}: {
+  controlRef: React.RefObject<MeetWindowControl | null>;
+  wanted: boolean;
+  /** The desktop's last call state for this room (window, layout); null without the sensor. */
+  meetCall: MeetCallState | null;
+  roomMeetCode: string | null | undefined;
+}) {
+  const room = useRoomContext();
+  /** `windowHandle`: the HWND the desktop armed this capture on; null from an older desktop. */
+  const currentRef = useRef<{ track: MediaStreamTrack; drop: () => void; windowHandle: number | null } | null>(null);
+  const wantedRef = useRef(wanted);
+  const meetCallRef = useRef(meetCall);
+  const roomMeetCodeRef = useRef(roomMeetCode);
+  /**
+   * The layout the open capture is cropped with (meet-window-crop.ts): one holder per capture, so a
+   * new window never starts from the old window's layout, and kept across readings that carry none.
+   */
+  const cropRef = useRef<{ windowHandle: number | null; geometry: MeetWindowGeometry | null } | null>(null);
+
+  useEffect(() => {
+    wantedRef.current = wanted;
+    if (!wanted) currentRef.current?.drop();
+  }, [wanted]);
+
+  useEffect(() => {
+    meetCallRef.current = meetCall;
+    roomMeetCodeRef.current = roomMeetCode;
+    const crop = cropRef.current;
+    if (crop) crop.geometry = nextMeetWindowCropGeometry(crop.geometry, meetCall, crop.windowHandle);
+    // The Meet tab now lives in another browser window. The capture still shows the old window,
+    // which shows some other tab now: off the recording at once. The session arms the new window.
+    const current = currentRef.current;
+    if (current && meetWindowNeedsRearm({ capturedWindowHandle: current.windowHandle, call: meetCall, roomMeetCode })) {
+      console.info(
+        `[bridge] The Meet tab moved to another window (${current.windowHandle} -> ${meetCall?.windowHandle}); capturing it again.`,
+      );
+      current.drop();
+    }
+  }, [meetCall, roomMeetCode]);
+
+  useEffect(() => {
+    const localParticipant = room.localParticipant;
+    /** The attempt in flight, shared by every caller (start chain, supervisor): single flight. */
+    let publishing: Promise<string> | null = null;
+    const movedFrom = (windowHandle: number | null) =>
+      meetWindowNeedsRearm({
+        capturedWindowHandle: windowHandle,
+        call: meetCallRef.current,
+        roomMeetCode: roomMeetCodeRef.current,
+      });
+
+    const publishOnce = async (roomId: string): Promise<string> => {
+      const existing = currentRef.current;
+      if (existing) {
+        if (!movedFrom(existing.windowHandle)) return "published";
+        // The Meet tab is in another window now: re-arm on it (meetWindowNeedsRearm).
+        existing.drop();
+      }
+      if (room.state !== ConnectionState.Connected) return "the meeting is not connected";
+      const armed = await armMeetWindowCapture(roomId);
+      if (!armed) return describeMeetWindowCaptureFailure("no-desktop-method");
+      if (!armed.ok) return describeMeetWindowCaptureFailure(armed);
+      // The HWND the desktop armed; null from an older desktop (no re-arm, no per-window layout).
+      const windowHandle =
+        typeof armed.windowHandle === "number" && Number.isSafeInteger(armed.windowHandle) && armed.windowHandle > 0
+          ? armed.windowHandle
+          : null;
+
+      let track: MediaStreamTrack | undefined;
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: MEET_WINDOW_CAPTURE_CONSTRAINTS,
+          audio: false,
+        });
+        track = stream.getVideoTracks()[0];
+      } catch {
+        track = undefined;
+      }
+      if (!track) return describeMeetWindowCaptureFailure("capture-failed");
+      const source = track;
+      // The arm was spent on a window the Meet tab has already left (it moved while this was being
+      // opened): never published. A kick that came in meanwhile makes the supervisor try again
+      // right after this attempt; otherwise its back-off does.
+      if (movedFrom(windowHandle)) {
+        source.stop();
+        return "the Meet tab moved to another window while it was being captured";
+      }
+      // A meeting UI: text and faces, kept sharp rather than smooth.
+      source.contentHint = "detail";
+      // Cropped to the page: no tab strip, address bar or bookmarks bar (meet-window-crop.ts). The
+      // layout follows the call state live; until the desktop has sent one (or from an older
+      // desktop, or when the bounds do not fit the frames) the frame goes out whole, as before.
+      const crop = {
+        windowHandle,
+        geometry: nextMeetWindowCropGeometry(null, meetCallRef.current, windowHandle),
+      };
+      cropRef.current = crop;
+      let lastCrop: string | null = null;
+      const visibleRect = (frame: { x: number; y: number; width: number; height: number }) => {
+        const rect = meetWindowVisibleRect(crop.geometry, frame);
+        const described = describeMeetWindowCrop(rect, frame);
+        if (described !== lastCrop) {
+          // Once per change, not per frame: where the egress logs can tell a crop from none.
+          console.info(`[bridge] Meet window crop: ${described}.`);
+          lastCrop = described;
+        }
+        return rect;
+      };
+      // Never a quiet track: a static Meet window would otherwise send the recorder nothing to
+      // decode, and the whole recording came out black. See meet-window-track.ts.
+      const steady = await steadyFrameTrack(source, { visibleRect });
+      const captured = steady.track;
+
+      try {
+        await localParticipant.publishTrack(captured, {
+          name: MEET_WINDOW_TRACK_NAME,
+          source: Track.Source.ScreenShare,
+          ...MEET_WINDOW_PUBLISH_OPTIONS,
+        });
+      } catch {
+        steady.stop();
+        if (cropRef.current === crop) cropRef.current = null;
+        return describeMeetWindowCaptureFailure("publish-failed");
+      }
+
+      const drop = () => {
+        if (currentRef.current?.track !== captured) return;
+        currentRef.current = null;
+        if (cropRef.current === crop) cropRef.current = null;
+        source.removeEventListener("ended", drop);
+        void localParticipant.unpublishTrack(captured, false).catch(() => {}).finally(() => steady.stop());
+      };
+      currentRef.current = { track: captured, drop, windowHandle };
+      // The Meet window was closed, or the desktop ended the capture. Heard on the SOURCE: the
+      // wrapper published in its place never fires `ended` on its own.
+      source.addEventListener("ended", drop);
+
+      // Read AFTER the awaits, not before: the parent turns `wanted` on in the same commit that
+      // calls this, so it is still false on entry. If it is false now, whatever wanted the
+      // picture went away while the window was being opened.
+      if (!wantedRef.current) {
+        drop();
+        return "the recording no longer needs it";
+      }
+      // The tab moved while the track was being published: the kick for the new window found
+      // this attempt in flight, so the supervisor runs one more check right after it.
+      if (movedFrom(windowHandle)) {
+        drop();
+        return "the Meet tab moved to another window while it was being published";
+      }
+      return "published";
+    };
+
+    controlRef.current = {
+      unpublishMeetWindow: () => currentRef.current?.drop(),
+      publishMeetWindow: (roomId) => {
+        if (!publishing) {
+          publishing = publishOnce(roomId).finally(() => {
+            publishing = null;
+          });
+        }
+        return publishing;
+      },
+    };
+
+    // A dropped connection takes the publication with it but leaves the capture running.
+    const onDisconnected = () => currentRef.current?.drop();
+    room.on(RoomEvent.Disconnected, onDisconnected);
+
+    return () => {
+      room.off(RoomEvent.Disconnected, onDisconnected);
+      controlRef.current = null;
+      currentRef.current?.drop();
+    };
+  }, [room, controlRef]);
 
   return null;
 }

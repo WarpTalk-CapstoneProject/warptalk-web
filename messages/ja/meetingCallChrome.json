@@ -6,7 +6,9 @@
     "addOthers": "参加者を追加"
   },
   "captions": {
-    "openFullTranscript": "文字起こし全文を開く",
+    "collapse": "字幕を隠す",
+    "expand": "字幕を表示",
+    "latest": "最新",
     "liveRegionAria": "ライブ字幕",
     "emptyState": "誰かが話すと、ここに字幕が表示されます。"
   },
@@ -22,5 +24,10 @@
       "reconnecting": "再接続中…",
       "waiting": "LiveKit を待機中"
     }
+  },
+  "displaced": {
+    "title": "別のデバイスまたはタブからこの会議に参加しています。",
+    "description": "このアカウントは別の場所で会議に参加中のため、そちらを切断しないようにこのウィンドウは接続を停止しました。そのまま別の場所で続けるか、会議をこちらに切り替えてください。",
+    "takeOver": "このデバイスを使用"
   }
 }

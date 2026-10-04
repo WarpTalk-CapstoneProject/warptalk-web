@@ -35,12 +35,18 @@ test("whole amounts do not grow invented decimals", () => {
   assert.equal(formatMoney(0, "VND"), "0 VND");
 });
 
-test("the currency code is spelled out and upper-cased, defaulting to VND", () => {
+test("the currency code is spelled out and upper-cased, defaulting to USD", () => {
   assert.equal(formatMoney(1_000, "vnd"), "1,000 VND");
-  assert.equal(formatMoney(1_000, "usd"), "1,000 USD");
-  assert.equal(formatMoney(1_000, undefined), "1,000 VND");
-  assert.equal(formatMoney(1_000, null), "1,000 VND");
-  assert.equal(formatMoney(1_000, ""), "1,000 VND");
+  assert.equal(formatMoney(1_000, "usd"), "1,000.00 USD");
+  assert.equal(formatMoney(1_000, undefined), "1,000.00 USD");
+  assert.equal(formatMoney(1_000, null), "1,000.00 USD");
+  assert.equal(formatMoney(1_000, ""), "1,000.00 USD");
+});
+
+test("USD always shows its cents, and keeps the digits of a sub-cent per-credit rate", () => {
+  assert.equal(formatMoney(79.6, "USD"), "79.60 USD");
+  assert.equal(formatMoney(166, "USD"), "166.00 USD");
+  assert.equal(formatMoney(0.0001539521, "USD"), "0.000154 USD");
 });
 
 test("the locale is pinned, not ambient", () => {

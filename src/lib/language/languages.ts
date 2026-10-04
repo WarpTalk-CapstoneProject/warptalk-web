@@ -198,6 +198,32 @@ export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | nu
 }
 
 /**
+ * What the meeting-language picker lists: the meeting-scope languages the workspace permits,
+ * plus any language the room ALREADY holds that the policy no longer permits.
+ *
+ * Disallowed languages are simply not offered — the owner's call (1 Oct 2026): the picker used
+ * to list them greyed out under a "Blocked" tag with a footnote pointing at workspace settings,
+ * which read as clutter in a list meant to say what this workspace speaks.
+ *
+ * The one exception is a language already in the set, which happens to a room created before
+ * the policy was tightened. Hiding it would hide the only control that can take it back out, and
+ * the server would keep refusing the room's saved set with nothing on screen to explain why. So
+ * it stays listed while it is selected, and disappears for good the moment it is removed.
+ *
+ * Compared on bare codes, because rooms hold "vi" or "vi-VN" interchangeably.
+ */
+export function meetingLanguagePickerOptions(
+  selected: readonly string[],
+  allowedTargetLanguages?: string[] | null,
+): SupportedLanguage[] {
+  const picked = new Set(selected.map(normalizeLanguageCode).filter(Boolean));
+  return languagesInScope("meeting").filter(
+    (language) =>
+      isLanguageAllowedByPolicy(language.code, allowedTargetLanguages) || picked.has(language.code),
+  );
+}
+
+/**
  * The languages a pre-join screen may offer for one room: the meeting scope, narrowed by BOTH
  * limits that apply.
  *

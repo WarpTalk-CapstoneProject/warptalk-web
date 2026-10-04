@@ -12,8 +12,13 @@
  * `GET /transcripts/{id}/translations` has always served them; nothing on the room page asked.
  *
  * This module is the part of "show the transcript in one language" that has no React in it:
- * which languages a meeting can be read in, which one to open on, and what a single line reads
- * as once a language is chosen. Pure so the answers can be tested without a meeting.
+ * which languages a meeting can be read in, and what a single line reads as once a language is
+ * chosen. Pure so the answers can be tested without a meeting.
+ *
+ * WHICH ONE TO OPEN ON is no longer a question this module answers (WT-924, 2026-10-02). It used
+ * to pick the reader's own language, or the best-covered one, whenever a meeting was multilingual;
+ * the owner's call is that a finished meeting always opens as spoken, so the record reads first as
+ * what each person actually said, and reading it in one language is something the reader chooses.
  */
 
 // Relative, with the extension: this module's unit tests run under the plain node test runner
@@ -21,6 +26,7 @@
 // values, not types, so they survive to runtime and have to resolve there.
 import { normalizeLanguageCode } from "../language/languages.ts";
 import { appendText } from "./transcript-display.ts";
+import { transcriptSpeakerDisplayName, type SpeakerLabels } from "./speaker-identity.ts";
 
 import type { TranscriptTranslationDto } from "@/types/transcript";
 
@@ -127,6 +133,41 @@ export function indexTranslationsBySegment(
   }
 
   return index;
+}
+
+/**
+ * Adds every stored segment's own words to the index, in the language they were spoken in.
+ *
+ * WT-925. A line can hold segments spoken in DIFFERENT languages: the Clean view's sentences are
+ * cut by the cleaner, not by the grouping, and production holds a Vietnamese sentence whose second
+ * chunk was English ("… em chỉnh nhiệm vụ cho anh đó" + "That's good."). Read in English, that
+ * English chunk has no translation into English and never will — it is the answer. Without this,
+ * `covered < segmentIds.length` marked the line partial forever: "1 of 68 entries is not in
+ * English yet", over a transcript the server counted as complete, so [Translate it] started a
+ * backfill with nothing to do and the line stayed exactly as it was.
+ *
+ * A real translation is never overwritten. The server counts a segment spoken in the target
+ * language as covered (`spokenInTarget`), and this is the same rule on this side.
+ */
+export function withSpokenSegmentText(
+  index: SegmentTranslationIndex,
+  segments: readonly {
+    id: string;
+    originalText?: string | null;
+    originalLanguage?: string | null;
+  }[],
+): SegmentTranslationIndex {
+  const merged: SegmentTranslationIndex = { ...index };
+
+  for (const segment of segments) {
+    const code = normalizeLanguageCode(segment.originalLanguage ?? "");
+    const text = segment.originalText?.trim();
+    if (!code || !text || merged[segment.id]?.[code]) continue;
+
+    merged[segment.id] = { ...merged[segment.id], [code]: text };
+  }
+
+  return merged;
 }
 
 function lineSegmentIds(line: TranscriptLine): readonly string[] {
@@ -241,10 +282,9 @@ export function transcriptLanguageOptions(
  * confirmed action that only someone with host authority can take; a zero-coverage entry is a
  * place that action can start from, not a translation that starts on selection.
  *
- * Kept separate from `transcriptLanguageOptions` rather than folded into it because
- * `defaultTranscriptLanguage` reads that list to decide what to open on, and it must keep
- * deciding from what the meeting actually produced. A list of offers is not evidence that a
- * meeting was multilingual.
+ * Kept separate from `transcriptLanguageOptions` rather than folded into it: that list is what
+ * the meeting actually produced, and a list of offers is not evidence that a meeting was
+ * multilingual.
  */
 export function withOfferableLanguages(
   options: readonly TranscriptLanguageOption[],
@@ -267,42 +307,6 @@ export function withOfferableLanguages(
   // Already-covered languages first, in their existing order; the offers follow, alphabetically,
   // so the list does not reorder itself as a backfill lands.
   return [...options, ...extra.sort((left, right) => left.code.localeCompare(right.code))];
-}
-
-/**
- * Which language to open the transcript on.
- *
- * The reader's own language wins when the meeting has it, because the whole point is that
- * somebody who was in the room can read what was said. Otherwise the language the most lines
- * are readable in — the meeting's own common denominator.
- *
- * A meeting held in ONE language falls back to as-spoken. Unifying a transcript that is already
- * unified changes nothing, and starting on a language chip implies a choice was made about a
- * question that was never asked.
- *
- * `allowed` (WT-705) is the room's generatable set. When given, only options inside it may be
- * opened on automatically: a language the transcript already holds but the meeting no longer
- * generates stays in the menu and stays readable, it is just never the default. An empty
- * `allowed` (room not loaded, or nothing generatable) opens on as-spoken.
- */
-export function defaultTranscriptLanguage(
-  options: readonly TranscriptLanguageOption[],
-  preferredLanguage?: string | null,
-  allowed?: readonly string[],
-): string {
-  if (options.length <= 1) return AS_SPOKEN;
-
-  const allowedCodes = allowed
-    ? new Set(allowed.map((code) => normalizeLanguageCode(code)).filter(Boolean))
-    : null;
-  const candidates = allowedCodes
-    ? options.filter((option) => allowedCodes.has(option.code))
-    : options;
-
-  const preferred = normalizeLanguageCode(preferredLanguage ?? "");
-  if (preferred && candidates.some((option) => option.code === preferred)) return preferred;
-
-  return candidates[0]?.code ?? AS_SPOKEN;
 }
 
 /** The language a display choice actually asks for — "" when it asks for none. */
@@ -378,11 +382,13 @@ export function resolveTranscriptLine(
  * would leave a file that reads as complete and is not.
  */
 export function assembleTranscriptText<
-  T extends TranscriptLine & { speakerName?: string | null },
+  T extends TranscriptLine & { speakerName?: string | null; speakerParticipantId?: string | null },
 >(
   blocks: readonly { sessionNumber: number; segments: readonly T[] }[],
   index: SegmentTranslationIndex,
   displayLanguage: string | null | undefined,
+  /** The reader's words for a line with no name — see transcriptSpeakerDisplayName. */
+  labels?: SpeakerLabels,
 ): string {
   const wanted = requestedLanguage(displayLanguage);
   const showSessionLabels = blocks.length > 1;
@@ -391,7 +397,8 @@ export function assembleTranscriptText<
     .map((block) => {
       const lines = block.segments.map((segment) => {
         const resolved = resolveTranscriptLine(segment, index, displayLanguage);
-        const name = segment.speakerName?.trim() || "Unknown speaker";
+        // The Google Meet stand-in prints the Meet person on the line, never its seat or its id.
+        const name = transcriptSpeakerDisplayName(segment.speakerParticipantId, segment.speakerName, labels);
         const tag =
           resolved.language && resolved.language !== wanted
             ? ` (${resolved.language.toUpperCase()})`

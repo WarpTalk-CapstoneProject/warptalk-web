@@ -69,11 +69,42 @@ if (!/endsAtMs:/.test(source)) {
   );
 }
 
+/**
+ * And once more, one layer down: the hook must hand the sighting's code to the SELECTION, not only
+ * to the reducer.
+ *
+ * Prod, 2026-10-03: the reducer compared codes correctly, but `selectTriggerMeeting` picked by
+ * clock alone, so a never-ended room for an earlier call stayed selected for its whole tail and
+ * the next Meet call could never become an offer. The sensor callback made it worse by latching
+ * the last render's selection on ANY sighting, without looking at the new code. Both are wiring,
+ * invisible to the pure tests - grep the caller.
+ */
+const HOOK = "src/hooks/use-bridge-trigger.ts";
+const hook = readFileSync(HOOK, "utf8");
+
+const selectCall = /selectTriggerMeeting\(([^)]*)\)/.exec(hook);
+if (!selectCall) {
+  failures.push(`${HOOK}: useBridgeTrigger no longer calls selectTriggerMeeting`);
+} else if (!/presence\?\.meetCode/.test(selectCall[1])) {
+  failures.push(
+    `${HOOK}: selectTriggerMeeting is not given \`presence?.meetCode\` - the schedule alone picks ` +
+      "the meeting, and a stale room for another call blocks the offer for the one on screen",
+  );
+}
+
+if (/setSeenRoomId\(\s*meetingRoomIdRef\.current\s*\)/.test(hook)) {
+  failures.push(
+    `${HOOK}: the sensor callback latches \`meetingRoomIdRef.current\` - the selection made with ` +
+      "the PREVIOUS sighting's code - so a new Meet tab latches the old room to `ready`",
+  );
+}
+
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${FILE}\n     ${failure}`);
   process.exit(1);
 }
 
 console.log(
-  "PASS the bridge trigger is given each room's Meet code, its end, and the room being translated",
+  "PASS the bridge trigger is given each room's Meet code, its end, the room being translated, " +
+    "and the sighting's code for selection",
 );

@@ -429,4 +429,24 @@ assert.match(
     + "the parameter it just consumed and the removal is a no-op.",
 );
 
+// 24. WT-896: a line outside the recording is not a play button. A meeting recorded from 22 minutes
+//     in passed the meeting-wide gate, and every earlier timestamp offered a play that
+//     seekTargetSeconds then refused without a word. Each timestamp asks about its own moment.
+assert.match(
+  transcript,
+  /canSeekAt\?: \(atMs: number\) => boolean/,
+  "The transcript must accept a per-moment seek gate (canSeekAt).",
+);
+assert.doesNotMatch(
+  transcript,
+  /onSeekToRecording\s*\n?\s*\?\s*\(\) => seekToMoment\(/,
+  "Timestamps must get their handler from seekHandlerAt, which asks canSeekAt — not straight from "
+    + "onSeekToRecording, which only says the meeting as a whole can be aligned.",
+);
+assert.match(
+  roomDetail,
+  /canSeekAt=\{canSeekAt\}/,
+  "The room page must hand the transcript the per-moment gate built from seekTargetSeconds.",
+);
+
 console.log("Recording seek contract: PASS");

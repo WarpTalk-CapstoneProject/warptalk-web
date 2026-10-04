@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -48,14 +49,14 @@ export function TranscriptPauseConfirmDialog({
   /** A pause/resume request is already in flight — see the control's own pending state. */
   pending?: boolean;
 }) {
+  const t = useTranslations("meetingLive");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Pause the transcript?</DialogTitle>
+          <DialogTitle>{t("transcriptPause.title")}</DialogTitle>
           <DialogDescription className="pt-2 text-ink-subtle">
-            Nothing said from now on is written to the transcript or stored — translation,
-            dubbing and voice clone keep running.
+            {t("transcriptPause.description")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-4">
@@ -64,10 +65,10 @@ export function TranscriptPauseConfirmDialog({
             onClick={() => onOpenChange(false)}
             className="border-border bg-surface-2 text-ink hover:bg-surface-3"
           >
-            Cancel
+            {t("transcriptPause.cancel")}
           </Button>
           <Button disabled={pending} onClick={onConfirm}>
-            Pause transcript
+            {t("transcriptPause.confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,7 +6,6 @@ import { FileText, PuzzlePiece, Sparkle, Subtitles, VideoCamera } from "@phospho
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import { mentionTokenLabel, splitMentionTokens } from "@/lib/assistant/message-mentions";
-import { cn } from "@/lib/utils";
 import type { AssistantMentionDto, AssistantPluginCatalogItemDto } from "@/types/assistant";
 
 /**
@@ -90,23 +89,40 @@ function MentionChip({
   plugins: AssistantPluginCatalogItemDto[];
   inline?: boolean;
 }) {
+  // "Summary · Standup" for a meeting's summary or transcript: the bare title is also what a
+  // mention of the room itself shows, and the icon alone is too small to tell them apart.
+  const label = mentionTokenLabel(mention);
+
+  if (inline) {
+    // In a sentence the chip is TEXT, not a flex box (3 Oct 2026). An 11px inline-flex box nudged
+    // by `align-[1px]` sat on its own synthesized baseline - the icon's bottom edge - so it rode
+    // visibly off the line of the words around it. As an inline span at the sentence's own size
+    // the label shares the baseline exactly, and only the icon is aligned, against the x-height.
+    return (
+      <span className="mx-px whitespace-nowrap rounded-[5px] bg-primary/10 px-1 py-px font-medium text-primary">
+        {/* A fixed box with nothing in flow, so every kind of mark shares one baseline: an
+            inline-flex box took its baseline from whatever text it held, and a member's 7px
+            initial dragged that chip half a line low. */}
+        <span className="relative mr-1 inline-block size-3.5 align-[-0.2em]">
+          <span className="absolute inset-0 flex items-center justify-center">
+            <MentionIcon mention={mention} plugins={plugins} />
+          </span>
+        </span>
+        {label}
+      </span>
+    );
+  }
+
   return (
-    <span
-      className={cn(
-        "items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 text-[11px] font-medium text-primary whitespace-nowrap",
-        // In a sentence it sits on the text's baseline and takes no more height than a line.
-        inline ? "inline-flex py-px align-[1px] leading-4" : "flex py-0.5",
-      )}
-    >
+    <span className="flex items-center gap-1 whitespace-nowrap rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
       <MentionIcon mention={mention} plugins={plugins} />
-      {/* "Summary · Standup" for a meeting's summary or transcript: the bare title is also what
-          a mention of the room itself shows, and the icon alone is too small to tell them apart. */}
-      {mentionTokenLabel(mention)}
+      {label}
     </span>
   );
 }
 
-function MentionIcon({
+/** A mention's mark: the plugin's own logo, a member's initial, or the kind of thing it names. */
+export function MentionIcon({
   mention,
   plugins,
 }: {

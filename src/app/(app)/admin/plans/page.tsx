@@ -45,6 +45,9 @@ import {
   RateCardDeactivateDialog,
   RateCardEditDialog,
 } from "@/components/admin/pricing-editors";
+import { PlanStorefrontPreview } from "@/components/admin/plan-storefront-preview";
+import { applyPlanEdits } from "@/lib/billing/plan-request";
+import { nextSortOrder } from "@/lib/billing/plan-order";
 import {
   useAdminPlans,
   useAdminPricingConfig,
@@ -63,6 +66,7 @@ import {
 } from "@/lib/admin/list-state";
 import { matchesSearch } from "@/lib/admin/search-text";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
+import { formatMoney } from "@/lib/format/currency";
 import {
   marginLabel,
   marginTone,
@@ -72,7 +76,7 @@ import { cn } from "@/lib/utils";
 import type { UsageRateCardDto } from "@/types/admin-pricing";
 import type { PlanDto } from "@/types/billing";
 
-const TAB_VALUES = ["plans", "rate-cards", "configuration"] as const;
+const TAB_VALUES = ["plans", "preview", "rate-cards", "configuration"] as const;
 
 type Tab = (typeof TAB_VALUES)[number];
 
@@ -406,8 +410,8 @@ function RateCardMargin({ card }: { card: UsageRateCardDto }) {
   const margin = resolveRateCardMargin(card);
   const tone = marginTone(margin);
   // The column this page exists for. It is the STORED multiplier where there is one, and a named
-  // refusal where price and cost are in different currencies — never price ÷ cost across VND and
-  // USD, which produces a plausible number that is off by the exchange rate.
+  // refusal where the price in credits cannot be put in dollars — never credits ÷ dollars, which
+  // produces a plausible number that is off by the value of a credit.
   return (
     <Tooltip
       content={
@@ -542,7 +546,8 @@ function RateCardsList({
       className: "w-[130px]",
       sortField: "price",
       defaultDirection: "desc",
-      cell: (card) => formatAdminMoney({ amount: card.unitPrice, currency: card.currency }),
+      // Credits per unit on every card: `currency` is only the card's label, never the price's unit.
+      cell: (card) => `${card.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 6 })} credits`,
     },
     {
       id: "providerCost",
@@ -553,7 +558,7 @@ function RateCardsList({
         <span className="text-ink-muted">
           {card.providerUnitCostUsd == null
             ? "—"
-            : formatAdminMoney({ amount: card.providerUnitCostUsd, currency: "USD" })}
+            : formatMoney(card.providerUnitCostUsd, "USD")}
         </span>
       ),
     },
@@ -733,6 +738,7 @@ function PlansAndPricing() {
   const searchParams = useSearchParams();
   const TAB_LABEL_KEYS: Record<Tab, string> = {
     plans: "tabs.plans",
+    preview: "tabs.preview",
     "rate-cards": "tabs.rateCards",
     configuration: "tabs.configuration",
   };
@@ -779,7 +785,11 @@ function PlansAndPricing() {
   const config = configQuery.data ?? null;
 
   const active =
-    tab === "plans" ? plansQuery : tab === "rate-cards" ? rateCardsQuery : configQuery;
+    tab === "plans" || tab === "preview"
+      ? plansQuery
+      : tab === "rate-cards"
+        ? rateCardsQuery
+        : configQuery;
 
   return (
     <AdminPage>
@@ -790,7 +800,7 @@ function PlansAndPricing() {
         description={t("description")}
         actions={
           <>
-            {tab === "plans" ? (
+            {tab === "plans" || tab === "preview" ? (
               <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
                 <Plus size={14} />
                 {t("newPlan")}
@@ -842,6 +852,28 @@ function PlansAndPricing() {
           onRetry={() => void plansQuery.refetch()}
           onEdit={setEditingPlan}
         />
+      ) : tab === "preview" ? (
+        // The ladder a buyer sees on Settings → Billing, with the same two dialogs laid over it.
+        <PlanStorefrontPreview
+          plans={plans}
+          isPending={plansQuery.isPending}
+          isError={plansQuery.isError}
+          onRetry={() => void plansQuery.refetch()}
+          onEdit={setEditingPlan}
+          onCreate={() => setIsCreatingPlan(true)}
+          // Both through the same full-record PUT the editor uses, so nothing else on the plan
+          // moves (applyPlanEdits lays the one change over the stored plan).
+          onToggleActive={(plan, isActive) =>
+            updatePlan.mutateAsync({ id: plan.id, request: applyPlanEdits(plan, { isActive }) })
+          }
+          onReorder={async (updates) => {
+            // One at a time: each is a whole-plan replacement, and a failure part-way leaves the
+            // plans already saved in their new places rather than racing each other.
+            for (const { plan, sortOrder } of updates) {
+              await updatePlan.mutateAsync({ id: plan.id, request: applyPlanEdits(plan, { sortOrder }) });
+            }
+          }}
+        />
       ) : tab === "rate-cards" ? (
         <RateCardsList
           cards={rateCards}
@@ -870,7 +902,7 @@ function PlansAndPricing() {
                 />
                 <ConfigRow
                   label={t("configRows.minimumContractPrice")}
-                  value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
+                  value={formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}
                 />
                 <ConfigRow label={t("configRows.salesWeightUsage")} value={config.salesUsageWeight} />
                 <ConfigRow
@@ -920,6 +952,7 @@ function PlansAndPricing() {
         onOpenChange={setIsCreatingPlan}
         onSubmit={(request) => createPlan.mutateAsync(request)}
         isSaving={createPlan.isPending}
+        sortOrder={nextSortOrder(plans)}
       />
 
       <PlanEditDialog

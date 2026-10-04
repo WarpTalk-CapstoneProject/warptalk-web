@@ -40,12 +40,12 @@ test("stacked categories keep the five largest and fold the rest into other", ()
   }));
   const report = {
     categories,
-    categoryTotals: categories.map((c, index) => ({ categoryId: c.id, slug: c.slug, name: c.name, color: null, amountVnd: 700 - index * 100, count: 1, budgetVnd: null })),
+    categoryTotals: categories.map((c, index) => ({ categoryId: c.id, slug: c.slug, name: c.name, color: null, amountUsd: 700 - index * 100, count: 1, budgetUsd: null })),
     months: [
-      { month: "2026-08", totalVnd: 0, paidVnd: 0, plannedVnd: 0, budgetVnd: null, categories: [] },
+      { month: "2026-08", totalUsd: 0, paidUsd: 0, plannedUsd: 0, budgetUsd: null, categories: [] },
       {
-        month: "2026-09", totalVnd: 2800, paidVnd: 2800, plannedVnd: 0, budgetVnd: null,
-        categories: categories.map((c, index) => ({ categoryId: c.id, amountVnd: 700 - index * 100, budgetVnd: null, overBudget: false })),
+        month: "2026-09", totalUsd: 2800, paidUsd: 2800, plannedUsd: 0, budgetUsd: null,
+        categories: categories.map((c, index) => ({ categoryId: c.id, amountUsd: 700 - index * 100, budgetUsd: null, overBudget: false })),
       },
     ],
   } as unknown as ExpenseReportDto;
@@ -59,13 +59,13 @@ test("stacked categories keep the five largest and fold the rest into other", ()
 
 test("the CSV export uses the import's columns and guards formulas", () => {
   const expense = {
-    expenseDate: "2026-09-01", vendor: "=HYPERLINK(evil)", categorySlug: "saas", amount: 21, currency: "USD", description: "Team, plan",
-    paymentMethod: "company_card", status: "paid", paidBy: null, tags: ["infra", "saas"], recurrence: "monthly", amountVnd: 546000,
+    expenseDate: "2026-09-01", vendor: "=HYPERLINK(evil)", categorySlug: "saas", amount: 546000, currency: "VND", description: "Team, plan",
+    paymentMethod: "company_card", status: "paid", paidBy: null, tags: ["infra", "saas"], recurrence: "monthly", amountUsd: 21,
   } as unknown as OperatingExpenseDto;
   const csv = toCsv(expenseCsvRows([expense]));
   const [header, row] = csv.trim().split("\r\n");
-  assert.equal(header, "date,vendor,category,amount,currency,description,payment_method,status,paid_by,tags,recurrence,amount_vnd");
-  assert.equal(row, "2026-09-01,'=HYPERLINK(evil),saas,21,USD,\"Team, plan\",company_card,paid,,infra;saas,monthly,546000");
+  assert.equal(header, "date,vendor,category,amount,currency,description,payment_method,status,paid_by,tags,recurrence,amount_usd");
+  assert.equal(row, "2026-09-01,'=HYPERLINK(evil),saas,546000,VND,\"Team, plan\",company_card,paid,,infra;saas,monthly,21");
   assert.deepEqual(parseTags(" Infra, saas;infra | Prod "), ["infra", "saas", "prod"]);
 });
 

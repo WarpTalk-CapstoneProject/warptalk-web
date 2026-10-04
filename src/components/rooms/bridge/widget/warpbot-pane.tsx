@@ -88,6 +88,10 @@ export function WarpBotPane() {
   const autoSizeComposer = useCallback((element: HTMLTextAreaElement | null) => {
     if (!element) return;
     element.style.height = "auto";
+    // The shell mounts this pane `hidden` under the Transcript tab, and a hidden textarea measures
+    // zero. Writing that down pins the box to 0px: only its padding is left on screen, with no
+    // placeholder and nothing to click. Leave it on `auto` (one row) until it can be measured.
+    if (element.scrollHeight === 0) return;
     element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
   }, []);
   // Sized on attach too, so a draft kept across a remount does not come back one line tall.
@@ -121,11 +125,14 @@ export function WarpBotPane() {
     const container = messagesContainerRef.current;
     if (!container || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
+      // The composer could not be measured while hidden either; a draft longer than one line gets
+      // its height back here.
+      autoSizeComposer(inputRef.current);
       if (shouldAutoScrollRef.current) container.scrollTop = container.scrollHeight;
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [autoSizeComposer]);
 
   const { isAway, scrollToLatest } = useScrollToLatest(messagesContainerRef, {
     threshold: AUTOSCROLL_THRESHOLD_PX,

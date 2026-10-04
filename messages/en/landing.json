@@ -5,7 +5,9 @@
     "pricing": "Pricing",
     "contact": "Contact",
     "download": "Download",
-    "getStarted": "Get Started"
+    "getStarted": "Get Started",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "badges": {
     "realtimeTranslation": "Real-time Translation",
@@ -19,17 +21,44 @@
     "createAccount": "Create an Account"
   },
   "featureSteps": {
-    "signalDrift": { "kicker": "Signal Drift", "title": "Every voice leaves a trace." },
-    "languageCrossing": { "kicker": "Language Crossing", "title": "Meaning crosses over." },
-    "thePause": { "kicker": "The Pause", "title": "The conversation keeps moving while the signal changes form." },
-    "memoryBloom": { "kicker": "Memory Bloom", "title": "The room remembers." }
+    "signalDrift": {
+      "kicker": "Signal Drift",
+      "title": "Every voice leaves a trace."
+    },
+    "languageCrossing": {
+      "kicker": "Language Crossing",
+      "title": "Meaning crosses over."
+    },
+    "thePause": {
+      "kicker": "The Pause",
+      "title": "The conversation keeps moving while the signal changes form."
+    },
+    "memoryBloom": {
+      "kicker": "Memory Bloom",
+      "title": "The room remembers."
+    }
   },
   "signals": {
-    "capture": { "meta": "Capture / STT / Audio", "label": "Capture" },
-    "understand": { "meta": "Understand / Context / Memory", "label": "Understand" },
-    "translate": { "meta": "Translate / AI / Language", "label": "Translate" },
-    "speak": { "meta": "Speak / TTS / Voice", "label": "Speak" },
-    "remember": { "meta": "Remember / Transcript / Assistant", "label": "Remember" }
+    "capture": {
+      "meta": "Capture / STT / Audio",
+      "label": "Capture"
+    },
+    "understand": {
+      "meta": "Understand / Context / Memory",
+      "label": "Understand"
+    },
+    "translate": {
+      "meta": "Translate / AI / Language",
+      "label": "Translate"
+    },
+    "speak": {
+      "meta": "Speak / TTS / Voice",
+      "label": "Speak"
+    },
+    "remember": {
+      "meta": "Remember / Transcript / Assistant",
+      "label": "Remember"
+    }
   },
   "voiceHeading": "Voice returns human.",
   "understandHeading": "When the room understands.",
@@ -49,7 +78,8 @@
     "featureCredits": "{count} credits per cycle",
     "featureParticipants": "Up to {count} participants per meeting",
     "featureLanguages": "Up to {count} languages simultaneously",
-    "featureDefaultSupport": "Standard email support"
+    "featureDefaultSupport": "Standard email support",
+    "plusVat": "+ {percent}% VAT · {total} at checkout"
   },
   "footer": {
     "stayInTouch": "Stay in touch!",

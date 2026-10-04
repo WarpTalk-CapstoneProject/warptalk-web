@@ -71,7 +71,7 @@ const PAGE_SIZE = 20;
 /** Mirrors InvoiceConstants.InvoiceStatuses.Filterable in the billing service. */
 const INVOICE_STATUSES = ["draft", "issued", "open", "paid", "void", "uncollectible"] as const;
 /** The two currencies the platform prices in. */
-const INVOICE_CURRENCIES = ["VND", "USD"] as const;
+const INVOICE_CURRENCIES = ["USD", "VND"] as const;
 
 /**
  * The invoice list's view, in the URL beside `tab=invoices`. Everything is server-side

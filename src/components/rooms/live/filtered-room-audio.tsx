@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
 import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
 import {
+  bridgeOutboundLeg,
+  describeInboundDubChange,
+  isDubOfSpeaker,
+  type BridgeOutboundLeg,
+} from "@/lib/meeting/bridge-mic-device";
+import {
   dubbedHistoryScope,
   EMPTY_DUBBED_HISTORY,
   mergeDubbedHistory,
+  outboundDubHistoryScope,
   routeRoomAudio,
 } from "@/lib/meeting/room-audio-routing";
 import { BridgeOutboundAudio } from "./bridge-outbound-audio";
+import { BridgeOutboundMic } from "./bridge-outbound-mic";
 import { HalfDuplexMic } from "./half-duplex-mic";
 
 
@@ -84,6 +92,8 @@ export function FilteredRoomAudio({
   bridgeOutboundDeviceId,
   bridgeStandInIdentity,
   onBridgeOutboundError,
+  onBridgeOutboundLegChange,
+  onBridgeInboundDubChange,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -104,7 +114,9 @@ export function FilteredRoomAudio({
    * WT-525 — set ONLY in an external-bridge meeting: the virtual device Google Meet is using as
    * its microphone. Its presence flips the "never your own dub" rule below, because in a bridge
    * meeting that track is not a redundant echo of yourself — it is the translated voice the far
-   * side is meant to hear, and this is the device that carries it to them.
+   * side is meant to hear, and this is the device that carries it to them. When there is no such
+   * dub to send, the same device carries the user's own microphone instead (BridgeOutboundMic),
+   * by the rule a native listener in the far side's language would get.
    */
   bridgeOutboundDeviceId?: string | null;
   /**
@@ -116,6 +128,18 @@ export function FilteredRoomAudio({
   bridgeStandInIdentity?: string | null;
   /** Surfaces a failed hand-off to the virtual device; silence here is indistinguishable from a working bridge. */
   onBridgeOutboundError?: (message: string) => void;
+  /**
+   * What Meet hears from this person, on every change (lib/meeting/bridge-mic-device): the session
+   * logs it to main.log and the popup says when it has been the untranslated voice for too long.
+   * `outboundIdentity` is the dub's bot when the leg is "dub".
+   */
+  onBridgeOutboundLegChange?: (leg: BridgeOutboundLeg, outboundIdentity: string | null) => void;
+  /**
+   * The other direction, on every change: the main.log line saying whether the Meet side's dub is
+   * being played to this listener, and why not when it is not (lib/meeting/bridge-mic-device).
+   * Only reported once the stand-in is known, so never in a native meeting.
+   */
+  onBridgeInboundDubChange?: (line: string) => void;
 }) {
   const bridgeActive = Boolean(bridgeOutboundDeviceId);
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
@@ -130,6 +154,7 @@ export function FilteredRoomAudio({
   // feedback/echo hazard, not just a redundant no-op. Drop it before any wanted/
   // subscription logic runs, so nothing below ever has to special-case "is this me".
   const trackRefs = tracks.filter(isTrackReference).filter((trackRef) => !trackRef.publication.isLocal);
+
 
   // The whole rule lives in lib/meeting/room-audio-routing.ts, where it can be tested. It is a
   // WHOLE-ROOM decision — a speaker's default dub is declined only if a track in this listener's
@@ -148,6 +173,17 @@ export function FilteredRoomAudio({
   // same object when nothing changed, so this settles after one pass.
   const [dubbedHistory, setDubbedHistory] = useState(EMPTY_DUBBED_HISTORY);
   const historyScope = dubbedHistoryScope({ targetLanguageNormalized, translationActive, voiceEnabled });
+  // The same memory for the far side as a listener (bridge rooms only): once the host's outbound
+  // dub has been on the wire in this scope, Meet gets silence rather than the host's raw voice
+  // while that bot is between sentences or reconnecting. Its own scope — the far side's language,
+  // not the host's listen language, and not keyed on the host's voiceEnabled.
+  const [outboundHistory, setOutboundHistory] = useState(EMPTY_DUBBED_HISTORY);
+  const outboundScope = outboundDubHistoryScope({
+    translationActive,
+    bridgeOutboundReady: bridgeActive,
+    speakerLanguageByUserId,
+    bridgeStandInIdentity,
+  });
   const routing = routeRoomAudio({
     identities: trackRefs.map((trackRef) => trackRef.participant.identity),
     targetLanguageNormalized,
@@ -159,9 +195,18 @@ export function FilteredRoomAudio({
     bridgeOutboundReady: bridgeActive,
     bridgeStandInIdentity,
     previouslyDubbedSpeakerIds: dubbedHistory.scope === historyScope ? dubbedHistory.ids : undefined,
+    previouslyDubbedOutbound: Boolean(
+      localUserId && outboundScope && outboundHistory.scope === outboundScope && outboundHistory.ids.has(localUserId),
+    ),
   });
   const nextDubbedHistory = mergeDubbedHistory(dubbedHistory, historyScope, routing.dubbedSpeakerIds);
   if (nextDubbedHistory !== dubbedHistory) setDubbedHistory(nextDubbedHistory);
+  const nextOutboundHistory = mergeDubbedHistory(
+    outboundHistory,
+    outboundScope,
+    routing.outboundIdentity && localUserId ? new Set([localUserId]) : new Set<string>(),
+  );
+  if (nextOutboundHistory !== outboundHistory) setOutboundHistory(nextOutboundHistory);
   const dubbedHistoryFingerprint = [...nextDubbedHistory.ids].sort().join(",");
   const isWanted = (identity: string) => routing.wanted.has(identity);
 
@@ -199,12 +244,56 @@ export function FilteredRoomAudio({
     : undefined;
   const audibleTracks = wantedTracks.filter((trackRef) => trackRef !== outboundTrack);
 
+  // What is actually rendered into the cable below, not what routing would like: a dub that routing
+  // names but that is not a track here yet plays nothing.
+  const playsRawMic = Boolean(routing.outboundRawMic && !outboundTrack && bridgeOutboundDeviceId);
+  const outboundIdentity = outboundTrack && bridgeOutboundDeviceId ? outboundTrack.participant.identity : null;
+  const outboundLeg = bridgeOutboundLeg({
+    deviceReady: bridgeActive,
+    outboundIdentity,
+    outboundRawMic: playsRawMic,
+  });
+  const onLegChangeRef = useRef(onBridgeOutboundLegChange);
+  useEffect(() => {
+    onLegChangeRef.current = onBridgeOutboundLegChange;
+  });
+  useEffect(() => {
+    onLegChangeRef.current?.(outboundLeg, outboundIdentity);
+  }, [outboundLeg, outboundIdentity]);
+
   // Exactly the dubs going to this listener's own speakers — the outbound bridge leg is excluded
   // because it plays into a virtual device Meet listens to, not into the room the user is sitting
   // in, so it cannot come back through their microphone.
   const localDubIdentities = audibleTracks
     .filter((trackRef) => trackRef.participant.identity.startsWith(AI_INTERPRETER_PREFIX))
     .map((trackRef) => trackRef.participant.identity);
+
+  // Bridge rooms: what this listener hears of the Meet side, for main.log — the twin of the
+  // outbound leg above. Every dub of the stand-in in the room is named, in any language, with
+  // whether the routing keeps it and whether its media is arriving; the line is what is compared,
+  // so it is reported when any of that changes and not on every render.
+  const inboundDubLine = bridgeStandInIdentity
+    ? describeInboundDubChange({
+        translationActive,
+        voiceEnabled,
+        listenLanguage: targetLanguageNormalized,
+        farSideLanguage: speakerLanguageByUserId[bridgeStandInIdentity],
+        tracks: trackRefs
+          .filter((trackRef) => isDubOfSpeaker(trackRef.participant.identity, bridgeStandInIdentity))
+          .map((trackRef) => ({
+            identity: trackRef.participant.identity,
+            wanted: isWanted(trackRef.participant.identity),
+            subscribed: Boolean(trackRef.publication.isSubscribed),
+          })),
+      })
+    : null;
+  const onInboundDubChangeRef = useRef(onBridgeInboundDubChange);
+  useEffect(() => {
+    onInboundDubChangeRef.current = onBridgeInboundDubChange;
+  });
+  useEffect(() => {
+    if (inboundDubLine) onInboundDubChangeRef.current?.(inboundDubLine);
+  }, [inboundDubLine]);
 
   return (
     <>
@@ -215,6 +304,18 @@ export function FilteredRoomAudio({
         <BridgeOutboundAudio
           key={`bridge-out-${outboundTrack.participant.identity}`}
           trackRef={outboundTrack}
+          outputDeviceId={bridgeOutboundDeviceId}
+          onError={onBridgeOutboundError}
+        />
+      )}
+      {/* When there is no dub for the far side — before Start, the first sentence, matching
+          languages — Meet hears the host as a native listener would: their own voice. Never
+          together with the dub above: routing already guarantees it, and !outboundTrack says so
+          here too, because two elements on one device would mix the original under the dub. See
+          bridge-outbound-mic.tsx for why this is the published track itself and not a copy. */}
+      {playsRawMic && bridgeOutboundDeviceId && (
+        <BridgeOutboundMic
+          key="bridge-out-raw-mic"
           outputDeviceId={bridgeOutboundDeviceId}
           onError={onBridgeOutboundError}
         />

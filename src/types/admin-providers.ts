@@ -12,13 +12,12 @@ export type ProviderDayStatus = Exclude<ProviderStatus, "unknown"> | "no_data";
 
 export type ProviderUsageUnit = "credits" | "providerCredits" | "participantMinutes" | "payments";
 
-export type ProviderMetricUnit = "count" | "credits" | "providerCredits" | "usd" | "vnd" | "percent" | "ms" | "minutes";
+export type ProviderMetricUnit = "count" | "credits" | "providerCredits" | "usd" | "percent" | "ms" | "minutes";
 
 export type ProviderMetricKey =
   | "usage"
   | "billedCredits"
   | "costUsd"
-  | "costVnd"
   | "calls"
   | "failures"
   | "errorRate"
@@ -27,7 +26,7 @@ export type ProviderMetricKey =
   | "roomMinutes"
   | "recordings"
   | "failedPayments"
-  | "volumeVnd";
+  | "volumeUsd";
 
 export interface AdminProviderStatusPageDto {
   url: string;
@@ -58,7 +57,6 @@ export interface AdminProviderSummaryDto {
     usageUnit: ProviderUsageUnit;
     usage: number | null;
     costUsd: number | null;
-    costVnd: number | null;
     usageNote: string | null;
     costNote: string | null;
   };
@@ -126,7 +124,6 @@ export interface AdminProviderBreakdownItemDto {
   value: number;
   share: number | null;
   costUsd: number | null;
-  costVnd: number | null;
   calls: number | null;
   failures: number | null;
 }

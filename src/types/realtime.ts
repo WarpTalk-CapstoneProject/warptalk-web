@@ -30,6 +30,18 @@ export interface ParticipantInfoDto {
   isUsingVoiceClone?: boolean;
 }
 
+/**
+ * TranscriptInterimReceived: the words of a turn still being spoken. A preview — the speaker's
+ * TranscriptSegmentReceived line replaces it. See lib/transcript/live-text.ts.
+ */
+export interface TranscriptInterimDto {
+  speakerId: string;
+  speakerName: string;
+  itemId: string;
+  text: string;
+  language: string;
+}
+
 export interface TranscriptSegmentDto {
   segmentId: string;
   speakerId: string;
@@ -58,6 +70,13 @@ export interface TranscriptSegmentDto {
    * language leave the transcript showing two different directions at once.
    */
   translations?: Record<string, string>;
+  /**
+   * Client-only: the translated SENTENCES behind each `translations` entry, by sentence index
+   * (the `-c{n}` suffix of the translation's own segment id). Kept so a sentence that arrives
+   * late, or twice, lands in its own slot instead of being appended after a later one or on top
+   * of itself; `translations[lang]` is these joined in index order.
+   */
+  translationSentences?: Record<string, string[]>;
   confidence: number;
   startTimeMs: number;
   endTimeMs: number;
@@ -105,6 +124,18 @@ export interface TranscriptCleanSentenceEventDto {
   flags: string[];
   source: "llm" | "prepass" | "unknown";
   revision: number;
+}
+
+/**
+ * `TranscriptSegmentSpeakerNamed`, broadcast to translationRoom:{roomId}: the Meet person on a
+ * bridge line that went out as "Google Meet participants", found about a second later from the
+ * captions that followed it. `segmentId` is the original TranscriptSegmentReceived's segmentId.
+ * Sent at most once per segment, only above the gateway's display confidence; older backends never
+ * send it. Applied by `applyLateFarSpeakerName` (speaker-identity.ts).
+ */
+export interface TranscriptSegmentSpeakerNamedDto {
+  segmentId: string;
+  speakerName: string;
 }
 
 export interface TranslationTextDto {

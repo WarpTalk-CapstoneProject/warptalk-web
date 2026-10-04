@@ -63,7 +63,7 @@ assert.match(
 );
 assert.doesNotMatch(
   banner,
-  /VND_PER_CREDIT|createCheckoutSession/,
+  /(VND|USD)_PER_CREDIT|createCheckoutSession/,
   "The banner must not price or charge anything itself — the server owns the price.",
 );
 

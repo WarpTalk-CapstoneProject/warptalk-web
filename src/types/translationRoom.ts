@@ -86,6 +86,13 @@ export interface TranslationRoomDto {
   externalMeetingUrl?: string | null;
   externalCalendarEventId?: string | null;
   externalCalendarEventUrl?: string | null;
+  /**
+   * W4b — EXTERNAL_BRIDGE: whose desktop publishes the far side right now (bridge claim). `null` on
+   * a legacy room, where the host holds that authority; absent from an older server.
+   */
+  bridgeCapturerUserId?: string | null;
+  /** W4b — EXTERNAL_BRIDGE: the normalized Google Meet code the room is claimed for, or null. */
+  externalMeetingCode?: string | null;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
@@ -112,6 +119,16 @@ export interface TranslationRoomDto {
    * See lib/meeting/artifact-language-options.ts for how each of those is read.
    */
   artifactLanguages?: RoomArtifactLanguagesDto | null;
+  /**
+   * WT-708: set only on the Start (and re-Start) response, and only when the workspace's CURRENT
+   * whitelist narrowed this meeting's languages. Read through lib/meeting/start-language-policy.ts.
+   */
+  languagePolicyNotice?: {
+    requested: string[];
+    effective: string[];
+    dropped: string[];
+    message: string;
+  } | null;
 }
 
 /** WT-703: server-computed language set for a finished room's artifacts. */
@@ -170,6 +187,12 @@ export interface TranslationRoomParticipantDto {
   avatarUrl?: string;
   joinedAt?: string;
   isExternal?: boolean;
+  /**
+   * EXTERNAL_BRIDGE (backend #509): this person is in Meet with their real mic and speakers
+   * (text-only bridge mode), so no outbound dub is synthesized for them. Always false outside
+   * bridge rooms; absent from an older server, which means voice.
+   */
+  isBridgeTextOnly?: boolean;
 }
 
 // ── Request DTOs ──────────────────────────────
